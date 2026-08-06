@@ -60,15 +60,28 @@ export class UnitView {
 
     this.barWidth = Math.max(0.75, radius * 2.4);
     const barHeight = 0.13;
+    // 底/前景几乎共面时，远距深度精度塌缩会让后画的透明底条盖住前景（闪烁→只剩底色）。
+    // 两层都走透明队列 + 关掉 depthWrite，靠 renderOrder 保证前景永远后画。
     const hpBack = new THREE.Mesh(
       new THREE.PlaneGeometry(this.barWidth + 0.06, barHeight + 0.06),
-      new THREE.MeshBasicMaterial({ color: 0x11161f, transparent: true, opacity: 0.85 }),
+      new THREE.MeshBasicMaterial({
+        color: 0x11161f,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      }),
     );
+    hpBack.renderOrder = 2;
     this.hpFill = new THREE.Mesh(
       new THREE.PlaneGeometry(this.barWidth, barHeight),
-      new THREE.MeshBasicMaterial({ color: hpColor(faction) }),
+      new THREE.MeshBasicMaterial({
+        color: hpColor(faction),
+        transparent: true,
+        depthWrite: false,
+      }),
     );
-    this.hpFill.position.z = 0.001;
+    this.hpFill.position.z = HP_FILL_Z;
+    this.hpFill.renderOrder = 3;
     this.hpAnchor.position.y = height + 0.4;
     this.hpAnchor.add(hpBack, this.hpFill);
 
@@ -94,7 +107,7 @@ export class UnitView {
     const ratio = Math.max(0, Math.min(1, hpRatio));
     this.hpFill.scale.x = Math.max(ratio, 0.0001);
     // 缩放是绕中心的，往左挪回去血条才是从右往左掉
-    this.hpFill.position.x = -(this.barWidth * (1 - ratio)) / 2;
+    this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
     this.hpAnchor.quaternion.copy(camera.quaternion);
 
     this.bodyMaterial.emissiveIntensity = attacking ? 0.75 : this.baseEmissive;
@@ -124,3 +137,6 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
 function hpColor(faction: Faction): number {
   return faction === Faction.Blue ? 0x63d68a : 0xf0d264;
 }
+
+/** 前景相对底条朝相机方向的偏移，拉开深度差减轻远距 Z-fighting */
+const HP_FILL_Z = 0.05;
