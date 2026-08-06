@@ -10,8 +10,15 @@ export {
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   type UnitConfig,
+  type UnitConfigDraft,
   type UnitTypeId,
+  applyUnitConfigDrafts,
+  dumpDefaultUnitConfigDrafts,
+  dumpUnitConfigDrafts,
   getUnitConfig,
+  recomputeMaxUnitRadius,
+  resetUnitConfigsToDefault,
+  toUnitConfigDraft,
 } from './config/units.js';
 
 export { type Attributes } from './stats/attributes.js';

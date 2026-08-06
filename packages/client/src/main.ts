@@ -1,5 +1,6 @@
 import { Faction, type UnitTypeId, fromFloat, spawnCommand } from '@pb/sim';
 import { SimLoop } from './loop.js';
+import { createConfigPanel, hydrateUnitConfigsFromStorage } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
 import { ARENA_H } from './view/coords.js';
@@ -9,17 +10,29 @@ import { BattleView } from './view/viewSync.js';
 const container = document.getElementById('app');
 if (!container) throw new Error('找不到 #app 容器');
 
+// 先灌入本地缓存的兵种参数，再创建 World，空间哈希才能用到自定义半径
+hydrateUnitConfigsFromStorage();
+
 const sceneContext = createScene(container);
 const loop = new SimLoop(20260806);
 const battleView = new BattleView(sceneContext.scene);
 
+const clearBattlefield = (): void => {
+  loop.reset();
+  battleView.invalidateUnitViews();
+};
+
 const panel = createPanel({
   loop,
-  onClear: () => {
-    loop.reset();
-    battleView.reset();
-  },
+  onClear: clearBattlefield,
   onBrawl: () => spawnBrawl(loop),
+});
+
+createConfigPanel({
+  onApplied: () => {
+    clearBattlefield();
+    panel.refreshUnitLabels();
+  },
 });
 
 enablePlacement({

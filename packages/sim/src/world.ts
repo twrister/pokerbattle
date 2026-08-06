@@ -34,7 +34,8 @@ export class World {
   readonly rng: Rng;
   readonly nav: NavGrid;
   readonly pathFinder: PathFinder;
-  readonly unitGrid: SpatialHash;
+  /** 清空战场时会按当前 MAX_UNIT_RADIUS 重建，保证改半径后空间哈希仍正确 */
+  unitGrid: SpatialHash;
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
 
@@ -134,6 +135,8 @@ export class World {
     this.tick = 0;
     this.nextEntityId = 1;
     this.rng.setState(this.seed);
+    // 配置面板可能改过半径，格子尺寸要跟着 MAX_UNIT_RADIUS 走
+    this.unitGrid = new SpatialHash(ARENA_WIDTH, ARENA_HEIGHT, MAX_UNIT_RADIUS * 2);
   }
 
   /**

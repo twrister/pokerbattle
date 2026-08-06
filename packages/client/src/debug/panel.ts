@@ -18,6 +18,8 @@ export interface PanelHandle {
   /** 当前选中的兵种 */
   readonly unitType: UnitTypeId;
   updateStats: (fps: number) => void;
+  /** 配置面板改了兵种显示名后刷新底部按钮文案 */
+  refreshUnitLabels: () => void;
 }
 
 /** 把 HUD 里的按钮和 SimLoop 接起来，并定时刷新状态读数 */
@@ -140,6 +142,12 @@ export function createPanel(options: PanelOptions): PanelHandle {
       projectilesOut.textContent = String(loop.world.projectiles.length);
       hashOut.textContent = loop.world.hash().toString(16).padStart(8, '0');
       fpsOut.textContent = fps.toFixed(0);
+    },
+    refreshUnitLabels() {
+      for (const button of unitGroup.querySelectorAll<HTMLButtonElement>('button')) {
+        const typeId = button.dataset.unit as UnitTypeId | undefined;
+        if (typeId) button.textContent = UNIT_CONFIGS[typeId].name;
+      }
     },
   };
 }

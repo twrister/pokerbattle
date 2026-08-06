@@ -134,6 +134,25 @@ export class BattleView {
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
+
+  /**
+   * 兵种半径等视觉参数变了之后调用。
+   * 池里缓存的圆柱是按旧半径建的，必须整批丢掉，否则新兵会穿旧壳。
+   */
+  invalidateUnitViews(): void {
+    for (const [, view] of this.activeUnits) {
+      this.scene.remove(view.group);
+    }
+    this.activeUnits.clear();
+    this.unitPool.clear();
+    for (const [, mesh] of this.activeProjectiles) {
+      this.scene.remove(mesh);
+      this.projectilePool.push(mesh);
+    }
+    this.activeProjectiles.clear();
+    this.prevUnits.clear();
+    this.prevUnitsTick = -1;
+  }
 }
 
 function lerp(a: number, b: number, t: number): number {
