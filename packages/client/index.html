@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PokerBattle · RTS 战斗沙盒</title>
+    <style>
+      :root {
+        --panel-bg: rgba(19, 24, 33, 0.82);
+        --panel-border: rgba(126, 145, 178, 0.22);
+        --text: #e6edf3;
+        --text-dim: #8b98ab;
+        --blue: #4f8dfd;
+        --red: #f2604f;
+        --accent: #63d68a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0d1117;
+        color: var(--text);
+        font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        user-select: none;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      /* HUD 整体不吃事件，只有具体控件吃，这样空白处的点击能穿透到画布上放兵 */
+      #hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .panel {
+        position: absolute;
+        pointer-events: auto;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      }
+
+      #panel-stats {
+        top: 16px;
+        left: 16px;
+        min-width: 188px;
+      }
+
+      #panel-controls {
+        top: 16px;
+        right: 16px;
+      }
+
+      #panel-spawn {
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 20px;
+        align-items: flex-end;
+      }
+
+      #panel-help {
+        bottom: 16px;
+        left: 16px;
+        max-width: 230px;
+        color: var(--text-dim);
+        line-height: 1.7;
+      }
+
+      .title {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 5px 14px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .stats-grid dt {
+        color: var(--text-dim);
+      }
+
+      .stats-grid dd {
+        margin: 0;
+        text-align: right;
+        font-family: 'Cascadia Mono', 'Consolas', monospace;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        pointer-events: auto;
+        font: inherit;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 7px 12px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, transform 0.06s;
+      }
+
+      button:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      button[aria-pressed='true'] {
+        background: rgba(99, 214, 138, 0.16);
+        border-color: var(--accent);
+        color: #d8ffe6;
+      }
+
+      #faction-group button[data-faction='0'][aria-pressed='true'] {
+        background: rgba(79, 141, 253, 0.24);
+        border-color: var(--blue);
+        color: #dcebff;
+      }
+
+      #faction-group button[data-faction='1'][aria-pressed='true'] {
+        background: rgba(242, 96, 79, 0.24);
+        border-color: var(--red);
+        color: #ffe1da;
+      }
+
+      kbd {
+        display: inline-block;
+        min-width: 18px;
+        padding: 1px 5px;
+        margin-right: 2px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--panel-border);
+        font-family: 'Cascadia Mono', 'Consolas', monospace;
+        font-size: 11px;
+        text-align: center;
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <section class="panel" id="panel-stats">
+        <div class="title">模拟状态</div>
+        <dl class="stats-grid">
+          <dt>Tick</dt>
+          <dd id="stat-tick">0</dd>
+          <dt>单位</dt>
+          <dd id="stat-units">0</dd>
+          <dt>飞行物</dt>
+          <dd id="stat-projectiles">0</dd>
+          <dt>World Hash</dt>
+          <dd id="stat-hash">-</dd>
+          <dt>FPS</dt>
+          <dd id="stat-fps">-</dd>
+        </dl>
+      </section>
+
+      <section class="panel" id="panel-controls">
+        <div class="title">运行控制</div>
+        <div class="btn-row">
+          <button id="btn-pause" type="button">暂停</button>
+          <button id="btn-step" type="button">单步</button>
+          <button id="btn-speed" type="button">1x</button>
+          <button id="btn-brawl" type="button">开团</button>
+          <button id="btn-clear" type="button">清空</button>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-spawn">
+        <div>
+          <div class="title">阵营</div>
+          <div class="btn-row" id="faction-group">
+            <button type="button" data-faction="0" aria-pressed="true">蓝方</button>
+            <button type="button" data-faction="1" aria-pressed="false">红方</button>
+          </div>
+        </div>
+        <div>
+          <div class="title">兵种</div>
+          <div class="btn-row" id="unit-group"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-help">
+        <div class="title">操作</div>
+        <div><kbd>左键</kbd> 点击地面放兵</div>
+        <div><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
+        <div><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
+        <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 清空</div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

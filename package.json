@@ -1,0 +1,16 @@
+{
+  "name": "poker-battle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @pb/client dev",
+    "build": "pnpm --filter @pb/client build",
+    "preview": "pnpm --filter @pb/client preview",
+    "test": "pnpm -r test",
+    "check": "pnpm -r check"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
