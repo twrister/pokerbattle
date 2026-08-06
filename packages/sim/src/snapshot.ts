@@ -1,6 +1,6 @@
 import { toFloat } from './math/fixed.js';
 import type { UnitTypeId } from './config/units.js';
-import type { Faction, UnitState } from './entity/unit.js';
+import { UnitState, type Faction } from './entity/unit.js';
 import type { World } from './world.js';
 
 /**
@@ -22,6 +22,8 @@ export interface UnitSnapshot {
   hpRatio: number;
   /** 正在出手前摇，渲染层可以据此播放攻击动作 */
   attacking: boolean;
+  /** 骑兵冲刺中，渲染层可以提高高亮 */
+  charging: boolean;
 }
 
 export interface ProjectileSnapshot {
@@ -53,6 +55,7 @@ export function takeSnapshot(world: World): Snapshot {
       radius: toFloat(unit.config.radius),
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
       attacking: unit.windupLeft > 0,
+      charging: unit.state === UnitState.Charge,
     });
   }
 

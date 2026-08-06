@@ -95,6 +95,7 @@ export class UnitView {
     facingZ: number,
     hpRatio: number,
     attacking: boolean,
+    charging: boolean,
     camera: THREE.Camera,
   ): void {
     this.group.position.set(sceneX, 0, sceneZ);
@@ -110,7 +111,8 @@ export class UnitView {
     this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
     this.hpAnchor.quaternion.copy(camera.quaternion);
 
-    this.bodyMaterial.emissiveIntensity = attacking ? 0.75 : this.baseEmissive;
+    // 冲刺高亮略强于普攻前摇，方便在混战里辨认
+    this.bodyMaterial.emissiveIntensity = charging ? 1.05 : attacking ? 0.75 : this.baseEmissive;
   }
 
   dispose(): void {
@@ -130,8 +132,14 @@ export function viewKey(faction: Faction, typeId: UnitTypeId): string {
 }
 
 function bodyColor(faction: Faction, typeId: UnitTypeId): number {
-  if (faction === Faction.Blue) return typeId === 'melee_grunt' ? 0x3f7ae0 : 0x74b7f7;
-  return typeId === 'melee_grunt' ? 0xd9503f : 0xf5926a;
+  if (faction === Faction.Blue) {
+    if (typeId === 'melee_grunt') return 0x3f7ae0;
+    if (typeId === 'melee_cavalry') return 0x1f9d8a;
+    return 0x74b7f7;
+  }
+  if (typeId === 'melee_grunt') return 0xd9503f;
+  if (typeId === 'melee_cavalry') return 0xc47a2b;
+  return 0xf5926a;
 }
 
 function hpColor(faction: Faction): number {

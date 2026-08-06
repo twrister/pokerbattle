@@ -1,0 +1,156 @@
+import { type Fx, ONE, div, mul } from '../math/fixed.js';
+import { distSq, lengthOf, normalize, set, vec } from '../math/vec2.js';
+import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
+import { MAX_UNIT_RADIUS } from '../config/units.js';
+import { TICK_RATE_FX } from '../config/tuning.js';
+import { type Unit, UnitState, isAlive } from '../entity/unit.js';
+import type { World } from '../world.js';
+
+/** 复用邻居缓冲，避免每帧分配 */
+const neighbors: number[] = [];
+const lateral = vec();
+
+/**
+ * 骑兵冲刺：冷却倒计时、直线位移、接触后前方 AOE 击退伤害。
+ *
+ * 放在普通移动之后、软碰撞之前：冲刺者不被推挤，被击退者本帧仍可参与分离。
+ */
+export function updateCharge(world: World): void {
+  // 冲刺位移会改坐标，命中查询前重建空间哈希
+  rebuildUnitGrid(world);
+
+  for (const unit of world.units) {
+    if (unit.dead) continue;
+    if (!unit.config.charge) continue;
+
+    if (unit.chargeCooldown > 0) unit.chargeCooldown -= ONE;
+
+    if (unit.state !== UnitState.Charge) continue;
+
+    advanceCharge(world, unit);
+  }
+}
+
+/** 沿锁定方向推进一段路程，并结算途经敌人 */
+function advanceCharge(world: World, unit: Unit): void {
+  const charge = unit.config.charge!;
+  const stepSpeed = mul(unit.stats.moveSpeed, charge.speedMul);
+  let step: Fx = div(stepSpeed, TICK_RATE_FX);
+  if (step > unit.chargeRemaining) step = unit.chargeRemaining;
+
+  const prevX = unit.pos.x;
+  const prevY = unit.pos.y;
+  unit.pos.x += mul(unit.chargeDir.x, step);
+  unit.pos.y += mul(unit.chargeDir.y, step);
+  unit.pos.x = clampToArena(unit.pos.x, ARENA_WIDTH, unit.config.radius);
+  unit.pos.y = clampToArena(unit.pos.y, ARENA_HEIGHT, unit.config.radius);
+
+  // 被边界卡住则提前结束冲刺
+  const moved = lengthOf(unit.pos.x - prevX, unit.pos.y - prevY);
+  unit.chargeRemaining -= moved;
+  if (moved <= 0 || unit.chargeRemaining <= 0) {
+    endCharge(unit);
+  }
+
+  resolveChargeHits(world, unit);
+}
+
+/**
+ * 碰撞圈碰到任意敌人后，对前方 aoeRadius 内所有未命中敌人结算击退伤害。
+ * 每段冲刺每个目标只结算一次。
+ */
+function resolveChargeHits(world: World, unit: Unit): void {
+  const charge = unit.config.charge!;
+  const grid = world.unitGrid;
+
+  // 先确认本帧是否与敌方碰撞圈重叠（触发溅射的条件）
+  if (!hasEnemyBodyContact(world, unit)) return;
+
+  const aoeSq = mul(charge.aoeRadius, charge.aoeRadius);
+  grid.query(unit.pos.x, unit.pos.y, charge.aoeRadius + MAX_UNIT_RADIUS, neighbors);
+
+  for (let k = 0; k < neighbors.length; k++) {
+    const idx = neighbors[k]!;
+    const other = world.units[idx]!;
+    if (!isAlive(other)) continue;
+    if (other.faction === unit.faction) continue;
+    if (other.id === unit.id) continue;
+    if (unit.chargeHits.includes(other.id)) continue;
+
+    const dx = other.pos.x - unit.pos.x;
+    const dy = other.pos.y - unit.pos.y;
+    if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) > aoeSq) continue;
+
+    // 前方半圆：相对位移与冲刺方向点积 ≥ 0
+    const forward = mul(dx, unit.chargeDir.x) + mul(dy, unit.chargeDir.y);
+    if (forward < 0) continue;
+
+    other.hp -= charge.hitDamage;
+    applyLateralKnockback(unit, other, charge.knockback);
+    unit.chargeHits.push(other.id);
+  }
+}
+
+/** 是否与任一敌方碰撞圈重叠 */
+function hasEnemyBodyContact(world: World, unit: Unit): boolean {
+  const grid = world.unitGrid;
+  grid.query(unit.pos.x, unit.pos.y, unit.config.radius + MAX_UNIT_RADIUS, neighbors);
+
+  for (let k = 0; k < neighbors.length; k++) {
+    const idx = neighbors[k]!;
+    const other = world.units[idx]!;
+    if (!isAlive(other)) continue;
+    if (other.faction === unit.faction) continue;
+    if (other.id === unit.id) continue;
+
+    const minDist = unit.config.radius + other.config.radius;
+    if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) < mul(minDist, minDist)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 横向击退：垂直于冲刺方向。
+ * 叉积 (dir × offset) 的符号决定推到左侧还是右侧，保证被撞单位往冲刺线外侧飞。
+ */
+function applyLateralKnockback(charger: Unit, victim: Unit, distance: Fx): void {
+  const dx = victim.pos.x - charger.pos.x;
+  const dy = victim.pos.y - charger.pos.y;
+  // 2D 叉积 dir×offset：>0 表示受害者在冲刺方向左侧
+  const cross = mul(charger.chargeDir.x, dy) - mul(charger.chargeDir.y, dx);
+
+  // 左侧推 (-dy, dx) 的垂直方向，右侧推反方向；重合时默认推右
+  if (cross >= 0) {
+    set(lateral, -charger.chargeDir.y, charger.chargeDir.x);
+  } else {
+    set(lateral, charger.chargeDir.y, -charger.chargeDir.x);
+  }
+  normalize(lateral, lateral.x, lateral.y);
+  if (lateral.x === 0 && lateral.y === 0) {
+    // 退化：冲刺方向为零或完全重合，沿固定轴推开
+    set(lateral, ONE, 0);
+  }
+
+  victim.pos.x += mul(lateral.x, distance);
+  victim.pos.y += mul(lateral.y, distance);
+  victim.pos.x = clampToArena(victim.pos.x, ARENA_WIDTH, victim.config.radius);
+  victim.pos.y = clampToArena(victim.pos.y, ARENA_HEIGHT, victim.config.radius);
+}
+
+function endCharge(unit: Unit): void {
+  unit.chargeRemaining = 0;
+  // 退出 Charge 后本帧不再 Seek/Attack，下一帧 AI 会按射程重判
+  unit.state = UnitState.Idle;
+}
+
+function rebuildUnitGrid(world: World): void {
+  const grid = world.unitGrid;
+  grid.clear();
+  for (let i = 0; i < world.units.length; i++) {
+    const unit = world.units[i]!;
+    if (unit.dead) continue;
+    grid.insert(i, unit.pos.x, unit.pos.y);
+  }
+}

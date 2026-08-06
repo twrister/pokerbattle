@@ -190,6 +190,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     select.dataset.field = 'attackKind';
     for (const [value, text] of [
       ['melee', '近战'],
+      ['melee_aoe', '近战范围'],
       ['projectile', '远程弹道'],
     ] as const) {
       const option = document.createElement('option');
@@ -220,7 +221,12 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
         continue;
       }
       if (field === 'attackKind') {
-        draft.attackKind = el.value === 'projectile' ? 'projectile' : 'melee';
+        draft.attackKind =
+          el.value === 'projectile'
+            ? 'projectile'
+            : el.value === 'melee_aoe'
+              ? 'melee_aoe'
+              : 'melee';
         continue;
       }
       const num = Number(el.value);

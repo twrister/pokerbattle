@@ -2,6 +2,7 @@ import { type Fx, ONE, div, mul, sqrt } from '../math/fixed.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { MAX_UNIT_RADIUS } from '../config/units.js';
 import { SEPARATION_ITERATIONS, SEPARATION_STRENGTH } from '../config/tuning.js';
+import { UnitState } from '../entity/unit.js';
 import type { World } from '../world.js';
 
 /** 复用的邻居缓冲，避免每帧每单位都新建数组 */
@@ -76,6 +77,8 @@ export function resolveSeparation(world: World): void {
     for (let i = 0; i < units.length; i++) {
       const unit = units[i]!;
       if (unit.dead) continue;
+      // 冲刺中不受软碰撞推挤，保证直线冲锋不被挤歪
+      if (unit.state === UnitState.Charge) continue;
       unit.pos.x = clampToArena(unit.pos.x + unit.push.x, ARENA_WIDTH, unit.config.radius);
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
     }

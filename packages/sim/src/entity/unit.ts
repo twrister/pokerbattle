@@ -14,7 +14,7 @@ export function opposingFaction(faction: Faction): Faction {
   return faction === Faction.Blue ? Faction.Red : Faction.Blue;
 }
 
-/** AI 状态机。目前只有三态，行为树接入时替换 systems/ai.ts 即可，数据结构不用动。 */
+/** AI 状态机。目前只有四态，行为树接入时替换 systems/ai.ts 即可，数据结构不用动。 */
 export const UnitState = {
   /** 场上没有敌人，原地待命 */
   Idle: 0,
@@ -22,6 +22,8 @@ export const UnitState = {
   Seek: 1,
   /** 目标在射程内，停下输出 */
   Attack: 2,
+  /** 骑兵直线冲刺中，位移与途中命中由 cavalry 系统处理 */
+  Charge: 3,
 } as const;
 export type UnitState = (typeof UnitState)[keyof typeof UnitState];
 
@@ -48,6 +50,15 @@ export interface Unit {
   attackCooldown: Fx;
   /** 出手前摇剩余（tick，定点），> 0 表示正在挥手/拉弓 */
   windupLeft: Fx;
+
+  /** 冲刺技能冷却剩余（tick）；无冲刺兵种恒为 0 */
+  chargeCooldown: Fx;
+  /** 本段冲刺剩余路程（格）；> 0 且 state=Charge 时正在冲 */
+  chargeRemaining: Fx;
+  /** 冲刺锁定方向（施放瞬间指向目标） */
+  readonly chargeDir: Vec2;
+  /** 本段冲刺已命中过的敌方 id，避免同一目标重复结算 */
+  readonly chargeHits: number[];
 
   readonly base: Attributes;
   readonly stats: Attributes;
@@ -85,6 +96,10 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     retargetIn: 0,
     attackCooldown: 0,
     windupLeft: 0,
+    chargeCooldown: 0,
+    chargeRemaining: 0,
+    chargeDir: vec(0, faction === Faction.Blue ? ONE : -ONE),
+    chargeHits: [],
     base,
     stats: attributesFromConfig(config),
     buffs: [],

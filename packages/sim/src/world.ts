@@ -15,6 +15,7 @@ import { updateTargeting } from './systems/targeting.js';
 import { updateAi } from './systems/ai.js';
 import { updatePaths } from './systems/pathfinding.js';
 import { updateMovement } from './systems/movement.js';
+import { updateCharge } from './systems/cavalry.js';
 import { resolveSeparation } from './systems/separation.js';
 import { updateCombat } from './systems/combat.js';
 import { updateProjectiles } from './systems/projectiles.js';
@@ -98,6 +99,7 @@ export class World {
     updateAi(this);
     updatePaths(this);
     updateMovement(this);
+    updateCharge(this);
     resolveSeparation(this);
     updateCombat(this);
     updateProjectiles(this);
@@ -158,6 +160,10 @@ export class World {
       h = mix(h, unit.targetId);
       h = mix(h, unit.attackCooldown);
       h = mix(h, unit.windupLeft);
+      h = mix(h, unit.chargeCooldown);
+      h = mix(h, unit.chargeRemaining);
+      h = mix(h, unit.chargeDir.x);
+      h = mix(h, unit.chargeDir.y);
     }
     for (const projectile of this.projectiles) {
       h = mix(h, projectile.id);

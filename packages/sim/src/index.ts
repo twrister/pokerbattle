@@ -9,6 +9,7 @@ export {
   MAX_UNIT_RADIUS,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  type ChargeConfig,
   type UnitConfig,
   type UnitConfigDraft,
   type UnitTypeId,

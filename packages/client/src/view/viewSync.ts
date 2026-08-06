@@ -65,6 +65,7 @@ export class BattleView {
         lerp(from.facingY, unit.facingY, alpha),
         lerp(from.hpRatio, unit.hpRatio, alpha),
         unit.attacking,
+        unit.charging,
         camera,
       );
     }

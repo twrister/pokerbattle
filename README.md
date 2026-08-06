@@ -1,6 +1,6 @@
 # PokerBattle
 
-类王室战争的 Web RTS 实时对战框架。当前阶段是**单机战斗 MVP**：可以在场上任意位置投放两种兵、两个阵营，观察自动索敌、寻路、碰撞推挤和战斗结算。
+类王室战争的 Web RTS 实时对战框架。当前阶段是**单机战斗 MVP**：可以在场上任意位置投放三种兵、两个阵营，观察自动索敌、寻路、碰撞推挤、冲刺和战斗结算。
 
 ## 运行
 
@@ -12,7 +12,7 @@ pnpm check    # 全仓类型检查
 pnpm build    # 生产构建
 ```
 
-打开页面后：左键点地面放兵，拖拽转视角，滚轮缩放。`1` `2` 切兵种，`Q` `E` 切阵营，空格暂停，`N` 单步，`B` 一键开团，`R` 清空。
+打开页面后：左键点地面放兵，拖拽转视角，滚轮缩放。`1` `2` `3` 切兵种，`Q` `E` 切阵营，空格暂停，`N` 单步，`B` 一键开团，`R` 清空。
 
 ## 结构
 
@@ -25,7 +25,7 @@ packages/
 `@pb/sim` 的唯一入口是 `world.step(commands)`，固定 20 tick/s。系统执行顺序写死在 [packages/sim/src/world.ts](packages/sim/src/world.ts) 里：
 
 ```
-指令 → Buff → 索敌 → AI → 寻路 → 移动 → 碰撞推挤 → 战斗 → 弹道 → 清理
+指令 → Buff → 索敌 → AI → 寻路 → 移动 → 冲刺 → 碰撞推挤 → 战斗 → 弹道 → 清理
 ```
 
 ## 确定性约定
@@ -41,7 +41,9 @@ packages/
 
 ## 加一个兵种
 
-往 [config/units.ts](packages/sim/src/config/units.ts) 的 `UNIT_CONFIGS` 加一行就行，HUD 的兵种按钮和渲染视图都会自动跟上，不需要改任何逻辑代码。
+无特殊技能时，往 [config/units.ts](packages/sim/src/config/units.ts) 的 `UNIT_CONFIGS` 加一行即可，HUD 兵种按钮和渲染视图会自动跟上。
+
+带冲刺等技能时，除配置外还要在对应系统里接线（例如骑兵的 `charge` 配置由 [systems/cavalry.ts](packages/sim/src/systems/cavalry.ts) 驱动）。
 
 ## 加一个 Buff
 

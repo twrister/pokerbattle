@@ -1,13 +1,36 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
 
-export type UnitTypeId = 'melee_grunt' | 'ranged_archer';
+export type UnitTypeId = 'melee_grunt' | 'ranged_archer' | 'melee_cavalry';
 
-/** 攻击方式：近战直接结算，远程生成一枚追踪弹 */
-export type AttackKind = { kind: 'melee' } | { kind: 'projectile'; speed: Fx };
+/** 攻击方式：近战单体、近战范围、远程追踪弹 */
+export type AttackKind =
+  | { kind: 'melee' }
+  | { kind: 'melee_aoe' }
+  | { kind: 'projectile'; speed: Fx };
+
+/** 冲刺技能参数。只有骑兵等具备冲锋的兵种才填写。 */
+export interface ChargeConfig {
+  /** 技能冷却（tick），20 tick = 1 秒 */
+  cooldown: Fx;
+  /** 直线冲刺总距离（格） */
+  distance: Fx;
+  /** 相对移速的倍率 */
+  speedMul: Fx;
+  /** 触发窗口下限：与目标中心距 ≥ 此值才可冲 */
+  triggerMin: Fx;
+  /** 触发窗口上限：与目标中心距 ≤ 此值才可冲 */
+  triggerMax: Fx;
+  /** 途经命中造成的少量伤害 */
+  hitDamage: Fx;
+  /** 横向击退距离（格） */
+  knockback: Fx;
+  /** 碰到敌人后，前方溅射半径（格） */
+  aoeRadius: Fx;
+}
 
 /**
  * 兵种配置。所有数值都是定点数，扩到 10 个兵种只是往 UNIT_CONFIGS 里加行，
- * 不需要新增任何类或分支逻辑。
+ * 不需要新增任何类或分支逻辑（有技能的兵种除外，需接对应系统）。
  */
 export interface UnitConfig {
   id: UnitTypeId;
@@ -29,6 +52,8 @@ export interface UnitConfig {
   /** 索敌半径。默认给到能覆盖全场，等价于「攻击场上最近的敌人」 */
   sightRange: Fx;
   attack: AttackKind;
+  /** 可选冲刺技能；有此字段的兵种由 cavalry 系统驱动 */
+  charge?: ChargeConfig;
 }
 
 /**
@@ -47,7 +72,7 @@ export interface UnitConfigDraft {
   range: number;
   moveSpeed: number;
   sightRange: number;
-  attackKind: 'melee' | 'projectile';
+  attackKind: 'melee' | 'melee_aoe' | 'projectile';
   /** 仅 attackKind === 'projectile' 时有意义 */
   projectileSpeed: number;
 }
@@ -85,17 +110,45 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       sightRange: FULL_FIELD_SIGHT,
       attack: { kind: 'projectile', speed: fromFloat(9.0) },
     },
+    melee_cavalry: {
+      id: 'melee_cavalry',
+      name: '骑兵（冲刺）',
+      radius: fromFloat(0.45),
+      mass: fromFloat(3.2),
+      maxHp: fromFloat(520),
+      damage: fromFloat(95),
+      attackInterval: fromFloat(20),
+      attackWindup: fromFloat(7),
+      range: fromFloat(0.55),
+      moveSpeed: fromFloat(2.2),
+      sightRange: FULL_FIELD_SIGHT,
+      attack: { kind: 'melee_aoe' },
+      charge: {
+        cooldown: fromFloat(100),
+        distance: fromFloat(3),
+        speedMul: fromFloat(2),
+        triggerMin: fromFloat(2),
+        triggerMax: fromFloat(2.5),
+        hitDamage: fromFloat(30),
+        knockback: fromFloat(1),
+        aoeRadius: fromFloat(1.5),
+      },
+    },
   };
 }
 
-/** 深拷贝一份配置，attack 联合类型单独处理以免共享引用 */
+/** 深拷贝攻击方式，避免共享引用 */
+function cloneAttack(attack: AttackKind): AttackKind {
+  if (attack.kind === 'projectile') return { kind: 'projectile', speed: attack.speed };
+  return { kind: attack.kind };
+}
+
+/** 深拷贝一份配置，attack / charge 单独处理以免共享引用 */
 function cloneConfig(config: UnitConfig): UnitConfig {
   return {
     ...config,
-    attack:
-      config.attack.kind === 'melee'
-        ? { kind: 'melee' }
-        : { kind: 'projectile', speed: config.attack.speed },
+    attack: cloneAttack(config.attack),
+    charge: config.charge ? { ...config.charge } : undefined,
   };
 }
 
@@ -119,10 +172,8 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.range = source.range;
   target.moveSpeed = source.moveSpeed;
   target.sightRange = source.sightRange;
-  target.attack =
-    source.attack.kind === 'melee'
-      ? { kind: 'melee' }
-      : { kind: 'projectile', speed: source.attack.speed };
+  target.attack = cloneAttack(source.attack);
+  target.charge = source.charge ? { ...source.charge } : undefined;
 }
 
 export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = createDefaultConfigs();
@@ -165,6 +216,15 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
   };
 }
 
+/** 把草稿里的攻击方式还原成运行时 AttackKind */
+function attackFromDraft(draft: UnitConfigDraft): AttackKind {
+  if (draft.attackKind === 'projectile') {
+    return { kind: 'projectile', speed: fromFloat(draft.projectileSpeed) };
+  }
+  if (draft.attackKind === 'melee_aoe') return { kind: 'melee_aoe' };
+  return { kind: 'melee' };
+}
+
 /** 导出全部兵种的浮点草稿 */
 export function dumpUnitConfigDrafts(): Record<UnitTypeId, UnitConfigDraft> {
   const out = {} as Record<UnitTypeId, UnitConfigDraft>;
@@ -199,10 +259,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.range = fromFloat(draft.range);
     target.moveSpeed = fromFloat(draft.moveSpeed);
     target.sightRange = fromFloat(draft.sightRange);
-    target.attack =
-      draft.attackKind === 'melee'
-        ? { kind: 'melee' }
-        : { kind: 'projectile', speed: fromFloat(draft.projectileSpeed) };
+    target.attack = attackFromDraft(draft);
   }
   recomputeMaxUnitRadius();
 }

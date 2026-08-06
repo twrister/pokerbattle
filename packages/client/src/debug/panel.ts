@@ -94,7 +94,14 @@ export function createPanel(options: PanelOptions): PanelHandle {
     if (event.repeat) return;
     switch (event.code) {
       case 'Digit1':
-      case 'Digit2': {
+      case 'Digit2':
+      case 'Digit3':
+      case 'Digit4':
+      case 'Digit5':
+      case 'Digit6':
+      case 'Digit7':
+      case 'Digit8':
+      case 'Digit9': {
         const index = Number(event.code.slice(5)) - 1;
         const next = UNIT_TYPE_IDS[index];
         if (next) selectUnit(next);

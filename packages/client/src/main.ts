@@ -49,17 +49,17 @@ function spawnBrawl(target: SimLoop): void {
   const lineup: Array<[UnitTypeId, number]> = [
     ['melee_grunt', 5],
     ['melee_grunt', 7],
-    ['melee_grunt', 9],
+    ['melee_cavalry', 8.5],
     ['melee_grunt', 11],
     ['ranged_archer', 6],
-    ['ranged_archer', 8],
-    ['ranged_archer', 10],
+    ['ranged_archer', 9],
     ['ranged_archer', 12],
   ];
   for (const [typeId, x] of lineup) {
     const backRow = typeId === 'ranged_archer';
-    const blueY = backRow ? 3 : 6;
-    const redY = ARENA_H - (backRow ? 3 : 6);
+    const midRow = typeId === 'melee_cavalry';
+    const blueY = backRow ? 3 : midRow ? 5 : 6;
+    const redY = ARENA_H - (backRow ? 3 : midRow ? 5 : 6);
     target.enqueue(spawnCommand(Faction.Blue, typeId, fromFloat(x), fromFloat(blueY)));
     target.enqueue(spawnCommand(Faction.Red, typeId, fromFloat(x), fromFloat(redY)));
   }
