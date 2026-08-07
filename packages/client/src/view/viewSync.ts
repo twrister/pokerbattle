@@ -46,6 +46,8 @@ export class BattleView {
 
   private renderUnits(curr: Snapshot, alpha: number, camera: THREE.Camera): void {
     this.seen.clear();
+    // 程序动画的时钟。用真实时间而不是逻辑 tick，20fps 的逻辑帧下动作依然是 60fps 平滑的
+    const timeSec = performance.now() * 0.001;
 
     for (const unit of curr.units) {
       this.seen.add(unit.id);
@@ -64,8 +66,10 @@ export class BattleView {
         lerp(from.facingX, unit.facingX, alpha),
         lerp(from.facingY, unit.facingY, alpha),
         lerp(from.hpRatio, unit.hpRatio, alpha),
+        unit.state,
         unit.attacking,
         unit.charging,
+        timeSec,
         camera,
       );
     }
@@ -111,7 +115,11 @@ export class BattleView {
     const key = viewKey(unit.faction, unit.typeId);
     const pooled = this.unitPool.get(key);
     const reused = pooled?.pop();
-    return reused ?? new UnitView(unit.faction, unit.typeId);
+    if (reused) {
+      reused.resetAnimState();
+      return reused;
+    }
+    return new UnitView(unit.faction, unit.typeId);
   }
 
   private pushPool(pool: Map<string, UnitView[]>, key: string, view: UnitView): void {
