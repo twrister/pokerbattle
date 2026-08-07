@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { toSimX, toSimY } from '../view/coords.js';
+import { ARENA_H, ARENA_W, toSimX, toSimY } from '../view/coords.js';
 
 export interface PlacementOptions {
   domElement: HTMLElement;
@@ -12,11 +12,17 @@ export interface PlacementOptions {
 const CLICK_DRAG_TOLERANCE = 6;
 const CLICK_MAX_DURATION_MS = 500;
 
+/** 点击落点是否在场地矩形内（含边界） */
+function isInsideArena(simX: number, simY: number): boolean {
+  return simX >= 0 && simX <= ARENA_W && simY >= 0 && simY <= ARENA_H;
+}
+
 /**
  * 点击地面放兵。
  *
  * 相机用的是 OrbitControls，左键既要能转视角又要能放兵，
  * 所以用「按下到抬起之间位移很小且时间很短」来区分点击和拖拽。
+ * 射线打的是无限地面平面，因此必须额外拒绝场外命中，避免被 clamp 到边缘仍出兵。
  */
 export function enablePlacement(options: PlacementOptions): () => void {
   const { domElement, camera, groundPlane, onPlace } = options;
@@ -48,7 +54,12 @@ export function enablePlacement(options: PlacementOptions): () => void {
     raycaster.setFromCamera(ndc, camera);
     if (!raycaster.ray.intersectPlane(groundPlane, hit)) return;
 
-    onPlace(toSimX(hit.x), toSimY(hit.z));
+    const simX = toSimX(hit.x);
+    const simY = toSimY(hit.z);
+    // 无限平面在场外也能命中；场外点击不放兵
+    if (!isInsideArena(simX, simY)) return;
+
+    onPlace(simX, simY);
   };
 
   domElement.addEventListener('pointerdown', onPointerDown);
