@@ -10,10 +10,10 @@ import {
 } from './unitSprites.js';
 
 /**
- * 单位视图。战兵/弓手用参考立绘做成公告板精灵（始终面向相机的面片），
+ * 单位视图。各兵种用参考立绘做成公告板精灵（始终面向相机的面片），
  * 配合程序化的待机/行走/攻击动作；几何体与材质按兵种共享，
  * 单个单位只有一个面片 + 血条，几百个同屏也没有压力。
- * 没有立绘的兵种（骑兵）沿用纯色圆柱占位。
+ * 没有立绘的兵种沿用纯色圆柱占位。
  * 地面上那圈亮环仍是真实碰撞圈，调推挤参数时一眼能看出对不对。
  */
 export class UnitView {
@@ -23,6 +23,8 @@ export class UnitView {
   private readonly hpAnchor = new THREE.Group();
   private readonly hpFill: THREE.Mesh;
   private readonly barWidth: number;
+  /** 振奋状态的脚下光环，默认隐藏并在快照标记时脉冲显示。 */
+  private readonly inspireAura: THREE.Mesh;
 
   // —— 精灵模式 ——
   /** 公告板挂点：每帧对齐相机朝向，子节点上的动画位移都发生在屏幕平面内 */
@@ -123,6 +125,20 @@ export class UnitView {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.03;
 
+    this.inspireAura = new THREE.Mesh(
+      new THREE.RingGeometry(radius * 1.08, radius * 1.22, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xffdc6b,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    this.inspireAura.rotation.x = -Math.PI / 2;
+    this.inspireAura.position.y = 0.035;
+    this.inspireAura.visible = false;
+
     this.barWidth = Math.max(0.75, radius * 2.4);
     const barHeight = 0.13;
     // 底/前景几乎共面时，远距深度精度塌缩会让后画的透明底条盖住前景（闪烁→只剩底色）。
@@ -150,7 +166,7 @@ export class UnitView {
     this.hpAnchor.position.y = topY + 0.35;
     this.hpAnchor.add(hpBack, this.hpFill);
 
-    this.group.add(ring, this.hpAnchor);
+    this.group.add(ring, this.inspireAura, this.hpAnchor);
   }
 
   update(
@@ -162,6 +178,7 @@ export class UnitView {
     state: UnitState,
     attacking: boolean,
     charging: boolean,
+    inspired: boolean,
     timeSec: number,
     camera: THREE.Camera,
   ): void {
@@ -185,6 +202,11 @@ export class UnitView {
     // 缩放是绕中心的，往左挪回去血条才是从右往左掉
     this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
     this.hpAnchor.quaternion.copy(camera.quaternion);
+    this.inspireAura.visible = inspired;
+    if (inspired) {
+      const pulse = 1 + Math.sin(timeSec * 7 + this.phase) * 0.08;
+      this.inspireAura.scale.setScalar(pulse);
+    }
   }
 
   /**
@@ -275,6 +297,7 @@ export class UnitView {
   resetAnimState(): void {
     this.wasAttacking = false;
     this.strikeUntil = 0;
+    this.inspireAura.visible = false;
   }
 
   dispose(): void {

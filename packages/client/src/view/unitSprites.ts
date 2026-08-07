@@ -18,7 +18,7 @@ export interface SpriteDef {
   sourceFacing: -1 | 1;
 }
 
-/** 有立绘的兵种。骑兵暂无参考图，继续用圆柱占位。 */
+/** 有立绘的兵种；正背面按朝向相机切换，左右靠镜像补全。 */
 export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
   melee_grunt: {
     frontUrl: 'units/warrior-front.png',
@@ -32,6 +32,28 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     backUrl: 'units/archer-back.png',
     heightMul: 3.8,
     aspect: 188 / 229,
+    sourceFacing: -1,
+  },
+  melee_cavalry: {
+    frontUrl: 'units/knight-front.png',
+    backUrl: 'units/knight-back.png',
+    // 骑马立绘比步兵高，倍率略大才能压住碰撞圈视觉尺度
+    heightMul: 4.4,
+    aspect: 199 / 234,
+    sourceFacing: 1,
+  },
+  hero_king: {
+    frontUrl: 'units/king-front.png',
+    backUrl: 'units/king-back.png',
+    heightMul: 3.5,
+    aspect: 197 / 200,
+    sourceFacing: 1,
+  },
+  hero_queen: {
+    frontUrl: 'units/queen-front.png',
+    backUrl: 'units/queen-back.png',
+    heightMul: 4.1,
+    aspect: 171 / 179,
     sourceFacing: -1,
   },
 };
@@ -83,6 +105,9 @@ function createSpriteMaterial(url: string): THREE.MeshBasicMaterial {
     side: THREE.DoubleSide,
     visible: false,
   });
+
+  // Node 测试没有 DOM，不能创建 ImageLoader；视图同步测试只需场景对象存在。
+  if (typeof document === 'undefined') return material;
 
   let texture = textureCache.get(url);
   if (!texture) {

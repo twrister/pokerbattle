@@ -51,12 +51,14 @@ function spawnBrawl(target: SimLoop): void {
     ['melee_grunt', 7],
     ['melee_cavalry', 8.5],
     ['melee_grunt', 11],
+    ['hero_king', 4],
+    ['hero_queen', 13],
     ['ranged_archer', 6],
     ['ranged_archer', 9],
     ['ranged_archer', 12],
   ];
   for (const [typeId, x] of lineup) {
-    const backRow = typeId === 'ranged_archer';
+    const backRow = typeId === 'ranged_archer' || typeId === 'hero_queen';
     const midRow = typeId === 'melee_cavalry';
     const blueY = backRow ? 3 : midRow ? 5 : 6;
     const redY = ARENA_H - (backRow ? 3 : midRow ? 5 : 6);

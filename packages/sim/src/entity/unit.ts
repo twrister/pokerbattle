@@ -59,6 +59,8 @@ export interface Unit {
   readonly chargeDir: Vec2;
   /** 本段冲刺已命中过的敌方 id，避免同一目标重复结算 */
   readonly chargeHits: number[];
+  /** 女王范围治疗的冷却剩余（tick）；无治疗技能的单位恒为 0 */
+  healCooldown: Fx;
 
   readonly base: Attributes;
   readonly stats: Attributes;
@@ -100,6 +102,7 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     chargeRemaining: 0,
     chargeDir: vec(0, faction === Faction.Blue ? ONE : -ONE),
     chargeHits: [],
+    healCooldown: 0,
     base,
     stats: attributesFromConfig(config),
     buffs: [],

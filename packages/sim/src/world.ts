@@ -4,6 +4,7 @@ import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config
 import { MAX_UNIT_RADIUS, type UnitTypeId, getUnitConfig } from './config/units.js';
 import { RETARGET_INTERVAL } from './config/tuning.js';
 import { type Projectile, createProjectile } from './entity/projectile.js';
+import { type HealEffect } from './entity/effect.js';
 import { type Faction, type Unit, createUnit } from './entity/unit.js';
 import { NavGrid } from './nav/grid.js';
 import { PathFinder } from './nav/astar.js';
@@ -19,6 +20,7 @@ import { updateCharge } from './systems/cavalry.js';
 import { resolveSeparation } from './systems/separation.js';
 import { updateCombat } from './systems/combat.js';
 import { updateProjectiles } from './systems/projectiles.js';
+import { updateHeroSkills } from './systems/heroSkills.js';
 import { cleanup } from './systems/cleanup.js';
 
 const NO_COMMANDS: readonly Command[] = [];
@@ -39,9 +41,11 @@ export class World {
   unitGrid: SpatialHash;
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
+  readonly healEffects: HealEffect[] = [];
 
   tick = 0;
   private nextEntityId = 1;
+  private nextEffectId = 1;
   private readonly unitsById = new Map<number, Unit>();
 
   constructor(seed = 1) {
@@ -87,6 +91,19 @@ export class World {
     return projectile;
   }
 
+  /** 记录一次治疗范围效果，供快照层播放短暂的视觉反馈。 */
+  spawnHealEffect(x: Fx, y: Fx, radius: Fx): void {
+    const totalTicks = 10;
+    this.healEffects.push({
+      id: this.nextEffectId++,
+      x,
+      y,
+      radius,
+      remainingTicks: totalTicks,
+      totalTicks,
+    });
+  }
+
   /**
    * 推进一个逻辑帧。系统顺序写死在这里，任何调整都会改变模拟结果，
    * 改动前请确认两端会同时更新。
@@ -101,6 +118,7 @@ export class World {
     updateMovement(this);
     updateCharge(this);
     resolveSeparation(this);
+    updateHeroSkills(this);
     updateCombat(this);
     updateProjectiles(this);
     cleanup(this);
@@ -133,9 +151,11 @@ export class World {
   clear(): void {
     this.units.length = 0;
     this.projectiles.length = 0;
+    this.healEffects.length = 0;
     this.unitsById.clear();
     this.tick = 0;
     this.nextEntityId = 1;
+    this.nextEffectId = 1;
     this.rng.setState(this.seed);
     // 配置面板可能改过半径，格子尺寸要跟着 MAX_UNIT_RADIUS 走
     this.unitGrid = new SpatialHash(ARENA_WIDTH, ARENA_HEIGHT, MAX_UNIT_RADIUS * 2);
@@ -164,12 +184,19 @@ export class World {
       h = mix(h, unit.chargeRemaining);
       h = mix(h, unit.chargeDir.x);
       h = mix(h, unit.chargeDir.y);
+      h = mix(h, unit.healCooldown);
     }
     for (const projectile of this.projectiles) {
       h = mix(h, projectile.id);
       h = mix(h, projectile.pos.x);
       h = mix(h, projectile.pos.y);
       h = mix(h, projectile.targetId);
+    }
+    for (const effect of this.healEffects) {
+      h = mix(h, effect.id);
+      h = mix(h, effect.x);
+      h = mix(h, effect.y);
+      h = mix(h, effect.remainingTicks);
     }
     return h >>> 0;
   }

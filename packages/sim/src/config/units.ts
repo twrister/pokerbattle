@@ -1,6 +1,11 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
 
-export type UnitTypeId = 'melee_grunt' | 'ranged_archer' | 'melee_cavalry';
+export type UnitTypeId =
+  | 'melee_grunt'
+  | 'ranged_archer'
+  | 'melee_cavalry'
+  | 'hero_king'
+  | 'hero_queen';
 
 /** 攻击方式：近战单体、近战范围、远程追踪弹 */
 export type AttackKind =
@@ -26,6 +31,22 @@ export interface ChargeConfig {
   knockback: Fx;
   /** 碰到敌人后，前方溅射半径（格） */
   aoeRadius: Fx;
+}
+
+/** 国王持续光环的属性和范围。 */
+export interface InspireConfig {
+  radius: Fx;
+  /** 攻击间隔乘数，小于 1 即提升攻速。 */
+  attackIntervalMul: Fx;
+  moveSpeedMul: Fx;
+}
+
+/** 女王自动治疗的选点、范围与冷却参数。 */
+export interface HealConfig {
+  cooldown: Fx;
+  targetRange: Fx;
+  radius: Fx;
+  amount: Fx;
 }
 
 /**
@@ -54,6 +75,10 @@ export interface UnitConfig {
   attack: AttackKind;
   /** 可选冲刺技能；有此字段的兵种由 cavalry 系统驱动 */
   charge?: ChargeConfig;
+  /** 可选振奋光环；有此字段的兵种由 heroSkills 系统驱动 */
+  inspire?: InspireConfig;
+  /** 可选自动范围治疗；有此字段的兵种由 heroSkills 系统驱动 */
+  heal?: HealConfig;
 }
 
 /**
@@ -134,6 +159,45 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
         aoeRadius: fromFloat(1.5),
       },
     },
+    hero_king: {
+      id: 'hero_king',
+      name: '国王（振奋）',
+      radius: fromFloat(0.62),
+      mass: fromFloat(5),
+      maxHp: fromFloat(800),
+      damage: fromFloat(100),
+      attackInterval: fromFloat(20),
+      attackWindup: fromFloat(7),
+      range: fromFloat(0.15),
+      moveSpeed: fromFloat(1.7),
+      sightRange: FULL_FIELD_SIGHT,
+      attack: { kind: 'melee' },
+      inspire: {
+        radius: fromFloat(3),
+        attackIntervalMul: fromFloat(0.8),
+        moveSpeedMul: fromFloat(1.2),
+      },
+    },
+    hero_queen: {
+      id: 'hero_queen',
+      name: '女王（治疗）',
+      radius: fromFloat(0.48),
+      mass: fromFloat(2.6),
+      maxHp: fromFloat(400),
+      damage: fromFloat(120),
+      attackInterval: fromFloat(24),
+      attackWindup: fromFloat(9),
+      range: fromFloat(5),
+      moveSpeed: fromFloat(1.4),
+      sightRange: FULL_FIELD_SIGHT,
+      attack: { kind: 'projectile', speed: fromFloat(9) },
+      heal: {
+        cooldown: fromFloat(100),
+        targetRange: fromFloat(3),
+        radius: fromFloat(1.5),
+        amount: fromFloat(120),
+      },
+    },
   };
 }
 
@@ -149,6 +213,8 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     ...config,
     attack: cloneAttack(config.attack),
     charge: config.charge ? { ...config.charge } : undefined,
+    inspire: config.inspire ? { ...config.inspire } : undefined,
+    heal: config.heal ? { ...config.heal } : undefined,
   };
 }
 
@@ -174,6 +240,8 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.sightRange = source.sightRange;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
+  target.inspire = source.inspire ? { ...source.inspire } : undefined;
+  target.heal = source.heal ? { ...source.heal } : undefined;
 }
 
 export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = createDefaultConfigs();

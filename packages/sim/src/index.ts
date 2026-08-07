@@ -10,6 +10,8 @@ export {
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   type ChargeConfig,
+  type HealConfig,
+  type InspireConfig,
   type UnitConfig,
   type UnitConfigDraft,
   type UnitTypeId,
@@ -34,6 +36,7 @@ export { SpatialHash } from './spatial/hash.js';
 
 export { type Command, CommandKind, type SpawnCommand, spawnCommand } from './commands.js';
 export {
+  type HealEffectSnapshot,
   type ProjectileSnapshot,
   type Snapshot,
   type UnitSnapshot,

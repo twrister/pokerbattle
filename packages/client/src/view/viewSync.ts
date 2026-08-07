@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Faction, type Snapshot, type UnitSnapshot } from '@pb/sim';
 import { toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey } from './unitView.js';
+import { HealEffectView } from './healEffectView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -21,6 +22,8 @@ export class BattleView {
   private readonly unitPool = new Map<string, UnitView[]>();
   private readonly activeProjectiles = new Map<number, THREE.Mesh>();
   private readonly projectilePool: THREE.Mesh[] = [];
+  private readonly activeHealEffects = new Map<number, HealEffectView>();
+  private readonly healEffectPool: HealEffectView[] = [];
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -34,6 +37,7 @@ export class BattleView {
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
     this.renderProjectiles(prev, curr, alpha);
+    this.renderHealEffects(curr);
   }
 
   /** 快照换了才重建索引，同一逻辑帧内的多次渲染直接复用 */
@@ -69,6 +73,7 @@ export class BattleView {
         unit.state,
         unit.attacking,
         unit.charging,
+        unit.inspired,
         timeSec,
         camera,
       );
@@ -79,6 +84,27 @@ export class BattleView {
       this.scene.remove(view.group);
       this.activeUnits.delete(id);
       this.pushPool(this.unitPool, view.key, view);
+    }
+  }
+
+  /** 将模拟层的短寿命治疗事件同步为可池化的扩散光环。 */
+  private renderHealEffects(curr: Snapshot): void {
+    this.seen.clear();
+    for (const effect of curr.healEffects) {
+      this.seen.add(effect.id);
+      let view = this.activeHealEffects.get(effect.id);
+      if (!view) {
+        view = this.healEffectPool.pop() ?? new HealEffectView();
+        this.activeHealEffects.set(effect.id, view);
+        this.scene.add(view.group);
+      }
+      view.update(effect);
+    }
+    for (const [id, view] of this.activeHealEffects) {
+      if (this.seen.has(id)) continue;
+      this.scene.remove(view.group);
+      this.activeHealEffects.delete(id);
+      this.healEffectPool.push(view);
     }
   }
 
@@ -140,6 +166,11 @@ export class BattleView {
       this.activeProjectiles.delete(id);
       this.projectilePool.push(mesh);
     }
+    for (const [id, view] of this.activeHealEffects) {
+      this.scene.remove(view.group);
+      this.activeHealEffects.delete(id);
+      this.healEffectPool.push(view);
+    }
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
@@ -159,6 +190,12 @@ export class BattleView {
       this.projectilePool.push(mesh);
     }
     this.activeProjectiles.clear();
+    for (const [id, view] of this.activeHealEffects) {
+      this.scene.remove(view.group);
+      this.activeHealEffects.delete(id);
+      this.healEffectPool.push(view);
+    }
+    this.activeHealEffects.clear();
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }

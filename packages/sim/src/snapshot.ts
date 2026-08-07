@@ -24,6 +24,8 @@ export interface UnitSnapshot {
   attacking: boolean;
   /** 骑兵冲刺中，渲染层可以提高高亮 */
   charging: boolean;
+  /** 受到国王振奋时，渲染层显示持续光环 */
+  inspired: boolean;
 }
 
 export interface ProjectileSnapshot {
@@ -33,10 +35,20 @@ export interface ProjectileSnapshot {
   y: number;
 }
 
+/** 女王瞬间治疗的范围效果。 */
+export interface HealEffectSnapshot {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  progress: number;
+}
+
 export interface Snapshot {
   tick: number;
   units: UnitSnapshot[];
   projectiles: ProjectileSnapshot[];
+  healEffects: HealEffectSnapshot[];
 }
 
 export function takeSnapshot(world: World): Snapshot {
@@ -56,6 +68,7 @@ export function takeSnapshot(world: World): Snapshot {
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
       attacking: unit.windupLeft > 0,
       charging: unit.state === UnitState.Charge,
+      inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
     });
   }
 
@@ -65,10 +78,21 @@ export function takeSnapshot(world: World): Snapshot {
     projectiles.push({ id: p.id, faction: p.faction, x: toFloat(p.pos.x), y: toFloat(p.pos.y) });
   }
 
-  return { tick: world.tick, units, projectiles };
+  const healEffects: HealEffectSnapshot[] = [];
+  for (const effect of world.healEffects) {
+    healEffects.push({
+      id: effect.id,
+      x: toFloat(effect.x),
+      y: toFloat(effect.y),
+      radius: toFloat(effect.radius),
+      progress: 1 - effect.remainingTicks / effect.totalTicks,
+    });
+  }
+
+  return { tick: world.tick, units, projectiles, healEffects };
 }
 
 /** 空快照，供渲染层在第一帧之前占位 */
 export function emptySnapshot(): Snapshot {
-  return { tick: 0, units: [], projectiles: [] };
+  return { tick: 0, units: [], projectiles: [], healEffects: [] };
 }
