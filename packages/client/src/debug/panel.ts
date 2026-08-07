@@ -20,6 +20,8 @@ export interface PanelHandle {
   updateStats: (fps: number) => void;
   /** 配置面板改了兵种显示名后刷新底部按钮文案 */
   refreshUnitLabels: () => void;
+  /** 移除全局快捷键和控件事件，供沙盒退出时释放 */
+  dispose: () => void;
 }
 
 /** 把 HUD 里的按钮和 SimLoop 接起来，并定时刷新状态读数 */
@@ -81,16 +83,14 @@ export function createPanel(options: PanelOptions): PanelHandle {
     speedButton.textContent = `${loop.speed}x`;
   }
 
-  for (const button of factionGroup.querySelectorAll('button')) {
-    button.addEventListener('click', () => selectFaction(Number(button.dataset.faction) as Faction));
-  }
-  pauseButton.addEventListener('click', togglePause);
-  stepButton.addEventListener('click', () => loop.stepOnce());
-  speedButton.addEventListener('click', cycleSpeed);
-  brawlButton.addEventListener('click', options.onBrawl);
-  clearButton.addEventListener('click', options.onClear);
+  const selectFactionFromButton = (event: Event): void => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('button[data-faction]');
+    if (button) selectFaction(Number(button.dataset.faction) as Faction);
+  };
 
-  window.addEventListener('keydown', (event) => {
+  const stepOnce = (): void => loop.stepOnce();
+
+  const onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) return;
     switch (event.code) {
       case 'Digit1':
@@ -127,7 +127,15 @@ export function createPanel(options: PanelOptions): PanelHandle {
         options.onBrawl();
         break;
     }
-  });
+  };
+
+  factionGroup.addEventListener('click', selectFactionFromButton);
+  pauseButton.addEventListener('click', togglePause);
+  stepButton.addEventListener('click', stepOnce);
+  speedButton.addEventListener('click', cycleSpeed);
+  brawlButton.addEventListener('click', options.onBrawl);
+  clearButton.addEventListener('click', options.onClear);
+  window.addEventListener('keydown', onKeyDown);
 
   selectFaction(faction);
   selectUnit(unitType);
@@ -155,6 +163,16 @@ export function createPanel(options: PanelOptions): PanelHandle {
         const typeId = button.dataset.unit as UnitTypeId | undefined;
         if (typeId) button.textContent = UNIT_CONFIGS[typeId].name;
       }
+    },
+    dispose() {
+      factionGroup.removeEventListener('click', selectFactionFromButton);
+      pauseButton.removeEventListener('click', togglePause);
+      stepButton.removeEventListener('click', stepOnce);
+      speedButton.removeEventListener('click', cycleSpeed);
+      brawlButton.removeEventListener('click', options.onBrawl);
+      clearButton.removeEventListener('click', options.onClear);
+      window.removeEventListener('keydown', onKeyDown);
+      unitGroup.replaceChildren();
     },
   };
 }

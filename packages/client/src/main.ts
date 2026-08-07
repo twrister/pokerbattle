@@ -3,46 +3,112 @@ import { SimLoop } from './loop.js';
 import { createConfigPanel, hydrateUnitConfigsFromStorage } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
+import { createMainMenu } from './ui/mainMenu.js';
+import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H } from './view/coords.js';
 import { createScene } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
 
-const container = document.getElementById('app');
-if (!container) throw new Error('找不到 #app 容器');
+const container = requiredElement<HTMLElement>('#app');
+const hud = requiredElement<HTMLElement>('#hud');
+const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
 
 // 先灌入本地缓存的兵种参数，再创建 World，空间哈希才能用到自定义半径
 hydrateUnitConfigsFromStorage();
 
-const sceneContext = createScene(container);
-const loop = new SimLoop(20260806);
-const battleView = new BattleView(sceneContext.scene);
-
-const clearBattlefield = (): void => {
-  loop.reset();
-  battleView.invalidateUnitViews();
-};
-
-const panel = createPanel({
-  loop,
-  onClear: clearBattlefield,
-  onBrawl: () => spawnBrawl(loop),
+let screens: ScreenController;
+const mainMenu = createMainMenu({
+  onStartSandbox: () => screens.show('sandbox'),
 });
 
-createConfigPanel({
-  onApplied: () => {
-    clearBattlefield();
-    panel.refreshUnitLabels();
+/** 启动一轮可完整释放的沙盒会话，防止反复进出后累积监听器和渲染循环。 */
+function enterSandbox(): () => void {
+  container.classList.remove('is-hidden');
+  hud.classList.remove('is-hidden');
+
+  const sceneContext = createScene(container);
+  const loop = new SimLoop(20260806);
+  const battleView = new BattleView(sceneContext.scene);
+
+  const clearBattlefield = (): void => {
+    loop.reset();
+    battleView.invalidateUnitViews();
+  };
+
+  const panel = createPanel({
+    loop,
+    onClear: clearBattlefield,
+    onBrawl: () => spawnBrawl(loop),
+  });
+
+  const configPanel = createConfigPanel({
+    onApplied: () => {
+      clearBattlefield();
+      panel.refreshUnitLabels();
+    },
+  });
+
+  const disablePlacement = enablePlacement({
+    domElement: sceneContext.renderer.domElement,
+    camera: sceneContext.camera,
+    groundPlane: sceneContext.groundPlane,
+    onPlace: (simX, simY) => {
+      loop.enqueue(spawnCommand(panel.faction, panel.unitType, fromFloat(simX), fromFloat(simY)));
+    },
+  });
+
+  const returnToMenu = (): void => screens.show('menu');
+  backButton.addEventListener('click', returnToMenu);
+
+  let lastFrameAt = performance.now();
+  let smoothedFps = 60;
+  let animationFrameId = 0;
+
+  const frame = (now: number): void => {
+    const deltaMs = Math.min(now - lastFrameAt, 250);
+    lastFrameAt = now;
+    smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
+
+    loop.advance(deltaMs);
+    sceneContext.controls.update();
+    battleView.render(loop.prev, loop.curr, loop.alpha, sceneContext.camera);
+    sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
+    panel.updateStats(smoothedFps);
+
+    animationFrameId = requestAnimationFrame(frame);
+  };
+
+  animationFrameId = requestAnimationFrame(frame);
+
+  return () => {
+    cancelAnimationFrame(animationFrameId);
+    backButton.removeEventListener('click', returnToMenu);
+    disablePlacement();
+    configPanel.dispose();
+    panel.dispose();
+    battleView.reset();
+    sceneContext.dispose();
+    hud.classList.add('is-hidden');
+    container.classList.add('is-hidden');
+  };
+}
+
+screens = createScreenController({
+  menu: () => {
+    mainMenu.show();
+    return () => mainMenu.hide();
   },
+  sandbox: enterSandbox,
 });
+screens.show('menu');
 
-enablePlacement({
-  domElement: sceneContext.renderer.domElement,
-  camera: sceneContext.camera,
-  groundPlane: sceneContext.groundPlane,
-  onPlace: (simX, simY) => {
-    loop.enqueue(spawnCommand(panel.faction, panel.unitType, fromFloat(simX), fromFloat(simY)));
-  },
-});
+/** 页面卸载时释放当前会话和大厅事件，避免热重载保留旧引用。 */
+function disposeApp(): void {
+  screens.dispose();
+  mainMenu.dispose();
+}
+
+window.addEventListener('pagehide', disposeApp, { once: true });
 
 /** 一键摆一场混战，用来快速验证寻路、推挤和战斗结算 */
 function spawnBrawl(target: SimLoop): void {
@@ -67,21 +133,9 @@ function spawnBrawl(target: SimLoop): void {
   }
 }
 
-let lastFrameAt = performance.now();
-let smoothedFps = 60;
-
-function frame(now: number): void {
-  const deltaMs = Math.min(now - lastFrameAt, 250);
-  lastFrameAt = now;
-  smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
-
-  loop.advance(deltaMs);
-  sceneContext.controls.update();
-  battleView.render(loop.prev, loop.curr, loop.alpha, sceneContext.camera);
-  sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
-  panel.updateStats(smoothedFps);
-
-  requestAnimationFrame(frame);
+/** 启动阶段立即校验页面骨架，避免缺失元素在交互后才触发隐晦空引用。 */
+function requiredElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) throw new Error(`页面缺少元素：${selector}`);
+  return element;
 }
-
-requestAnimationFrame(frame);

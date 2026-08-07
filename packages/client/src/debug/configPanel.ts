@@ -38,6 +38,8 @@ export interface ConfigPanelOptions {
 export interface ConfigPanelHandle {
   /** 当前运行时配置写回表单（外部改表后可调用） */
   refreshFromRuntime: () => void;
+  /** 移除静态控件事件并清空动态表单 */
+  dispose: () => void;
 }
 
 /** 兵种参数调试面板：同时展示全部兵种，支持保存到 localStorage / 重置默认 */
@@ -65,10 +67,9 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     }
   }
 
-  toggleButton.addEventListener('click', () => setCollapsed(!collapsed));
-  setCollapsed(collapsed);
+  const toggleCollapsed = (): void => setCollapsed(!collapsed);
 
-  saveButton.addEventListener('click', () => {
+  const save = (): void => {
     readAllFormsIntoDrafts();
     applyUnitConfigDrafts(drafts);
     try {
@@ -79,9 +80,9 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     }
     options.onApplied();
     syncSectionTitles();
-  });
+  };
 
-  resetButton.addEventListener('click', () => {
+  const reset = (): void => {
     resetUnitConfigsToDefault();
     drafts = dumpDefaultUnitConfigDrafts();
     try {
@@ -92,7 +93,12 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     renderForm();
     setStatus('已恢复出厂默认', false);
     options.onApplied();
-  });
+  };
+
+  toggleButton.addEventListener('click', toggleCollapsed);
+  saveButton.addEventListener('click', save);
+  resetButton.addEventListener('click', reset);
+  setCollapsed(collapsed);
 
   /** 把全部兵种草稿并排渲染成表单 */
   function renderForm(): void {
@@ -255,6 +261,12 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     refreshFromRuntime() {
       drafts = dumpUnitConfigDrafts();
       renderForm();
+    },
+    dispose() {
+      toggleButton.removeEventListener('click', toggleCollapsed);
+      saveButton.removeEventListener('click', save);
+      resetButton.removeEventListener('click', reset);
+      formEl.replaceChildren();
     },
   };
 }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PokerBattle · RTS 战斗沙盒</title>
+    <title>PokerBattle</title>
     <style>
       :root {
         --panel-bg: rgba(19, 24, 33, 0.82);
@@ -29,6 +29,310 @@
         font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
         font-size: 13px;
         user-select: none;
+      }
+
+      .is-hidden {
+        display: none !important;
+      }
+
+      #main-menu {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        overflow: auto;
+        background:
+          radial-gradient(circle at 50% 24%, rgba(58, 88, 116, 0.34), transparent 34%),
+          linear-gradient(160deg, #101924 0%, #0a1018 54%, #10141b 100%);
+      }
+
+      .lobby-shell {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: min(100%, calc(100svh * 0.5625));
+        min-height: 100svh;
+        margin: 0 auto;
+        padding:
+          max(env(safe-area-inset-top), clamp(20px, 3.2vh, 54px))
+          clamp(20px, 5vw, 52px)
+          max(env(safe-area-inset-bottom), clamp(18px, 2.8vh, 44px));
+        overflow: hidden;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 32%),
+          rgba(10, 16, 24, 0.54);
+        box-shadow: 0 0 80px rgba(0, 0, 0, 0.48);
+      }
+
+      .lobby-shell::before,
+      .lobby-shell::after {
+        content: '';
+        position: absolute;
+        border: 1px solid rgba(174, 198, 218, 0.08);
+        transform: rotate(18deg);
+        pointer-events: none;
+      }
+
+      .lobby-shell::before {
+        top: 12%;
+        right: -28%;
+        width: 70%;
+        aspect-ratio: 1;
+        border-radius: 28%;
+      }
+
+      .lobby-shell::after {
+        bottom: 11%;
+        left: -36%;
+        width: 64%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+      }
+
+      .lobby-topbar,
+      .lobby-hero,
+      .lobby-actions,
+      .lobby-nav {
+        position: relative;
+        z-index: 1;
+      }
+
+      .lobby-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .player-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .player-avatar {
+        display: grid;
+        width: clamp(38px, 6vh, 58px);
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid rgba(169, 198, 220, 0.38);
+        border-radius: 50%;
+        background: linear-gradient(145deg, #26384b, #152232);
+        color: #d9e9f5;
+        font-size: clamp(14px, 2.2vh, 21px);
+        font-weight: 700;
+      }
+
+      .player-copy {
+        min-width: 0;
+      }
+
+      .player-name {
+        overflow: hidden;
+        color: #f4f7fa;
+        font-size: clamp(14px, 2vh, 19px);
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .player-level {
+        margin-top: 2px;
+        color: #79899b;
+        font-size: clamp(10px, 1.4vh, 13px);
+        letter-spacing: 0.08em;
+      }
+
+      .lobby-hero {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+        padding: clamp(24px, 6vh, 76px) 0 clamp(18px, 4vh, 48px);
+        text-align: center;
+      }
+
+      .hero-mark {
+        position: relative;
+        display: grid;
+        width: clamp(118px, 20vh, 210px);
+        aspect-ratio: 0.74;
+        place-items: center;
+        margin-bottom: clamp(22px, 4vh, 46px);
+        border: 1px solid rgba(175, 199, 218, 0.26);
+        border-radius: 16px;
+        background:
+          linear-gradient(145deg, rgba(116, 153, 180, 0.18), rgba(12, 20, 29, 0.82)),
+          #121e2a;
+        box-shadow:
+          18px 18px 0 -7px rgba(32, 48, 63, 0.66),
+          0 28px 70px rgba(0, 0, 0, 0.32);
+        color: #d7ecf8;
+        font-family: Georgia, serif;
+        font-size: clamp(48px, 8vh, 84px);
+        transform: rotate(-4deg);
+      }
+
+      .hero-mark::after {
+        content: '♠';
+        position: absolute;
+        right: 12px;
+        bottom: 8px;
+        color: rgba(215, 236, 248, 0.25);
+        font-size: 0.34em;
+        transform: rotate(180deg);
+      }
+
+      .lobby-kicker {
+        color: #7690a6;
+        font-size: clamp(10px, 1.5vh, 14px);
+        font-weight: 650;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+      }
+
+      .lobby-title {
+        margin: clamp(8px, 1.5vh, 16px) 0 0;
+        color: #f2f5f7;
+        font-size: clamp(36px, 6.2vh, 66px);
+        font-weight: 720;
+        letter-spacing: 0.04em;
+        line-height: 1;
+      }
+
+      .lobby-subtitle {
+        max-width: 28em;
+        margin: clamp(12px, 2vh, 20px) auto 0;
+        color: #8292a2;
+        font-size: clamp(12px, 1.7vh, 16px);
+        line-height: 1.7;
+      }
+
+      .lobby-actions {
+        display: grid;
+        gap: clamp(8px, 1.5vh, 14px);
+      }
+
+      .lobby-play-row {
+        display: grid;
+        grid-template-columns: 1fr 1.35fr;
+        gap: 10px;
+      }
+
+      .play-entry {
+        width: 100%;
+        padding: clamp(14px, 2.4vh, 23px) 14px;
+        border-radius: 14px;
+        font-size: clamp(15px, 2.3vh, 21px);
+        font-weight: 680;
+        letter-spacing: 0.08em;
+      }
+
+      .play-entry small {
+        display: block;
+        margin-top: 5px;
+        font-size: 0.52em;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+      }
+
+      #btn-solo {
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+        color: #d5e2ec;
+      }
+
+      #btn-solo small {
+        color: rgba(180, 198, 214, 0.62);
+      }
+
+      #btn-match {
+        border: 1px solid rgba(153, 207, 237, 0.52);
+        background: linear-gradient(135deg, #3d718f, #294c68);
+        box-shadow: 0 12px 28px rgba(17, 57, 82, 0.32);
+        color: #f7fbfd;
+      }
+
+      #btn-match small {
+        color: rgba(232, 245, 251, 0.66);
+      }
+
+      #lobby-status {
+        min-height: 1.4em;
+        color: transparent;
+        font-size: clamp(10px, 1.4vh, 13px);
+        text-align: center;
+        transition: color 0.18s;
+      }
+
+      #lobby-status.is-visible {
+        color: #8192a4;
+      }
+
+      .lobby-nav {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: clamp(8px, 1.4vh, 14px);
+        padding-top: clamp(12px, 2vh, 20px);
+        border-top: 1px solid rgba(137, 158, 177, 0.13);
+      }
+
+      .nav-entry {
+        display: grid;
+        gap: 5px;
+        place-items: center;
+        min-width: 0;
+        padding: clamp(9px, 1.6vh, 15px) 5px;
+        border-color: transparent;
+        background: transparent;
+        color: #718192;
+      }
+
+      .nav-entry:hover {
+        border-color: rgba(139, 165, 184, 0.14);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .nav-icon {
+        color: #91a8ba;
+        font-size: clamp(19px, 3vh, 28px);
+        line-height: 1;
+      }
+
+      .nav-label {
+        font-size: clamp(11px, 1.55vh, 14px);
+        font-weight: 600;
+      }
+
+      .nav-tag {
+        color: #536272;
+        font-size: clamp(8px, 1.05vh, 10px);
+        letter-spacing: 0.12em;
+      }
+
+      @media (max-aspect-ratio: 1 / 1) {
+        .lobby-shell {
+          width: 100%;
+          box-shadow: none;
+        }
+      }
+
+      @media (max-height: 620px) {
+        .hero-mark {
+          width: 90px;
+          margin-bottom: 16px;
+        }
+
+        .lobby-hero {
+          padding: 16px 0 12px;
+        }
+
+        .lobby-subtitle {
+          display: none;
+        }
       }
 
       #app {
@@ -67,6 +371,14 @@
       #panel-controls {
         top: 16px;
         right: 16px;
+      }
+
+      #btn-back-menu {
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        pointer-events: auto;
+        transform: translateX(-50%);
       }
 
       #panel-spawn {
@@ -307,9 +619,63 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
+    <main id="main-menu" aria-hidden="false">
+      <div class="lobby-shell">
+        <header class="lobby-topbar">
+          <div class="player-card">
+            <div class="player-avatar" aria-hidden="true">PB</div>
+            <div class="player-copy">
+              <div class="player-name">指挥官</div>
+              <div class="player-level">等级 01</div>
+            </div>
+          </div>
+        </header>
 
-    <div id="hud">
+        <section class="lobby-hero">
+          <div class="hero-mark" aria-hidden="true">P</div>
+          <div class="lobby-kicker">Tactical Card Battle</div>
+          <h1 class="lobby-title">PokerBattle</h1>
+          <p class="lobby-subtitle">组合你的阵容，在有限的战场上创造无限解法。</p>
+        </section>
+
+        <section class="lobby-actions" aria-label="主要玩法">
+          <div class="lobby-play-row">
+            <button id="btn-solo" class="play-entry" type="button" data-placeholder="单机模式">
+              单机模式
+              <small>COMING SOON</small>
+            </button>
+            <button id="btn-match" class="play-entry" type="button" data-placeholder="匹配">
+              匹配
+              <small>COMING SOON</small>
+            </button>
+          </div>
+          <div id="lobby-status" role="status" aria-live="polite">功能正在筹备中</div>
+        </section>
+
+        <nav class="lobby-nav" aria-label="功能入口">
+          <button class="nav-entry" type="button" data-placeholder="卡组">
+            <span class="nav-icon" aria-hidden="true">▣</span>
+            <span class="nav-label">卡组</span>
+            <span class="nav-tag">COMING SOON</span>
+          </button>
+          <button class="nav-entry" type="button" data-placeholder="图鉴">
+            <span class="nav-icon" aria-hidden="true">◇</span>
+            <span class="nav-label">图鉴</span>
+            <span class="nav-tag">COMING SOON</span>
+          </button>
+          <button id="btn-sandbox" class="nav-entry" type="button">
+            <span class="nav-icon" aria-hidden="true">◎</span>
+            <span class="nav-label">模拟沙盒</span>
+            <span class="nav-tag">MVP</span>
+          </button>
+        </nav>
+      </div>
+    </main>
+
+    <div id="app" class="is-hidden"></div>
+
+    <div id="hud" class="is-hidden">
+      <button id="btn-back-menu" type="button">返回主界面</button>
       <section class="panel" id="panel-stats">
         <div class="title">模拟状态</div>
         <dl class="stats-grid">
