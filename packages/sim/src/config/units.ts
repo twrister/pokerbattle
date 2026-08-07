@@ -1,4 +1,5 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
+import rawUnitConfigs from './units.json';
 
 export type UnitTypeId =
   | 'melee_grunt'
@@ -88,8 +89,36 @@ export interface UnitConfig {
   heal?: HealConfig;
 }
 
+/** 冲刺技能浮点草稿（与 JSON / 面板往返一致） */
+export interface ChargeConfigDraft {
+  cooldown: number;
+  windup: number;
+  distance: number;
+  speedMul: number;
+  triggerMin: number;
+  triggerMax: number;
+  hitDamage: number;
+  knockback: number;
+  aoeRadius: number;
+}
+
+/** 振奋光环浮点草稿 */
+export interface InspireConfigDraft {
+  radius: number;
+  attackIntervalMul: number;
+  moveSpeedMul: number;
+}
+
+/** 治疗技能浮点草稿 */
+export interface HealConfigDraft {
+  cooldown: number;
+  targetRange: number;
+  radius: number;
+  amount: number;
+}
+
 /**
- * 人类可读的浮点草稿。调试面板编辑、localStorage 持久化都用这套，
+ * 人类可读的浮点草稿。调试面板与 units.json 都用这套，
  * 写入模拟前再 fromFloat，避免在 UI 层直接碰定点。
  */
 export interface UnitConfigDraft {
@@ -108,10 +137,11 @@ export interface UnitConfigDraft {
   attackKind: 'melee' | 'melee_aoe' | 'projectile';
   /** 仅 attackKind === 'projectile' 时有意义 */
   projectileSpeed: number;
+  /** 有则随 JSON 往返，保存时不得丢失 */
+  charge?: ChargeConfigDraft;
+  inspire?: InspireConfigDraft;
+  heal?: HealConfigDraft;
 }
-
-/** 大于场地对角线（约 36.7），索敌时等价于全场搜索 */
-const FULL_FIELD_SIGHT = fromFloat(40);
 
 /**
  * 体型=1 时的显示半径（场景单位），取铁卫出厂碰撞半径作基准。
@@ -119,118 +149,13 @@ const FULL_FIELD_SIGHT = fromFloat(40);
  */
 export const BODY_SCALE_REFERENCE = 0.45;
 
-function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
-  return {
-    melee_grunt: {
-      id: 'melee_grunt',
-      name: '铁卫（近战）',
-      radius: fromFloat(0.45),
-      // 铁卫即体型基准
-      bodyScale: fromFloat(1),
-      mass: fromFloat(3.0),
-      maxHp: fromFloat(620),
-      damage: fromFloat(95),
-      attackInterval: fromFloat(20),
-      attackWindup: fromFloat(7),
-      range: fromFloat(0.15),
-      moveSpeed: fromFloat(1.7),
-      sightRange: FULL_FIELD_SIGHT,
-      attack: { kind: 'melee' },
-    },
-    ranged_archer: {
-      id: 'ranged_archer',
-      name: '弓手（远程）',
-      radius: fromFloat(0.3),
-      // 相对铁卫：0.3 / 0.45，保持解耦前的观感
-      bodyScale: fromFloat(0.3 / BODY_SCALE_REFERENCE),
-      mass: fromFloat(1.4),
-      maxHp: fromFloat(240),
-      damage: fromFloat(65),
-      attackInterval: fromFloat(24),
-      attackWindup: fromFloat(9),
-      range: fromFloat(5.0),
-      moveSpeed: fromFloat(1.4),
-      sightRange: FULL_FIELD_SIGHT,
-      attack: { kind: 'projectile', speed: fromFloat(9.0) },
-    },
-    melee_cavalry: {
-      id: 'melee_cavalry',
-      name: '骑兵（冲刺）',
-      radius: fromFloat(0.45),
-      bodyScale: fromFloat(1),
-      mass: fromFloat(3.2),
-      maxHp: fromFloat(520),
-      damage: fromFloat(95),
-      attackInterval: fromFloat(20),
-      attackWindup: fromFloat(7),
-      range: fromFloat(0.55),
-      moveSpeed: fromFloat(2.2),
-      sightRange: FULL_FIELD_SIGHT,
-      attack: { kind: 'melee_aoe' },
-      charge: {
-        cooldown: fromFloat(100),
-        // 0.5 秒原地蓄力后再直线冲出
-        windup: fromFloat(10),
-        distance: fromFloat(3),
-        speedMul: fromFloat(2),
-        triggerMin: fromFloat(2),
-        triggerMax: fromFloat(2.5),
-        hitDamage: fromFloat(30),
-        knockback: fromFloat(1),
-        aoeRadius: fromFloat(1.5),
-      },
-    },
-    hero_king: {
-      id: 'hero_king',
-      name: '国王（振奋）',
-      radius: fromFloat(0.62),
-      bodyScale: fromFloat(0.62 / BODY_SCALE_REFERENCE),
-      mass: fromFloat(5),
-      maxHp: fromFloat(800),
-      damage: fromFloat(100),
-      attackInterval: fromFloat(20),
-      attackWindup: fromFloat(7),
-      range: fromFloat(0.15),
-      moveSpeed: fromFloat(1.7),
-      sightRange: FULL_FIELD_SIGHT,
-      attack: { kind: 'melee' },
-      inspire: {
-        radius: fromFloat(3),
-        attackIntervalMul: fromFloat(0.8),
-        moveSpeedMul: fromFloat(1.2),
-      },
-    },
-    hero_queen: {
-      id: 'hero_queen',
-      name: '女王（治疗）',
-      radius: fromFloat(0.48),
-      bodyScale: fromFloat(0.48 / BODY_SCALE_REFERENCE),
-      mass: fromFloat(2.6),
-      maxHp: fromFloat(400),
-      damage: fromFloat(120),
-      attackInterval: fromFloat(24),
-      attackWindup: fromFloat(9),
-      range: fromFloat(5),
-      moveSpeed: fromFloat(1.4),
-      sightRange: FULL_FIELD_SIGHT,
-      attack: { kind: 'projectile', speed: fromFloat(9) },
-      heal: {
-        cooldown: fromFloat(100),
-        targetRange: fromFloat(3),
-        radius: fromFloat(1.5),
-        amount: fromFloat(120),
-      },
-    },
-  };
-}
-
 /** 深拷贝攻击方式，避免共享引用 */
 function cloneAttack(attack: AttackKind): AttackKind {
   if (attack.kind === 'projectile') return { kind: 'projectile', speed: attack.speed };
   return { kind: attack.kind };
 }
 
-/** 深拷贝一份配置，attack / charge 单独处理以免共享引用 */
+/** 深拷贝一份配置，attack / 技能块单独处理以免共享引用 */
 function cloneConfig(config: UnitConfig): UnitConfig {
   return {
     ...config,
@@ -268,9 +193,86 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.heal = source.heal ? { ...source.heal } : undefined;
 }
 
-export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = createDefaultConfigs();
+/** 把草稿里的攻击方式还原成运行时 AttackKind */
+function attackFromDraft(draft: UnitConfigDraft): AttackKind {
+  if (draft.attackKind === 'projectile') {
+    return { kind: 'projectile', speed: fromFloat(draft.projectileSpeed) };
+  }
+  if (draft.attackKind === 'melee_aoe') return { kind: 'melee_aoe' };
+  return { kind: 'melee' };
+}
 
-/** 模块加载时冻结的出厂默认值，供「重置」对照 */
+/** 浮点冲刺草稿 → 定点 */
+function chargeFromDraft(draft: ChargeConfigDraft): ChargeConfig {
+  return {
+    cooldown: fromFloat(draft.cooldown),
+    windup: fromFloat(draft.windup),
+    distance: fromFloat(draft.distance),
+    speedMul: fromFloat(draft.speedMul),
+    triggerMin: fromFloat(draft.triggerMin),
+    triggerMax: fromFloat(draft.triggerMax),
+    hitDamage: fromFloat(draft.hitDamage),
+    knockback: fromFloat(draft.knockback),
+    aoeRadius: fromFloat(draft.aoeRadius),
+  };
+}
+
+/** 浮点振奋草稿 → 定点 */
+function inspireFromDraft(draft: InspireConfigDraft): InspireConfig {
+  return {
+    radius: fromFloat(draft.radius),
+    attackIntervalMul: fromFloat(draft.attackIntervalMul),
+    moveSpeedMul: fromFloat(draft.moveSpeedMul),
+  };
+}
+
+/** 浮点治疗草稿 → 定点 */
+function healFromDraft(draft: HealConfigDraft): HealConfig {
+  return {
+    cooldown: fromFloat(draft.cooldown),
+    targetRange: fromFloat(draft.targetRange),
+    radius: fromFloat(draft.radius),
+    amount: fromFloat(draft.amount),
+  };
+}
+
+/** 单条浮点草稿转运行时定点配置 */
+function configFromDraft(draft: UnitConfigDraft): UnitConfig {
+  return {
+    id: draft.id,
+    name: draft.name,
+    radius: fromFloat(draft.radius),
+    bodyScale: fromFloat(
+      Number.isFinite(draft.bodyScale) && draft.bodyScale > 0 ? draft.bodyScale : 1,
+    ),
+    mass: fromFloat(draft.mass),
+    maxHp: fromFloat(draft.maxHp),
+    damage: fromFloat(draft.damage),
+    attackInterval: fromFloat(draft.attackInterval),
+    attackWindup: fromFloat(draft.attackWindup),
+    range: fromFloat(draft.range),
+    moveSpeed: fromFloat(draft.moveSpeed),
+    sightRange: fromFloat(draft.sightRange),
+    attack: attackFromDraft(draft),
+    charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
+    inspire: draft.inspire ? inspireFromDraft(draft.inspire) : undefined,
+    heal: draft.heal ? healFromDraft(draft.heal) : undefined,
+  };
+}
+
+/** 从 units.json 加载并转成定点配置表 */
+function loadConfigsFromJson(): Record<UnitTypeId, UnitConfig> {
+  const drafts = rawUnitConfigs as Record<UnitTypeId, UnitConfigDraft>;
+  const out = {} as Record<UnitTypeId, UnitConfig>;
+  for (const id of Object.keys(drafts) as UnitTypeId[]) {
+    out[id] = configFromDraft({ ...drafts[id], id });
+  }
+  return out;
+}
+
+export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = loadConfigsFromJson();
+
+/** 模块加载时冻结的出厂默认值，供「重置」对照；保存写回 JSON 后可再 capture */
 const DEFAULT_UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = cloneConfigs(UNIT_CONFIGS);
 
 export const UNIT_TYPE_IDS = Object.keys(UNIT_CONFIGS) as UnitTypeId[];
@@ -289,9 +291,9 @@ export function getUnitConfig(typeId: UnitTypeId): UnitConfig {
   return UNIT_CONFIGS[typeId];
 }
 
-/** 把定点配置导出成浮点草稿，供面板展示 */
+/** 把定点配置导出成浮点草稿，供面板展示 / 写回 JSON */
 export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
-  return {
+  const draft: UnitConfigDraft = {
     id: config.id,
     name: config.name,
     radius: toFloat(config.radius),
@@ -307,15 +309,35 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     attackKind: config.attack.kind,
     projectileSpeed: config.attack.kind === 'projectile' ? toFloat(config.attack.speed) : 9,
   };
-}
-
-/** 把草稿里的攻击方式还原成运行时 AttackKind */
-function attackFromDraft(draft: UnitConfigDraft): AttackKind {
-  if (draft.attackKind === 'projectile') {
-    return { kind: 'projectile', speed: fromFloat(draft.projectileSpeed) };
+  if (config.charge) {
+    draft.charge = {
+      cooldown: toFloat(config.charge.cooldown),
+      windup: toFloat(config.charge.windup),
+      distance: toFloat(config.charge.distance),
+      speedMul: toFloat(config.charge.speedMul),
+      triggerMin: toFloat(config.charge.triggerMin),
+      triggerMax: toFloat(config.charge.triggerMax),
+      hitDamage: toFloat(config.charge.hitDamage),
+      knockback: toFloat(config.charge.knockback),
+      aoeRadius: toFloat(config.charge.aoeRadius),
+    };
   }
-  if (draft.attackKind === 'melee_aoe') return { kind: 'melee_aoe' };
-  return { kind: 'melee' };
+  if (config.inspire) {
+    draft.inspire = {
+      radius: toFloat(config.inspire.radius),
+      attackIntervalMul: toFloat(config.inspire.attackIntervalMul),
+      moveSpeedMul: toFloat(config.inspire.moveSpeedMul),
+    };
+  }
+  if (config.heal) {
+    draft.heal = {
+      cooldown: toFloat(config.heal.cooldown),
+      targetRange: toFloat(config.heal.targetRange),
+      radius: toFloat(config.heal.radius),
+      amount: toFloat(config.heal.amount),
+    };
+  }
+  return draft;
 }
 
 /** 导出全部兵种的浮点草稿 */
@@ -336,7 +358,7 @@ export function dumpDefaultUnitConfigDrafts(): Record<UnitTypeId, UnitConfigDraf
   return out;
 }
 
-/** 用浮点草稿覆盖运行时配置表，并刷新 MAX_UNIT_RADIUS */
+/** 用浮点草稿覆盖运行时配置表，并刷新 MAX_UNIT_RADIUS；技能块有则覆盖、无则清空 */
 export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft>): void {
   for (const id of UNIT_TYPE_IDS) {
     const draft = drafts[id];
@@ -357,14 +379,25 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.moveSpeed = fromFloat(draft.moveSpeed);
     target.sightRange = fromFloat(draft.sightRange);
     target.attack = attackFromDraft(draft);
+    // 与文件一致：缺省技能键表示该兵种无此技能
+    target.charge = draft.charge ? chargeFromDraft(draft.charge) : undefined;
+    target.inspire = draft.inspire ? inspireFromDraft(draft.inspire) : undefined;
+    target.heal = draft.heal ? healFromDraft(draft.heal) : undefined;
   }
   recomputeMaxUnitRadius();
 }
 
-/** 把全部兵种恢复到出厂默认值 */
+/** 把全部兵种恢复到出厂默认值（以最近一次 capture / 模块加载时的快照为准） */
 export function resetUnitConfigsToDefault(): void {
   for (const id of UNIT_TYPE_IDS) {
     copyConfigInto(UNIT_CONFIGS[id], DEFAULT_UNIT_CONFIGS[id]);
   }
   recomputeMaxUnitRadius();
+}
+
+/** 把当前运行时配置记为新的出厂快照（保存写回 units.json 成功后调用） */
+export function captureUnitConfigsAsDefault(): void {
+  for (const id of UNIT_TYPE_IDS) {
+    copyConfigInto(DEFAULT_UNIT_CONFIGS[id], UNIT_CONFIGS[id]);
+  }
 }

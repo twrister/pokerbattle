@@ -1,7 +1,7 @@
 import {
-  BODY_SCALE_REFERENCE,
   UNIT_TYPE_IDS,
   applyUnitConfigDrafts,
+  captureUnitConfigsAsDefault,
   dumpDefaultUnitConfigDrafts,
   dumpUnitConfigDrafts,
   resetUnitConfigsToDefault,
@@ -9,9 +9,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 
-/** v2：体型与半径解耦（相对铁卫=1）；读到 v1 时会换算 bodyScale */
-const STORAGE_KEY = 'pb.unitConfigs.v2';
-const LEGACY_STORAGE_KEY = 'pb.unitConfigs.v1';
+/** 面板折叠状态仍可本地记忆；兵种数值以 units.json 为唯一数据源 */
 const COLLAPSE_KEY = 'pb.unitConfigPanel.collapsed';
 
 /** 表单字段元数据：label + 输入控件类型 */
@@ -46,7 +44,7 @@ export interface ConfigPanelHandle {
   dispose: () => void;
 }
 
-/** 兵种参数调试面板：同时展示全部兵种，支持保存到 localStorage / 重置默认 */
+/** 兵种参数调试面板：展示全部兵种，保存写回 units.json / 重置为文件快照 */
 export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandle {
   const root = required<HTMLElement>('#panel-config');
   const formEl = required<HTMLDivElement>('#config-form', root);
@@ -55,8 +53,10 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   const resetButton = required<HTMLButtonElement>('#btn-config-reset', root);
   const toggleButton = required<HTMLButtonElement>('#btn-config-toggle', root);
 
-  let drafts = loadInitialDrafts();
+  // 模块加载时已从 units.json 灌入 UNIT_CONFIGS
+  let drafts = dumpUnitConfigDrafts();
   let collapsed = readCollapsed();
+  let saveSeq = 0;
 
   /** 切换收起/展开，并记住上次状态 */
   function setCollapsed(next: boolean): void {
@@ -73,29 +73,30 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
 
   const toggleCollapsed = (): void => setCollapsed(!collapsed);
 
+  /** 应用到运行时，并尝试经 Vite 中间件写回 units.json */
   const save = (): void => {
     readAllFormsIntoDrafts();
     applyUnitConfigDrafts(drafts);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
-      setStatus('已保存，并写入本地缓存', false);
-    } catch {
-      setStatus('已应用到运行时（本地缓存写入失败）', true);
-    }
     options.onApplied();
     syncSectionTitles();
+
+    const seq = ++saveSeq;
+    void persistDraftsToFile(drafts).then((result) => {
+      if (seq !== saveSeq) return;
+      if (result.ok) {
+        captureUnitConfigsAsDefault();
+        setStatus('已保存并写回 units.json', false);
+      } else {
+        setStatus(`已应用到运行时（未能写回文件：${result.error}）`, true);
+      }
+    });
   };
 
   const reset = (): void => {
     resetUnitConfigsToDefault();
     drafts = dumpDefaultUnitConfigDrafts();
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // 隐私模式等读不到 storage 时忽略
-    }
     renderForm();
-    setStatus('已恢复出厂默认', false);
+    setStatus('已恢复为配置文件快照', false);
     options.onApplied();
   };
 
@@ -218,7 +219,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     return row;
   }
 
-  /** 从全部兵种表单读回草稿（保存 / 切换攻击方式前调用） */
+  /** 从全部兵种表单读回草稿（保存 / 切换攻击方式前调用）；技能块保留在 drafts 上原样写回 */
   function readAllFormsIntoDrafts(): void {
     for (const el of formEl.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-field]')) {
       const typeId = el.dataset.unit as UnitTypeId | undefined;
@@ -275,17 +276,35 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   };
 }
 
-/**
- * 在创建 World 之前调用：把 localStorage 里的兵种参数写回 UNIT_CONFIGS，
- * 这样空间哈希会按自定义半径建格。
- */
-export function hydrateUnitConfigsFromStorage(): void {
-  applyUnitConfigDrafts(readStoredDrafts() ?? dumpUnitConfigDrafts());
-}
-
-/** 优先读 localStorage，失败或损坏则回落运行时 / 默认 */
-function loadInitialDrafts(): Record<UnitTypeId, UnitConfigDraft> {
-  return readStoredDrafts() ?? dumpUnitConfigDrafts();
+/** POST 到 Vite 开发中间件写盘；preview/build 下接口不存在 */
+async function persistDraftsToFile(
+  drafts: Record<UnitTypeId, UnitConfigDraft>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch('/__pb/unit-configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(drafts),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) detail = body.error;
+      } catch {
+        // 非 JSON 错误体时沿用 status
+      }
+      // 常见于非 dev：中间件未注册，需在 pnpm dev 下保存
+      if (res.status === 404) {
+        return { ok: false, error: '需在 pnpm dev 下保存' };
+      }
+      return { ok: false, error: detail };
+    }
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
+  }
 }
 
 function readCollapsed(): boolean {
@@ -296,66 +315,12 @@ function readCollapsed(): boolean {
   }
 }
 
-/** 从 localStorage 解析草稿；没有或损坏时返回 null */
-function readStoredDrafts(): Record<UnitTypeId, UnitConfigDraft> | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return mergeStoredDrafts(JSON.parse(raw));
-
-    // v1 的 bodyScale 是「相对碰撞半径」倍率，换成「相对铁卫」后写入 v2
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!legacy) return null;
-    const migrated = migrateV1BodyScale(
-      JSON.parse(legacy) as Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
-    );
-    const merged = mergeStoredDrafts(migrated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    } catch {
-      // 写不进 storage 时仍返回内存里的迁移结果
-    }
-    return merged;
-  } catch {
-    return null;
-  }
-}
-
-/** 以出厂默认为底，叠本地补丁 */
-function mergeStoredDrafts(
-  parsed: Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
-): Record<UnitTypeId, UnitConfigDraft> {
-  const base = dumpDefaultUnitConfigDrafts();
-  for (const id of UNIT_TYPE_IDS) {
-    const patch = parsed[id];
-    if (patch) Object.assign(base[id], patch, { id });
-  }
-  return base;
-}
-
-/**
- * v1→v2：旧显示半径 ≈ radius × bodyScale，新 bodyScale = 旧显示半径 / 铁卫基准。
- */
-function migrateV1BodyScale(
-  parsed: Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
-): Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>> {
-  const defaults = dumpDefaultUnitConfigDrafts();
-  for (const id of UNIT_TYPE_IDS) {
-    const patch = parsed[id];
-    if (!patch) continue;
-    const radius = Number.isFinite(patch.radius) ? (patch.radius as number) : defaults[id].radius;
-    const oldScale = Number.isFinite(patch.bodyScale) ? (patch.bodyScale as number) : 1;
-    patch.bodyScale = (radius * oldScale) / BODY_SCALE_REFERENCE;
-  }
-  return parsed;
-}
-
 function formatNumber(value: number): string {
   // 去掉多余尾零，方便编辑；保留足够精度避免 fromFloat 往返抖动
   return String(Number(value.toFixed(4)));
 }
 
-/** 只接受数值字段，避免把 name/attackKind 误写成 number */
+/** 只接受数值字段，避免把 name/attackKind/技能块误写成 number */
 function assignNumericField(
   draft: UnitConfigDraft,
   field: keyof UnitConfigDraft,

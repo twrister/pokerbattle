@@ -1,6 +1,6 @@
 import { Faction, type UnitTypeId, fromFloat, spawnCommand } from '@pb/sim';
 import { SimLoop } from './loop.js';
-import { createConfigPanel, hydrateUnitConfigsFromStorage } from './debug/configPanel.js';
+import { createConfigPanel } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
 import { createMainMenu } from './ui/mainMenu.js';
@@ -13,8 +13,7 @@ const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
 const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
 
-// 先灌入本地缓存的兵种参数，再创建 World，空间哈希才能用到自定义半径
-hydrateUnitConfigsFromStorage();
+// 兵种参数在 @pb/sim 加载 units.json 时已生效，无需再 hydrate
 
 let screens: ScreenController;
 const mainMenu = createMainMenu({
