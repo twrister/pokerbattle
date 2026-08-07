@@ -81,17 +81,17 @@ describe('渲染同步', () => {
     expect(reused[0]).toBe(created[0]);
   });
 
-  it('治疗事件会创建范围效果，并在事件结束后回收', () => {
+  it('治疗事件会创建单体受疗效果，并在事件结束后回收', () => {
     const scene = new THREE.Scene();
     const view = new BattleView(scene);
     const world = new World(1);
-    world.spawnHealEffect(fromFloat(8), fromFloat(8), fromFloat(1.5));
+    world.spawnHealEffect(fromFloat(8), fromFloat(8), fromFloat(0.5));
     const withEffect = takeSnapshot(world);
 
     view.render(withEffect, withEffect, 1, camera);
     expect(scene.children.length).toBe(1);
 
-    for (let i = 0; i < 10; i++) world.step();
+    for (let i = 0; i < 12; i++) world.step();
     const withoutEffect = takeSnapshot(world);
     view.render(withEffect, withoutEffect, 1, camera);
     expect(scene.children.length).toBe(0);

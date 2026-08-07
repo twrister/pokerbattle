@@ -15,17 +15,25 @@ import {
   getSpriteMaterials,
   type SpriteMaterials,
 } from './unitSprites.js';
+import {
+  CAST_FRAME_RATE,
+  CAST_SHEETS,
+  applyCastFrame,
+  createCastSheetMaterial,
+  getCastSheetGeometry,
+} from './castEffectSprites.js';
 
 /**
  * 单位视图。各兵种用参考立绘做成公告板精灵（始终面向相机的面片），
- * 配合程序化的待机/行走/攻击动作；几何体与材质按兵种共享，
- * 单个单位只有一个面片 + 血条，几百个同屏也没有压力。
+ * 配合程序化的待机/行走/攻击动作；贴图按兵种共享，材质按视图克隆以便单独受击染色。
  * 没有立绘的兵种沿用纯色圆柱占位。
  * 地面上那圈亮环仍是真实碰撞圈；精灵/圆柱大小只看体型（相对铁卫=1），与碰撞半径无关。
  */
 export class UnitView {
   readonly key: string;
   readonly group = new THREE.Group();
+  /** 上次同步的血量比例，供视图层检测掉血并触发受击闪红 */
+  lastHpRatio = 1;
 
   private readonly hpAnchor = new THREE.Group();
   private readonly hpFill: THREE.Mesh;
@@ -37,7 +45,10 @@ export class UnitView {
   /** 公告板挂点：每帧对齐相机朝向，子节点上的动画位移都发生在屏幕平面内 */
   private readonly billboard: THREE.Group | null = null;
   private readonly sprite: THREE.Mesh | null = null;
+  /** 本视图独立材质，用于受击染色 */
   private readonly spriteMaterials: SpriteMaterials | null = null;
+  /** 共享模板材质；贴图异步就绪后只改模板的 visible，克隆体每帧同步 */
+  private readonly sharedSpriteMaterials: SpriteMaterials | null = null;
   /** 精灵可视高度（场景单位） */
   private readonly spriteSize: number = 0;
   private readonly spriteWidth: number = 0;
@@ -54,14 +65,42 @@ export class UnitView {
   private wasAttacking = false;
   /** 突刺动画结束时刻（秒）；> timeSec 时播放朝面向一侧的前倾突刺 */
   private strikeUntil = 0;
+  /** 受击闪红结束时刻（秒） */
+  private hitUntil = 0;
+  /** 范围受击轻抖结束时刻（秒） */
+  private shakeUntil = 0;
+  /** 本次闪红是否来自范围伤害（更长、略亮） */
+  private aoeHitFlash = false;
+  /** 上一帧是否在施法，用来抓边沿并重开动效 */
+  private wasCasting = false;
+  /** 本次施法动画起始时刻（秒） */
+  private castAnimStartedAt = 0;
 
   // —— 圆柱占位模式 ——
   private readonly yaw: THREE.Group | null = null;
   private readonly bodyMaterial: THREE.MeshStandardMaterial | null = null;
+  private readonly baseBodyColor = new THREE.Color();
   private readonly baseEmissive: number = 0.12;
+
+  /**
+   * 有技能兵种挂的 Teleport 施法特效挂点；无技能兵种为 null。
+   * 子节点是三层 Additive 序列帧，始终面向相机。
+   */
+  private readonly castFx: THREE.Group | null = null;
+  private readonly castLayers: Array<{
+    mesh: THREE.Mesh;
+    material: THREE.MeshBasicMaterial;
+    frames: number;
+  }> = [];
 
   /** 出手突刺持续时长（秒），与前摇后仰分开，专管「砍出去」那一下 */
   private static readonly STRIKE_SEC = 0.18;
+  /** 受击材质变红持续时长（秒） */
+  private static readonly HIT_FLASH_SEC = 0.15;
+  /** 范围受击闪红更长，方便同帧多目标对齐辨认 */
+  private static readonly HIT_FLASH_AOE_SEC = 0.24;
+  /** 范围受击轻抖时长（秒） */
+  private static readonly HIT_SHAKE_SEC = 0.12;
 
   constructor(faction: Faction, typeId: UnitTypeId) {
     this.key = viewKey(faction, typeId);
@@ -71,18 +110,23 @@ export class UnitView {
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
     const color = bodyColor(faction, typeId);
-    const spriteMaterials = getSpriteMaterials(typeId);
+    const sharedSprites = getSpriteMaterials(typeId);
 
     let topY: number;
-    if (spriteMaterials) {
+    if (sharedSprites) {
       const spriteDef = SPRITE_DEFS[typeId]!;
-      this.spriteMaterials = spriteMaterials;
+      this.sharedSpriteMaterials = sharedSprites;
+      // 克隆材质，避免同兵种共享 tint 时全体一起变红
+      this.spriteMaterials = {
+        front: sharedSprites.front.clone(),
+        back: sharedSprites.back.clone(),
+      };
       this.spriteSize = bodyRadius * spriteDef.heightMul;
       this.spriteWidth = this.spriteSize * spriteDef.aspect;
       this.spriteSourceFacing = spriteDef.sourceFacing;
       topY = this.spriteSize;
 
-      this.sprite = new THREE.Mesh(SPRITE_GEOMETRY, spriteMaterials.front);
+      this.sprite = new THREE.Mesh(SPRITE_GEOMETRY, this.spriteMaterials.front);
       this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
 
       this.billboard = new THREE.Group();
@@ -99,7 +143,8 @@ export class UnitView {
       const height = bodyRadius * 2.6;
       topY = height;
 
-      // 每个视图独立一份材质，才能在出手前摇时单独高亮
+      this.baseBodyColor.set(color);
+      // 每个视图独立一份材质，才能在出手前摇/受击时单独高亮
       this.bodyMaterial = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.55,
@@ -149,6 +194,22 @@ export class UnitView {
     this.inspireAura.position.y = 0.035;
     this.inspireAura.visible = false;
 
+    // 仅骑兵 / 女王挂施法特效；国王光环是持续效果，不需要瞬间施法动画
+    if (config.charge || config.heal) {
+      this.castFx = new THREE.Group();
+      this.castFx.visible = false;
+      for (const sheet of CAST_SHEETS) {
+        const material = createCastSheetMaterial(sheet);
+        const mesh = new THREE.Mesh(getCastSheetGeometry(sheet), material);
+        const height = bodyRadius * sheet.heightMul;
+        mesh.scale.set(height, height, 1);
+        mesh.renderOrder = 4;
+        this.castFx.add(mesh);
+        this.castLayers.push({ mesh, material, frames: sheet.frames });
+      }
+      this.group.add(this.castFx);
+    }
+
     this.barWidth = Math.max(0.75, bodyRadius * 2.4);
     const barHeight = 0.13;
     // 底/前景几乎共面时，远距深度精度塌缩会让后画的透明底条盖住前景（闪烁→只剩底色）。
@@ -189,10 +250,18 @@ export class UnitView {
     attacking: boolean,
     charging: boolean,
     inspired: boolean,
+    casting: boolean,
     timeSec: number,
     camera: THREE.Camera,
   ): void {
     this.group.position.set(sceneX, 0, sceneZ);
+    // 范围受击时在落点上叠短促抖动，多目标同帧掉血更易成组辨认
+    if (timeSec < this.shakeUntil) {
+      const u = (this.shakeUntil - timeSec) / UnitView.HIT_SHAKE_SEC;
+      const amp = 0.07 * u * u;
+      this.group.position.x += Math.sin(timeSec * 68 + this.phase) * amp;
+      this.group.position.z += Math.cos(timeSec * 52 + this.phase) * amp;
+    }
 
     if (this.billboard && this.sprite) {
       this.billboard.quaternion.copy(camera.quaternion);
@@ -216,6 +285,62 @@ export class UnitView {
     if (inspired) {
       const pulse = 1 + Math.sin(timeSec * 7 + this.phase) * 0.08;
       this.inspireAura.scale.setScalar(pulse);
+    }
+
+    this.updateCastFx(casting, timeSec, camera);
+    this.applyHitTint(timeSec);
+  }
+
+  /** 施法边沿重启 Teleport 序列帧；持续施法时播完循环，结束则隐藏。 */
+  private updateCastFx(casting: boolean, timeSec: number, camera: THREE.Camera): void {
+    if (!this.castFx) return;
+
+    if (casting && !this.wasCasting) this.castAnimStartedAt = timeSec;
+    this.wasCasting = casting;
+    if (!casting) {
+      this.castFx.visible = false;
+      return;
+    }
+
+    this.castFx.visible = true;
+    this.castFx.quaternion.copy(camera.quaternion);
+    const elapsed = Math.max(0, timeSec - this.castAnimStartedAt);
+    for (let i = 0; i < this.castLayers.length; i++) {
+      const layer = this.castLayers[i]!;
+      const sheet = CAST_SHEETS[i]!;
+      const frame = Math.floor(elapsed * CAST_FRAME_RATE) % layer.frames;
+      const map = layer.material.map;
+      if (map) applyCastFrame(map, sheet, frame);
+    }
+  }
+
+  /** 血量下降时由视图层调用，开启短时材质变红；aoe 时加长并触发轻抖 */
+  flashHit(timeSec: number, aoe = false): void {
+    this.aoeHitFlash = aoe;
+    this.hitUntil = timeSec + (aoe ? UnitView.HIT_FLASH_AOE_SEC : UnitView.HIT_FLASH_SEC);
+    if (aoe) this.shakeUntil = timeSec + UnitView.HIT_SHAKE_SEC;
+  }
+
+  /** 按受击剩余时间把材质色拉向红再复原；强度 1→0 */
+  private applyHitTint(timeSec: number): void {
+    const duration = this.aoeHitFlash ? UnitView.HIT_FLASH_AOE_SEC : UnitView.HIT_FLASH_SEC;
+    const raw = timeSec < this.hitUntil ? (this.hitUntil - timeSec) / duration : 0;
+    // 范围受击峰值更亮，同波次多目标闪红更容易齐步被看见
+    const t = this.aoeHitFlash ? Math.min(1, raw * 1.15) : raw;
+
+    if (this.spriteMaterials && this.sharedSpriteMaterials) {
+      // 共享材质在贴图加载完成后才 visible；克隆体需跟着同步，否则会永远隐形
+      this.spriteMaterials.front.visible = this.sharedSpriteMaterials.front.visible;
+      this.spriteMaterials.back.visible = this.sharedSpriteMaterials.back.visible;
+      HIT_TINT_COLOR.lerpColors(WHITE_COLOR, HIT_FLASH_COLOR, t);
+      this.spriteMaterials.front.color.copy(HIT_TINT_COLOR);
+      this.spriteMaterials.back.color.copy(HIT_TINT_COLOR);
+      return;
+    }
+
+    if (this.bodyMaterial) {
+      this.bodyMaterial.color.lerpColors(this.baseBodyColor, HIT_FLASH_COLOR, t);
+      this.bodyMaterial.emissive.lerpColors(this.baseBodyColor, HIT_FLASH_COLOR, t);
     }
   }
 
@@ -303,18 +428,35 @@ export class UnitView {
     sprite.scale.set(this.mirror * this.spriteWidth, size * stretch, 1);
   }
 
-  /** 对象池取出复用时清掉攻击动画边沿，避免上一任单位的突刺残帧 */
+  /** 对象池取出复用时清掉攻击/受击动画边沿，避免上一任单位的残帧 */
   resetAnimState(): void {
     this.wasAttacking = false;
     this.strikeUntil = 0;
+    this.hitUntil = 0;
+    this.shakeUntil = 0;
+    this.aoeHitFlash = false;
+    this.wasCasting = false;
+    this.castAnimStartedAt = 0;
+    this.lastHpRatio = 1;
     this.inspireAura.visible = false;
+    if (this.castFx) this.castFx.visible = false;
+    this.applyHitTint(0);
   }
 
   dispose(): void {
+    // 精灵贴图共享、几何体共享，只销毁本视图克隆的材质
+    this.spriteMaterials?.front.dispose();
+    this.spriteMaterials?.back.dispose();
+    for (const layer of this.castLayers) {
+      layer.material.map?.dispose();
+      layer.material.dispose();
+    }
+
     this.group.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
-      // 精灵面片、软阴影用的是全局共享资源，不能跟着单个视图销毁
+      // 精灵面片、软阴影、施法序列帧用的是全局共享几何，不能跟着单个视图销毁
       if (object === this.sprite || object.geometry === BLOB_SHADOW_GEOMETRY) return;
+      if (this.castLayers.some((layer) => layer.mesh === object)) return;
       object.geometry.dispose();
       const material = object.material;
       if (Array.isArray(material)) material.forEach((m) => m.dispose());
@@ -349,3 +491,7 @@ const HP_FILL_Z = 0.05;
 const DIRECTION_HYSTERESIS = 0.12;
 /** 每帧复用的相机右向量，避免多单位更新时产生临时对象 */
 const CAMERA_RIGHT = new THREE.Vector3();
+const WHITE_COLOR = new THREE.Color(0xffffff);
+const HIT_FLASH_COLOR = new THREE.Color(0xff3a3a);
+/** 受击 tint 插值临时色，避免每帧 new Color */
+const HIT_TINT_COLOR = new THREE.Color();

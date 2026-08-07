@@ -3,6 +3,7 @@ import { Faction, type Snapshot, type UnitSnapshot } from '@pb/sim';
 import { toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
+import { AoePulseEffectView } from './aoePulseEffectView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -24,6 +25,8 @@ export class BattleView {
   private readonly projectilePool: THREE.Mesh[] = [];
   private readonly activeHealEffects = new Map<number, HealEffectView>();
   private readonly healEffectPool: HealEffectView[] = [];
+  private readonly activeAoePulses = new Map<number, AoePulseEffectView>();
+  private readonly aoePulsePool: AoePulseEffectView[] = [];
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -38,6 +41,7 @@ export class BattleView {
     this.renderUnits(curr, alpha, camera);
     this.renderProjectiles(prev, curr, alpha);
     this.renderHealEffects(curr);
+    this.renderAoePulses(curr);
   }
 
   /** 快照换了才重建索引，同一逻辑帧内的多次渲染直接复用 */
@@ -62,6 +66,10 @@ export class BattleView {
         this.scene.add(view.group);
       }
 
+      // 逻辑血量下降时闪红；同 tick 内 hpRatio 不变，不会每渲染帧重复触发
+      if (unit.hpRatio < view.lastHpRatio) view.flashHit(timeSec, unit.aoeHit);
+      view.lastHpRatio = unit.hpRatio;
+
       // 刚出场的单位在上一帧不存在，直接用当前值，不然会从原点飞过来
       const from = this.prevUnits.get(unit.id) ?? unit;
       view.update(
@@ -74,6 +82,7 @@ export class BattleView {
         unit.attacking,
         unit.charging,
         unit.inspired,
+        unit.casting,
         timeSec,
         camera,
       );
@@ -105,6 +114,27 @@ export class BattleView {
       this.scene.remove(view.group);
       this.activeHealEffects.delete(id);
       this.healEffectPool.push(view);
+    }
+  }
+
+  /** 将普攻整圆 / 冲刺扇形脉冲同步到场景。 */
+  private renderAoePulses(curr: Snapshot): void {
+    this.seen.clear();
+    for (const effect of curr.aoePulseEffects) {
+      this.seen.add(effect.id);
+      let view = this.activeAoePulses.get(effect.id);
+      if (!view) {
+        view = this.aoePulsePool.pop() ?? new AoePulseEffectView();
+        this.activeAoePulses.set(effect.id, view);
+        this.scene.add(view.group);
+      }
+      view.update(effect);
+    }
+    for (const [id, view] of this.activeAoePulses) {
+      if (this.seen.has(id)) continue;
+      this.scene.remove(view.group);
+      this.activeAoePulses.delete(id);
+      this.aoePulsePool.push(view);
     }
   }
 
@@ -141,11 +171,16 @@ export class BattleView {
     const key = viewKey(unit.faction, unit.typeId);
     const pooled = this.unitPool.get(key);
     const reused = pooled?.pop();
+    let view: UnitView;
     if (reused) {
       reused.resetAnimState();
-      return reused;
+      view = reused;
+    } else {
+      view = new UnitView(unit.faction, unit.typeId);
     }
-    return new UnitView(unit.faction, unit.typeId);
+    // 出场对齐当前血量，避免首帧被当成「掉血」误闪红
+    view.lastHpRatio = unit.hpRatio;
+    return view;
   }
 
   private pushPool(pool: Map<string, UnitView[]>, key: string, view: UnitView): void {
@@ -170,6 +205,11 @@ export class BattleView {
       this.scene.remove(view.group);
       this.activeHealEffects.delete(id);
       this.healEffectPool.push(view);
+    }
+    for (const [id, view] of this.activeAoePulses) {
+      this.scene.remove(view.group);
+      this.activeAoePulses.delete(id);
+      this.aoePulsePool.push(view);
     }
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
@@ -196,6 +236,12 @@ export class BattleView {
       this.healEffectPool.push(view);
     }
     this.activeHealEffects.clear();
+    for (const [id, view] of this.activeAoePulses) {
+      this.scene.remove(view.group);
+      this.activeAoePulses.delete(id);
+      this.aoePulsePool.push(view);
+    }
+    this.activeAoePulses.clear();
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }

@@ -10,6 +10,8 @@ export interface PanelOptions {
   loop: SimLoop;
   onClear: () => void;
   onBrawl: () => void;
+  /** 清空后双方各随机一个兵种 1v1 */
+  onRandomPk: () => void;
 }
 
 export interface PanelHandle {
@@ -39,6 +41,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const stepButton = required<HTMLButtonElement>('#btn-step');
   const speedButton = required<HTMLButtonElement>('#btn-speed');
   const brawlButton = required<HTMLButtonElement>('#btn-brawl');
+  const randomPkButton = required<HTMLButtonElement>('#btn-random-pk');
   const clearButton = required<HTMLButtonElement>('#btn-clear');
 
   const tickOut = required<HTMLElement>('#stat-tick');
@@ -134,6 +137,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   stepButton.addEventListener('click', stepOnce);
   speedButton.addEventListener('click', cycleSpeed);
   brawlButton.addEventListener('click', options.onBrawl);
+  randomPkButton.addEventListener('click', options.onRandomPk);
   clearButton.addEventListener('click', options.onClear);
   window.addEventListener('keydown', onKeyDown);
 
@@ -170,6 +174,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
       stepButton.removeEventListener('click', stepOnce);
       speedButton.removeEventListener('click', cycleSpeed);
       brawlButton.removeEventListener('click', options.onBrawl);
+      randomPkButton.removeEventListener('click', options.onRandomPk);
       clearButton.removeEventListener('click', options.onClear);
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();

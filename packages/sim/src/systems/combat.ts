@@ -22,6 +22,11 @@ export function updateCombat(world: World): void {
       if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
       continue;
     }
+    // 治疗施法前摇期间不普攻，避免与技能前摇抢动作
+    if (unit.healWindupLeft > 0) {
+      if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
+      continue;
+    }
 
     if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
 
@@ -95,6 +100,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
   }
   world.unitGrid.query(unit.pos.x, unit.pos.y, queryRadius, neighbors);
 
+  let hitAny = false;
   for (let k = 0; k < neighbors.length; k++) {
     const other = world.units[neighbors[k]!]!;
     if (!isAlive(other)) continue;
@@ -106,5 +112,14 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
     if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) > mul(reach, reach)) continue;
 
     other.hp -= unit.stats.damage;
+    // 标记范围受击，渲染层据此同步加强闪红
+    other.aoeHitFxLeft = 2;
+    hitAny = true;
+  }
+
+  if (hitAny) {
+    // 地面环取自身攻击包络（不含对方半径），一眼可读「砍一圈」
+    const pulseRadius = unit.stats.range + unit.config.radius + ATTACK_RANGE_TOLERANCE;
+    world.spawnAoePulse('melee_ring', unit.pos.x, unit.pos.y, pulseRadius);
   }
 }

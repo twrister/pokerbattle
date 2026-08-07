@@ -44,11 +44,11 @@ export interface InspireConfig {
   moveSpeedMul: Fx;
 }
 
-/** 女王自动治疗的选点、范围与冷却参数。 */
+/** 女王自动单体治疗的选目标距离与冷却参数。 */
 export interface HealConfig {
   cooldown: Fx;
+  /** 可治疗友军的中心距上限（格） */
   targetRange: Fx;
-  radius: Fx;
   amount: Fx;
 }
 
@@ -85,7 +85,7 @@ export interface UnitConfig {
   charge?: ChargeConfig;
   /** 可选振奋光环；有此字段的兵种由 heroSkills 系统驱动 */
   inspire?: InspireConfig;
-  /** 可选自动范围治疗；有此字段的兵种由 heroSkills 系统驱动 */
+  /** 可选自动单体治疗；有此字段的兵种由 heroSkills 系统驱动 */
   heal?: HealConfig;
 }
 
@@ -113,7 +113,6 @@ export interface InspireConfigDraft {
 export interface HealConfigDraft {
   cooldown: number;
   targetRange: number;
-  radius: number;
   amount: number;
 }
 
@@ -231,7 +230,6 @@ function healFromDraft(draft: HealConfigDraft): HealConfig {
   return {
     cooldown: fromFloat(draft.cooldown),
     targetRange: fromFloat(draft.targetRange),
-    radius: fromFloat(draft.radius),
     amount: fromFloat(draft.amount),
   };
 }
@@ -333,7 +331,6 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.heal = {
       cooldown: toFloat(config.heal.cooldown),
       targetRange: toFloat(config.heal.targetRange),
-      radius: toFloat(config.heal.radius),
       amount: toFloat(config.heal.amount),
     };
   }

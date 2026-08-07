@@ -1,11 +1,11 @@
-import { Faction, type UnitTypeId, fromFloat, spawnCommand } from '@pb/sim';
+import { Faction, UNIT_TYPE_IDS, type UnitTypeId, fromFloat, spawnCommand } from '@pb/sim';
 import { SimLoop } from './loop.js';
 import { createConfigPanel } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
-import { ARENA_H } from './view/coords.js';
+import { ARENA_H, ARENA_W } from './view/coords.js';
 import { createScene } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
 
@@ -73,6 +73,7 @@ function enterSandbox(): () => void {
     loop,
     onClear: clearBattlefield,
     onBrawl: () => spawnBrawl(loop),
+    onRandomPk: () => spawnRandomPk(loop, clearBattlefield),
   });
 
   const configPanel = createConfigPanel({
@@ -169,6 +170,22 @@ function spawnBrawl(target: SimLoop): void {
     target.enqueue(spawnCommand(Faction.Blue, typeId, fromFloat(x), fromFloat(blueY)));
     target.enqueue(spawnCommand(Faction.Red, typeId, fromFloat(x), fromFloat(redY)));
   }
+}
+
+/** 从全部兵种里随机抽一个，仅用于沙盒对战测试 */
+function pickRandomUnitType(): UnitTypeId {
+  const index = Math.floor(Math.random() * UNIT_TYPE_IDS.length);
+  return UNIT_TYPE_IDS[index]!;
+}
+
+/** 清空后双方各随机上场一个单位，方便快速测 1v1 */
+function spawnRandomPk(target: SimLoop, clear: () => void): void {
+  clear();
+  const x = ARENA_W / 2;
+  const blueType = pickRandomUnitType();
+  const redType = pickRandomUnitType();
+  target.enqueue(spawnCommand(Faction.Blue, blueType, fromFloat(x), fromFloat(6)));
+  target.enqueue(spawnCommand(Faction.Red, redType, fromFloat(x), fromFloat(ARENA_H - 6)));
 }
 
 /** 启动阶段立即校验页面骨架，避免缺失元素在交互后才触发隐晦空引用。 */

@@ -14,8 +14,8 @@ import type { World } from '../world.js';
 export function updateMovement(world: World): void {
   for (const unit of world.units) {
     if (unit.dead || unit.state !== UnitState.Seek) continue;
-    // 已经抬手了就站定输出，不能边走边打（冲刺走 cavalry 系统，不会进 Seek）
-    if (unit.windupLeft > 0) continue;
+    // 普攻/治疗前摇期间站定，不能边走边抬手（冲刺走 cavalry 系统，不会进 Seek）
+    if (unit.windupLeft > 0 || unit.healWindupLeft > 0) continue;
 
     let remaining: Fx = div(unit.stats.moveSpeed, TICK_RATE_FX);
 

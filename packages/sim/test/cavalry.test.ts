@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
+import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
 describe('骑兵冲刺', () => {
@@ -38,6 +39,7 @@ describe('骑兵冲刺', () => {
     }
     expect(cavalry.state).toBe(UnitState.Charge);
     expect(cavalry.chargeWindupLeft).toBeGreaterThan(0);
+    expect(takeSnapshot(world).units.find((u) => u.id === cavalry.id)?.casting).toBe(true);
 
     const yAtWindup = cavalry.pos.y;
     // 0.5s = 10 tick；前摇期间应基本站定
@@ -144,5 +146,46 @@ describe('骑兵冲刺', () => {
     // 至少吃到一轮普攻伤害
     expect(toFloat(hpA - a.hp)).toBeGreaterThanOrEqual(95);
     expect(toFloat(hpB - b.hp)).toBeGreaterThanOrEqual(95);
+  });
+
+  it('普攻命中时生成整圆地面脉冲，并标记范围受击', () => {
+    const world = new World(1);
+    world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(16));
+    const a = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16.9));
+    const b = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9.7), fromFloat(16.9));
+    const hpA = a.hp;
+
+    for (let i = 0; i < 60; i++) {
+      world.step();
+      if (a.hp < hpA) break;
+    }
+
+    const snap = takeSnapshot(world);
+    const rings = snap.aoePulseEffects.filter((e) => e.kind === 'melee_ring');
+    expect(rings.length).toBeGreaterThanOrEqual(1);
+    expect(rings[0]!.radius).toBeGreaterThan(0.5);
+    expect(snap.units.find((u) => u.id === a.id)?.aoeHit).toBe(true);
+    expect(snap.units.find((u) => u.id === b.id)?.aoeHit).toBe(true);
+  });
+
+  it('冲刺首撞生成前方扇形脉冲，同段不重复生成', () => {
+    const world = new World(1);
+    const cavalry = world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(10));
+    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(12.2));
+    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(12));
+
+    let fanCount = 0;
+    let charged = false;
+    for (let i = 0; i < 50; i++) {
+      world.step();
+      if (cavalry.state === UnitState.Charge && cavalry.chargeWindupLeft <= 0) charged = true;
+      fanCount += takeSnapshot(world).aoePulseEffects.filter((e) => e.kind === 'charge_fan').length;
+      if (charged && cavalry.state !== UnitState.Charge) break;
+    }
+
+    expect(charged).toBe(true);
+    // 首撞只冒一次扇形；效果持续数 tick，累加计数应落在持续窗口内
+    expect(fanCount).toBeGreaterThanOrEqual(1);
+    expect(fanCount).toBeLessThanOrEqual(8);
   });
 });

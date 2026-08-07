@@ -75,6 +75,10 @@ function resolveChargeHits(world: World, unit: Unit): void {
   const aoeSq = mul(charge.aoeRadius, charge.aoeRadius);
   grid.query(unit.pos.x, unit.pos.y, charge.aoeRadius + MAX_UNIT_RADIUS, neighbors);
 
+  // 仅首撞播扇形冲击波，后续途经溅射只靠受击标记
+  const firstImpact = unit.chargeHits.length === 0;
+  let hitAny = false;
+
   for (let k = 0; k < neighbors.length; k++) {
     const idx = neighbors[k]!;
     const other = world.units[idx]!;
@@ -92,8 +96,21 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (forward < 0) continue;
 
     other.hp -= charge.hitDamage;
+    other.aoeHitFxLeft = 2;
     applyLateralKnockback(unit, other, charge.knockback);
     unit.chargeHits.push(other.id);
+    hitAny = true;
+  }
+
+  if (firstImpact && hitAny) {
+    world.spawnAoePulse(
+      'charge_fan',
+      unit.pos.x,
+      unit.pos.y,
+      charge.aoeRadius,
+      unit.chargeDir.x,
+      unit.chargeDir.y,
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import { toFloat } from './math/fixed.js';
 import type { UnitTypeId } from './config/units.js';
 import { UnitState, type Faction } from './entity/unit.js';
+import type { AoePulseKind } from './entity/effect.js';
 import type { World } from './world.js';
 
 /**
@@ -26,6 +27,10 @@ export interface UnitSnapshot {
   charging: boolean;
   /** 受到国王振奋时，渲染层显示持续光环 */
   inspired: boolean;
+  /** 正在施放技能（冲刺前摇 / 治疗施法），渲染层播放施法特效 */
+  casting: boolean;
+  /** 本帧刚吃到范围伤害，渲染层同步加强闪红与轻抖 */
+  aoeHit: boolean;
 }
 
 export interface ProjectileSnapshot {
@@ -35,12 +40,25 @@ export interface ProjectileSnapshot {
   y: number;
 }
 
-/** 女王瞬间治疗的范围效果。 */
+/** 女王单体治疗落在受疗单位上的反馈效果。 */
 export interface HealEffectSnapshot {
   id: number;
   x: number;
   y: number;
+  /** 受疗单位碰撞半径，供渲染缩放 */
   radius: number;
+  progress: number;
+}
+
+/** 近战范围伤害 / 冲刺溅射的地面脉冲。 */
+export interface AoePulseEffectSnapshot {
+  id: number;
+  kind: AoePulseKind;
+  x: number;
+  y: number;
+  radius: number;
+  dirX: number;
+  dirY: number;
   progress: number;
 }
 
@@ -49,6 +67,7 @@ export interface Snapshot {
   units: UnitSnapshot[];
   projectiles: ProjectileSnapshot[];
   healEffects: HealEffectSnapshot[];
+  aoePulseEffects: AoePulseEffectSnapshot[];
 }
 
 export function takeSnapshot(world: World): Snapshot {
@@ -66,10 +85,14 @@ export function takeSnapshot(world: World): Snapshot {
       facingY: toFloat(unit.facing.y),
       radius: toFloat(unit.config.radius),
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
-      // 冲刺原地前摇复用攻击蓄力姿势；真正位移时再亮冲刺高亮
-      attacking: unit.windupLeft > 0 || unit.chargeWindupLeft > 0,
+      // 普攻 / 冲刺蓄力 / 治疗施法前摇共用同一套攻击蓄力姿势
+      attacking:
+        unit.windupLeft > 0 || unit.chargeWindupLeft > 0 || unit.healWindupLeft > 0,
       charging: unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0,
       inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
+      // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）
+      casting: unit.chargeWindupLeft > 0 || unit.castFxLeft > 0,
+      aoeHit: unit.aoeHitFxLeft > 0,
     });
   }
 
@@ -90,10 +113,24 @@ export function takeSnapshot(world: World): Snapshot {
     });
   }
 
-  return { tick: world.tick, units, projectiles, healEffects };
+  const aoePulseEffects: AoePulseEffectSnapshot[] = [];
+  for (const effect of world.aoePulseEffects) {
+    aoePulseEffects.push({
+      id: effect.id,
+      kind: effect.kind,
+      x: toFloat(effect.x),
+      y: toFloat(effect.y),
+      radius: toFloat(effect.radius),
+      dirX: toFloat(effect.dirX),
+      dirY: toFloat(effect.dirY),
+      progress: 1 - effect.remainingTicks / effect.totalTicks,
+    });
+  }
+
+  return { tick: world.tick, units, projectiles, healEffects, aoePulseEffects };
 }
 
 /** 空快照，供渲染层在第一帧之前占位 */
 export function emptySnapshot(): Snapshot {
-  return { tick: 0, units: [], projectiles: [], healEffects: [] };
+  return { tick: 0, units: [], projectiles: [], healEffects: [], aoePulseEffects: [] };
 }

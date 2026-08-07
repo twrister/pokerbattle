@@ -5,7 +5,7 @@
     "radius": 0.5,
     "bodyScale": 1,
     "mass": 3,
-    "maxHp": 620,
+    "maxHp": 400,
     "damage": 95,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -19,7 +19,7 @@
     "id": "ranged_archer",
     "name": "弓手（远程）",
     "radius": 0.4,
-    "bodyScale": 0.8,
+    "bodyScale": 0.9,
     "mass": 1.4,
     "maxHp": 240,
     "damage": 65,
@@ -34,10 +34,10 @@
   "melee_cavalry": {
     "id": "melee_cavalry",
     "name": "骑兵（冲刺）",
-    "radius": 0.8,
-    "bodyScale": 1.8,
+    "radius": 0.7,
+    "bodyScale": 1.4,
     "mass": 3.2,
-    "maxHp": 520,
+    "maxHp": 900,
     "damage": 95,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -61,8 +61,8 @@
   "hero_king": {
     "id": "hero_king",
     "name": "国王（振奋）",
-    "radius": 0.7,
-    "bodyScale": 1.4,
+    "radius": 0.6,
+    "bodyScale": 1.2,
     "mass": 5,
     "maxHp": 800,
     "damage": 100,
@@ -82,8 +82,8 @@
   "hero_queen": {
     "id": "hero_queen",
     "name": "女王（治疗）",
-    "radius": 0.7,
-    "bodyScale": 1.4,
+    "radius": 0.6,
+    "bodyScale": 1.2,
     "mass": 2.6,
     "maxHp": 400,
     "damage": 120,
@@ -97,7 +97,6 @@
     "heal": {
       "cooldown": 100,
       "targetRange": 3,
-      "radius": 1.5,
       "amount": 120
     }
   }

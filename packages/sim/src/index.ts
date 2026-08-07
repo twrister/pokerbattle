@@ -41,6 +41,7 @@ export { SpatialHash } from './spatial/hash.js';
 
 export { type Command, CommandKind, type SpawnCommand, spawnCommand } from './commands.js';
 export {
+  type AoePulseEffectSnapshot,
   type HealEffectSnapshot,
   type ProjectileSnapshot,
   type Snapshot,
@@ -48,4 +49,5 @@ export {
   emptySnapshot,
   takeSnapshot,
 } from './snapshot.js';
+export { type AoePulseKind, type AoePulseEffect, type HealEffect } from './entity/effect.js';
 export { World } from './world.js';

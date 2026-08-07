@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Faction } from '../src/entity/unit.js';
+import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
@@ -27,6 +27,8 @@ describe('国王与女王', () => {
     expect(ally.stats.attackInterval).toBeLessThan(baseInterval);
     expect(ally.stats.moveSpeed).toBeGreaterThan(baseSpeed);
     expect(toFloat(ally.stats.attackInterval)).toBeCloseTo(toFloat(baseInterval) * 0.8, 3);
+    // 国王振奋是持续光环，不触发施法特效
+    expect(takeSnapshot(world).units.some((u) => u.typeId === 'hero_king' && u.casting)).toBe(false);
 
     king.pos.x = fromFloat(1);
     secondKing.pos.x = fromFloat(1);
@@ -36,7 +38,7 @@ describe('国王与女王', () => {
     expect(ally.stats.moveSpeed).toBe(baseSpeed);
   });
 
-  it('女王自动选取低血友军为圆心，范围治疗并进入五秒冷却', () => {
+  it('女王单体治疗前摇起手播特效，结束后只治疗锁定的低血友军', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
     const lowHp = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(8));
@@ -51,10 +53,27 @@ describe('国王与女王', () => {
     const outBefore = outOfRange.hp;
     world.step();
 
-    expect(toFloat(lowHp.hp - lowBefore)).toBe(120);
-    expect(toFloat(nearby.hp - nearbyBefore)).toBe(100);
-    expect(outOfRange.hp).toBe(outBefore);
+    // 前摇刚起手：特效 + 攻击蓄力姿势，治疗尚未结算，目标已锁定
+    expect(queen.healWindupLeft).toBeGreaterThan(0);
+    expect(queen.healCastTargetId).toBe(lowHp.id);
     expect(queen.healCooldown).toBe(fromFloat(100));
+    expect(queen.castFxLeft).toBeGreaterThan(0);
+    expect(lowHp.hp).toBe(lowBefore);
+    const windupSnap = takeSnapshot(world);
+    const queenSnap = windupSnap.units.find((u) => u.id === queen.id);
+    expect(queenSnap?.casting).toBe(true);
+    expect(queenSnap?.attacking).toBe(true);
+    expect(windupSnap.healEffects).toHaveLength(0);
+
+    // 走完 attackWindup 后只回锁定目标，旁侧受伤友军不受益
+    const windupTicks = toFloat(queen.stats.attackWindup);
+    for (let i = 0; i < windupTicks; i++) world.step();
+
+    expect(queen.healWindupLeft).toBe(0);
+    expect(queen.healCastTargetId).toBe(0);
+    expect(toFloat(lowHp.hp - lowBefore)).toBe(120);
+    expect(nearby.hp).toBe(nearbyBefore);
+    expect(outOfRange.hp).toBe(outBefore);
     expect(takeSnapshot(world).healEffects).toHaveLength(1);
   });
 
@@ -67,5 +86,82 @@ describe('国王与女王', () => {
 
     expect(queen.healCooldown).toBe(0);
     expect(takeSnapshot(world).healEffects).toHaveLength(0);
+  });
+
+  it('女王不能以自身为目标回血', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(8));
+    queen.hp -= fromFloat(200);
+    const queenBefore = queen.hp;
+    const allyBefore = ally.hp;
+
+    world.step();
+
+    // 仅自身受伤时不施放治疗
+    expect(queen.hp).toBe(queenBefore);
+    expect(ally.hp).toBe(allyBefore);
+    expect(queen.healCooldown).toBe(0);
+
+    ally.hp -= fromFloat(150);
+    const allyHurt = ally.hp;
+    world.step();
+    // 前摇起手进冷却；走完前摇后才结算
+    expect(queen.healCooldown).toBe(fromFloat(100));
+    expect(queen.healWindupLeft).toBeGreaterThan(0);
+    for (let i = 0; i < toFloat(queen.stats.attackWindup); i++) world.step();
+
+    // 有其他受伤友军时正常单体治疗，且绝不回自己
+    expect(toFloat(ally.hp - allyHurt)).toBe(120);
+    expect(queen.hp).toBe(queenBefore);
+  });
+
+  it('无敌军时女王寻路接近远处受伤友军并治疗，不普攻友军', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const far = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(20));
+    const nearer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(16));
+    far.hp -= fromFloat(200);
+    nearer.hp -= fromFloat(100);
+    queen.retargetIn = 0;
+
+    const startY = queen.pos.y;
+    world.step();
+
+    // 应锁定更近的受伤友军并进入 Seek
+    expect(queen.targetId).toBe(nearer.id);
+    expect(queen.state).toBe(UnitState.Seek);
+    expect(toFloat(queen.pos.y)).toBeGreaterThan(toFloat(startY));
+
+    // 走到治疗半径内后起手，全程不进入 Attack；前摇结束后回血
+    let castStarted = false;
+    for (let i = 0; i < 400; i++) {
+      expect(queen.state).not.toBe(UnitState.Attack);
+      world.step();
+      if (queen.healCooldown > 0) {
+        castStarted = true;
+        break;
+      }
+    }
+    expect(castStarted).toBe(true);
+    for (let i = 0; i < toFloat(queen.stats.attackWindup); i++) {
+      expect(queen.state).not.toBe(UnitState.Attack);
+      world.step();
+    }
+    expect(nearer.hp).toBeGreaterThan(nearer.stats.maxHp - fromFloat(100));
+  });
+
+  it('场上有敌军时女王优先锁敌而非受伤友军', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(12));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(18));
+    ally.hp -= fromFloat(150);
+    queen.retargetIn = 0;
+
+    world.step();
+
+    expect(queen.targetId).toBe(enemy.id);
+    expect(queen.state).not.toBe(UnitState.Idle);
   });
 });

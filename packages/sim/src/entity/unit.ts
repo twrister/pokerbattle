@@ -43,6 +43,11 @@ export interface Unit {
   state: UnitState;
 
   targetId: number;
+  /**
+   * 当前目标对应的攻击环槽位（0..7）；无目标时为 -1。
+   * 锁定目标时一次性决定，存活期间不变，避免围攻时来回换边。
+   */
+  engageSlot: number;
   /** 出生错峰：> 0 时暂不索敌；锁定目标后不再周期重置 */
   retargetIn: number;
 
@@ -61,8 +66,25 @@ export interface Unit {
   readonly chargeDir: Vec2;
   /** 本段冲刺已命中过的敌方 id，避免同一目标重复结算 */
   readonly chargeHits: number[];
-  /** 女王范围治疗的冷却剩余（tick）；无治疗技能的单位恒为 0 */
+  /** 女王单体治疗的冷却剩余（tick）；无治疗技能的单位恒为 0 */
   healCooldown: Fx;
+  /**
+   * 治疗施法前摇剩余（tick）；> 0 时站定蓄力，走完才结算治疗。
+   * 时长复用 attackWindup，表现上与普攻前摇一致。
+   */
+  healWindupLeft: Fx;
+  /** 本次治疗前摇锁定的友军 id；无施法时为 NO_TARGET */
+  healCastTargetId: number;
+  /**
+   * 施法特效剩余逻辑帧。仅驱动快照 `casting`，不参与战斗判定。
+   * 骑兵冲刺前摇走 chargeWindupLeft，不占用本字段。
+   */
+  castFxLeft: number;
+  /**
+   * 刚吃到范围伤害的表现剩余逻辑帧。仅驱动快照 `aoeHit`，
+   * 供渲染层同步加强闪红与轻抖。
+   */
+  aoeHitFxLeft: number;
 
   readonly base: Attributes;
   readonly stats: Attributes;
@@ -97,6 +119,7 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     hp: base.maxHp,
     state: UnitState.Idle,
     targetId: NO_TARGET,
+    engageSlot: -1,
     retargetIn: 0,
     attackCooldown: 0,
     windupLeft: 0,
@@ -106,6 +129,10 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     chargeDir: vec(0, faction === Faction.Blue ? ONE : -ONE),
     chargeHits: [],
     healCooldown: 0,
+    healWindupLeft: 0,
+    healCastTargetId: NO_TARGET,
+    castFxLeft: 0,
+    aoeHitFxLeft: 0,
     base,
     stats: attributesFromConfig(config),
     buffs: [],

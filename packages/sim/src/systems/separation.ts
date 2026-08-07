@@ -1,7 +1,15 @@
 import { type Fx, ONE, div, mul, sqrt } from '../math/fixed.js';
+import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { MAX_UNIT_RADIUS } from '../config/units.js';
-import { SEPARATION_ITERATIONS, SEPARATION_STRENGTH } from '../config/tuning.js';
+import {
+  ATTACK_PUSH_DEEP_RATIO,
+  ATTACK_PUSH_SCALE,
+  PUSH_MAX_MOVE_RATIO,
+  SEPARATION_ITERATIONS,
+  SEPARATION_STRENGTH,
+  TICK_RATE_FX,
+} from '../config/tuning.js';
 import { UnitState } from '../entity/unit.js';
 import type { World } from '../world.js';
 
@@ -14,6 +22,9 @@ const neighbors: number[] = [];
  * 硬碰撞在密集队形里极易把单位卡死，王室战争这类游戏一律用软碰撞，
  * 表现上就是「挤过去」而不是「撞墙」。推开的位移按质量反比分配，
  * 所以大体型能把小体型顶开，自己几乎不动。
+ *
+ * Attack 状态下的浅层重叠会被弱化推挤，减少站定输出被弹飞；
+ * 深层重叠仍全量解开。单 tick 推挤位移还有上限，避免多邻居叠加瞬移。
  */
 export function resolveSeparation(world: World): void {
   const units = world.units;
@@ -62,7 +73,17 @@ export function resolveSeparation(world: World): void {
           ny = div(dy, gap);
         }
 
-        const correction = mul(minDist - gap, SEPARATION_STRENGTH);
+        const penetration = minDist - gap;
+        let strength = SEPARATION_STRENGTH;
+        // 任一方在 Attack 且重叠尚浅：削弱推挤，优先保住输出站位
+        if (
+          (a.state === UnitState.Attack || b.state === UnitState.Attack) &&
+          penetration < mul(minDist, ATTACK_PUSH_DEEP_RATIO)
+        ) {
+          strength = mul(strength, ATTACK_PUSH_SCALE);
+        }
+
+        const correction = mul(penetration, strength);
         const totalMass = a.config.mass + b.config.mass;
         const aShare = div(b.config.mass, totalMass);
         const bShare = ONE - aShare;
@@ -79,6 +100,16 @@ export function resolveSeparation(world: World): void {
       if (unit.dead) continue;
       // 冲刺中不受软碰撞推挤，保证直线冲锋不被挤歪
       if (unit.state === UnitState.Charge) continue;
+
+      // 多邻居累加后可能超大，按本 tick 移动能力裁剪，防止被弹飞
+      const pushLen = lengthOf(unit.push.x, unit.push.y);
+      const maxPush = mul(div(unit.stats.moveSpeed, TICK_RATE_FX), PUSH_MAX_MOVE_RATIO);
+      if (pushLen > maxPush && pushLen > 0) {
+        const scale = div(maxPush, pushLen);
+        unit.push.x = mul(unit.push.x, scale);
+        unit.push.y = mul(unit.push.y, scale);
+      }
+
       unit.pos.x = clampToArena(unit.pos.x + unit.push.x, ARENA_WIDTH, unit.config.radius);
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
     }

@@ -56,6 +56,22 @@ describe('战斗行为', () => {
     expect(melee.state).toBe(UnitState.Attack);
   });
 
+  it('近战能贴脸打到远程女王（攻击环不得落在进入射程外）', () => {
+    const world = new World(1);
+    const melee = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const queen = world.spawnUnit(Faction.Red, 'hero_queen', fromFloat(9), fromFloat(20));
+    queen.stats.damage = 0;
+
+    let enteredAttack = false;
+    for (let i = 0; i < 200; i++) {
+      world.step();
+      if (melee.state === UnitState.Attack) enteredAttack = true;
+    }
+
+    expect(enteredAttack).toBe(true);
+    expect(queen.dead).toBe(true);
+  });
+
   it('远程兵在射程边缘停下并用飞行弹造成伤害', () => {
     const world = new World(1);
     const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(9), fromFloat(6));
@@ -125,5 +141,131 @@ describe('碰撞推挤', () => {
     const heavyMoved = Math.abs(toFloat(heavy.pos.x - heavyStart));
     const lightMoved = Math.abs(toFloat(light.pos.x - lightStart));
     expect(lightMoved).toBeGreaterThan(heavyMoved * 1.5);
+  });
+
+  it('深层重叠即使有一方在 Attack 也会被推开', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(16));
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9.02), fromFloat(16));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16.8));
+    // 强制进入 Attack，验证深层重叠不会被弱推挤卡死
+    attacker.state = UnitState.Attack;
+    attacker.targetId = enemy.id;
+    ally.state = UnitState.Attack;
+    ally.targetId = enemy.id;
+
+    run(world, 80);
+
+    const gap = toFloat(dist(attacker.pos.x, attacker.pos.y, ally.pos.x, ally.pos.y));
+    const minGap = toFloat(attacker.config.radius + ally.config.radius);
+    expect(gap).toBeGreaterThan(minGap * 0.9);
+  });
+});
+
+describe('拥挤与攻击环', () => {
+  /** 统计场上存活单位两两最大穿透深度（格） */
+  function maxPenetration(world: World): number {
+    let worst = 0;
+    const units = world.units;
+    for (let i = 0; i < units.length; i++) {
+      const a = units[i]!;
+      if (a.dead) continue;
+      for (let j = i + 1; j < units.length; j++) {
+        const b = units[j]!;
+        if (b.dead) continue;
+        const gap = toFloat(dist(a.pos.x, a.pos.y, b.pos.x, b.pos.y));
+        const minGap = toFloat(a.config.radius + b.config.radius);
+        const pen = minGap - gap;
+        if (pen > worst) worst = pen;
+      }
+    }
+    return worst;
+  }
+
+  it('多名近战同打一人时会占用多个攻击槽位，不会全挤到目标中心', () => {
+    const world = new World(1);
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(18));
+    enemy.stats.damage = 0;
+    // 定点 Fx 上限约 32767，过大 fromFloat 会溢出成负数被当成死亡
+    enemy.stats.maxHp = fromFloat(20000);
+    enemy.hp = enemy.stats.maxHp;
+
+    const attackers = [
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(7), fromFloat(10)),
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10)),
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(11), fromFloat(10)),
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(9)),
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(9)),
+    ];
+
+    run(world, 240);
+
+    const slots = new Set(attackers.map((u) => u.engageSlot));
+    expect(slots.size).toBeGreaterThanOrEqual(3);
+    for (const u of attackers) {
+      expect(u.engageSlot).toBeGreaterThanOrEqual(0);
+      // 不应长期钻进敌人碰撞圆中心
+      const gap = toFloat(dist(u.pos.x, u.pos.y, enemy.pos.x, enemy.pos.y));
+      expect(gap).toBeGreaterThan(toFloat(u.config.radius + enemy.config.radius) * 0.85);
+    }
+  });
+
+  it('Attack 单位被浅层推挤后仍能维持攻击状态', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(15.5));
+    const bumper = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9.9), fromFloat(15.5));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16.4));
+    enemy.stats.damage = 0;
+    enemy.stats.maxHp = fromFloat(20000);
+    enemy.hp = enemy.stats.maxHp;
+
+    // 先贴近并进入攻击
+    run(world, 80);
+    expect(attacker.state).toBe(UnitState.Attack);
+
+    let switches = 0;
+    let attackFrames = 0;
+    let prev = attacker.state;
+    for (let i = 0; i < 120; i++) {
+      // 侧向浅层重叠（穿透约 0.1 < 深层阈值），模拟友军擦肩而不是硬怼进碰撞核
+      bumper.pos.x = attacker.pos.x + fromFloat(0.9);
+      bumper.pos.y = attacker.pos.y;
+      world.step();
+      if (attacker.state === UnitState.Attack) attackFrames++;
+      if (attacker.state !== prev) {
+        if (
+          (prev === UnitState.Attack && attacker.state === UnitState.Seek) ||
+          (prev === UnitState.Seek && attacker.state === UnitState.Attack)
+        ) {
+          switches++;
+        }
+        prev = attacker.state;
+      }
+    }
+
+    expect(attackFrames).toBeGreaterThan(100);
+    expect(switches).toBeLessThanOrEqual(4);
+  });
+
+  it('多单位对冲后峰值重叠可控，多数单位能进入输出', () => {
+    const world = new World(1);
+    for (let i = 0; i < 6; i++) {
+      world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(6 + i * 1.1), fromFloat(10));
+      world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(6 + i * 1.1), fromFloat(22));
+    }
+
+    let peakPen = 0;
+    let attackTicks = 0;
+    for (let t = 0; t < 300; t++) {
+      world.step();
+      peakPen = Math.max(peakPen, maxPenetration(world));
+      for (const u of world.units) {
+        if (!u.dead && u.state === UnitState.Attack) attackTicks++;
+      }
+    }
+
+    // 软碰撞允许短暂重叠，但不该长期深度穿透
+    expect(peakPen).toBeLessThan(0.55);
+    expect(attackTicks).toBeGreaterThan(200);
   });
 });

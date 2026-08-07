@@ -4,7 +4,7 @@ import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config
 import { MAX_UNIT_RADIUS, type UnitTypeId, getUnitConfig } from './config/units.js';
 import { RETARGET_INTERVAL } from './config/tuning.js';
 import { type Projectile, createProjectile } from './entity/projectile.js';
-import { type HealEffect } from './entity/effect.js';
+import { type AoePulseEffect, type AoePulseKind, type HealEffect } from './entity/effect.js';
 import { type Faction, type Unit, createUnit } from './entity/unit.js';
 import { NavGrid } from './nav/grid.js';
 import { PathFinder } from './nav/astar.js';
@@ -20,7 +20,7 @@ import { updateCharge } from './systems/cavalry.js';
 import { resolveSeparation } from './systems/separation.js';
 import { updateCombat } from './systems/combat.js';
 import { updateProjectiles } from './systems/projectiles.js';
-import { updateHeroSkills } from './systems/heroSkills.js';
+import { tickPresentationFx, updateHeroSkills } from './systems/heroSkills.js';
 import { cleanup } from './systems/cleanup.js';
 
 const NO_COMMANDS: readonly Command[] = [];
@@ -42,6 +42,7 @@ export class World {
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
   readonly healEffects: HealEffect[] = [];
+  readonly aoePulseEffects: AoePulseEffect[] = [];
 
   tick = 0;
   private nextEntityId = 1;
@@ -91,9 +92,9 @@ export class World {
     return projectile;
   }
 
-  /** 记录一次治疗范围效果，供快照层播放短暂的视觉反馈。 */
+  /** 记录一次单体受疗反馈，供快照层在目标脚底播放短暂特效。 */
   spawnHealEffect(x: Fx, y: Fx, radius: Fx): void {
-    const totalTicks = 10;
+    const totalTicks = 12;
     this.healEffects.push({
       id: this.nextEffectId++,
       x,
@@ -105,11 +106,40 @@ export class World {
   }
 
   /**
+   * 记录一次伤害范围脉冲（普攻整圆 / 冲刺扇形），供快照层播放地面反馈。
+   * dir 仅 charge_fan 使用；整圆可传 0。
+   */
+  spawnAoePulse(
+    kind: AoePulseKind,
+    x: Fx,
+    y: Fx,
+    radius: Fx,
+    dirX: Fx = 0,
+    dirY: Fx = 0,
+  ): void {
+    // 比治疗环更短，突出「这一刀」的瞬时感
+    const totalTicks = 6;
+    this.aoePulseEffects.push({
+      id: this.nextEffectId++,
+      kind,
+      x,
+      y,
+      radius,
+      dirX,
+      dirY,
+      remainingTicks: totalTicks,
+      totalTicks,
+    });
+  }
+
+  /**
    * 推进一个逻辑帧。系统顺序写死在这里，任何调整都会改变模拟结果，
    * 改动前请确认两端会同时更新。
    */
   step(commands: readonly Command[] = NO_COMMANDS): void {
     this.tick++;
+    // 先推进上帧遗留的表现倒计时，再跑本帧逻辑，保证新特效能进当帧快照
+    tickPresentationFx(this);
     applyCommands(this, commands);
     updateBuffs(this);
     updateTargeting(this);
@@ -152,6 +182,7 @@ export class World {
     this.units.length = 0;
     this.projectiles.length = 0;
     this.healEffects.length = 0;
+    this.aoePulseEffects.length = 0;
     this.unitsById.clear();
     this.tick = 0;
     this.nextEntityId = 1;
@@ -178,6 +209,7 @@ export class World {
       h = mix(h, unit.hp);
       h = mix(h, unit.state);
       h = mix(h, unit.targetId);
+      h = mix(h, unit.engageSlot);
       h = mix(h, unit.attackCooldown);
       h = mix(h, unit.windupLeft);
       h = mix(h, unit.chargeCooldown);
@@ -186,6 +218,10 @@ export class World {
       h = mix(h, unit.chargeDir.x);
       h = mix(h, unit.chargeDir.y);
       h = mix(h, unit.healCooldown);
+      h = mix(h, unit.healWindupLeft);
+      h = mix(h, unit.healCastTargetId);
+      h = mix(h, unit.castFxLeft);
+      h = mix(h, unit.aoeHitFxLeft);
     }
     for (const projectile of this.projectiles) {
       h = mix(h, projectile.id);
@@ -198,6 +234,15 @@ export class World {
       h = mix(h, effect.x);
       h = mix(h, effect.y);
       h = mix(h, effect.remainingTicks);
+    }
+    for (const effect of this.aoePulseEffects) {
+      h = mix(h, effect.id);
+      h = mix(h, effect.x);
+      h = mix(h, effect.y);
+      h = mix(h, effect.dirX);
+      h = mix(h, effect.dirY);
+      h = mix(h, effect.remainingTicks);
+      h = mix(h, effect.kind === 'charge_fan' ? 1 : 0);
     }
     return h >>> 0;
   }
