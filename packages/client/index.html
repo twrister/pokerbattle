@@ -248,6 +248,17 @@
         color: rgba(180, 198, 214, 0.62);
       }
 
+      #btn-solo:not([data-placeholder]) {
+        border-color: rgba(99, 214, 138, 0.48);
+        background: linear-gradient(135deg, #315f58, #1d403d);
+        box-shadow: 0 12px 28px rgba(23, 83, 73, 0.28);
+        color: #effff5;
+      }
+
+      #btn-solo:not([data-placeholder]) small {
+        color: rgba(222, 255, 235, 0.68);
+      }
+
       #btn-match {
         border: 1px solid rgba(153, 207, 237, 0.52);
         background: linear-gradient(135deg, #3d718f, #294c68);
@@ -340,6 +351,20 @@
         inset: 0;
       }
 
+      /*
+       * 宽屏固定显示 9:16 战斗区域；更窄的设备让两侧贴边并由高度自然适配。
+       * HUD 始终铺满屏幕，四角面板锚定视口而非游戏画面边缘。
+       */
+      #app.is-solo {
+        top: 0;
+        right: auto;
+        bottom: 0;
+        left: 50%;
+        width: min(100vw, calc(100svh * 0.5625));
+        height: 100svh;
+        transform: translateX(-50%);
+      }
+
       canvas {
         display: block;
       }
@@ -371,6 +396,37 @@
       #panel-controls {
         top: 16px;
         right: 16px;
+        min-width: 188px;
+      }
+
+      /* 单机镜头俯仰角；沙盒不展示 */
+      #solo-camera-angle-row {
+        display: none;
+        margin-top: 10px;
+      }
+
+      #hud.is-solo #solo-camera-angle-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 10px;
+        align-items: center;
+      }
+
+      #solo-camera-angle-row label {
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+
+      #solo-camera-angle-value {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      #solo-camera-angle {
+        grid-column: 1 / -1;
+        width: 100%;
+        accent-color: var(--accent);
+        cursor: pointer;
       }
 
       #btn-back-menu {
@@ -396,6 +452,23 @@
         max-width: 230px;
         color: var(--text-dim);
         line-height: 1.7;
+      }
+
+      #hud.is-solo #btn-brawl,
+      #hud.is-solo #panel-spawn,
+      #hud.is-solo [data-sandbox-help] {
+        display: none;
+      }
+
+      #hud.is-solo #panel-stats,
+      #hud.is-solo #panel-controls,
+      #hud.is-solo #btn-back-menu {
+        top: max(16px, env(safe-area-inset-top));
+      }
+
+      #hud.is-solo #panel-help,
+      #hud.is-solo #panel-config {
+        bottom: max(16px, env(safe-area-inset-bottom));
       }
 
       /* 锚在右下角；column-reverse 让标题+切换钮始终贴底，展开收起位置不变 */
@@ -653,9 +726,9 @@
 
         <section class="lobby-actions" aria-label="主要玩法">
           <div class="lobby-play-row">
-            <button id="btn-solo" class="play-entry" type="button" data-placeholder="单机模式">
+            <button id="btn-solo" class="play-entry" type="button">
               单机模式
-              <small>COMING SOON</small>
+              <small>SOLO</small>
             </button>
             <button id="btn-match" class="play-entry" type="button" data-placeholder="匹配">
               匹配
@@ -715,6 +788,17 @@
           <button id="btn-random-pk" type="button">随机PK</button>
           <button id="btn-clear" type="button">清空</button>
         </div>
+        <div id="solo-camera-angle-row">
+          <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">45°</span></label>
+          <input
+            id="solo-camera-angle"
+            type="range"
+            min="15"
+            max="90"
+            step="1"
+            value="45"
+          />
+        </div>
       </section>
 
       <section class="panel" id="panel-config">
@@ -750,9 +834,9 @@
 
       <section class="panel" id="panel-help">
         <div class="title">操作</div>
-        <div><kbd>左键</kbd> 点击地面放兵</div>
-        <div><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
-        <div><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
+        <div data-sandbox-help><kbd>左键</kbd> 点击地面放兵</div>
+        <div data-sandbox-help><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
+        <div data-sandbox-help><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
         <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 清空</div>
       </section>
     </div>

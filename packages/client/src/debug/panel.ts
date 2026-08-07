@@ -9,9 +9,17 @@ const STATS_REFRESH_MS = 150;
 export interface PanelOptions {
   loop: SimLoop;
   onClear: () => void;
-  onBrawl: () => void;
+  /** 是否启用沙盒的阵营、兵种选择和对应快捷键。 */
+  enableSpawnControls?: boolean;
+  /** 沙盒专用的快速开团预设；单机模式不提供。 */
+  onBrawl?: () => void;
   /** 清空后双方各随机一个兵种 1v1 */
-  onRandomPk: () => void;
+  onRandomPk?: () => void;
+  /** 单机正交镜头俯仰角；传入后绑定运行控制里的滑条 */
+  soloCameraAngle?: {
+    initial: number;
+    onChange: (degrees: number) => void;
+  };
 }
 
 export interface PanelHandle {
@@ -29,6 +37,7 @@ export interface PanelHandle {
 /** 把 HUD 里的按钮和 SimLoop 接起来，并定时刷新状态读数 */
 export function createPanel(options: PanelOptions): PanelHandle {
   const { loop } = options;
+  const spawnControlsEnabled = options.enableSpawnControls ?? true;
 
   let faction: Faction = Faction.Blue;
   let unitType: UnitTypeId = UNIT_TYPE_IDS[0]!;
@@ -43,6 +52,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const brawlButton = required<HTMLButtonElement>('#btn-brawl');
   const randomPkButton = required<HTMLButtonElement>('#btn-random-pk');
   const clearButton = required<HTMLButtonElement>('#btn-clear');
+  const cameraAngleInput = required<HTMLInputElement>('#solo-camera-angle');
+  const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -50,14 +61,16 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const hashOut = required<HTMLElement>('#stat-hash');
   const fpsOut = required<HTMLElement>('#stat-fps');
 
-  // 兵种按钮直接由配置表生成，加新兵种不需要动 HTML
-  for (const typeId of UNIT_TYPE_IDS) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.dataset.unit = typeId;
-    button.textContent = UNIT_CONFIGS[typeId].name;
-    button.addEventListener('click', () => selectUnit(typeId));
-    unitGroup.appendChild(button);
+  if (spawnControlsEnabled) {
+    // 兵种按钮直接由配置表生成，加新兵种不需要动 HTML
+    for (const typeId of UNIT_TYPE_IDS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.unit = typeId;
+      button.textContent = UNIT_CONFIGS[typeId].name;
+      button.addEventListener('click', () => selectUnit(typeId));
+      unitGroup.appendChild(button);
+    }
   }
 
   function selectFaction(next: Faction): void {
@@ -105,16 +118,17 @@ export function createPanel(options: PanelOptions): PanelHandle {
       case 'Digit7':
       case 'Digit8':
       case 'Digit9': {
+        if (!spawnControlsEnabled) break;
         const index = Number(event.code.slice(5)) - 1;
         const next = UNIT_TYPE_IDS[index];
         if (next) selectUnit(next);
         break;
       }
       case 'KeyQ':
-        selectFaction(Faction.Blue);
+        if (spawnControlsEnabled) selectFaction(Faction.Blue);
         break;
       case 'KeyE':
-        selectFaction(Faction.Red);
+        if (spawnControlsEnabled) selectFaction(Faction.Red);
         break;
       case 'Space':
         event.preventDefault();
@@ -127,18 +141,30 @@ export function createPanel(options: PanelOptions): PanelHandle {
         options.onClear();
         break;
       case 'KeyB':
-        options.onBrawl();
+        options.onBrawl?.();
         break;
     }
   };
 
-  factionGroup.addEventListener('click', selectFactionFromButton);
+  /** 同步滑条旁的角度读数，并回写到场景镜头。 */
+  const onCameraAngleInput = (): void => {
+    const degrees = Number(cameraAngleInput.value);
+    cameraAngleValue.textContent = `${degrees}°`;
+    options.soloCameraAngle?.onChange(degrees);
+  };
+
+  if (spawnControlsEnabled) factionGroup.addEventListener('click', selectFactionFromButton);
   pauseButton.addEventListener('click', togglePause);
   stepButton.addEventListener('click', stepOnce);
   speedButton.addEventListener('click', cycleSpeed);
-  brawlButton.addEventListener('click', options.onBrawl);
-  randomPkButton.addEventListener('click', options.onRandomPk);
+  if (options.onBrawl) brawlButton.addEventListener('click', options.onBrawl);
+  if (options.onRandomPk) randomPkButton.addEventListener('click', options.onRandomPk);
   clearButton.addEventListener('click', options.onClear);
+  if (options.soloCameraAngle) {
+    cameraAngleInput.value = String(Math.round(options.soloCameraAngle.initial));
+    cameraAngleValue.textContent = `${cameraAngleInput.value}°`;
+    cameraAngleInput.addEventListener('input', onCameraAngleInput);
+  }
   window.addEventListener('keydown', onKeyDown);
 
   selectFaction(faction);
@@ -169,13 +195,16 @@ export function createPanel(options: PanelOptions): PanelHandle {
       }
     },
     dispose() {
-      factionGroup.removeEventListener('click', selectFactionFromButton);
+      if (spawnControlsEnabled) factionGroup.removeEventListener('click', selectFactionFromButton);
       pauseButton.removeEventListener('click', togglePause);
       stepButton.removeEventListener('click', stepOnce);
       speedButton.removeEventListener('click', cycleSpeed);
-      brawlButton.removeEventListener('click', options.onBrawl);
-      randomPkButton.removeEventListener('click', options.onRandomPk);
+      if (options.onBrawl) brawlButton.removeEventListener('click', options.onBrawl);
+      if (options.onRandomPk) randomPkButton.removeEventListener('click', options.onRandomPk);
       clearButton.removeEventListener('click', options.onClear);
+      if (options.soloCameraAngle) {
+        cameraAngleInput.removeEventListener('input', onCameraAngleInput);
+      }
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();
     },

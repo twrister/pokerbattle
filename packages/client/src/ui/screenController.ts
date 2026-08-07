@@ -1,4 +1,4 @@
-export type AppScreen = 'menu' | 'sandbox';
+export type AppScreen = 'menu' | 'sandbox' | 'solo';
 export type EnterScreen = () => () => void;
 
 export interface ScreenController {

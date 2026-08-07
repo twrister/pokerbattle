@@ -40,6 +40,8 @@ export interface ConfigPanelOptions {
 export interface ConfigPanelHandle {
   /** 当前运行时配置写回表单（外部改表后可调用） */
   refreshFromRuntime: () => void;
+  /** 战斗会话切换时替换清场回调，面板 DOM 本身跨会话复用 */
+  setOnApplied: (onApplied: () => void) => void;
   /** 移除静态控件事件并清空动态表单 */
   dispose: () => void;
 }
@@ -57,6 +59,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   let drafts = dumpUnitConfigDrafts();
   let collapsed = readCollapsed();
   let saveSeq = 0;
+  let onApplied = options.onApplied;
 
   /** 切换收起/展开，并记住上次状态 */
   function setCollapsed(next: boolean): void {
@@ -77,7 +80,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   const save = (): void => {
     readAllFormsIntoDrafts();
     applyUnitConfigDrafts(drafts);
-    options.onApplied();
+    onApplied();
     syncSectionTitles();
 
     const seq = ++saveSeq;
@@ -97,7 +100,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     drafts = dumpDefaultUnitConfigDrafts();
     renderForm();
     setStatus('已恢复为配置文件快照', false);
-    options.onApplied();
+    onApplied();
   };
 
   toggleButton.addEventListener('click', toggleCollapsed);
@@ -266,6 +269,9 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     refreshFromRuntime() {
       drafts = dumpUnitConfigDrafts();
       renderForm();
+    },
+    setOnApplied(next) {
+      onApplied = next;
     },
     dispose() {
       toggleButton.removeEventListener('click', toggleCollapsed);
