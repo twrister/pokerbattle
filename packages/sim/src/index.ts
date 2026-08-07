@@ -6,6 +6,7 @@ export { Rng } from './math/rng.js';
 export { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
 export { REPATH_INTERVAL, RETARGET_INTERVAL, TICK_RATE } from './config/tuning.js';
 export {
+  BODY_SCALE_REFERENCE,
   MAX_UNIT_RADIUS,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,

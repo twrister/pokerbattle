@@ -398,14 +398,24 @@
         line-height: 1.7;
       }
 
+      /* 锚在右下角；column-reverse 让标题+切换钮始终贴底，展开收起位置不变 */
       #panel-config {
         bottom: 16px;
         right: 16px;
-        width: min(780px, calc(100vw - 32px));
+        width: auto;
         max-height: calc(100vh - 32px);
         display: flex;
-        flex-direction: column;
+        flex-direction: column-reverse;
         gap: 10px;
+        z-index: 5;
+      }
+
+      /* 展开后铺满视口（留边距），内容在上、切换钮仍在右下角 */
+      #panel-config:not(.is-collapsed) {
+        width: calc(100vw - 32px);
+        height: calc(100vh - 32px);
+        max-height: none;
+        z-index: 30;
       }
 
       #panel-config .config-header {
@@ -425,10 +435,12 @@
         padding: 4px 10px;
         font-size: 12px;
         flex-shrink: 0;
+        min-width: 3.5em;
       }
 
       #panel-config.is-collapsed {
         width: auto;
+        height: auto;
         gap: 0;
       }
 
@@ -448,7 +460,7 @@
         overflow: auto;
         overscroll-behavior: contain;
         padding-right: 2px;
-        max-height: min(78vh, 720px);
+        flex: 1;
         min-height: 0;
       }
 

@@ -1,4 +1,5 @@
 import {
+  BODY_SCALE_REFERENCE,
   UNIT_TYPE_IDS,
   applyUnitConfigDrafts,
   dumpDefaultUnitConfigDrafts,
@@ -8,7 +9,9 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 
-const STORAGE_KEY = 'pb.unitConfigs.v1';
+/** v2：体型与半径解耦（相对铁卫=1）；读到 v1 时会换算 bodyScale */
+const STORAGE_KEY = 'pb.unitConfigs.v2';
+const LEGACY_STORAGE_KEY = 'pb.unitConfigs.v1';
 const COLLAPSE_KEY = 'pb.unitConfigPanel.collapsed';
 
 /** 表单字段元数据：label + 输入控件类型 */
@@ -18,7 +21,8 @@ const NUMERIC_FIELDS: Array<{
   step: string;
   hint?: string;
 }> = [
-  { key: 'radius', label: '半径', step: '0.05', hint: '碰撞 / 体型' },
+  { key: 'radius', label: '半径', step: '0.05', hint: '碰撞' },
+  { key: 'bodyScale', label: '体型', step: '0.05', hint: '铁卫=1' },
   { key: 'mass', label: '质量', step: '0.1', hint: '推挤权重' },
   { key: 'maxHp', label: '生命', step: '10' },
   { key: 'damage', label: '伤害', step: '5' },
@@ -296,17 +300,54 @@ function readCollapsed(): boolean {
 function readStoredDrafts(): Record<UnitTypeId, UnitConfigDraft> | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>;
-    const base = dumpDefaultUnitConfigDrafts();
-    for (const id of UNIT_TYPE_IDS) {
-      const patch = parsed[id];
-      if (patch) Object.assign(base[id], patch, { id });
+    if (raw) return mergeStoredDrafts(JSON.parse(raw));
+
+    // v1 的 bodyScale 是「相对碰撞半径」倍率，换成「相对铁卫」后写入 v2
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacy) return null;
+    const migrated = migrateV1BodyScale(
+      JSON.parse(legacy) as Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
+    );
+    const merged = mergeStoredDrafts(migrated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      // 写不进 storage 时仍返回内存里的迁移结果
     }
-    return base;
+    return merged;
   } catch {
     return null;
   }
+}
+
+/** 以出厂默认为底，叠本地补丁 */
+function mergeStoredDrafts(
+  parsed: Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
+): Record<UnitTypeId, UnitConfigDraft> {
+  const base = dumpDefaultUnitConfigDrafts();
+  for (const id of UNIT_TYPE_IDS) {
+    const patch = parsed[id];
+    if (patch) Object.assign(base[id], patch, { id });
+  }
+  return base;
+}
+
+/**
+ * v1→v2：旧显示半径 ≈ radius × bodyScale，新 bodyScale = 旧显示半径 / 铁卫基准。
+ */
+function migrateV1BodyScale(
+  parsed: Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>>,
+): Partial<Record<UnitTypeId, Partial<UnitConfigDraft>>> {
+  const defaults = dumpDefaultUnitConfigDrafts();
+  for (const id of UNIT_TYPE_IDS) {
+    const patch = parsed[id];
+    if (!patch) continue;
+    const radius = Number.isFinite(patch.radius) ? (patch.radius as number) : defaults[id].radius;
+    const oldScale = Number.isFinite(patch.bodyScale) ? (patch.bodyScale as number) : 1;
+    patch.bodyScale = (radius * oldScale) / BODY_SCALE_REFERENCE;
+  }
+  return parsed;
 }
 
 function formatNumber(value: number): string {
@@ -322,6 +363,7 @@ function assignNumericField(
 ): void {
   switch (field) {
     case 'radius':
+    case 'bodyScale':
     case 'mass':
     case 'maxHp':
     case 'damage':

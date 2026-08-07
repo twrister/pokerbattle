@@ -1,5 +1,12 @@
 import * as THREE from 'three';
-import { Faction, UNIT_CONFIGS, UnitState, type UnitTypeId, toFloat } from '@pb/sim';
+import {
+  BODY_SCALE_REFERENCE,
+  Faction,
+  UNIT_CONFIGS,
+  UnitState,
+  type UnitTypeId,
+  toFloat,
+} from '@pb/sim';
 import {
   BLOB_SHADOW_GEOMETRY,
   BLOB_SHADOW_MATERIAL,
@@ -14,7 +21,7 @@ import {
  * 配合程序化的待机/行走/攻击动作；几何体与材质按兵种共享，
  * 单个单位只有一个面片 + 血条，几百个同屏也没有压力。
  * 没有立绘的兵种沿用纯色圆柱占位。
- * 地面上那圈亮环仍是真实碰撞圈，调推挤参数时一眼能看出对不对。
+ * 地面上那圈亮环仍是真实碰撞圈；精灵/圆柱大小只看体型（相对铁卫=1），与碰撞半径无关。
  */
 export class UnitView {
   readonly key: string;
@@ -59,7 +66,10 @@ export class UnitView {
   constructor(faction: Faction, typeId: UnitTypeId) {
     this.key = viewKey(faction, typeId);
 
-    const radius = toFloat(UNIT_CONFIGS[typeId].radius);
+    const config = UNIT_CONFIGS[typeId];
+    // 碰撞圈用真实半径；显示半径 = 铁卫基准 × 体型，与碰撞完全解耦
+    const radius = toFloat(config.radius);
+    const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
     const color = bodyColor(faction, typeId);
     const spriteMaterials = getSpriteMaterials(typeId);
 
@@ -67,7 +77,7 @@ export class UnitView {
     if (spriteMaterials) {
       const spriteDef = SPRITE_DEFS[typeId]!;
       this.spriteMaterials = spriteMaterials;
-      this.spriteSize = radius * spriteDef.heightMul;
+      this.spriteSize = bodyRadius * spriteDef.heightMul;
       this.spriteWidth = this.spriteSize * spriteDef.aspect;
       this.spriteSourceFacing = spriteDef.sourceFacing;
       topY = this.spriteSize;
@@ -83,10 +93,10 @@ export class UnitView {
       const blob = new THREE.Mesh(BLOB_SHADOW_GEOMETRY, BLOB_SHADOW_MATERIAL);
       blob.rotation.x = -Math.PI / 2;
       blob.position.y = 0.02;
-      blob.scale.setScalar(radius * 0.9);
+      blob.scale.setScalar(bodyRadius * 0.9);
       this.group.add(blob);
     } else {
-      const height = radius * 2.6;
+      const height = bodyRadius * 2.6;
       topY = height;
 
       // 每个视图独立一份材质，才能在出手前摇时单独高亮
@@ -99,7 +109,7 @@ export class UnitView {
       });
 
       const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius * 0.82, radius, height, 20),
+        new THREE.CylinderGeometry(bodyRadius * 0.82, bodyRadius, height, 20),
         this.bodyMaterial,
       );
       body.position.y = height / 2;
@@ -107,11 +117,11 @@ export class UnitView {
 
       // 朝前的小尖锥，用来看清单位面朝哪个方向
       const marker = new THREE.Mesh(
-        new THREE.ConeGeometry(radius * 0.4, radius * 0.9, 4),
+        new THREE.ConeGeometry(bodyRadius * 0.4, bodyRadius * 0.9, 4),
         new THREE.MeshStandardMaterial({ color: 0xf5f7fa, roughness: 0.4 }),
       );
       marker.rotation.x = Math.PI / 2;
-      marker.position.set(0, height * 0.62, radius * 0.95);
+      marker.position.set(0, height * 0.62, bodyRadius * 0.95);
 
       this.yaw = new THREE.Group();
       this.yaw.add(body, marker);
@@ -139,7 +149,7 @@ export class UnitView {
     this.inspireAura.position.y = 0.035;
     this.inspireAura.visible = false;
 
-    this.barWidth = Math.max(0.75, radius * 2.4);
+    this.barWidth = Math.max(0.75, bodyRadius * 2.4);
     const barHeight = 0.13;
     // 底/前景几乎共面时，远距深度精度塌缩会让后画的透明底条盖住前景（闪烁→只剩底色）。
     // 两层都走透明队列 + 关掉 depthWrite，靠 renderOrder 保证前景永远后画。

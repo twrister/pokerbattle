@@ -58,8 +58,13 @@ export interface HealConfig {
 export interface UnitConfig {
   id: UnitTypeId;
   name: string;
-  /** 碰撞半径，同时决定渲染体型 */
+  /** 碰撞半径（推挤 / 射程 / 场地夹紧），与显示体型无关 */
   radius: Fx;
+  /**
+   * 显示体型倍率，与碰撞半径解耦。
+   * 1 = 铁卫基准（显示半径 = BODY_SCALE_REFERENCE），不影响碰撞。
+   */
+  bodyScale: Fx;
   /** 推挤权重，体型越大越推不动 */
   mass: Fx;
   maxHp: Fx;
@@ -91,6 +96,7 @@ export interface UnitConfigDraft {
   id: UnitTypeId;
   name: string;
   radius: number;
+  bodyScale: number;
   mass: number;
   maxHp: number;
   damage: number;
@@ -107,12 +113,20 @@ export interface UnitConfigDraft {
 /** 大于场地对角线（约 36.7），索敌时等价于全场搜索 */
 const FULL_FIELD_SIGHT = fromFloat(40);
 
+/**
+ * 体型=1 时的显示半径（场景单位），取铁卫出厂碰撞半径作基准。
+ * 渲染：显示半径 = BODY_SCALE_REFERENCE × bodyScale，与各兵种 radius 无关。
+ */
+export const BODY_SCALE_REFERENCE = 0.45;
+
 function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
   return {
     melee_grunt: {
       id: 'melee_grunt',
       name: '铁卫（近战）',
       radius: fromFloat(0.45),
+      // 铁卫即体型基准
+      bodyScale: fromFloat(1),
       mass: fromFloat(3.0),
       maxHp: fromFloat(620),
       damage: fromFloat(95),
@@ -127,6 +141,8 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       id: 'ranged_archer',
       name: '弓手（远程）',
       radius: fromFloat(0.3),
+      // 相对铁卫：0.3 / 0.45，保持解耦前的观感
+      bodyScale: fromFloat(0.3 / BODY_SCALE_REFERENCE),
       mass: fromFloat(1.4),
       maxHp: fromFloat(240),
       damage: fromFloat(65),
@@ -141,6 +157,7 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       id: 'melee_cavalry',
       name: '骑兵（冲刺）',
       radius: fromFloat(0.45),
+      bodyScale: fromFloat(1),
       mass: fromFloat(3.2),
       maxHp: fromFloat(520),
       damage: fromFloat(95),
@@ -167,6 +184,7 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       id: 'hero_king',
       name: '国王（振奋）',
       radius: fromFloat(0.62),
+      bodyScale: fromFloat(0.62 / BODY_SCALE_REFERENCE),
       mass: fromFloat(5),
       maxHp: fromFloat(800),
       damage: fromFloat(100),
@@ -186,6 +204,7 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       id: 'hero_queen',
       name: '女王（治疗）',
       radius: fromFloat(0.48),
+      bodyScale: fromFloat(0.48 / BODY_SCALE_REFERENCE),
       mass: fromFloat(2.6),
       maxHp: fromFloat(400),
       damage: fromFloat(120),
@@ -234,6 +253,7 @@ function cloneConfigs(source: Record<UnitTypeId, UnitConfig>): Record<UnitTypeId
 function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.name = source.name;
   target.radius = source.radius;
+  target.bodyScale = source.bodyScale;
   target.mass = source.mass;
   target.maxHp = source.maxHp;
   target.damage = source.damage;
@@ -275,6 +295,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     id: config.id,
     name: config.name,
     radius: toFloat(config.radius),
+    bodyScale: toFloat(config.bodyScale),
     mass: toFloat(config.mass),
     maxHp: toFloat(config.maxHp),
     damage: toFloat(config.damage),
@@ -323,6 +344,10 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     const target = UNIT_CONFIGS[id];
     target.name = draft.name;
     target.radius = fromFloat(draft.radius);
+    // 缺省或非法体型回落为铁卫基准 1，避免 NaN 把精灵缩成看不见
+    target.bodyScale = fromFloat(
+      Number.isFinite(draft.bodyScale) && draft.bodyScale > 0 ? draft.bodyScale : 1,
+    );
     target.mass = fromFloat(draft.mass);
     target.maxHp = fromFloat(draft.maxHp);
     target.damage = fromFloat(draft.damage);
