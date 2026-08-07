@@ -22,6 +22,26 @@ describe('战斗行为', () => {
     expect(unit.pos.y).toBe(startY);
   });
 
+  it('锁定目标后不会因更近敌人而换敌，目标死亡后才重新索敌', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const far = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
+    // 先让攻击者锁住远处目标
+    run(world, 10);
+    expect(attacker.targetId).toBe(far.id);
+
+    // 再在身旁刷一个更近的敌人，存活期间仍应咬住原目标
+    const near = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(11));
+    run(world, 20);
+    expect(attacker.targetId).toBe(far.id);
+
+    // 原目标死亡后才转火近处敌人
+    far.hp = 0;
+    far.dead = true;
+    run(world, 5);
+    expect(attacker.targetId).toBe(near.id);
+  });
+
   it('近战兵会寻路接近远处的敌人并最终进入攻击状态', () => {
     const world = new World(1);
     const melee = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(4));

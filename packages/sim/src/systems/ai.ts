@@ -57,7 +57,7 @@ export function updateAi(world: World): void {
 }
 
 /**
- * CD 就绪、非前摇、目标中心距落在触发窗时进入冲刺。
+ * CD 就绪、非普攻前摇、目标中心距落在触发窗时进入冲刺（先原地前摇再起动）。
  * 返回 true 表示本帧已切入 Charge。
  */
 function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distSq>): boolean {
@@ -73,8 +73,10 @@ function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distS
   normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
   if (desiredFacing.x === 0 && desiredFacing.y === 0) return false;
 
+  // 方向与路程在起手前锁定；前摇期间站定，由 cavalry 系统倒计时后再位移
   unit.state = UnitState.Charge;
   copy(unit.chargeDir, desiredFacing);
+  unit.chargeWindupLeft = charge.windup;
   unit.chargeRemaining = charge.distance;
   unit.chargeCooldown = charge.cooldown;
   unit.chargeHits.length = 0;

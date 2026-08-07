@@ -17,6 +17,8 @@ export type AttackKind =
 export interface ChargeConfig {
   /** 技能冷却（tick），20 tick = 1 秒 */
   cooldown: Fx;
+  /** 起冲前原地前摇（tick），20 tick = 1 秒 */
+  windup: Fx;
   /** 直线冲刺总距离（格） */
   distance: Fx;
   /** 相对移速的倍率 */
@@ -150,6 +152,8 @@ function createDefaultConfigs(): Record<UnitTypeId, UnitConfig> {
       attack: { kind: 'melee_aoe' },
       charge: {
         cooldown: fromFloat(100),
+        // 0.5 秒原地蓄力后再直线冲出
+        windup: fromFloat(10),
         distance: fromFloat(3),
         speedMul: fromFloat(2),
         triggerMin: fromFloat(2),

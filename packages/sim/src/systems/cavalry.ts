@@ -11,7 +11,7 @@ const neighbors: number[] = [];
 const lateral = vec();
 
 /**
- * 骑兵冲刺：冷却倒计时、直线位移、接触后前方 AOE 击退伤害。
+ * 骑兵冲刺：冷却倒计时、原地前摇、直线位移、接触后前方 AOE 击退伤害。
  *
  * 放在普通移动之后、软碰撞之前：冲刺者不被推挤，被击退者本帧仍可参与分离。
  */
@@ -33,6 +33,12 @@ export function updateCharge(world: World): void {
 
 /** 沿锁定方向推进一段路程，并结算途经敌人 */
 function advanceCharge(world: World, unit: Unit): void {
+  // 原地前摇：站定蓄力，方向已在 AI 切入时锁定
+  if (unit.chargeWindupLeft > 0) {
+    unit.chargeWindupLeft -= ONE;
+    return;
+  }
+
   const charge = unit.config.charge!;
   const stepSpeed = mul(unit.stats.moveSpeed, charge.speedMul);
   let step: Fx = div(stepSpeed, TICK_RATE_FX);
@@ -141,6 +147,7 @@ function applyLateralKnockback(charger: Unit, victim: Unit, distance: Fx): void 
 
 function endCharge(unit: Unit): void {
   unit.chargeRemaining = 0;
+  unit.chargeWindupLeft = 0;
   // 退出 Charge 后本帧不再 Seek/Attack，下一帧 AI 会按射程重判
   unit.state = UnitState.Idle;
 }

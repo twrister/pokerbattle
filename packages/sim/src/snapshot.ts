@@ -66,8 +66,9 @@ export function takeSnapshot(world: World): Snapshot {
       facingY: toFloat(unit.facing.y),
       radius: toFloat(unit.config.radius),
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
-      attacking: unit.windupLeft > 0,
-      charging: unit.state === UnitState.Charge,
+      // 冲刺原地前摇复用攻击蓄力姿势；真正位移时再亮冲刺高亮
+      attacking: unit.windupLeft > 0 || unit.chargeWindupLeft > 0,
+      charging: unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0,
       inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
     });
   }

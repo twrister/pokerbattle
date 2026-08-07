@@ -1,26 +1,26 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
-import { RETARGET_INTERVAL } from '../config/tuning.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 
 /**
- * 选敌：始终锁定场上距离最近的敌方单位。
+ * 选敌：锁定最近敌人后，目标存活期间不再换敌；只有目标死亡/消失才重新索敌。
  *
- * 不是每帧都重选——一来没必要，二来目标在两个几乎等距的敌人之间反复横跳
- * 会让单位原地抽搐。spawnUnit 时按 id 给了不同的初始倒计时，天然错峰。
+ * spawnUnit 时按 id 打散了首次索敌倒计时（retargetIn），避免同批出场挤在同一帧全场扫描。
  */
 export function updateTargeting(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
-    if (unit.retargetIn > 0) unit.retargetIn--;
 
-    const hadTarget = unit.targetId !== NO_TARGET;
-    const targetLost = hadTarget && !isAlive(world.getUnit(unit.targetId));
-    if (!targetLost && unit.retargetIn > 0) continue;
+    // 仅用于出生错峰；锁定后不再周期重置
+    if (unit.retargetIn > 0) {
+      unit.retargetIn--;
+      continue;
+    }
+
+    if (isAlive(world.getUnit(unit.targetId))) continue;
 
     unit.targetId = findNearestEnemy(world, unit);
-    unit.retargetIn = RETARGET_INTERVAL;
   }
 }
 

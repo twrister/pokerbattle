@@ -5,7 +5,7 @@ export const TICK_RATE = 20;
 /** 定点形式的帧率，供 div 使用 */
 export const TICK_RATE_FX: Fx = fromFloat(TICK_RATE);
 
-/** 索敌间隔（tick）。用 id % 间隔 错峰，避免所有单位在同一帧集中做全场扫描。 */
+/** 首次索敌错峰间隔（tick）。spawn 时用 id % 间隔打散，避免同批出场挤在同一帧全场扫描。 */
 export const RETARGET_INTERVAL = 5;
 
 /** 路径重算间隔（tick）。目标一直在动，但没必要每帧都跑 A*。 */

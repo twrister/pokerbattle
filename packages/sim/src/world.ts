@@ -70,7 +70,7 @@ export class World {
       clampToArena(x, ARENA_WIDTH, config.radius),
       clampToArena(y, ARENA_HEIGHT, config.radius),
     );
-    // 按 id 打散首次索敌的时机，避免同批出场的单位每 5 帧一起做全场扫描
+    // 按 id 打散首次索敌时机；锁定后目标死亡才再索敌，不再周期重选
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
@@ -181,6 +181,7 @@ export class World {
       h = mix(h, unit.attackCooldown);
       h = mix(h, unit.windupLeft);
       h = mix(h, unit.chargeCooldown);
+      h = mix(h, unit.chargeWindupLeft);
       h = mix(h, unit.chargeRemaining);
       h = mix(h, unit.chargeDir.x);
       h = mix(h, unit.chargeDir.y);

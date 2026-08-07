@@ -43,7 +43,7 @@ export interface Unit {
   state: UnitState;
 
   targetId: number;
-  /** 距离下次重新索敌还有几 tick */
+  /** 出生错峰：> 0 时暂不索敌；锁定目标后不再周期重置 */
   retargetIn: number;
 
   /** 攻击冷却剩余（tick，定点），每 tick 减 ONE */
@@ -53,7 +53,9 @@ export interface Unit {
 
   /** 冲刺技能冷却剩余（tick）；无冲刺兵种恒为 0 */
   chargeCooldown: Fx;
-  /** 本段冲刺剩余路程（格）；> 0 且 state=Charge 时正在冲 */
+  /** 冲刺原地前摇剩余（tick）；> 0 时 state=Charge 但尚未起动 */
+  chargeWindupLeft: Fx;
+  /** 本段冲刺剩余路程（格）；> 0 且 state=Charge 且前摇结束时正在冲 */
   chargeRemaining: Fx;
   /** 冲刺锁定方向（施放瞬间指向目标） */
   readonly chargeDir: Vec2;
@@ -99,6 +101,7 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     attackCooldown: 0,
     windupLeft: 0,
     chargeCooldown: 0,
+    chargeWindupLeft: 0,
     chargeRemaining: 0,
     chargeDir: vec(0, faction === Faction.Blue ? ONE : -ONE),
     chargeHits: [],

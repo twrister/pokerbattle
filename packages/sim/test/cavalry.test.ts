@@ -12,9 +12,9 @@ describe('骑兵冲刺', () => {
 
     const startY = cavalry.pos.y;
     let sawCharge = false;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) {
       world.step();
-      if (cavalry.state === UnitState.Charge) sawCharge = true;
+      if (cavalry.state === UnitState.Charge && cavalry.chargeWindupLeft <= 0) sawCharge = true;
       // 冲刺结束后停止观察位移，避免后续 Seek 干扰断言
       if (sawCharge && cavalry.state !== UnitState.Charge) break;
     }
@@ -25,6 +25,35 @@ describe('骑兵冲刺', () => {
     expect(traveled).toBeGreaterThan(2.5);
     expect(traveled).toBeLessThan(3.4);
     expect(cavalry.chargeCooldown).toBeGreaterThan(0);
+  });
+
+  it('冲刺触发后先原地前摇 0.5s，期间不位移', () => {
+    const world = new World(1);
+    const cavalry = world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(10));
+    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(12.25));
+
+    // 等到切入冲刺前摇
+    for (let i = 0; i < 20 && cavalry.state !== UnitState.Charge; i++) {
+      world.step();
+    }
+    expect(cavalry.state).toBe(UnitState.Charge);
+    expect(cavalry.chargeWindupLeft).toBeGreaterThan(0);
+
+    const yAtWindup = cavalry.pos.y;
+    // 0.5s = 10 tick；前摇期间应基本站定
+    for (let i = 0; i < 9; i++) {
+      world.step();
+      expect(cavalry.state).toBe(UnitState.Charge);
+      expect(toFloat(cavalry.pos.y - yAtWindup)).toBeLessThan(0.05);
+    }
+
+    // 前摇结束后开始直线位移
+    for (let i = 0; i < 5; i++) {
+      world.step();
+      if (cavalry.chargeWindupLeft <= 0 && cavalry.state === UnitState.Charge) break;
+    }
+    expect(cavalry.chargeWindupLeft).toBe(0);
+    expect(toFloat(cavalry.pos.y - yAtWindup)).toBeGreaterThan(0.1);
   });
 
   it('冲刺碰到敌人后，前方 1.5 内敌人均受击退伤害，同段不重复命中', () => {
@@ -38,9 +67,9 @@ describe('骑兵冲刺', () => {
     const splashHp = splash.hp;
 
     let charged = false;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 50; i++) {
       world.step();
-      if (cavalry.state === UnitState.Charge) charged = true;
+      if (cavalry.state === UnitState.Charge && cavalry.chargeWindupLeft <= 0) charged = true;
       if (charged && cavalry.state !== UnitState.Charge) break;
     }
 
