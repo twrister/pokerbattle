@@ -464,20 +464,21 @@
         min-height: 0;
       }
 
-      /* 每个兵种一列，始终横向并排；窄屏可左右滚动 */
+      /* 每个兵种一列固定宽度，从左排布；超出可左右滚动 */
       #config-form {
         display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
+        justify-content: flex-start;
         gap: 12px;
         align-items: start;
         width: max-content;
-        min-width: 100%;
       }
 
       .config-unit {
-        flex: 1 0 220px;
+        flex: 0 0 220px;
         width: 220px;
+        box-sizing: border-box;
         padding: 10px 10px 4px;
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.03);

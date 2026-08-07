@@ -42,7 +42,7 @@
     "attackInterval": 20,
     "attackWindup": 7,
     "range": 0.55,
-    "moveSpeed": 2.2,
+    "moveSpeed": 2,
     "sightRange": 40,
     "attackKind": "melee_aoe",
     "projectileSpeed": 9,

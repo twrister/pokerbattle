@@ -68,7 +68,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 export default defineConfig({
   plugins: [unitConfigWritePlugin()],
   // host: true 表示监听所有网卡，局域网内其它设备可以直接访问
-  server: { host: true, port: 5173, open: true },
+  server: { host: true, port: 8081, open: true },
   // 预览服务器跑的是 build 产物，用来把沙盒发给同事试玩
   preview: { host: true, port: 8080, strictPort: true },
   build: { target: 'es2022' },
