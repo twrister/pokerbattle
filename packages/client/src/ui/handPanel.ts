@@ -11,16 +11,32 @@ import {
   type PlayingCard,
 } from '../cards/deck.js';
 import { detectHandCategories, findStrongestHand } from '../cards/handCategory.js';
+import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
 const PLAY_ANIMATION_MS = 360;
 /** 手牌增删后，留存牌从旧坐标滑到新坐标的时长。 */
 const LAYOUT_MOVE_MS = 280;
 const MIN_DRAW_INTERVAL_MS = 250;
+/** 选了牌但拼不出牌型时的提示。 */
+const STATUS_NO_CATEGORY = '未凑成有效牌型';
+/** 拖到战场但整阵越界时的提示。 */
+const STATUS_INVALID_DROP = '请在己方半场内放置完整阵型';
+/** 箭头弧顶相对首尾连线的最大抬高像素。 */
+const ARROW_MAX_LIFT = 180;
+
+/** 一次出兵请求；point 为拖拽落点屏幕坐标，点按钮自动放置时为 null。 */
+export interface FormationSpawnRequest {
+  formation: CardFormation;
+  cards: readonly PlayingCard[];
+  point: { clientX: number; clientY: number } | null;
+}
 
 export interface HandPanelOptions {
   drawIntervalSeconds?: number;
   deck?: PokerDeck;
-  /** 出牌完成回调；formation 为玩家点选的搭配，仅点出牌按钮且唯一搭配时也会带上。 */
+  /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
+  onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
+  /** 出兵成功且出牌动画结束后的回调。 */
   onPlay?: (cards: readonly PlayingCard[], formation: CardFormation | null) => void;
 }
 
@@ -37,7 +53,10 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const cardsElement = required<HTMLElement>('#hand-cards');
   const formationsElement = required<HTMLElement>('#hand-formations');
   const selectBestButton = required<HTMLButtonElement>('#btn-select-best');
-  const playButton = required<HTMLButtonElement>('#btn-play-cards');
+  const statusElement = required<HTMLElement>('#hand-status');
+  const arrowLayer = required<SVGElement>('#hand-arrow');
+  const arrowPath = required<SVGPathElement>('#hand-arrow-path');
+  const arrowHead = required<SVGPolygonElement>('#hand-arrow-head');
   const pileCount = required<HTMLElement>('#hand-pile-count');
   const handCount = required<HTMLElement>('#hand-count');
   const countdown = required<HTMLElement>('#hand-draw-countdown');
@@ -62,6 +81,15 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let disposed = false;
   /** 用于作废上一轮尚未结束的布局位移动画回调。 */
   let layoutGeneration = 0;
+  /** 用于丢弃上一批阵型按钮尚未返回的缩略图。 */
+  let thumbnailGeneration = 0;
+  /** 正在拖拽的阵型 id；null 表示当前没有出兵手势。 */
+  let dragFormationId: string | null = null;
+  let dragPointerId: number | null = null;
+  /** 按下时的按钮范围：在其内松开视为「原地自动放置」。 */
+  let dragButtonRect: DOMRect | null = null;
+  /** 指针手势已处理过一次放置，抑制紧随其后的合成 click。 */
+  let suppressClick = false;
 
   root.classList.add('is-active');
   for (const card of deck.drawMany(INITIAL_HAND_SIZE)) knownCardIds.delete(card.id);
@@ -170,18 +198,24 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   }
 
   /**
-   * 出牌共用流程：选项按钮带上指定搭配，出牌按钮仅在唯一搭配时可用并自动带上。
-   * 飞出动画结束后再回收牌，保证 DOM 不会提前消失。
+   * 出兵共用流程：先向外请求落点，只有成功才播出牌动画并回收手牌。
+   * 失败时保留选牌与阵型按钮，玩家可以换个位置重试。
    */
-  const playSelected = (formation: CardFormation | null): void => {
-    if (playing || selected.size === 0) return;
-    if (formations.length === 0) return;
-    // 多个搭配时必须点选项，避免误用默认搭配。
-    if (formation === null && formations.length !== 1) return;
-    const chosen = formation ?? formations[0] ?? null;
-    const playedIds = [...selected];
+  const requestPlay = (
+    formation: CardFormation,
+    point: { clientX: number; clientY: number } | null,
+  ): boolean => {
+    if (playing || selected.size === 0 || formations.length === 0) return false;
+    const cards = deck.hand.filter((card) => selected.has(card.id));
+    if (cards.length === 0) return false;
+    if (options.onRequestSpawn?.({ formation, cards, point }) === false) {
+      setStatus(STATUS_INVALID_DROP);
+      return false;
+    }
+
+    setStatus('');
+    const playedIds = cards.map((card) => card.id);
     playing = true;
-    playButton.disabled = true;
     formationsElement.querySelectorAll<HTMLButtonElement>('.formation-option').forEach((button) => {
       button.disabled = true;
     });
@@ -199,15 +233,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       selected.clear();
       formations = [];
       playing = false;
-      options.onPlay?.(playedCards, chosen);
+      options.onPlay?.(playedCards, formation);
       render();
     }, PLAY_ANIMATION_MS);
     pendingTimers.add(timer);
-  };
-
-  /** 工具栏出牌按钮：仅唯一搭配时等价于点该选项。 */
-  const onPlayClick = (): void => {
-    playSelected(null);
+    return true;
   };
 
   /** 一键选中手牌中最强合法牌型，并清空其余正式/临时选中。 */
@@ -223,14 +253,68 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncSelection();
   };
 
-  /** 搭配选项点击：直接确认该搭配并出牌。 */
-  const onFormationClick = (event: Event): void => {
-    const button = (event.target as Element).closest<HTMLButtonElement>('.formation-option[data-formation-id]');
+  /** 按下阵型按钮：捕获指针并开始画拖拽箭头，此时还不消耗任何手牌。 */
+  const onFormationPointerDown = (event: PointerEvent): void => {
+    if (playing || event.button !== 0) return;
+    const button = (event.target as Element).closest<HTMLButtonElement>(
+      '.formation-option[data-formation-id]',
+    );
     if (!button || button.disabled) return;
     const formationId = button.dataset.formationId;
-    const formation = formations.find((entry) => entry.id === formationId) ?? null;
+    if (!formationId || !formations.some((entry) => entry.id === formationId)) return;
+    event.preventDefault();
+    dragFormationId = formationId;
+    dragPointerId = event.pointerId;
+    dragButtonRect = button.getBoundingClientRect();
+    formationsElement.setPointerCapture(event.pointerId);
+    drawArrow(event.clientX, event.clientY);
+  };
+
+  const onFormationPointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== dragPointerId) return;
+    drawArrow(event.clientX, event.clientY);
+  };
+
+  /**
+   * 松手判定：按钮内 = 自动放置，战场上 = 指定落点，其余区域 = 取消。
+   * 取消与失败都不消耗手牌，玩家可以直接再来一次。
+   */
+  const onFormationPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== dragPointerId) return;
+    const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
+    const buttonRect = dragButtonRect;
+    endFormationDrag(event.pointerId);
+    suppressClick = true;
     if (!formation) return;
-    playSelected(formation);
+
+    if (buttonRect && isInsideRect(buttonRect, event.clientX, event.clientY)) {
+      requestPlay(formation, null);
+      return;
+    }
+    if (isOverBattlefield(event.clientX, event.clientY)) {
+      requestPlay(formation, { clientX: event.clientX, clientY: event.clientY });
+      return;
+    }
+    setStatus('');
+  };
+
+  const onFormationPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId !== dragPointerId) return;
+    endFormationDrag(event.pointerId);
+  };
+
+  /** 键盘/辅助技术触发的点击等价于自动放置；指针手势已处理过的 click 直接吞掉。 */
+  const onFormationClick = (event: Event): void => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    const button = (event.target as Element).closest<HTMLButtonElement>(
+      '.formation-option[data-formation-id]',
+    );
+    if (!button || button.disabled) return;
+    const formation = formations.find((entry) => entry.id === button.dataset.formationId) ?? null;
+    if (formation) requestPlay(formation, null);
   };
 
   cardsElement.addEventListener('pointerdown', onPointerDown);
@@ -238,8 +322,47 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   cardsElement.addEventListener('pointerup', finishPointerSelection);
   cardsElement.addEventListener('pointercancel', cancelPointerSelection);
   selectBestButton.addEventListener('click', onSelectBestClick);
-  playButton.addEventListener('click', onPlayClick);
+  formationsElement.addEventListener('pointerdown', onFormationPointerDown);
+  formationsElement.addEventListener('pointermove', onFormationPointerMove);
+  formationsElement.addEventListener('pointerup', onFormationPointerUp);
+  formationsElement.addEventListener('pointercancel', onFormationPointerCancel);
   formationsElement.addEventListener('click', onFormationClick);
+
+  /** 结束一次出兵手势：释放指针捕获、清状态并收起箭头。 */
+  function endFormationDrag(pointerId: number): void {
+    if (formationsElement.hasPointerCapture(pointerId)) {
+      formationsElement.releasePointerCapture(pointerId);
+    }
+    dragFormationId = null;
+    dragPointerId = null;
+    dragButtonRect = null;
+    hideArrow();
+  }
+
+  /** 从按钮中心向指针画一条弧线，末端箭头随弧线切线旋转。 */
+  function drawArrow(toX: number, toY: number): void {
+    if (!dragButtonRect) return;
+    const fromX = dragButtonRect.left + dragButtonRect.width / 2;
+    const fromY = dragButtonRect.top + dragButtonRect.height / 2;
+    const lift = Math.min(Math.hypot(toX - fromX, toY - fromY) * 0.45, ARROW_MAX_LIFT) + 40;
+    const controlX = (fromX + toX) / 2;
+    const controlY = (fromY + toY) / 2 - lift;
+    arrowPath.setAttribute('d', `M ${fromX} ${fromY} Q ${controlX} ${controlY} ${toX} ${toY}`);
+    const angle = (Math.atan2(toY - controlY, toX - controlX) * 180) / Math.PI;
+    arrowHead.setAttribute('transform', `translate(${toX} ${toY}) rotate(${angle})`);
+    arrowLayer.classList.add('is-visible');
+  }
+
+  function hideArrow(): void {
+    arrowLayer.classList.remove('is-visible');
+    arrowPath.removeAttribute('d');
+  }
+
+  /** 提示区留一行高度常驻，出现/消失不会顶动下方手牌。 */
+  function setStatus(text: string): void {
+    statusElement.textContent = text;
+    statusElement.classList.toggle('is-visible', text.length > 0);
+  }
 
   /** 记录当前手牌屏幕坐标，供重建 DOM 后做 FLIP 位移。 */
   function captureCardRects(): Map<string, DOMRect> {
@@ -342,23 +465,17 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
     renderFormations();
     selectBestButton.disabled = playing || deck.hand.length === 0;
-    // 出牌按钮仅在恰好一个合法搭配时可用，多个搭配必须点选项确认。
-    playButton.disabled = playing || formations.length !== 1;
-    playButton.textContent =
-      formations.length === 1
-        ? `出牌 ${selected.size}`
-        : selected.size > 0
-          ? `选搭配 ${selected.size}`
-          : '出牌';
+    setStatus(!playing && selected.size > 0 && formations.length === 0 ? STATUS_NO_CATEGORY : '');
   }
 
-  /** 根据正式选中牌识别牌型并列出兵种搭配按钮。 */
+  /** 根据正式选中牌识别牌型并列出兵种搭配按钮（只放 3D 缩略图，说明走 aria-label）。 */
   function renderFormations(): void {
     const selectedCards = deck.hand.filter((card) => selected.has(card.id));
     const categories = detectHandCategories(selectedCards);
     formations = getFormationsFor(categories);
     formationsElement.replaceChildren();
     formationsElement.classList.toggle('is-visible', formations.length > 0 && !playing);
+    const generation = ++thumbnailGeneration;
     if (formations.length === 0 || playing) return;
 
     const fragment = document.createDocumentFragment();
@@ -367,13 +484,33 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       button.type = 'button';
       button.className = 'formation-option';
       button.dataset.formationId = formation.id;
-      button.innerHTML = `
-        <strong>${formation.name}</strong>
-        <span>${formatFormationUnits(formation)}</span>
-      `;
+      button.setAttribute('aria-label', `${formation.name}：${formatFormationUnits(formation)}`);
+      const image = document.createElement('img');
+      image.className = 'formation-thumb';
+      image.alt = '';
+      image.draggable = false;
+      button.appendChild(image);
       fragment.appendChild(button);
+      void applyThumbnail(button, image, formation, generation);
     }
     formationsElement.appendChild(fragment);
+  }
+
+  /** 缩略图异步出图；上一批按钮已被替换或环境无 WebGL 时分别丢弃与退回文字。 */
+  async function applyThumbnail(
+    button: HTMLButtonElement,
+    image: HTMLImageElement,
+    formation: CardFormation,
+    generation: number,
+  ): Promise<void> {
+    const url = await getFormationThumbnail(formation);
+    if (disposed || generation !== thumbnailGeneration) return;
+    if (url) {
+      image.src = url;
+      return;
+    }
+    button.classList.add('is-thumb-missing');
+    button.textContent = formation.name;
   }
 
   /** 同步牌数和补牌倒计时，满手牌时明确显示暂停而不是归零。 */
@@ -415,14 +552,33 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardsElement.removeEventListener('pointerup', finishPointerSelection);
       cardsElement.removeEventListener('pointercancel', cancelPointerSelection);
       selectBestButton.removeEventListener('click', onSelectBestClick);
-      playButton.removeEventListener('click', onPlayClick);
+      formationsElement.removeEventListener('pointerdown', onFormationPointerDown);
+      formationsElement.removeEventListener('pointermove', onFormationPointerMove);
+      formationsElement.removeEventListener('pointerup', onFormationPointerUp);
+      formationsElement.removeEventListener('pointercancel', onFormationPointerCancel);
       formationsElement.removeEventListener('click', onFormationClick);
+      hideArrow();
+      setStatus('');
       cardsElement.replaceChildren();
       formationsElement.replaceChildren();
       formationsElement.classList.remove('is-visible');
       root.classList.remove('is-active');
     },
   };
+}
+
+/** 屏幕坐标是否落在按钮范围内（含边界）。 */
+function isInsideRect(rect: DOMRect, clientX: number, clientY: number): boolean {
+  return (
+    clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+  );
+}
+
+/** 松手点是否在 3D 战场上；落在手牌 HUD 里的一律按取消处理。 */
+function isOverBattlefield(clientX: number, clientY: number): boolean {
+  const element = document.elementFromPoint(clientX, clientY);
+  if (!element || element.closest('#solo-hand')) return false;
+  return Boolean(element.closest('#app'));
 }
 
 /** 把阵型 rows 格式化为「前：铁卫x2 / 后：弓手x2」，突出前后站位。 */

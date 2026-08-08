@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AoePulseEffectSnapshot } from '@pb/sim';
-import { toSceneX, toSceneZ } from './coords.js';
+import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 
 const RING_COLOR = 0xffb040;
 const FAN_COLOR = 0xff6a2b;
@@ -106,7 +106,8 @@ export class AoePulseEffectView {
 
     if (isFan) {
       // Circle/Ring 半弧心在局部 +X；减 π/2 把 +X 转到冲刺朝向 (dirX, dirY→sceneZ)
-      this.group.rotation.y = Math.atan2(effect.dirX, effect.dirY) - Math.PI / 2;
+      this.group.rotation.y =
+        Math.atan2(effect.dirX, toSceneFacingZ(effect.dirY)) - Math.PI / 2;
       this.fanFill.scale.setScalar(effect.radius * grow);
       this.fanEdge.scale.setScalar(effect.radius * grow);
       this.fanFillMat.opacity = fade * 0.4;

@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Faction, World, fromFloat, takeSnapshot } from '@pb/sim';
-import { ARENA_H, ARENA_W, toSceneX, toSceneZ, toSimX, toSimY } from '../src/view/coords.js';
+import {
+  ARENA_H,
+  ARENA_W,
+  toSceneFacingZ,
+  toSceneX,
+  toSceneZ,
+  toSimX,
+  toSimY,
+} from '../src/view/coords.js';
 import { BattleView } from '../src/view/viewSync.js';
 
 /**
@@ -17,6 +25,12 @@ describe('坐标换算', () => {
   it('场地中心映射到场景原点', () => {
     expect(toSceneX(ARENA_W / 2)).toBeCloseTo(0, 6);
     expect(toSceneZ(ARENA_H / 2)).toBeCloseTo(0, 6);
+  });
+
+  it('蓝方半场（低 simY）落在 +Z，镜头近端即画面下方', () => {
+    expect(toSceneZ(0)).toBeCloseTo(ARENA_H / 2, 6);
+    expect(toSceneZ(ARENA_H)).toBeCloseTo(-ARENA_H / 2, 6);
+    expect(toSceneFacingZ(1)).toBe(-1);
   });
 });
 

@@ -24,13 +24,14 @@ describe('单机正交镜头', () => {
     expect(camera.up.y).toBe(1);
   });
 
-  it('90° 时退回正上俯视并保持蓝方在画面上方', () => {
+  it('90° 时退回正上俯视并保持蓝方在画面下方', () => {
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
     applySoloCameraPose(camera, 90);
 
     expect(camera.position.x).toBeCloseTo(0);
     expect(camera.position.z).toBeCloseTo(0);
     expect(camera.position.y).toBeGreaterThan(0);
+    // -Z 朝上 → +Z（蓝方）在画面下方
     expect(camera.up.z).toBe(-1);
   });
 

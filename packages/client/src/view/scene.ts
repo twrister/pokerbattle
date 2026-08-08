@@ -169,13 +169,14 @@ export function clampSoloCameraAngle(degrees: number): number {
 
 /**
  * 设置单机正交镜头位姿：从 +Z 侧俯视战场中心。
+ * +Z 为近端（画面下方 = 蓝方己方半场），-Z 为远端（画面上方 = 红方）。
  * 角度为相对水平面的俯仰角，45° 为默认斜视，90° 为正上俯视。
  */
 export function applySoloCameraPose(camera: THREE.Camera, angleDeg: number): void {
   const elevDeg = clampSoloCameraAngle(angleDeg);
   if (elevDeg >= SOLO_TOP_DOWN_ANGLE_DEG) {
     camera.position.set(0, SOLO_CAMERA_DISTANCE, 0);
-    // 正上方俯视时，用 -Z 作为画面上方，与斜视时「蓝方在上」一致
+    // 正上方俯视时，用 -Z 作为画面上方，与斜视时「蓝方在下」一致
     camera.up.set(0, 0, -1);
   } else {
     const elev = (elevDeg * Math.PI) / 180;
@@ -207,7 +208,7 @@ export function calculateSoloOrthoBounds(
 
   const halfW = ARENA_W / 2 + SOLO_VIEW_PADDING;
   const halfH = ARENA_H / 2 + SOLO_VIEW_PADDING;
-  // +Z 为镜头近端，对应画面底部；多包一段空区即可把战场整体上移。
+  // +Z 为镜头近端（蓝方 / 画面底部）；多包一段空区即可把战场整体上移，给手牌留白。
   const corners = [
     new THREE.Vector3(-halfW, 0, -halfH),
     new THREE.Vector3(halfW, 0, -halfH),

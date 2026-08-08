@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Faction, type Snapshot, type UnitSnapshot } from '@pb/sim';
-import { toSceneX, toSceneZ } from './coords.js';
+import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
@@ -76,7 +76,7 @@ export class BattleView {
         toSceneX(lerp(from.x, unit.x, alpha)),
         toSceneZ(lerp(from.y, unit.y, alpha)),
         lerp(from.facingX, unit.facingX, alpha),
-        lerp(from.facingY, unit.facingY, alpha),
+        toSceneFacingZ(lerp(from.facingY, unit.facingY, alpha)),
         lerp(from.hpRatio, unit.hpRatio, alpha),
         unit.state,
         unit.attacking,

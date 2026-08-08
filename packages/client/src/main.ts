@@ -1,13 +1,26 @@
-import { Faction, UNIT_TYPE_IDS, type UnitTypeId, fromFloat, spawnCommand } from '@pb/sim';
+import {
+  Faction,
+  UNIT_TYPE_IDS,
+  type UnitTypeId,
+  fromFloat,
+  resolveFormationSpawns,
+  spawnCommand,
+} from '@pb/sim';
 import { SimLoop } from './loop.js';
 import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
-import { enablePlacement } from './input/placement.js';
-import { createHandPanel } from './ui/handPanel.js';
+import {
+  blueHalfSafeAnchor,
+  enablePlacement,
+  isFormationInsideBlueHalf,
+  screenToSim,
+} from './input/placement.js';
+import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
+import { disposeFormationThumbnailRenderer } from './view/formationThumbnail.js';
 import { createScene, type SceneContext } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
 
@@ -71,12 +84,35 @@ function enterBattleSession(mode: BattleMode): () => void {
   battleView.reset();
 
   const loop = new SimLoop(20260806);
-  // 本版已带上牌型搭配；onPlay 的 formation 供下一版接入可序列化出兵指令。
+
+  /**
+   * 蓝方出兵：拖拽给屏幕落点，点击按钮则退回半场中央的安全点。
+   * 整阵越界直接拒绝（不逐单位 clamp，否则贴边阵型会被压扁重叠），由手牌面板提示重放。
+   */
+  const requestSpawn = (request: FormationSpawnRequest): boolean => {
+    const anchor = request.point
+      ? screenToSim(
+          sceneContext.renderer.domElement,
+          sceneContext.camera,
+          sceneContext.groundPlane,
+          request.point.clientX,
+          request.point.clientY,
+        )
+      : blueHalfSafeAnchor(request.formation);
+    if (!anchor) return false;
+
+    const points = resolveFormationSpawns(request.formation, Faction.Blue, anchor.x, anchor.y);
+    if (!isFormationInsideBlueHalf(points)) return false;
+    for (const point of points) {
+      loop.enqueue(
+        spawnCommand(Faction.Blue, point.typeId, fromFloat(point.x), fromFloat(point.y)),
+      );
+    }
+    return true;
+  };
+
   const handPanel = isSolo
-    ? createHandPanel({
-        drawIntervalSeconds: 3,
-        onPlay: (_cards, _formation) => {},
-      })
+    ? createHandPanel({ drawIntervalSeconds: 3, onRequestSpawn: requestSpawn })
     : null;
 
   const clearBattlefield = (): void => {
@@ -194,6 +230,7 @@ function disposeApp(): void {
   sharedBattleView = null;
   sharedScene?.dispose();
   sharedScene = null;
+  disposeFormationThumbnailRenderer();
   mainMenu.dispose();
   deckConfigPage.dispose();
 }

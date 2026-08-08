@@ -2,20 +2,28 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPokerCards, PokerDeck, type PlayingCard } from '../src/cards/deck.js';
-import { createHandPanel } from '../src/ui/handPanel.js';
+import { createHandPanel, type FormationSpawnRequest } from '../src/ui/handPanel.js';
+
+// jsdom 没有 WebGL，缩略图渲染整体打桩，测试只关心按钮里挂的是图片而不是文字。
+vi.mock('../src/view/formationThumbnail.js', () => ({
+  getFormationThumbnail: vi.fn(async () => 'data:image/png;base64,thumb'),
+  disposeFormationThumbnailRenderer: vi.fn(),
+}));
 
 describe('单机手牌交互', () => {
   beforeEach(() => {
     document.body.innerHTML = `
+      <div id="app"><canvas id="battle-canvas"></canvas></div>
       <section id="solo-hand">
+        <div id="hand-status"></div>
         <div id="hand-formations"></div>
         <span id="hand-pile-count"></span>
         <span id="hand-count"></span>
         <span id="hand-draw-countdown"></span>
         <button id="btn-select-best"></button>
-        <button id="btn-play-cards"></button>
         <div id="hand-cards"></div>
       </section>
+      <svg id="hand-arrow"><path id="hand-arrow-path"></path><polygon id="hand-arrow-head"></polygon></svg>
     `;
     HTMLElement.prototype.setPointerCapture = vi.fn();
     HTMLElement.prototype.releasePointerCapture = vi.fn();
@@ -62,9 +70,6 @@ describe('单机手牌交互', () => {
     expect(firstCard.classList.contains('is-selected')).toBe(true);
     expect(document.querySelectorAll('.playing-card.is-preview')).toHaveLength(0);
 
-    // 单张对应多个搭配，出牌按钮禁用，必须点选项。
-    const playButton = document.querySelector<HTMLButtonElement>('#btn-play-cards')!;
-    expect(playButton.disabled).toBe(true);
     const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
     expect(option).toBeTruthy();
 
@@ -105,13 +110,12 @@ describe('单机手牌交互', () => {
     firstCard.dispatchEvent(pointerEvent('pointerup', 5));
     expect(firstCard.classList.contains('is-preview')).toBe(false);
     expect(firstCard.classList.contains('is-selected')).toBe(false);
-    expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(true);
     expect(document.querySelector('#hand-formations')?.classList.contains('is-visible')).toBe(false);
 
     panel.dispose();
   });
 
-  it('选中对子后列出搭配；多搭配时出牌按钮禁用，点选项才出牌', () => {
+  it('选中对子后列出全部搭配，点其中一个即出牌', () => {
     vi.useFakeTimers();
     const onPlay = vi.fn();
     const deck = deckWithCards(['9-spades', '9-hearts', '3-clubs']);
@@ -137,7 +141,6 @@ describe('单机手牌交互', () => {
     expect(formations.classList.contains('is-visible')).toBe(true);
     const options = [...formations.querySelectorAll<HTMLButtonElement>('.formation-option')];
     expect(options.length).toBeGreaterThan(1);
-    expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(true);
 
     const chosen = options[0]!;
     chosen.click();
@@ -154,33 +157,135 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('唯一搭配时出牌按钮可用并自动带上该搭配', () => {
+  it('页面上没有出牌按钮，阵型按钮只放缩略图并把说明留给读屏器', async () => {
+    const panel = createHandPanel({ deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']) });
+    selectAllCards();
+
+    expect(document.querySelector('#btn-play-cards')).toBeNull();
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    // 缩略图是异步返回的，等一次微任务队列。
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(option.textContent?.trim()).toBe('');
+    expect(option.querySelector('img.formation-thumb')?.getAttribute('src')).toBe(
+      'data:image/png;base64,thumb',
+    );
+    const label = option.getAttribute('aria-label') ?? '';
+    expect(label).toContain('前：');
+    expect(label).toContain('后：');
+
+    panel.dispose();
+  });
+
+  it('选中牌拼不出牌型时给出提示', () => {
+    const panel = createHandPanel({ deck: deckWithCards(['3-spades', '9-hearts']) });
+    selectAllCards();
+
+    expect(document.querySelectorAll('.formation-option')).toHaveLength(0);
+    const status = document.querySelector<HTMLElement>('#hand-status')!;
+    expect(status.textContent).toBe('未凑成有效牌型');
+    expect(status.classList.contains('is-visible')).toBe(true);
+
+    panel.dispose();
+  });
+
+  it('在按钮内松开走自动放置，拖拽期间显示箭头', () => {
     vi.useFakeTimers();
+    const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
     const onPlay = vi.fn();
-    // 三顺在配置里只有一条搭配，可验证出牌按钮直出。
-    const deck = deckWithCards(['3-spades', '4-hearts', '5-clubs']);
-    const panel = createHandPanel({ deck, onPlay });
-    const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
-    const hit = vi.fn(() => cards[0]!);
-    Object.defineProperty(document, 'elementFromPoint', {
-      configurable: true,
-      value: hit,
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onRequestSpawn,
+      onPlay,
     });
+    selectAllCards();
 
-    cards[0]!.dispatchEvent(pointerEvent('pointerdown', 22));
-    hit.mockReturnValue(cards[2]!);
-    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointermove', 22, 80, 10));
-    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointerup', 22));
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    option.getBoundingClientRect = () => buttonRect();
+    const arrow = document.querySelector('#hand-arrow')!;
 
-    const options = document.querySelectorAll('.formation-option');
-    expect(options).toHaveLength(1);
-    const playButton = document.querySelector<HTMLButtonElement>('#btn-play-cards')!;
-    expect(playButton.disabled).toBe(false);
+    option.dispatchEvent(pointerEvent('pointerdown', 40, 120, 500));
+    expect(arrow.classList.contains('is-visible')).toBe(true);
+    document
+      .querySelector('#hand-formations')!
+      .dispatchEvent(pointerEvent('pointermove', 40, 130, 480));
+    expect(document.querySelector('#hand-arrow-path')?.getAttribute('d')).toContain('M ');
 
-    playButton.click();
+    document
+      .querySelector('#hand-formations')!
+      .dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+    expect(onRequestSpawn).toHaveBeenCalledOnce();
+    expect(onRequestSpawn.mock.calls[0]?.[0]?.point).toBeNull();
+
     vi.advanceTimersByTime(360);
     expect(onPlay).toHaveBeenCalledOnce();
-    expect(onPlay.mock.calls[0]?.[1]?.id).toBe('straight3_mix');
+    expect(panel.deck.hand).toHaveLength(0);
+
+    panel.dispose();
+  });
+
+  it('拖到战场松开时带上落点坐标并消耗手牌', () => {
+    vi.useFakeTimers();
+    const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onRequestSpawn,
+    });
+    selectAllCards();
+
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    option.getBoundingClientRect = () => buttonRect();
+    dropOn(document.querySelector('#battle-canvas')!, option, 41, 200, 300);
+
+    expect(onRequestSpawn).toHaveBeenCalledOnce();
+    expect(onRequestSpawn.mock.calls[0]?.[0]?.point).toEqual({ clientX: 200, clientY: 300 });
+    expect(onRequestSpawn.mock.calls[0]?.[0]?.cards).toHaveLength(3);
+
+    vi.advanceTimersByTime(360);
+    expect(panel.deck.hand).toHaveLength(0);
+
+    panel.dispose();
+  });
+
+  it('落点非法时提示重放，手牌与阵型按钮都保留', () => {
+    vi.useFakeTimers();
+    const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => false);
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onRequestSpawn,
+    });
+    selectAllCards();
+
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    option.getBoundingClientRect = () => buttonRect();
+    dropOn(document.querySelector('#battle-canvas')!, option, 42, 200, 300);
+
+    vi.advanceTimersByTime(360);
+    expect(panel.deck.hand).toHaveLength(3);
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在己方半场内放置完整阵型');
+    expect(document.querySelectorAll('.formation-option')).toHaveLength(1);
+
+    panel.dispose();
+  });
+
+  it('松开在战场之外时取消出兵，不请求落点也不扣牌', () => {
+    vi.useFakeTimers();
+    const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onRequestSpawn,
+    });
+    selectAllCards();
+
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    option.getBoundingClientRect = () => buttonRect();
+    dropOn(document.querySelector('#solo-hand')!, option, 43, 200, 700);
+
+    expect(onRequestSpawn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(360);
+    expect(panel.deck.hand).toHaveLength(3);
+    expect(document.querySelector('#hand-arrow')?.classList.contains('is-visible')).toBe(false);
 
     panel.dispose();
   });
@@ -354,6 +459,52 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 });
+
+/** 依次点选当前全部手牌，得到稳定的正式选中集合。 */
+function selectAllCards(): void {
+  const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+  for (const [index, card] of cards.entries()) {
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => card),
+    });
+    card.dispatchEvent(pointerEvent('pointerdown', 100 + index));
+    card.dispatchEvent(pointerEvent('pointerup', 100 + index));
+  }
+}
+
+/** jsdom 的矩形恒为 0，阵型按钮需要一个可判定「是否在按钮内」的假范围。 */
+function buttonRect(): DOMRect {
+  return {
+    x: 100,
+    y: 480,
+    left: 100,
+    top: 480,
+    right: 150,
+    bottom: 530,
+    width: 50,
+    height: 50,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+/** 从阵型按钮拖到指定元素上松手，落点判定走 elementFromPoint。 */
+function dropOn(
+  target: Element,
+  option: HTMLElement,
+  pointerId: number,
+  clientX: number,
+  clientY: number,
+): void {
+  const formations = document.querySelector('#hand-formations')!;
+  option.dispatchEvent(pointerEvent('pointerdown', pointerId, 120, 500));
+  Object.defineProperty(document, 'elementFromPoint', {
+    configurable: true,
+    value: vi.fn(() => target),
+  });
+  formations.dispatchEvent(pointerEvent('pointermove', pointerId, clientX, clientY));
+  formations.dispatchEvent(pointerEvent('pointerup', pointerId, clientX, clientY));
+}
 
 /** 给 jsdom 的 MouseEvent 补 pointerId，覆盖手牌依赖的最小 PointerEvent 契约。 */
 function pointerEvent(type: string, pointerId: number, clientX = 10, clientY = 10): Event {

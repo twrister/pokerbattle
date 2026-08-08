@@ -1,5 +1,14 @@
 import * as THREE from 'three';
+import { Faction, resolveFormationSpawns, type CardFormation, type FormationSpawnPoint } from '@pb/sim';
 import { ARENA_H, ARENA_W, toSimX, toSimY } from '../view/coords.js';
+
+/** 蓝方可出兵区域：整个宽度 + 靠近己方的半场（含中线）。 */
+export const BLUE_HALF_MAX_Y = ARENA_H / 2;
+
+export interface SimPoint {
+  x: number;
+  y: number;
+}
 
 export interface PlacementOptions {
   domElement: HTMLElement;
@@ -15,6 +24,67 @@ const CLICK_MAX_DURATION_MS = 500;
 /** 点击落点是否在场地矩形内（含边界） */
 function isInsideArena(simX: number, simY: number): boolean {
   return simX >= 0 && simX <= ARENA_W && simY >= 0 && simY <= ARENA_H;
+}
+
+/**
+ * 屏幕坐标 → sim 平面坐标。
+ * 射线打的是无限地面平面，命中失败（视线与地面平行）时返回 null，场外判断交给调用方。
+ */
+export function screenToSim(
+  domElement: HTMLElement,
+  camera: THREE.Camera,
+  groundPlane: THREE.Plane,
+  clientX: number,
+  clientY: number,
+): SimPoint | null {
+  const rect = domElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(
+    new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    ),
+    camera,
+  );
+  const hit = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+  return { x: toSimX(hit.x), y: toSimY(hit.z) };
+}
+
+/**
+ * 整套阵型是否都落在蓝方半场内。
+ * 故意不做逐单位 clamp：贴边时 clamp 会把整排压到同一条线上互相重叠，
+ * 宁可判非法让玩家重放，也不生成一堆挤在边界的单位。
+ */
+export function isFormationInsideBlueHalf(points: readonly FormationSpawnPoint[]): boolean {
+  return points.every(
+    (point) => point.x >= 0 && point.x <= ARENA_W && point.y >= 0 && point.y <= BLUE_HALF_MAX_Y,
+  );
+}
+
+/**
+ * 点击按钮自动出兵时的落点：从蓝方半场中央出发，再按阵型包围盒把锚点推回合法区域。
+ * 阵型本身比半场还大时返回 null，由调用方提示玩家。
+ */
+export function blueHalfSafeAnchor(formation: CardFormation): SimPoint | null {
+  const centerX = ARENA_W / 2;
+  const centerY = BLUE_HALF_MAX_Y / 2;
+  const points = resolveFormationSpawns(formation, Faction.Blue, centerX, centerY);
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const offsetX = shiftIntoRange(Math.min(...xs), Math.max(...xs), 0, ARENA_W);
+  const offsetY = shiftIntoRange(Math.min(...ys), Math.max(...ys), 0, BLUE_HALF_MAX_Y);
+  if (offsetX === null || offsetY === null) return null;
+  return { x: centerX + offsetX, y: centerY + offsetY };
+}
+
+/** 求把 [min, max] 整体推入 [low, high] 所需的位移；区间本身超长则无解。 */
+function shiftIntoRange(min: number, max: number, low: number, high: number): number | null {
+  if (max - min > high - low) return null;
+  if (min < low) return low - min;
+  if (max > high) return high - max;
+  return 0;
 }
 
 /**
