@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPokerCards, PokerDeck, type PlayingCard } from '../src/cards/deck.js';
 import { createHandPanel } from '../src/ui/handPanel.js';
 
 describe('单机手牌交互', () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <section id="solo-hand">
+        <div id="hand-formations"></div>
         <span id="hand-pile-count"></span>
         <span id="hand-count"></span>
         <span id="hand-draw-countdown"></span>
@@ -40,7 +42,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('按下为临时选中，松开后切到正式选中并可出牌', () => {
+  it('按下为临时选中，松开后切到正式选中并可点搭配出牌', () => {
     vi.useFakeTimers();
     const onPlay = vi.fn();
     const panel = createHandPanel({ onPlay });
@@ -59,21 +61,26 @@ describe('单机手牌交互', () => {
     expect(firstCard.classList.contains('is-selected')).toBe(true);
     expect(document.querySelectorAll('.playing-card.is-preview')).toHaveLength(0);
 
+    // 单张对应多个搭配，出牌按钮禁用，必须点选项。
     const playButton = document.querySelector<HTMLButtonElement>('#btn-play-cards')!;
-    expect(playButton.disabled).toBe(false);
+    expect(playButton.disabled).toBe(true);
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    expect(option).toBeTruthy();
 
-    playButton.click();
+    option.click();
     expect(firstCard.classList.contains('is-playing')).toBe(true);
     vi.advanceTimersByTime(360);
 
     expect(onPlay).toHaveBeenCalledOnce();
     expect(onPlay.mock.calls[0]?.[0]).toHaveLength(1);
+    expect(onPlay.mock.calls[0]?.[1]?.id).toBeTruthy();
     expect(panel.deck.hand).toHaveLength(2);
     expect(panel.deck.availableCount).toBe(52);
 
     panel.dispose();
     expect(document.querySelector('#solo-hand')?.classList.contains('is-active')).toBe(false);
     expect(document.querySelector('#hand-cards')?.children).toHaveLength(0);
+    expect(document.querySelector('#hand-formations')?.children).toHaveLength(0);
   });
 
   it('按住已正式选中的牌时保持拉高，松开后才取消正式选中', () => {
@@ -87,17 +94,92 @@ describe('单机手牌交互', () => {
     firstCard.dispatchEvent(pointerEvent('pointerdown', 4));
     firstCard.dispatchEvent(pointerEvent('pointerup', 4));
     expect(firstCard.classList.contains('is-selected')).toBe(true);
+    expect(document.querySelector('#hand-formations')?.classList.contains('is-visible')).toBe(true);
 
     firstCard.dispatchEvent(pointerEvent('pointerdown', 5));
     // 取消模式按住期间显示预览置灰，正式选中拉高等到 pointerup 才撤销。
     expect(firstCard.classList.contains('is-preview')).toBe(true);
     expect(firstCard.classList.contains('is-selected')).toBe(true);
-    expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(false);
 
     firstCard.dispatchEvent(pointerEvent('pointerup', 5));
     expect(firstCard.classList.contains('is-preview')).toBe(false);
     expect(firstCard.classList.contains('is-selected')).toBe(false);
     expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(true);
+    expect(document.querySelector('#hand-formations')?.classList.contains('is-visible')).toBe(false);
+
+    panel.dispose();
+  });
+
+  it('选中对子后列出搭配；多搭配时出牌按钮禁用，点选项才出牌', () => {
+    vi.useFakeTimers();
+    const onPlay = vi.fn();
+    const deck = deckWithCards(['9-spades', '9-hearts', '3-clubs']);
+    const panel = createHandPanel({ deck, onPlay });
+    const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+    const pairCards = cards.filter((element) =>
+      ['9-spades', '9-hearts'].includes(element.dataset.cardId ?? ''),
+    );
+    expect(pairCards).toHaveLength(2);
+    const [first, second] = pairCards as [HTMLElement, HTMLElement];
+    const hit = vi.fn(() => first);
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: hit,
+    });
+
+    first.dispatchEvent(pointerEvent('pointerdown', 21));
+    hit.mockReturnValue(second);
+    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointermove', 21, 40, 10));
+    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointerup', 21));
+
+    const formations = document.querySelector('#hand-formations')!;
+    expect(formations.classList.contains('is-visible')).toBe(true);
+    const options = [...formations.querySelectorAll<HTMLButtonElement>('.formation-option')];
+    expect(options.length).toBeGreaterThan(1);
+    expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(true);
+
+    const chosen = options[0]!;
+    chosen.click();
+    vi.advanceTimersByTime(360);
+
+    expect(onPlay).toHaveBeenCalledOnce();
+    expect(onPlay.mock.calls[0]?.[0].map((card: PlayingCard) => card.id).sort()).toEqual([
+      '9-hearts',
+      '9-spades',
+    ]);
+    expect(onPlay.mock.calls[0]?.[1]?.id).toBe(chosen.dataset.formationId);
+    expect(panel.deck.hand).toHaveLength(1);
+
+    panel.dispose();
+  });
+
+  it('唯一搭配时出牌按钮可用并自动带上该搭配', () => {
+    vi.useFakeTimers();
+    const onPlay = vi.fn();
+    // 三顺在配置里只有一条搭配，可验证出牌按钮直出。
+    const deck = deckWithCards(['3-spades', '4-hearts', '5-clubs']);
+    const panel = createHandPanel({ deck, onPlay });
+    const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+    const hit = vi.fn(() => cards[0]!);
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: hit,
+    });
+
+    cards[0]!.dispatchEvent(pointerEvent('pointerdown', 22));
+    hit.mockReturnValue(cards[2]!);
+    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointermove', 22, 80, 10));
+    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointerup', 22));
+
+    const options = document.querySelectorAll('.formation-option');
+    expect(options).toHaveLength(1);
+    const playButton = document.querySelector<HTMLButtonElement>('#btn-play-cards')!;
+    expect(playButton.disabled).toBe(false);
+
+    playButton.click();
+    vi.advanceTimersByTime(360);
+    expect(onPlay).toHaveBeenCalledOnce();
+    expect(onPlay.mock.calls[0]?.[1]?.id).toBe('straight3_mix');
 
     panel.dispose();
   });
@@ -239,4 +321,18 @@ function pointerEvent(type: string, pointerId: number, clientX = 10, clientY = 1
   const event = new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY });
   Object.defineProperty(event, 'pointerId', { value: pointerId });
   return event;
+}
+
+/** 构造仅含指定牌的牌堆，并按给定顺序抽到手牌，便于测固定牌型。 */
+function deckWithCards(ids: readonly string[]): PokerDeck {
+  const all = createPokerCards();
+  const cards = ids.map((id) => {
+    const found = all.find((card) => card.id === id);
+    if (!found) throw new Error(`测试牌不存在：${id}`);
+    return found;
+  });
+  // 随机源恒为 0：加权抽取总会落到当前列表第一张。
+  const deck = new PokerDeck(cards, () => 0);
+  deck.drawMany(ids.length);
+  return deck;
 }

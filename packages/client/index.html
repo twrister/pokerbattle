@@ -721,6 +721,62 @@
         display: flex;
       }
 
+      /* 选中合法牌型后，在工具栏上方列出对应兵种搭配；空时隐藏。 */
+      #hand-formations {
+        display: none;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        max-width: min(96vw, calc(100svh * 0.5625));
+        margin-bottom: 6px;
+        pointer-events: auto;
+      }
+
+      #hand-formations.is-visible {
+        display: flex;
+      }
+
+      #hand-formations .formation-option {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        min-width: 88px;
+        padding: 6px 10px;
+        border: 1px solid rgba(99, 214, 138, 0.42);
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(49, 95, 88, 0.92), rgba(29, 64, 61, 0.92));
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+        color: #effff5;
+        font-size: 11px;
+        line-height: 1.25;
+        cursor: pointer;
+      }
+
+      #hand-formations .formation-option:hover {
+        border-color: rgba(148, 236, 180, 0.85);
+        filter: brightness(1.08);
+      }
+
+      #hand-formations .formation-option:disabled {
+        border-color: var(--panel-border);
+        background: rgba(255, 255, 255, 0.05);
+        color: #697583;
+        cursor: default;
+        filter: none;
+      }
+
+      #hand-formations .formation-option strong {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      #hand-formations .formation-option span {
+        color: rgba(239, 255, 245, 0.78);
+        font-size: 10px;
+      }
+
       .hand-toolbar {
         display: flex;
         align-items: center;
@@ -935,10 +991,241 @@
         font: inherit;
       }
 
+      #deck-config {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: auto;
+        background:
+          radial-gradient(circle at 78% 12%, rgba(69, 115, 155, 0.28), transparent 35%),
+          #0a1018;
+      }
+
+      .deck-shell {
+        gap: clamp(12px, 2vh, 22px);
+        overflow: auto;
+      }
+
+      .deck-header,
+      .deck-toolbar,
+      .deck-content,
+      .deck-footer {
+        position: relative;
+        z-index: 1;
+      }
+
+      .deck-header,
+      .deck-toolbar,
+      .deck-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .deck-header h1 {
+        margin: 0;
+        font-size: clamp(22px, 3.3vh, 34px);
+      }
+
+      .deck-back,
+      .deck-toolbar button,
+      .deck-footer button,
+      .deck-category,
+      .deck-formation,
+      .deck-mini-button,
+      .deck-icon-button,
+      .deck-danger-button {
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .deck-back,
+      .deck-toolbar button,
+      .deck-footer button {
+        min-height: 34px;
+        padding: 7px 12px;
+      }
+
+      .deck-toolbar {
+        align-items: flex-start;
+      }
+
+      .deck-toolbar-copy {
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+
+      .deck-content {
+        display: grid;
+        flex: 1;
+        grid-template-columns: minmax(86px, 0.55fr) minmax(120px, 0.8fr) minmax(0, 2fr);
+        /* 上行编辑区 + 下行整宽预览，预览占更多高度便于看间距 */
+        grid-template-rows: minmax(0, 1fr) minmax(300px, 1.45fr);
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .deck-column,
+      .deck-editor-panel,
+      .deck-preview-panel {
+        min-height: 0;
+        padding: 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(18, 27, 38, 0.82);
+      }
+
+      .deck-column {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        overflow: auto;
+      }
+
+      .deck-category,
+      .deck-formation {
+        padding: 8px;
+        text-align: left;
+      }
+
+      .deck-category.is-active,
+      .deck-formation.is-active {
+        border-color: rgba(99, 214, 138, 0.8);
+        background: rgba(51, 104, 87, 0.7);
+      }
+
+      .deck-editor-panel {
+        overflow: auto;
+      }
+
+      #deck-editor {
+        display: grid;
+        gap: 10px;
+      }
+
+      .deck-field {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+      }
+
+      .deck-field input,
+      .deck-row select {
+        min-width: 0;
+        padding: 6px 7px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .deck-rows {
+        display: grid;
+        gap: 7px;
+        padding-top: 4px;
+      }
+
+      .deck-section-title {
+        color: #b9c8d5;
+        font-weight: 650;
+      }
+
+      .deck-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+        padding: 7px;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .deck-row-label {
+        width: 42px;
+        color: #91a2b4;
+        font-size: 11px;
+      }
+
+      .deck-row select {
+        flex: 1 1 82px;
+      }
+
+      .deck-mini-button,
+      .deck-icon-button,
+      .deck-danger-button {
+        padding: 5px 8px;
+      }
+
+      .deck-danger-button {
+        border-color: rgba(242, 96, 79, 0.55);
+        color: #ffc0b8;
+      }
+
+      .deck-preview-panel {
+        /* 预览独占第二行整宽，避免挤在三列网格的第一格里显得过小 */
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 8px;
+        min-height: clamp(300px, 40vh, 520px);
+      }
+
+      #deck-preview {
+        position: relative;
+        min-height: clamp(260px, 34vh, 480px);
+        height: 100%;
+        overflow: hidden;
+        border-radius: 8px;
+        background: linear-gradient(155deg, #172433, #0d141d);
+      }
+
+      #deck-preview canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #deck-status {
+        flex: 1;
+        color: var(--text-dim);
+      }
+
+      #deck-status.is-error {
+        color: #ffab9e;
+      }
+
       @media (max-height: 700px) {
         #hud.is-solo #panel-stats,
         #hud.is-solo #panel-help {
           display: none;
+        }
+      }
+
+      @media (max-width: 580px) {
+        .deck-content {
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: auto auto minmax(280px, 1.3fr);
+        }
+
+        .deck-editor-panel,
+        .deck-preview-panel {
+          grid-column: 1 / -1;
+        }
+
+        .deck-preview-panel {
+          min-height: clamp(280px, 44vh, 460px);
+        }
+
+        #deck-preview {
+          min-height: clamp(240px, 38vh, 420px);
         }
       }
     </style>
@@ -978,10 +1265,10 @@
         </section>
 
         <nav class="lobby-nav" aria-label="功能入口">
-          <button class="nav-entry" type="button" data-placeholder="卡组">
+          <button id="btn-deck" class="nav-entry" type="button">
             <span class="nav-icon" aria-hidden="true">▣</span>
             <span class="nav-label">卡组</span>
-            <span class="nav-tag">COMING SOON</span>
+            <span class="nav-tag">编辑阵型</span>
           </button>
           <button class="nav-entry" type="button" data-placeholder="图鉴">
             <span class="nav-icon" aria-hidden="true">◇</span>
@@ -994,6 +1281,37 @@
             <span class="nav-tag">MVP</span>
           </button>
         </nav>
+      </div>
+    </main>
+
+    <main id="deck-config" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell deck-shell">
+        <header class="deck-header">
+          <button id="btn-deck-back" class="deck-back" type="button">返回主界面</button>
+          <h1>卡组阵型</h1>
+        </header>
+        <section class="deck-toolbar">
+          <div class="deck-toolbar-copy">选择牌型与阵型，前排朝向敌方；编辑会实时更新 2D 站位与 3D 预览。</div>
+          <button id="btn-deck-add-formation" type="button">新增阵型</button>
+        </section>
+        <section class="deck-content">
+          <nav id="deck-category-list" class="deck-column" aria-label="牌型"></nav>
+          <nav id="deck-formation-list" class="deck-column" aria-label="阵型列表"></nav>
+          <section class="deck-editor-panel" aria-label="阵型编辑">
+            <div id="deck-editor"></div>
+          </section>
+          <section class="deck-preview-panel" aria-label="3D 阵型预览">
+            <div class="deck-section-title">3D 阵型预览（蓝方视角）</div>
+            <div id="deck-preview"></div>
+          </section>
+        </section>
+        <footer class="deck-footer">
+          <div id="deck-status" role="status" aria-live="polite">
+            编辑完成后保存；仅 pnpm dev 可写回配置文件。
+          </div>
+          <button id="btn-deck-reset" type="button">重置</button>
+          <button id="btn-deck-save" type="button">保存配置</button>
+        </footer>
       </div>
     </main>
 
@@ -1084,6 +1402,7 @@
       </section>
 
       <section id="solo-hand" aria-label="手牌">
+        <div id="hand-formations" aria-label="兵种搭配"></div>
         <div class="hand-toolbar">
           <span>牌堆 <strong id="hand-pile-count">54</strong></span>
           <span>手牌 <strong id="hand-count">0/10</strong></span>

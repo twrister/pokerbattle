@@ -28,6 +28,30 @@ export {
   resetUnitConfigsToDefault,
   toUnitConfigDraft,
 } from './config/units.js';
+export {
+  CARD_FORMATIONS,
+  FORMATION_COL_SPACING,
+  FORMATION_ROW_SPACING,
+  HAND_CATEGORY_NAMES,
+  HAND_CATEGORY_ORDER,
+  applyCardFormationDrafts,
+  captureCardFormationsAsDefault,
+  createCardFormation,
+  dumpCardFormationDrafts,
+  dumpDefaultCardFormationDrafts,
+  resetCardFormationsToDefault,
+  validateCardFormationDrafts,
+  type CardFormation,
+  type CardFormationDrafts,
+  type FormationDraft,
+  type FormationSlot,
+  type FormationSpawnPoint,
+  type FormationUnitEntry,
+  type HandCategory,
+  getFormationsFor,
+  resolveFormationSpawns,
+  resolveFormationSpawnsFx,
+} from './config/cardFormations.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';

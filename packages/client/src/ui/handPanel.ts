@@ -1,9 +1,16 @@
 import {
+  getFormationsFor,
+  UNIT_CONFIGS,
+  type CardFormation,
+  type UnitTypeId,
+} from '@pb/sim';
+import {
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
   PokerDeck,
   type PlayingCard,
 } from '../cards/deck.js';
+import { detectHandCategories } from '../cards/handCategory.js';
 
 const PLAY_ANIMATION_MS = 360;
 /** 手牌增删后，留存牌从旧坐标滑到新坐标的时长。 */
@@ -13,7 +20,8 @@ const MIN_DRAW_INTERVAL_MS = 250;
 export interface HandPanelOptions {
   drawIntervalSeconds?: number;
   deck?: PokerDeck;
-  onPlay?: (cards: readonly PlayingCard[]) => void;
+  /** 出牌完成回调；formation 为玩家点选的搭配，仅点出牌按钮且唯一搭配时也会带上。 */
+  onPlay?: (cards: readonly PlayingCard[], formation: CardFormation | null) => void;
 }
 
 export interface HandPanelHandle {
@@ -27,6 +35,7 @@ export interface HandPanelHandle {
 export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle {
   const root = required<HTMLElement>('#solo-hand');
   const cardsElement = required<HTMLElement>('#hand-cards');
+  const formationsElement = required<HTMLElement>('#hand-formations');
   const playButton = required<HTMLButtonElement>('#btn-play-cards');
   const pileCount = required<HTMLElement>('#hand-pile-count');
   const handCount = required<HTMLElement>('#hand-count');
@@ -38,6 +47,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const preview = new Set<string>();
   const knownCardIds = new Set<string>();
   const pendingTimers = new Set<number>();
+  /** 当前选中牌对应的兵种搭配选项。 */
+  let formations: CardFormation[] = [];
 
   let drawIntervalMs = toIntervalMs(options.drawIntervalSeconds ?? 3);
   let remainingMs = drawIntervalMs;
@@ -157,12 +168,22 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     preview.clear();
   }
 
-  /** 等飞出动画结束后再回收牌，保证 DOM 不会提前消失。 */
-  const onPlayClick = (): void => {
+  /**
+   * 出牌共用流程：选项按钮带上指定搭配，出牌按钮仅在唯一搭配时可用并自动带上。
+   * 飞出动画结束后再回收牌，保证 DOM 不会提前消失。
+   */
+  const playSelected = (formation: CardFormation | null): void => {
     if (playing || selected.size === 0) return;
+    if (formations.length === 0) return;
+    // 多个搭配时必须点选项，避免误用默认搭配。
+    if (formation === null && formations.length !== 1) return;
+    const chosen = formation ?? formations[0] ?? null;
     const playedIds = [...selected];
     playing = true;
     playButton.disabled = true;
+    formationsElement.querySelectorAll<HTMLButtonElement>('.formation-option').forEach((button) => {
+      button.disabled = true;
+    });
     for (const cardId of playedIds) {
       [...cardsElement.querySelectorAll<HTMLElement>('.playing-card')].find(
         (element) => element.dataset.cardId === cardId,
@@ -175,11 +196,27 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       const playedCards = deck.play(playedIds);
       for (const card of playedCards) knownCardIds.delete(card.id);
       selected.clear();
+      formations = [];
       playing = false;
-      options.onPlay?.(playedCards);
+      options.onPlay?.(playedCards, chosen);
       render();
     }, PLAY_ANIMATION_MS);
     pendingTimers.add(timer);
+  };
+
+  /** 工具栏出牌按钮：仅唯一搭配时等价于点该选项。 */
+  const onPlayClick = (): void => {
+    playSelected(null);
+  };
+
+  /** 搭配选项点击：直接确认该搭配并出牌。 */
+  const onFormationClick = (event: Event): void => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('.formation-option[data-formation-id]');
+    if (!button || button.disabled) return;
+    const formationId = button.dataset.formationId;
+    const formation = formations.find((entry) => entry.id === formationId) ?? null;
+    if (!formation) return;
+    playSelected(formation);
   };
 
   cardsElement.addEventListener('pointerdown', onPointerDown);
@@ -187,6 +224,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   cardsElement.addEventListener('pointerup', finishPointerSelection);
   cardsElement.addEventListener('pointercancel', cancelPointerSelection);
   playButton.addEventListener('click', onPlayClick);
+  formationsElement.addEventListener('click', onFormationClick);
 
   /** 记录当前手牌屏幕坐标，供重建 DOM 后做 FLIP 位移。 */
   function captureCardRects(): Map<string, DOMRect> {
@@ -287,8 +325,39 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardElement.classList.toggle('is-preview', isPreview);
       cardElement.setAttribute('aria-pressed', String(isSelected));
     }
-    playButton.disabled = playing || selected.size === 0;
-    playButton.textContent = selected.size > 0 ? `出牌 ${selected.size}` : '出牌';
+    renderFormations();
+    // 出牌按钮仅在恰好一个合法搭配时可用，多个搭配必须点选项确认。
+    playButton.disabled = playing || formations.length !== 1;
+    playButton.textContent =
+      formations.length === 1
+        ? `出牌 ${selected.size}`
+        : selected.size > 0
+          ? `选搭配 ${selected.size}`
+          : '出牌';
+  }
+
+  /** 根据正式选中牌识别牌型并列出兵种搭配按钮。 */
+  function renderFormations(): void {
+    const selectedCards = deck.hand.filter((card) => selected.has(card.id));
+    const categories = detectHandCategories(selectedCards);
+    formations = getFormationsFor(categories);
+    formationsElement.replaceChildren();
+    formationsElement.classList.toggle('is-visible', formations.length > 0 && !playing);
+    if (formations.length === 0 || playing) return;
+
+    const fragment = document.createDocumentFragment();
+    for (const formation of formations) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'formation-option';
+      button.dataset.formationId = formation.id;
+      button.innerHTML = `
+        <strong>${formation.name}</strong>
+        <span>${formatFormationUnits(formation)}</span>
+      `;
+      fragment.appendChild(button);
+    }
+    formationsElement.appendChild(fragment);
   }
 
   /** 同步牌数和补牌倒计时，满手牌时明确显示暂停而不是归零。 */
@@ -330,10 +399,43 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardsElement.removeEventListener('pointerup', finishPointerSelection);
       cardsElement.removeEventListener('pointercancel', cancelPointerSelection);
       playButton.removeEventListener('click', onPlayClick);
+      formationsElement.removeEventListener('click', onFormationClick);
       cardsElement.replaceChildren();
+      formationsElement.replaceChildren();
+      formationsElement.classList.remove('is-visible');
       root.classList.remove('is-active');
     },
   };
+}
+
+/** 把阵型 rows 格式化为「前：铁卫x2 / 后：弓手x2」，突出前后站位。 */
+function formatFormationUnits(formation: CardFormation): string {
+  if (formation.rows.length === 0) return '';
+  if (formation.rows.length === 1) {
+    return formatRowUnits(formation.rows[0]!);
+  }
+  return formation.rows
+    .map((row, index) => {
+      const label = index === 0 ? '前' : index === formation.rows.length - 1 ? '后' : `排${index + 1}`;
+      return `${label}：${formatRowUnits(row)}`;
+    })
+    .join(' / ');
+}
+
+/** 单排兵种短标签，如「铁卫x2 · 弓手x1」。 */
+function formatRowUnits(row: readonly UnitTypeId[]): string {
+  const counts = new Map<UnitTypeId, number>();
+  const order: UnitTypeId[] = [];
+  for (const typeId of row) {
+    if (!counts.has(typeId)) order.push(typeId);
+    counts.set(typeId, (counts.get(typeId) ?? 0) + 1);
+  }
+  return order
+    .map((typeId) => {
+      const name = UNIT_CONFIGS[typeId]?.name.replace(/（.*?）/, '') ?? typeId;
+      return `${name}x${counts.get(typeId)}`;
+    })
+    .join(' · ');
 }
 
 /** 将面板输入收敛为安全的毫秒值，避免零间隔导致单帧连续抽牌。 */

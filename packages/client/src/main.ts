@@ -4,6 +4,7 @@ import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.j
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
 import { createHandPanel } from './ui/handPanel.js';
+import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
@@ -20,7 +21,9 @@ let screens: ScreenController;
 const mainMenu = createMainMenu({
   onStartSandbox: () => screens.show('sandbox'),
   onStartSolo: () => screens.show('solo'),
+  onOpenDeckConfig: () => screens.show('deck-config'),
 });
+const deckConfigPage = createDeckConfigPage({ onBack: () => screens.show('menu') });
 
 /**
  * 战斗场景与配置面板跨「大厅 ↔ 单机/沙盒」复用。
@@ -68,8 +71,13 @@ function enterBattleSession(mode: BattleMode): () => void {
   battleView.reset();
 
   const loop = new SimLoop(20260806);
-  // 第一版只验证完整出牌交互；onPlay 保留为下一版接入可序列化出兵指令的边界。
-  const handPanel = isSolo ? createHandPanel({ drawIntervalSeconds: 3, onPlay: () => {} }) : null;
+  // 本版已带上牌型搭配；onPlay 的 formation 供下一版接入可序列化出兵指令。
+  const handPanel = isSolo
+    ? createHandPanel({
+        drawIntervalSeconds: 3,
+        onPlay: (_cards, _formation) => {},
+      })
+    : null;
 
   const clearBattlefield = (): void => {
     loop.reset();
@@ -168,6 +176,10 @@ screens = createScreenController({
     mainMenu.show();
     return () => mainMenu.hide();
   },
+  'deck-config': () => {
+    deckConfigPage.show();
+    return () => deckConfigPage.hide();
+  },
   sandbox: enterSandbox,
   solo: enterSolo,
 });
@@ -183,6 +195,7 @@ function disposeApp(): void {
   sharedScene?.dispose();
   sharedScene = null;
   mainMenu.dispose();
+  deckConfigPage.dispose();
 }
 
 window.addEventListener('pagehide', disposeApp, { once: true });

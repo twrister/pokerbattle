@@ -1,0 +1,243 @@
+{
+  "straight_flush": [
+    {
+      "id": "straight_flush_royal",
+      "name": "王室冲锋",
+      "rows": [
+        [
+          "melee_cavalry"
+        ],
+        [
+          "hero_king",
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 2
+    }
+  ],
+  "bomb": [
+    {
+      "id": "bomb_cavalry",
+      "name": "双骑兵",
+      "rows": [
+        [
+          "melee_cavalry",
+          "melee_cavalry"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "rocket": [
+    {
+      "id": "rocket_royal",
+      "name": "王室降临",
+      "rows": [
+        [
+          "hero_king",
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "full_house": [
+    {
+      "id": "full_house_king",
+      "name": "国王护卫",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "hero_king"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "flush": [
+    {
+      "id": "flush_archers",
+      "name": "五弓手",
+      "rows": [
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "straight5": [
+    {
+      "id": "straight5_wave",
+      "name": "五铁卫",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "straight4": [
+    {
+      "id": "straight4_line",
+      "name": "四铁卫",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "triple_with_one": [
+    {
+      "id": "triple_one_support",
+      "name": "铁卫带弓",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "two_pair": [
+    {
+      "id": "two_pair_split",
+      "name": "铁卫弓手各二",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "triple": [
+    {
+      "id": "triple_grunts",
+      "name": "三铁卫",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "triple_cavalry",
+      "name": "单骑兵",
+      "rows": [
+        [
+          "melee_cavalry"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "straight3": [
+    {
+      "id": "straight3_mix",
+      "name": "铁卫弓手",
+      "rows": [
+        [
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "pair": [
+    {
+      "id": "pair_grunts",
+      "name": "双铁卫",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "pair_archers",
+      "name": "双弓手",
+      "rows": [
+        [
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "single": [
+    {
+      "id": "single_grunt",
+      "name": "单铁卫",
+      "rows": [
+        [
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "single_archer",
+      "name": "单弓手",
+      "rows": [
+        [
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ]
+}

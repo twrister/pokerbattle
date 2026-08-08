@@ -6,13 +6,16 @@ describe('页面状态管理', () => {
     const leaveMenu = vi.fn();
     const leaveSolo = vi.fn();
     const leaveSandbox = vi.fn();
+    const leaveDeckConfig = vi.fn();
     const enterMenu = vi.fn(() => leaveMenu);
     const enterSolo = vi.fn(() => leaveSolo);
     const enterSandbox = vi.fn(() => leaveSandbox);
+    const enterDeckConfig = vi.fn(() => leaveDeckConfig);
     const screens = createScreenController({
       menu: enterMenu,
       solo: enterSolo,
       sandbox: enterSandbox,
+      'deck-config': enterDeckConfig,
     });
 
     expect(screens.current).toBeNull();
@@ -29,8 +32,12 @@ describe('页面状态管理', () => {
     expect(leaveSolo).toHaveBeenCalledOnce();
     expect(enterSandbox).toHaveBeenCalledOnce();
 
-    screens.show('menu');
+    screens.show('deck-config');
     expect(leaveSandbox).toHaveBeenCalledOnce();
+    expect(enterDeckConfig).toHaveBeenCalledOnce();
+
+    screens.show('menu');
+    expect(leaveDeckConfig).toHaveBeenCalledOnce();
     expect(enterMenu).toHaveBeenCalledTimes(2);
   });
 
@@ -41,6 +48,7 @@ describe('页面状态管理', () => {
       menu: enterMenu,
       solo: () => vi.fn(),
       sandbox: () => vi.fn(),
+      'deck-config': () => vi.fn(),
     });
 
     screens.show('menu');
