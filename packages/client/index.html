@@ -702,6 +702,238 @@
         text-align: center;
         color: var(--text);
       }
+
+      /* 手牌独立于调试面板锚在单机画面底部，重叠排布确保十张牌仍能完整操作。 */
+      #solo-hand {
+        position: absolute;
+        right: 0;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        left: 0;
+        z-index: 12;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+        perspective: 1000px;
+      }
+
+      #hud.is-solo #solo-hand.is-active {
+        display: flex;
+      }
+
+      .hand-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 5px;
+        padding: 5px 8px 5px 12px;
+        border: 1px solid rgba(174, 198, 218, 0.2);
+        border-radius: 999px;
+        background: rgba(11, 17, 24, 0.8);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+        color: var(--text-dim);
+        font-size: 11px;
+        pointer-events: auto;
+        backdrop-filter: blur(9px);
+      }
+
+      .hand-toolbar strong {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      #btn-play-cards {
+        min-width: 76px;
+        border-color: rgba(99, 214, 138, 0.5);
+        background: linear-gradient(135deg, #315f58, #1d403d);
+        color: #effff5;
+        font-weight: 700;
+      }
+
+      #btn-play-cards:disabled {
+        border-color: var(--panel-border);
+        background: rgba(255, 255, 255, 0.05);
+        color: #697583;
+        cursor: default;
+      }
+
+      #hand-cards {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        width: min(100vw, calc(100svh * 0.5625));
+        min-height: clamp(140px, 24vh, 220px);
+        /* 预留正式选中拉高半截的空间，避免顶到工具栏。 */
+        padding: clamp(48px, 7.5vh, 72px) 10px 0;
+        pointer-events: auto;
+        touch-action: none;
+      }
+
+      .playing-card {
+        position: relative;
+        z-index: calc(var(--card-index) + 1);
+        flex: 0 0 auto;
+        width: clamp(62px, 9.7vh, 96px);
+        aspect-ratio: 312 / 413;
+        padding: 0;
+        border: 0;
+        border-radius: clamp(7px, 1.1vh, 11px);
+        background: transparent;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38);
+        /* 拉高统一走变量，避免动画结束后把正式选中的 transform 锁死在 0。 */
+        --card-lift: 0px;
+        transform: translateY(var(--card-lift)) rotate(calc((var(--card-index) - 4.5) * 0.35deg));
+        transform-style: preserve-3d;
+        transition:
+          transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          filter 150ms,
+          box-shadow 150ms,
+          opacity 240ms;
+        will-change: transform;
+      }
+
+      .playing-card + .playing-card {
+        margin-left: clamp(-46px, -4.2vh, -30px);
+      }
+
+      /* 划过时轻晃；选中/预览时不播，避免临时选择带动位置。 */
+      .playing-card:hover:not(.is-playing):not(.is-dealing):not(.is-selected):not(.is-preview) {
+        animation: card-wobble 320ms ease-out;
+      }
+
+      /* 临时选中：只用描边，不用 filter，避免影响正式选中的拉高 transform。 */
+      .playing-card.is-preview {
+        box-shadow:
+          0 0 0 3px rgba(99, 214, 138, 0.78),
+          0 16px 28px rgba(0, 0, 0, 0.48);
+      }
+
+      /* 正式选中：始终拉高；预览取消模式下按下时也不落回，等松开再提交。 */
+      .playing-card.is-selected {
+        --card-lift: -33.333%;
+        box-shadow: 0 16px 28px rgba(0, 0, 0, 0.48);
+      }
+
+      .playing-card.is-selected.is-preview {
+        box-shadow:
+          0 0 0 3px rgba(99, 214, 138, 0.78),
+          0 16px 28px rgba(0, 0, 0, 0.48);
+      }
+
+      .playing-card-inner,
+      .playing-card-face {
+        position: absolute;
+        inset: 0;
+        display: block;
+        border-radius: inherit;
+        transform-style: preserve-3d;
+      }
+
+      .playing-card-face {
+        overflow: hidden;
+        backface-visibility: hidden;
+      }
+
+      .playing-card-front {
+        transform: rotateY(0deg);
+      }
+
+      .playing-card-back {
+        background: #172535 url('/cards/Back.png') center / cover no-repeat;
+        transform: rotateY(180deg);
+      }
+
+      .playing-card-front img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .playing-card.is-dealing {
+        animation: card-deal 520ms var(--deal-delay) cubic-bezier(0.2, 0.85, 0.25, 1.15) both;
+      }
+
+      .playing-card.is-dealing .playing-card-inner {
+        animation: card-flip 520ms var(--deal-delay) cubic-bezier(0.35, 0.1, 0.25, 1) both;
+      }
+
+      .playing-card.is-playing {
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-48vh) rotate(8deg) scale(0.72);
+        filter: brightness(1.35) saturate(1.2);
+        transition-duration: 340ms;
+      }
+
+      @keyframes card-deal {
+        0% {
+          opacity: 0;
+          transform: translate(42px, 70px) rotate(18deg) scale(0.35);
+        }
+        62% {
+          opacity: 1;
+          transform: translate(-3px, -7px) rotate(-2deg) scale(1.04);
+        }
+        100% {
+          transform: translateY(var(--card-lift, 0px)) rotate(calc((var(--card-index) - 4.5) * 0.35deg));
+        }
+      }
+
+      @keyframes card-flip {
+        0%,
+        34% {
+          transform: rotateY(180deg);
+        }
+        100% {
+          transform: rotateY(360deg);
+        }
+      }
+
+      /* 围绕当前抬起高度轻微左右晃，悬停与点选共用。 */
+      @keyframes card-wobble {
+        0%,
+        100% {
+          transform: translateY(var(--card-lift, 0px)) rotate(calc((var(--card-index) - 4.5) * 0.35deg));
+        }
+        35% {
+          transform: translateY(calc(var(--card-lift, 0px) - 6px))
+            rotate(calc((var(--card-index) - 4.5) * 0.35deg - 1.6deg));
+        }
+        70% {
+          transform: translateY(calc(var(--card-lift, 0px) - 4px))
+            rotate(calc((var(--card-index) - 4.5) * 0.35deg + 1.2deg));
+        }
+      }
+
+      #solo-draw-interval-row {
+        display: none;
+        grid-template-columns: auto 70px;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+      }
+
+      #hud.is-solo #solo-draw-interval-row {
+        display: grid;
+      }
+
+      #solo-draw-interval {
+        width: 100%;
+        padding: 4px 6px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font: inherit;
+      }
+
+      @media (max-height: 700px) {
+        #hud.is-solo #panel-stats,
+        #hud.is-solo #panel-help {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -799,6 +1031,10 @@
             value="45"
           />
         </div>
+        <label id="solo-draw-interval-row" for="solo-draw-interval">
+          发牌间隔
+          <input id="solo-draw-interval" type="number" min="0.25" max="60" step="0.25" value="3" />
+        </label>
       </section>
 
       <section class="panel" id="panel-config">
@@ -838,6 +1074,16 @@
         <div data-sandbox-help><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
         <div data-sandbox-help><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
         <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 清空</div>
+      </section>
+
+      <section id="solo-hand" aria-label="手牌">
+        <div class="hand-toolbar">
+          <span>牌堆 <strong id="hand-pile-count">54</strong></span>
+          <span>手牌 <strong id="hand-count">0/10</strong></span>
+          <span>补牌 <strong id="hand-draw-countdown">3.0s</strong></span>
+          <button id="btn-play-cards" type="button" disabled>出牌</button>
+        </div>
+        <div id="hand-cards"></div>
       </section>
     </div>
 

@@ -20,6 +20,11 @@ export interface PanelOptions {
     initial: number;
     onChange: (degrees: number) => void;
   };
+  /** 单机自动发牌间隔；传入后允许在运行时立即调整。 */
+  soloDrawInterval?: {
+    initialSeconds: number;
+    onChange: (seconds: number) => void;
+  };
 }
 
 export interface PanelHandle {
@@ -54,6 +59,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const clearButton = required<HTMLButtonElement>('#btn-clear');
   const cameraAngleInput = required<HTMLInputElement>('#solo-camera-angle');
   const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
+  const drawIntervalInput = required<HTMLInputElement>('#solo-draw-interval');
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -153,6 +159,13 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloCameraAngle?.onChange(degrees);
   };
 
+  /** 校验数字框后再通知手牌，避免编辑中的空值把计时器改成无效状态。 */
+  const onDrawIntervalInput = (): void => {
+    const seconds = Number(drawIntervalInput.value);
+    if (!Number.isFinite(seconds) || seconds < 0.25) return;
+    options.soloDrawInterval?.onChange(seconds);
+  };
+
   if (spawnControlsEnabled) factionGroup.addEventListener('click', selectFactionFromButton);
   pauseButton.addEventListener('click', togglePause);
   stepButton.addEventListener('click', stepOnce);
@@ -164,6 +177,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
     cameraAngleInput.value = String(Math.round(options.soloCameraAngle.initial));
     cameraAngleValue.textContent = `${cameraAngleInput.value}°`;
     cameraAngleInput.addEventListener('input', onCameraAngleInput);
+  }
+  if (options.soloDrawInterval) {
+    drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
+    drawIntervalInput.addEventListener('input', onDrawIntervalInput);
   }
   window.addEventListener('keydown', onKeyDown);
 
@@ -204,6 +221,9 @@ export function createPanel(options: PanelOptions): PanelHandle {
       clearButton.removeEventListener('click', options.onClear);
       if (options.soloCameraAngle) {
         cameraAngleInput.removeEventListener('input', onCameraAngleInput);
+      }
+      if (options.soloDrawInterval) {
+        drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
       }
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();

@@ -3,6 +3,7 @@ import { SimLoop } from './loop.js';
 import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { enablePlacement } from './input/placement.js';
+import { createHandPanel } from './ui/handPanel.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
@@ -67,6 +68,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   battleView.reset();
 
   const loop = new SimLoop(20260806);
+  // 第一版只验证完整出牌交互；onPlay 保留为下一版接入可序列化出兵指令的边界。
+  const handPanel = isSolo ? createHandPanel({ drawIntervalSeconds: 3, onPlay: () => {} }) : null;
 
   const clearBattlefield = (): void => {
     loop.reset();
@@ -83,6 +86,10 @@ function enterBattleSession(mode: BattleMode): () => void {
           soloCameraAngle: {
             initial: sceneContext.getSoloCameraAngle(),
             onChange: (degrees) => sceneContext.setSoloCameraAngle(degrees),
+          },
+          soloDrawInterval: {
+            initialSeconds: 3,
+            onChange: (seconds) => handPanel?.setDrawInterval(seconds),
           },
         }
       : { onBrawl: () => spawnBrawl(loop) }),
@@ -118,6 +125,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
 
     loop.advance(deltaMs);
+    handPanel?.update(deltaMs);
     sceneContext.controls?.update();
     battleView.render(loop.prev, loop.curr, loop.alpha, sceneContext.camera);
     sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
@@ -137,6 +145,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     container.classList.remove('is-solo');
     backButton.removeEventListener('click', returnToMenu);
     disablePlacement();
+    handPanel?.dispose();
     panel.dispose();
     // 断开已离开会话的清场回调，避免隐藏期间误触保存仍引用旧 loop
     configPanel.setOnApplied(() => {});
