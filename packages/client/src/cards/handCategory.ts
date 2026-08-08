@@ -1,9 +1,9 @@
 import { HAND_CATEGORY_ORDER, type HandCategory } from '@pb/sim';
-import type { CardRank, PlayingCard } from './deck.js';
+import { compareCardsByStrength, type CardRank, type PlayingCard } from './deck.js';
 
 /**
- * 顺子专用点数表，与手牌显示用的斗地主牌力解耦。
- * A 同时可作 1 与 14，由 isStraight 分别尝试。
+ * 顺子专用点数表：A 同时可作 1 与 14，由 isStraight 分别尝试。
+ * 与手牌排序牌力一致（2 最小），但顺子不走大小王。
  */
 const STRAIGHT_VALUE: Readonly<Record<CardRank, number>> = {
   A: 14,
@@ -20,6 +20,8 @@ const STRAIGHT_VALUE: Readonly<Record<CardRank, number>> = {
   Q: 12,
   K: 13,
 };
+
+const CATEGORY_RANK = new Map(HAND_CATEGORY_ORDER.map((category, index) => [category, index]));
 
 /** 识别一组选中牌命中的全部牌型，按强度降序；不合法组合返回空数组。 */
 export function detectHandCategories(cards: readonly PlayingCard[]): HandCategory[] {
@@ -48,8 +50,71 @@ export function detectHandCategories(cards: readonly PlayingCard[]): HandCategor
   }
 
   if (hits.length <= 1) return hits;
-  const order = new Map(HAND_CATEGORY_ORDER.map((category, index) => [category, index]));
-  return [...hits].sort((left, right) => (order.get(left) ?? 99) - (order.get(right) ?? 99));
+  return [...hits].sort((left, right) => (CATEGORY_RANK.get(left) ?? 99) - (CATEGORY_RANK.get(right) ?? 99));
+}
+
+/**
+ * 在整副手牌中枚举 1～5 张合法组合，返回牌型最强的一组。
+ * 同牌型时按牌力从高到低逐张比较；空手牌返回空数组。
+ */
+export function findStrongestHand(cards: readonly PlayingCard[]): PlayingCard[] {
+  if (cards.length === 0) return [];
+
+  let bestCards: PlayingCard[] = [];
+  let bestCategoryRank = Number.POSITIVE_INFINITY;
+
+  const maxSize = Math.min(5, cards.length);
+  for (let size = 1; size <= maxSize; size += 1) {
+    forEachCombination(cards, size, (combo) => {
+      const top = detectHandCategories(combo)[0];
+      if (!top) return;
+      const rank = CATEGORY_RANK.get(top) ?? 99;
+      if (rank > bestCategoryRank) return;
+      if (rank < bestCategoryRank || compareCombosByStrength(combo, bestCards) < 0) {
+        bestCategoryRank = rank;
+        bestCards = combo.slice();
+      }
+    });
+  }
+  return bestCards;
+}
+
+/** 按牌力降序逐张比较两组牌；先出现更强牌的一侧更强。 */
+function compareCombosByStrength(left: readonly PlayingCard[], right: readonly PlayingCard[]): number {
+  const a = [...left].sort(compareCardsByStrength);
+  const b = [...right].sort(compareCardsByStrength);
+  const len = Math.max(a.length, b.length);
+  for (let index = 0; index < len; index += 1) {
+    const cardA = a[index];
+    const cardB = b[index];
+    if (!cardA) return 1;
+    if (!cardB) return -1;
+    const diff = compareCardsByStrength(cardA, cardB);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/** 枚举 cards 中恰好取 size 张的全部组合（顺序与原数组一致）。 */
+function forEachCombination(
+  cards: readonly PlayingCard[],
+  size: number,
+  visit: (combo: PlayingCard[]) => void,
+): void {
+  const combo: PlayingCard[] = [];
+  const walk = (start: number): void => {
+    if (combo.length === size) {
+      visit(combo);
+      return;
+    }
+    const remaining = size - combo.length;
+    for (let index = start; index <= cards.length - remaining; index += 1) {
+      combo.push(cards[index]!);
+      walk(index + 1);
+      combo.pop();
+    }
+  };
+  walk(0);
 }
 
 /** 两张：对子；大小王额外命中王炸。 */

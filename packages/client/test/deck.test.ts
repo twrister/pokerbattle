@@ -42,7 +42,7 @@ describe('单机扑克牌堆', () => {
     expect(deck.getAvailableWeight(card!.id)).toBe(RETURNED_CARD_WEIGHT);
   });
 
-  it('每次查看手牌都按斗地主牌力自动从大到小排列', () => {
+  it('每次查看手牌都按牌力自动从大到小排列（2 最小）', () => {
     const allCards = createPokerCards();
     const ids = ['3-diamonds', 'A-clubs', 'joker-red', '2-hearts', 'joker-black', 'K-spades'];
     const cards = ids.map((id) => allCards.find((card) => card.id === id)!);
@@ -53,10 +53,10 @@ describe('单机扑克牌堆', () => {
     expect(deck.hand.map((card) => card.id)).toEqual([
       'joker-red',
       'joker-black',
-      '2-hearts',
       'A-clubs',
       'K-spades',
       '3-diamonds',
+      '2-hearts',
     ]);
   });
 });

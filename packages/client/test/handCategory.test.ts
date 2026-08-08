@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPokerCards, type PlayingCard } from '../src/cards/deck.js';
-import { detectHandCategories } from '../src/cards/handCategory.js';
+import { detectHandCategories, findStrongestHand } from '../src/cards/handCategory.js';
 
 const ALL = createPokerCards();
 
@@ -183,5 +183,49 @@ describe('牌型识别 detectHandCategories', () => {
         card('8-hearts'),
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('findStrongestHand', () => {
+  it('优先选更强牌型，同花顺压过对子', () => {
+    const best = findStrongestHand([
+      card('6-spades'),
+      card('7-spades'),
+      card('8-spades'),
+      card('9-spades'),
+      card('10-spades'),
+      card('3-hearts'),
+      card('3-clubs'),
+    ]);
+    expect(best.map((entry) => entry.id).sort()).toEqual([
+      '10-spades',
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+    ]);
+  });
+
+  it('同牌型时选牌力更高的一组', () => {
+    const best = findStrongestHand([
+      card('8-spades'),
+      card('8-hearts'),
+      card('8-clubs'),
+      card('8-diamonds'),
+      card('3-spades'),
+      card('3-hearts'),
+      card('3-clubs'),
+      card('3-diamonds'),
+    ]);
+    expect(best.map((entry) => entry.id).sort()).toEqual([
+      '8-clubs',
+      '8-diamonds',
+      '8-hearts',
+      '8-spades',
+    ]);
+  });
+
+  it('空手牌返回空', () => {
+    expect(findStrongestHand([])).toEqual([]);
   });
 });

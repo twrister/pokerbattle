@@ -798,14 +798,25 @@
         font-variant-numeric: tabular-nums;
       }
 
+      #btn-select-best,
       #btn-play-cards {
         min-width: 76px;
-        border-color: rgba(99, 214, 138, 0.5);
-        background: linear-gradient(135deg, #315f58, #1d403d);
-        color: #effff5;
         font-weight: 700;
       }
 
+      #btn-select-best {
+        border-color: rgba(174, 198, 218, 0.42);
+        background: linear-gradient(135deg, #3a4a5c, #243040);
+        color: #e8f0f8;
+      }
+
+      #btn-play-cards {
+        border-color: rgba(99, 214, 138, 0.5);
+        background: linear-gradient(135deg, #315f58, #1d403d);
+        color: #effff5;
+      }
+
+      #btn-select-best:disabled,
       #btn-play-cards:disabled {
         border-color: var(--panel-border);
         background: rgba(255, 255, 255, 0.05);
@@ -1414,6 +1425,7 @@
           <span>牌堆 <strong id="hand-pile-count">54</strong></span>
           <span>手牌 <strong id="hand-count">0/10</strong></span>
           <span>补牌 <strong id="hand-draw-countdown">3.0s</strong></span>
+          <button id="btn-select-best" type="button">推荐</button>
           <button id="btn-play-cards" type="button" disabled>出牌</button>
         </div>
         <div id="hand-cards"></div>

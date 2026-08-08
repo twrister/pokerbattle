@@ -10,7 +10,7 @@ import {
   PokerDeck,
   type PlayingCard,
 } from '../cards/deck.js';
-import { detectHandCategories } from '../cards/handCategory.js';
+import { detectHandCategories, findStrongestHand } from '../cards/handCategory.js';
 
 const PLAY_ANIMATION_MS = 360;
 /** 手牌增删后，留存牌从旧坐标滑到新坐标的时长。 */
@@ -36,6 +36,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const root = required<HTMLElement>('#solo-hand');
   const cardsElement = required<HTMLElement>('#hand-cards');
   const formationsElement = required<HTMLElement>('#hand-formations');
+  const selectBestButton = required<HTMLButtonElement>('#btn-select-best');
   const playButton = required<HTMLButtonElement>('#btn-play-cards');
   const pileCount = required<HTMLElement>('#hand-pile-count');
   const handCount = required<HTMLElement>('#hand-count');
@@ -209,6 +210,19 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     playSelected(null);
   };
 
+  /** 一键选中手牌中最强合法牌型，并清空其余正式/临时选中。 */
+  const onSelectBestClick = (): void => {
+    if (playing) return;
+    const best = findStrongestHand(deck.hand);
+    if (best.length === 0) return;
+    clearPreview();
+    pointerId = null;
+    dragAnchorIndex = null;
+    selected.clear();
+    for (const card of best) selected.add(card.id);
+    syncSelection();
+  };
+
   /** 搭配选项点击：直接确认该搭配并出牌。 */
   const onFormationClick = (event: Event): void => {
     const button = (event.target as Element).closest<HTMLButtonElement>('.formation-option[data-formation-id]');
@@ -223,6 +237,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   cardsElement.addEventListener('pointermove', onPointerMove);
   cardsElement.addEventListener('pointerup', finishPointerSelection);
   cardsElement.addEventListener('pointercancel', cancelPointerSelection);
+  selectBestButton.addEventListener('click', onSelectBestClick);
   playButton.addEventListener('click', onPlayClick);
   formationsElement.addEventListener('click', onFormationClick);
 
@@ -326,6 +341,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardElement.setAttribute('aria-pressed', String(isSelected));
     }
     renderFormations();
+    selectBestButton.disabled = playing || deck.hand.length === 0;
     // 出牌按钮仅在恰好一个合法搭配时可用，多个搭配必须点选项确认。
     playButton.disabled = playing || formations.length !== 1;
     playButton.textContent =
@@ -398,6 +414,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardsElement.removeEventListener('pointermove', onPointerMove);
       cardsElement.removeEventListener('pointerup', finishPointerSelection);
       cardsElement.removeEventListener('pointercancel', cancelPointerSelection);
+      selectBestButton.removeEventListener('click', onSelectBestClick);
       playButton.removeEventListener('click', onPlayClick);
       formationsElement.removeEventListener('click', onFormationClick);
       cardsElement.replaceChildren();

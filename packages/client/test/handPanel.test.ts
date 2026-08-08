@@ -12,6 +12,7 @@ describe('单机手牌交互', () => {
         <span id="hand-pile-count"></span>
         <span id="hand-count"></span>
         <span id="hand-draw-countdown"></span>
+        <button id="btn-select-best"></button>
         <button id="btn-play-cards"></button>
         <div id="hand-cards"></div>
       </section>
@@ -288,6 +289,44 @@ describe('单机手牌交互', () => {
     expect(first.classList.contains('is-selected')).toBe(true);
     expect(second.classList.contains('is-selected')).toBe(false);
     expect(third.classList.contains('is-selected')).toBe(false);
+
+    panel.dispose();
+  });
+
+  it('最大牌型按钮清空旧选中并只选中最强合法组合', () => {
+    const deck = deckWithCards([
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+      '10-spades',
+      '3-hearts',
+      '3-clubs',
+    ]);
+    const panel = createHandPanel({ deck });
+    const three = document.querySelector<HTMLElement>('.playing-card[data-card-id="3-hearts"]')!;
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => three),
+    });
+
+    three.dispatchEvent(pointerEvent('pointerdown', 31));
+    three.dispatchEvent(pointerEvent('pointerup', 31));
+    expect(three.classList.contains('is-selected')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('#btn-select-best')!.click();
+
+    const selectedIds = [...document.querySelectorAll<HTMLElement>('.playing-card.is-selected')].map(
+      (element) => element.dataset.cardId,
+    );
+    expect(selectedIds.sort()).toEqual([
+      '10-spades',
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+    ]);
+    expect(three.classList.contains('is-selected')).toBe(false);
 
     panel.dispose();
   });

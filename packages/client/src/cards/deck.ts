@@ -28,8 +28,8 @@ const SUITS: ReadonlyArray<{ id: CardSuit; fileIndex: number; symbol: string }> 
 ];
 
 const RANKS: readonly CardRank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+/** 点数牌力：2 最小，A 最大；大小王另计。 */
 const RANK_STRENGTH: Readonly<Record<CardRank, number>> = {
-  '2': 15,
   A: 14,
   K: 13,
   Q: 12,
@@ -42,6 +42,7 @@ const RANK_STRENGTH: Readonly<Record<CardRank, number>> = {
   '5': 5,
   '4': 4,
   '3': 3,
+  '2': 2,
 };
 const SUIT_STRENGTH: Readonly<Record<CardSuit, number>> = {
   spades: 4,
@@ -81,15 +82,15 @@ export function createPokerCards(): PlayingCard[] {
   return cards;
 }
 
-/** 按斗地主常用牌力从大到小排序，同点数以黑桃、红桃、梅花、方片稳定排列。 */
+/** 按牌力从大到小排序，同点数以黑桃、红桃、梅花、方片稳定排列。 */
 export function compareCardsByStrength(left: PlayingCard, right: PlayingCard): number {
   const strengthDiff = getCardStrength(right) - getCardStrength(left);
   if (strengthDiff !== 0) return strengthDiff;
   return (SUIT_STRENGTH[right.suit ?? 'diamonds'] ?? 0) - (SUIT_STRENGTH[left.suit ?? 'diamonds'] ?? 0);
 }
 
-/** 将大小王放在 2 之前，其余点数沿用斗地主牌力。 */
-function getCardStrength(card: PlayingCard): number {
+/** 大小王最强，其余按 A>K>…>3>2。 */
+export function getCardStrength(card: PlayingCard): number {
   if (card.joker === 'red') return 17;
   if (card.joker === 'black') return 16;
   return RANK_STRENGTH[card.rank as CardRank];
