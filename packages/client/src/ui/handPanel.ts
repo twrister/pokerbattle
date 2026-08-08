@@ -44,6 +44,8 @@ export interface HandPanelHandle {
   readonly deck: PokerDeck;
   update: (deltaMs: number) => void;
   setDrawInterval: (seconds: number) => void;
+  /** 取景参数变更后重渲当前阵型按钮缩略图。 */
+  refreshFormations: () => void;
   dispose: () => void;
 }
 
@@ -542,6 +544,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       drawIntervalMs = nextInterval;
       remainingMs = Math.min(remainingMs, nextInterval);
       syncStatus();
+    },
+    refreshFormations() {
+      renderFormations();
     },
     dispose() {
       disposed = true;

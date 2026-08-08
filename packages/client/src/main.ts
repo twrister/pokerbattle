@@ -20,7 +20,11 @@ import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
-import { disposeFormationThumbnailRenderer } from './view/formationThumbnail.js';
+import {
+  disposeFormationThumbnailRenderer,
+  getFormationThumbnailFrameSettings,
+  setFormationThumbnailFrameSettings,
+} from './view/formationThumbnail.js';
 import { createScene, type SceneContext } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
 
@@ -120,6 +124,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleView.invalidateUnitViews();
   };
 
+  const thumbFrame = getFormationThumbnailFrameSettings();
   const panel = createPanel({
     loop,
     onClear: clearBattlefield,
@@ -134,6 +139,14 @@ function enterBattleSession(mode: BattleMode): () => void {
           soloDrawInterval: {
             initialSeconds: 3,
             onChange: (seconds) => handPanel?.setDrawInterval(seconds),
+          },
+          formationThumbnailFrame: {
+            initialUnitDisplayScale: thumbFrame.unitDisplayScale,
+            initialFrameMargin: thumbFrame.frameMargin,
+            onChange: (settings) => {
+              setFormationThumbnailFrameSettings(settings);
+              handPanel?.refreshFormations();
+            },
           },
         }
       : { onBrawl: () => spawnBrawl(loop) }),

@@ -17,14 +17,45 @@ import { getSpriteMaterials } from './unitSprites.js';
  * 之后按钮只是一张 <img>，不产生任何逐帧开销。
  */
 
-/** 缩略图像素边长；按钮显示尺寸远小于此值，保证高分屏不糊。 */
-const THUMBNAIL_SIZE = 192;
+/** 缩略图像素宽高，比例与按钮 128×98 一致，保证高分屏不糊。 */
+const THUMBNAIL_WIDTH = 256;
+const THUMBNAIL_HEIGHT = Math.round((THUMBNAIL_WIDTH * 98) / 128);
+/** 按钮内兵种相对「刚好装进取景」再放大的倍率（默认值，可被运行控制覆盖）。 */
+export const DEFAULT_UNIT_DISPLAY_SCALE = 2;
+/** 阵型包围盒外扩的世界单位（默认值，可被运行控制覆盖）。 */
+export const DEFAULT_FRAME_MARGIN = 1;
 /** 等待共享立绘贴图就绪的最长帧数；超时仍出图，避免按钮一直空着。 */
 const MAX_TEXTURE_WAIT_FRAMES = 180;
-/** 阵型包围盒外扩的世界单位，给立绘和脚下阴影留边。 */
-const FRAME_MARGIN = 1.2;
 /** 取景时按最高立绘估算的顶部空间（世界单位）。 */
 const FRAME_HEIGHT = 4.5;
+/** 阵型地面中心在按钮画面中的竖直锚点：自下而上 1/3，上方留给立绘。 */
+const FRAME_ANCHOR_Y_FROM_BOTTOM = 1 / 3;
+
+/** 当前取景放大倍率；写入缓存键，改参后旧图自动失效。 */
+let unitDisplayScale = DEFAULT_UNIT_DISPLAY_SCALE;
+/** 当前包围盒外扩边距。 */
+let frameMargin = DEFAULT_FRAME_MARGIN;
+
+/** 读取阵型缩略图取景参数，供运行控制初始化滑条。 */
+export function getFormationThumbnailFrameSettings(): {
+  unitDisplayScale: number;
+  frameMargin: number;
+} {
+  return { unitDisplayScale, frameMargin };
+}
+
+/** 运行控制改取景参数；非法值夹到可调范围。 */
+export function setFormationThumbnailFrameSettings(settings: {
+  unitDisplayScale?: number;
+  frameMargin?: number;
+}): void {
+  if (settings.unitDisplayScale !== undefined) {
+    unitDisplayScale = clamp(settings.unitDisplayScale, 1, 3);
+  }
+  if (settings.frameMargin !== undefined) {
+    frameMargin = clamp(settings.frameMargin, 0, 2);
+  }
+}
 
 interface ThumbnailSession {
   renderer: THREE.WebGLRenderer;
@@ -40,10 +71,10 @@ let queue: Promise<unknown> = Promise.resolve();
 /** 无 WebGL（如 jsdom）时置位，后续请求直接返回 null 不再重试。 */
 let unavailable = false;
 
-/** 缓存键带上 rows 与间距，卡组页改完配置后按钮能立刻换新图。 */
+/** 缓存键带上 rows、间距与取景参数，改配置或滑条后按钮能立刻换新图。 */
 export function formationThumbnailKey(formation: CardFormation): string {
   const rows = formation.rows.map((row) => row.join(',')).join('|');
-  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${rows}`;
+  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${rows}#s${unitDisplayScale.toFixed(2)}#m${frameMargin.toFixed(2)}`;
 }
 
 /** 取阵型缩略图 dataURL；同一阵型只渲染一次，无 WebGL 环境返回 null。 */
@@ -86,7 +117,7 @@ function ensureSession(): ThumbnailSession | null {
       preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(1);
-    renderer.setSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, false);
+    renderer.setSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, false);
 
     const scene = new THREE.Scene();
     scene.add(new THREE.HemisphereLight(0xc7dcff, 0x1d2430, 1.8));
@@ -104,6 +135,8 @@ function ensureSession(): ThumbnailSession | null {
 async function renderThumbnail(formation: CardFormation): Promise<string | null> {
   const active = ensureSession();
   if (!active) return null;
+  // 热更新或比例调整后仍沿用旧 session 时，强制对齐当前缩略图尺寸。
+  active.renderer.setSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, false);
 
   const points = resolveFormationSpawns(formation, Faction.Blue, 0, 0);
   if (points.length === 0) return null;
@@ -137,7 +170,10 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
   }
 }
 
-/** 按阵型包围盒配平正交视锥，让不同规模的阵型都占满按钮且不越界。 */
+/**
+ * 按阵型包围盒配正交视锥：水平钉阵型地面中心，竖直锚在按钮自下而上 1/3。
+ * 放大以该锚点为中心裁切，优先保证脚底落点稳定，上方留给立绘。
+ */
 function frameCamera(
   camera: THREE.OrthographicCamera,
   units: ReadonlyArray<{ x: number; z: number }>,
@@ -152,10 +188,10 @@ function frameCamera(
     minZ = Math.min(minZ, unit.z);
     maxZ = Math.max(maxZ, unit.z);
   }
-  minX -= FRAME_MARGIN;
-  maxX += FRAME_MARGIN;
-  minZ -= FRAME_MARGIN;
-  maxZ += FRAME_MARGIN;
+  minX -= frameMargin;
+  maxX += frameMargin;
+  minZ -= frameMargin;
+  maxZ += frameMargin;
 
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
@@ -166,7 +202,7 @@ function frameCamera(
   camera.lookAt(centerX, FRAME_HEIGHT / 2, centerZ);
   camera.updateMatrixWorld(true);
 
-  // 立绘从地面往上长，取景盒必须连顶部一起投影，否则高个兵种会被切头。
+  // 立绘从地面往上长，取景盒必须连顶部一起投影，用来估算刚好装下的范围。
   const corner = new THREE.Vector3();
   let left = Infinity;
   let right = -Infinity;
@@ -184,16 +220,37 @@ function frameCamera(
     }
   }
 
-  const half = Math.max(right - left, top - bottom) / 2;
-  const cx = (left + right) / 2;
-  const cy = (bottom + top) / 2;
-  camera.left = cx - half;
-  camera.right = cx + half;
-  camera.top = cy + half;
-  camera.bottom = cy - half;
+  // 阵型地面中心投影到相机空间，作为按钮取景锚点（不跟立绘顶部 AABB 偏移）。
+  const formationCenter = corner.set(centerX, 0, centerZ).applyMatrix4(camera.matrixWorldInverse);
+  const cx = formationCenter.x;
+  const cy = formationCenter.y;
+  const below = Math.max(cy - bottom, 0.5);
+  const above = Math.max(top - cy, 0.5);
+  const halfWNeeded = Math.max(cx - left, right - cx, 0.5);
+  const aspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
+  // 竖直按「下 1/3 / 上 2/3」装下内容，再套按钮宽高比。
+  const neededH = Math.max(
+    below / FRAME_ANCHOR_Y_FROM_BOTTOM,
+    above / (1 - FRAME_ANCHOR_Y_FROM_BOTTOM),
+  );
+  let height = Math.max(neededH, (halfWNeeded * 2) / aspect);
+  let width = height * aspect;
+  // 以锚点为中心整体缩小视锥，实现兵种放大。
+  height /= unitDisplayScale;
+  width /= unitDisplayScale;
+  const halfW = width / 2;
+  camera.left = cx - halfW;
+  camera.right = cx + halfW;
+  camera.bottom = cy - height * FRAME_ANCHOR_Y_FROM_BOTTOM;
+  camera.top = cy + height * (1 - FRAME_ANCHOR_Y_FROM_BOTTOM);
   camera.near = 0.1;
   camera.far = radius * 4;
   camera.updateProjectionMatrix();
+}
+
+/** 把运行控制滑条值夹到合法区间。 */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 /** 共享立绘异步加载，出图前补帧等待；超时兜底避免请求悬挂。 */

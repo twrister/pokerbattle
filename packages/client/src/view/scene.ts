@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ARENA_H, ARENA_W } from './coords.js';
 
 /** 单机正交斜视角默认俯仰角（相对水平面，度） */
-export const DEFAULT_SOLO_CAMERA_ANGLE_DEG = 45;
+export const DEFAULT_SOLO_CAMERA_ANGLE_DEG = 43;
 /** 单机镜头允许的俯仰角范围 */
 export const SOLO_CAMERA_ANGLE_MIN_DEG = 15;
 export const SOLO_CAMERA_ANGLE_MAX_DEG = 90;
@@ -170,7 +170,7 @@ export function clampSoloCameraAngle(degrees: number): number {
 /**
  * 设置单机正交镜头位姿：从 +Z 侧俯视战场中心。
  * +Z 为近端（画面下方 = 蓝方己方半场），-Z 为远端（画面上方 = 红方）。
- * 角度为相对水平面的俯仰角，45° 为默认斜视，90° 为正上俯视。
+ * 角度为相对水平面的俯仰角，43° 为默认斜视，90° 为正上俯视。
  */
 export function applySoloCameraPose(camera: THREE.Camera, angleDeg: number): void {
   const elevDeg = clampSoloCameraAngle(angleDeg);

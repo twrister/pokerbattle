@@ -9,8 +9,8 @@ import {
 } from '../src/view/scene.js';
 
 describe('单机正交镜头', () => {
-  it('默认俯仰角为 45°，并限制在 15–90', () => {
-    expect(DEFAULT_SOLO_CAMERA_ANGLE_DEG).toBe(45);
+  it('默认俯仰角为 43°，并限制在 15–90', () => {
+    expect(DEFAULT_SOLO_CAMERA_ANGLE_DEG).toBe(43);
     expect(clampSoloCameraAngle(0)).toBe(15);
     expect(clampSoloCameraAngle(120)).toBe(90);
   });

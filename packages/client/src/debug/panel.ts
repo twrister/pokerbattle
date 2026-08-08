@@ -25,6 +25,12 @@ export interface PanelOptions {
     initialSeconds: number;
     onChange: (seconds: number) => void;
   };
+  /** 兵种搭配缩略图取景；传入后绑定运行控制滑条。 */
+  formationThumbnailFrame?: {
+    initialUnitDisplayScale: number;
+    initialFrameMargin: number;
+    onChange: (settings: { unitDisplayScale: number; frameMargin: number }) => void;
+  };
 }
 
 export interface PanelHandle {
@@ -60,6 +66,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const cameraAngleInput = required<HTMLInputElement>('#solo-camera-angle');
   const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
   const drawIntervalInput = required<HTMLInputElement>('#solo-draw-interval');
+  const thumbScaleInput = required<HTMLInputElement>('#formation-thumb-scale');
+  const thumbScaleValue = required<HTMLElement>('#formation-thumb-scale-value');
+  const thumbMarginInput = required<HTMLInputElement>('#formation-thumb-margin');
+  const thumbMarginValue = required<HTMLElement>('#formation-thumb-margin-value');
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -166,6 +176,15 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloDrawInterval?.onChange(seconds);
   };
 
+  /** 同步阵型缩略图取景滑条读数，并立刻重渲按钮图。 */
+  const onFormationThumbFrameInput = (): void => {
+    const unitDisplayScale = Number(thumbScaleInput.value);
+    const frameMargin = Number(thumbMarginInput.value);
+    thumbScaleValue.textContent = unitDisplayScale.toFixed(2);
+    thumbMarginValue.textContent = frameMargin.toFixed(2);
+    options.formationThumbnailFrame?.onChange({ unitDisplayScale, frameMargin });
+  };
+
   if (spawnControlsEnabled) factionGroup.addEventListener('click', selectFactionFromButton);
   pauseButton.addEventListener('click', togglePause);
   stepButton.addEventListener('click', stepOnce);
@@ -181,6 +200,15 @@ export function createPanel(options: PanelOptions): PanelHandle {
   if (options.soloDrawInterval) {
     drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
     drawIntervalInput.addEventListener('input', onDrawIntervalInput);
+  }
+  if (options.formationThumbnailFrame) {
+    const { initialUnitDisplayScale, initialFrameMargin } = options.formationThumbnailFrame;
+    thumbScaleInput.value = String(initialUnitDisplayScale);
+    thumbMarginInput.value = String(initialFrameMargin);
+    thumbScaleValue.textContent = initialUnitDisplayScale.toFixed(2);
+    thumbMarginValue.textContent = initialFrameMargin.toFixed(2);
+    thumbScaleInput.addEventListener('input', onFormationThumbFrameInput);
+    thumbMarginInput.addEventListener('input', onFormationThumbFrameInput);
   }
   window.addEventListener('keydown', onKeyDown);
 
@@ -224,6 +252,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
       }
       if (options.soloDrawInterval) {
         drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+      }
+      if (options.formationThumbnailFrame) {
+        thumbScaleInput.removeEventListener('input', onFormationThumbFrameInput);
+        thumbMarginInput.removeEventListener('input', onFormationThumbFrameInput);
       }
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();

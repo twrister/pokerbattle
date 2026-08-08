@@ -429,6 +429,41 @@
         cursor: pointer;
       }
 
+      /* 兵种搭配缩略图取景；仅单机展示 */
+      #formation-thumb-controls {
+        display: none;
+        margin-top: 10px;
+        gap: 10px;
+      }
+
+      #hud.is-solo #formation-thumb-controls {
+        display: grid;
+      }
+
+      #formation-thumb-controls .thumb-frame-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 10px;
+        align-items: center;
+      }
+
+      #formation-thumb-controls label {
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+
+      #formation-thumb-controls .thumb-frame-value {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      #formation-thumb-controls input[type='range'] {
+        grid-column: 1 / -1;
+        width: 100%;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
       #btn-back-menu {
         position: absolute;
         top: 16px;
@@ -736,48 +771,50 @@
         color: #ffcf9c;
       }
 
-      /* 左：牌堆信息 · 中：3D 阵型按钮 · 右：推荐按钮 */
-      .hand-toolbar {
-        display: flex;
+      /* 牌堆信息固定靠左；阵型按钮居中放大；推荐靠右。无工具栏底框。 */
+      .hand-bar {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
         width: min(100vw, calc(100svh * 0.5625));
-        margin-bottom: 5px;
-        padding: 5px 10px;
-        border: 1px solid rgba(174, 198, 218, 0.2);
-        border-radius: 18px;
-        background: rgba(11, 17, 24, 0.8);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+        min-height: 98px;
+        margin-bottom: 4px;
+        padding: 0 10px;
         color: var(--text-dim);
         font-size: 11px;
         pointer-events: auto;
-        backdrop-filter: blur(9px);
       }
 
-      .hand-toolbar-info,
-      .hand-toolbar-actions {
+      .hand-toolbar-info {
         display: flex;
-        flex: 0 1 auto;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 4px 8px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        justify-self: start;
         min-width: 0;
       }
 
-      .hand-toolbar strong {
+      .hand-toolbar-actions {
+        display: flex;
+        align-items: center;
+        justify-self: end;
+        min-width: 0;
+      }
+
+      .hand-toolbar-info strong {
         color: var(--text);
         font-variant-numeric: tabular-nums;
       }
 
-      /* 阵型按钮居中；无可用搭配时整段留空，两侧信息位置保持不变。 */
+      /* 兵种搭配按钮居中；无可用搭配时中间留空，左右信息位置不变。 */
       #hand-formations {
         display: flex;
-        flex: 1 1 auto;
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 6px;
+        gap: 20px;
         min-width: 0;
         touch-action: none;
       }
@@ -786,16 +823,16 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: clamp(48px, 8.4vh, 68px);
-        aspect-ratio: 1;
-        padding: 2px;
+        width: 128px;
+        height: 98px;
+        padding: 0;
         overflow: hidden;
         border: 1px solid rgba(99, 214, 138, 0.42);
-        border-radius: 12px;
+        border-radius: 16px;
         background: linear-gradient(135deg, rgba(49, 95, 88, 0.92), rgba(29, 64, 61, 0.92));
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
         color: #effff5;
-        font-size: 11px;
+        font-size: 12px;
         line-height: 1.2;
         cursor: grab;
       }
@@ -817,7 +854,8 @@
         display: block;
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: cover;
+        object-position: center center;
         pointer-events: none;
       }
 
@@ -868,9 +906,9 @@
         align-items: flex-end;
         justify-content: center;
         width: min(100vw, calc(100svh * 0.5625));
-        min-height: clamp(140px, 24vh, 220px);
-        /* 预留正式选中拉高半截的空间，避免顶到工具栏。 */
-        padding: clamp(48px, 7.5vh, 72px) 10px 0;
+        height: 180px;
+        /* 预留正式选中拉高半截的空间，避免顶到上方阵型区。 */
+        padding: 48px 10px 0;
         pointer-events: auto;
         touch-action: none;
       }
@@ -1266,19 +1304,6 @@
         }
       }
 
-      /* 窄屏把阵型按钮换到第二行，避免挤压左右两段或压住手牌。 */
-      @media (max-width: 430px) {
-        .hand-toolbar {
-          flex-wrap: wrap;
-          justify-content: space-between;
-        }
-
-        #hand-formations {
-          order: 1;
-          flex: 1 1 100%;
-        }
-      }
-
       @media (max-width: 580px) {
         .deck-content {
           grid-template-columns: 1fr 1fr;
@@ -1416,20 +1441,48 @@
           <button id="btn-clear" type="button">清空</button>
         </div>
         <div id="solo-camera-angle-row">
-          <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">45°</span></label>
+          <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">43°</span></label>
           <input
             id="solo-camera-angle"
             type="range"
             min="15"
             max="90"
             step="1"
-            value="45"
+            value="43"
           />
         </div>
         <label id="solo-draw-interval-row" for="solo-draw-interval">
           发牌间隔
           <input id="solo-draw-interval" type="number" min="0.25" max="60" step="0.25" value="3" />
         </label>
+        <div id="formation-thumb-controls">
+          <div class="thumb-frame-row">
+            <label for="formation-thumb-scale">
+              阵型放大 <span id="formation-thumb-scale-value" class="thumb-frame-value">2.00</span>
+            </label>
+            <input
+              id="formation-thumb-scale"
+              type="range"
+              min="1"
+              max="3"
+              step="0.05"
+              value="2"
+            />
+          </div>
+          <div class="thumb-frame-row">
+            <label for="formation-thumb-margin">
+              阵型边距 <span id="formation-thumb-margin-value" class="thumb-frame-value">1.00</span>
+            </label>
+            <input
+              id="formation-thumb-margin"
+              type="range"
+              min="0"
+              max="2"
+              step="0.05"
+              value="1"
+            />
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="panel-config">
@@ -1473,7 +1526,7 @@
 
       <section id="solo-hand" aria-label="手牌">
         <div id="hand-status" role="status" aria-live="polite"></div>
-        <div class="hand-toolbar">
+        <div class="hand-bar">
           <div class="hand-toolbar-info">
             <span>牌堆 <strong id="hand-pile-count">54</strong></span>
             <span>手牌 <strong id="hand-count">0/10</strong></span>
