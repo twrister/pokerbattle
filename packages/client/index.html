@@ -995,7 +995,9 @@
         position: fixed;
         inset: 0;
         z-index: 12;
-        overflow: auto;
+        /* 仅纵向滚动；横向裁切避免装饰伪元素撑出页面拖拽条 */
+        overflow-x: hidden;
+        overflow-y: auto;
         background:
           radial-gradient(circle at 78% 12%, rgba(69, 115, 155, 0.28), transparent 35%),
           #0a1018;
@@ -1003,7 +1005,9 @@
 
       .deck-shell {
         gap: clamp(12px, 2vh, 22px);
-        overflow: auto;
+        /* 覆盖 lobby-shell 的 overflow:hidden 时保留纵向滚动，并裁切左右溢出 */
+        overflow-x: hidden;
+        overflow-y: auto;
       }
 
       .deck-header,
@@ -1056,6 +1060,7 @@
       }
 
       .deck-toolbar-copy {
+        min-width: 0;
         color: var(--text-dim);
         line-height: 1.5;
       }
@@ -1064,9 +1069,10 @@
         display: grid;
         flex: 1;
         grid-template-columns: minmax(86px, 0.55fr) minmax(120px, 0.8fr) minmax(0, 2fr);
-        /* 上行编辑区 + 下行整宽预览，预览占更多高度便于看间距 */
-        grid-template-rows: minmax(0, 1fr) minmax(300px, 1.45fr);
+        /* 上行预览区 + 下行整宽编辑，预览占更多高度便于看间距 */
+        grid-template-rows: minmax(300px, 1.45fr) minmax(0, 1fr);
         gap: 10px;
+        min-width: 0;
         min-height: 0;
       }
 
@@ -1100,6 +1106,8 @@
       }
 
       .deck-editor-panel {
+        /* 编辑区独占第二行整宽，表单字段有足够横向空间 */
+        grid-column: 1 / -1;
         overflow: auto;
       }
 
@@ -1170,8 +1178,6 @@
       }
 
       .deck-preview-panel {
-        /* 预览独占第二行整宽，避免挤在三列网格的第一格里显得过小 */
-        grid-column: 1 / -1;
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: 8px;
@@ -1195,6 +1201,7 @@
 
       #deck-status {
         flex: 1;
+        min-width: 0;
         color: var(--text-dim);
       }
 
@@ -1297,12 +1304,12 @@
         <section class="deck-content">
           <nav id="deck-category-list" class="deck-column" aria-label="牌型"></nav>
           <nav id="deck-formation-list" class="deck-column" aria-label="阵型列表"></nav>
-          <section class="deck-editor-panel" aria-label="阵型编辑">
-            <div id="deck-editor"></div>
-          </section>
           <section class="deck-preview-panel" aria-label="3D 阵型预览">
             <div class="deck-section-title">3D 阵型预览（蓝方视角）</div>
             <div id="deck-preview"></div>
+          </section>
+          <section class="deck-editor-panel" aria-label="阵型编辑">
+            <div id="deck-editor"></div>
           </section>
         </section>
         <footer class="deck-footer">
