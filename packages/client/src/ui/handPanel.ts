@@ -6,6 +6,8 @@ import {
 } from '../cards/deck.js';
 
 const PLAY_ANIMATION_MS = 360;
+/** 手牌增删后，留存牌从旧坐标滑到新坐标的时长。 */
+const LAYOUT_MOVE_MS = 280;
 const MIN_DRAW_INTERVAL_MS = 250;
 
 export interface HandPanelOptions {
@@ -46,6 +48,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let dragAnchorIndex: number | null = null;
   let playing = false;
   let disposed = false;
+  /** 用于作废上一轮尚未结束的布局位移动画回调。 */
+  let layoutGeneration = 0;
 
   root.classList.add('is-active');
   for (const card of deck.drawMany(INITIAL_HAND_SIZE)) knownCardIds.delete(card.id);
@@ -65,13 +69,37 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
 
     const from = Math.min(dragAnchorIndex, currentIndex);
     const to = Math.max(dragAnchorIndex, currentIndex);
+    const previousPreview = new Set(preview);
     preview.clear();
     for (let index = from; index <= to; index += 1) {
       const id = deck.hand[index]?.id;
       if (id) preview.add(id);
     }
     syncSelection();
+    // 新划入预览的牌补播轻晃；pointer capture 下 :hover 不会落到这些牌上。
+    for (const id of preview) {
+      if (!previousPreview.has(id)) playCardWobble(id);
+    }
   };
+
+  /** 给指定牌重播划过轻晃；连滑同一牌时先卸类再挂，确保 animation 能重启。 */
+  function playCardWobble(cardId: string): void {
+    const cardElement = [...cardsElement.querySelectorAll<HTMLElement>('.playing-card')].find(
+      (element) => element.dataset.cardId === cardId,
+    );
+    if (!cardElement || cardElement.classList.contains('is-playing') || cardElement.classList.contains('is-dealing')) {
+      return;
+    }
+    cardElement.classList.remove('is-wobbling');
+    void cardElement.offsetWidth;
+    cardElement.classList.add('is-wobbling');
+    const clearWobble = (event: AnimationEvent): void => {
+      if (event.animationName !== 'card-wobble' || event.target !== cardElement) return;
+      cardElement.classList.remove('is-wobbling');
+      cardElement.removeEventListener('animationend', clearWobble);
+    };
+    cardElement.addEventListener('animationend', clearWobble);
+  }
 
   /** 捕获指针确保划出单张牌边界后仍能完成一次连续临时选牌。 */
   const onPointerDown = (event: PointerEvent): void => {
@@ -89,6 +117,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     preview.clear();
     preview.add(cardId);
     syncSelection();
+    playCardWobble(cardId);
     cardsElement.setPointerCapture(event.pointerId);
     applyPointerCard(event.clientX, event.clientY);
   };
@@ -159,8 +188,56 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   cardsElement.addEventListener('pointercancel', cancelPointerSelection);
   playButton.addEventListener('click', onPlayClick);
 
+  /** 记录当前手牌屏幕坐标，供重建 DOM 后做 FLIP 位移。 */
+  function captureCardRects(): Map<string, DOMRect> {
+    const rects = new Map<string, DOMRect>();
+    for (const cardElement of cardsElement.querySelectorAll<HTMLElement>('.playing-card')) {
+      const cardId = cardElement.dataset.cardId;
+      if (cardId) rects.set(cardId, cardElement.getBoundingClientRect());
+    }
+    return rects;
+  }
+
+  /**
+   * 对仍留在手牌中的牌做 FLIP：先瞬移回旧位置，再过渡到新布局。
+   * 新发入的牌走独立的 is-dealing，不参与位移。
+   */
+  function animateLayoutShift(previousRects: Map<string, DOMRect>): void {
+    if (previousRects.size === 0) return;
+    const generation = ++layoutGeneration;
+    for (const cardElement of cardsElement.querySelectorAll<HTMLElement>('.playing-card')) {
+      const cardId = cardElement.dataset.cardId;
+      if (!cardId || cardElement.classList.contains('is-dealing')) continue;
+      const previous = previousRects.get(cardId);
+      if (!previous) continue;
+      const next = cardElement.getBoundingClientRect();
+      const dx = previous.left - next.left;
+      const dy = previous.top - next.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+
+      cardElement.classList.add('is-reflowing');
+      cardElement.style.transition = 'none';
+      // 先叠加上旧→新的位移差，视觉上停在原位；清掉后由 CSS 过渡到目标 transform。
+      cardElement.style.transform = `translate(${dx}px, ${dy}px) translateY(var(--card-lift)) rotate(calc((var(--card-index) - 4.5) * 0.35deg))`;
+      void cardElement.offsetWidth;
+      cardElement.style.transition = `transform ${LAYOUT_MOVE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+      cardElement.style.transform = '';
+
+      const clearReflow = (event: TransitionEvent): void => {
+        if (event.propertyName !== 'transform' || event.target !== cardElement) return;
+        cardElement.removeEventListener('transitionend', clearReflow);
+        if (disposed || generation !== layoutGeneration) return;
+        cardElement.classList.remove('is-reflowing');
+        cardElement.style.transition = '';
+        cardElement.style.transform = '';
+      };
+      cardElement.addEventListener('transitionend', clearReflow);
+    }
+  }
+
   /** 重建最多十张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
+    const previousRects = captureCardRects();
     const fragment = document.createDocumentFragment();
     deck.hand.forEach((card, index) => {
       const isNew = !knownCardIds.has(card.id);
@@ -194,16 +271,19 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     });
     cardsElement.replaceChildren(fragment);
     syncStatus();
+    // 先恢复选中拉高，再量新坐标，避免 FLIP 把选中态高度差算进去。
     syncSelection();
+    animateLayoutShift(previousRects);
   }
 
-  /** 只更新选择态，避免 pointermove 时反复创建图片节点；临时选中只改描边不改位置。 */
+  /** 只更新选择态，避免 pointermove 时反复创建图片节点；加选/取消预览都置灰，划过轻晃另由 playCardWobble 触发。 */
   function syncSelection(): void {
     for (const cardElement of cardsElement.querySelectorAll<HTMLElement>('.playing-card')) {
       const cardId = cardElement.dataset.cardId ?? '';
       const isSelected = selected.has(cardId);
       const isPreview = preview.has(cardId);
       cardElement.classList.toggle('is-selected', isSelected);
+      // 取消模式也挂预览置灰；正式选中拉高仍保留到 pointerup 再提交。
       cardElement.classList.toggle('is-preview', isPreview);
       cardElement.setAttribute('aria-pressed', String(isSelected));
     }

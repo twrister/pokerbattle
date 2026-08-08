@@ -10,6 +10,11 @@ export const SOLO_CAMERA_ANGLE_MAX_DEG = 90;
 
 const SOLO_CAMERA_DISTANCE = 50;
 const SOLO_VIEW_PADDING = 1;
+/**
+ * 战场近端（画面下方）额外留白的世界单位。
+ * 取景时把这块空区算进视锥，战场会略上移并略缩小，给底部手牌腾操作空间。
+ */
+const SOLO_VIEW_BOTTOM_EXTRA = 5;
 /** 接近 90° 时改用正上方位姿，避免 lookAt 与 up 平行产生万向节锁 */
 const SOLO_TOP_DOWN_ANGLE_DEG = 89.5;
 
@@ -202,11 +207,12 @@ export function calculateSoloOrthoBounds(
 
   const halfW = ARENA_W / 2 + SOLO_VIEW_PADDING;
   const halfH = ARENA_H / 2 + SOLO_VIEW_PADDING;
+  // +Z 为镜头近端，对应画面底部；多包一段空区即可把战场整体上移。
   const corners = [
     new THREE.Vector3(-halfW, 0, -halfH),
     new THREE.Vector3(halfW, 0, -halfH),
-    new THREE.Vector3(halfW, 0, halfH),
-    new THREE.Vector3(-halfW, 0, halfH),
+    new THREE.Vector3(halfW, 0, halfH + SOLO_VIEW_BOTTOM_EXTRA),
+    new THREE.Vector3(-halfW, 0, halfH + SOLO_VIEW_BOTTOM_EXTRA),
   ];
 
   let minX = Infinity;

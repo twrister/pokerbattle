@@ -796,14 +796,20 @@
         margin-left: clamp(-46px, -4.2vh, -30px);
       }
 
-      /* 划过时轻晃；选中/预览时不播，避免临时选择带动位置。 */
-      .playing-card:hover:not(.is-playing):not(.is-dealing):not(.is-selected):not(.is-preview) {
+      /* 普通悬停轻晃；正式选中/预览/布局位移时不播，预览划过改由 is-wobbling 补播。 */
+      .playing-card:hover:not(.is-playing):not(.is-dealing):not(.is-reflowing):not(.is-selected):not(.is-preview) {
+        animation: card-wobble 320ms ease-out;
+      }
+
+      /* 临时选牌划入时由 JS 挂上，绕过 pointer capture 下 :hover 失效。 */
+      .playing-card.is-wobbling:not(.is-playing):not(.is-dealing):not(.is-reflowing) {
         animation: card-wobble 320ms ease-out;
       }
 
       /* 临时选中：只用描边，不用 filter，避免影响正式选中的拉高 transform。 */
       .playing-card.is-preview {
         box-shadow:
+          inset 0 0 0 2px rgba(99, 214, 138, 0.78),
           0 0 0 3px rgba(99, 214, 138, 0.78),
           0 16px 28px rgba(0, 0, 0, 0.48);
       }
@@ -816,6 +822,7 @@
 
       .playing-card.is-selected.is-preview {
         box-shadow:
+          inset 0 0 0 2px rgba(99, 214, 138, 0.78),
           0 0 0 3px rgba(99, 214, 138, 0.78),
           0 16px 28px rgba(0, 0, 0, 0.48);
       }

@@ -39,8 +39,9 @@ describe('单机正交镜头', () => {
 
     expect(bounds.left).toBeLessThanOrEqual(-10);
     expect(bounds.right).toBeGreaterThanOrEqual(10);
-    expect(bounds.top).toBeGreaterThanOrEqual(17);
-    expect(bounds.bottom).toBeLessThanOrEqual(-17);
+    // 下方留白后视锥上偏，仍须包住含 1 格边距的战场（半高 17）
+    expect(bounds.top).toBeGreaterThanOrEqual(16.9);
+    expect(bounds.bottom).toBeLessThanOrEqual(-16.9);
   });
 
   it('在更宽或更窄的容器中都保持完整战场（正上俯视）', () => {
@@ -51,6 +52,14 @@ describe('单机正交镜头', () => {
       expect(bounds.top).toBeGreaterThanOrEqual(16);
       expect(bounds.bottom).toBeLessThanOrEqual(-16);
     }
+  });
+
+  it('取景相对战场中心上偏，给底部手牌留白', () => {
+    const aspect = 9 / 16;
+    const bounds = calculateSoloOrthoBounds(aspect, 90);
+    // 下方额外留白后，视锥中心应落在原点偏下（相机空间 Y 更小 → 战场上移）
+    const centerY = (bounds.top + bounds.bottom) / 2;
+    expect(centerY).toBeLessThan(0);
   });
 
   it('45° 斜视角时战场四角都落在正交视锥内', () => {

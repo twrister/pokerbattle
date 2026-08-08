@@ -89,7 +89,7 @@ describe('单机手牌交互', () => {
     expect(firstCard.classList.contains('is-selected')).toBe(true);
 
     firstCard.dispatchEvent(pointerEvent('pointerdown', 5));
-    // 按下仅进入取消预览，正式选中与拉高都要等到 pointerup 才撤销。
+    // 取消模式按住期间显示预览置灰，正式选中拉高等到 pointerup 才撤销。
     expect(firstCard.classList.contains('is-preview')).toBe(true);
     expect(firstCard.classList.contains('is-selected')).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('#btn-play-cards')?.disabled).toBe(false);
@@ -126,6 +126,7 @@ describe('单机手牌交互', () => {
 
     hit.mockReturnValue(second);
     document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointermove', 10, 40, 10));
+    // 取消模式滑选期间同步预览置灰，正式选中仍保持到松开。
     expect(first.classList.contains('is-preview')).toBe(true);
     expect(second.classList.contains('is-preview')).toBe(true);
     expect(first.classList.contains('is-selected')).toBe(true);
@@ -134,6 +135,40 @@ describe('单机手牌交互', () => {
     document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointerup', 10));
     expect(first.classList.contains('is-selected')).toBe(false);
     expect(second.classList.contains('is-selected')).toBe(false);
+
+    panel.dispose();
+  });
+
+  it('补牌后留存牌会从旧坐标过渡到新坐标', () => {
+    const panel = createHandPanel();
+    const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+    expect(cards).toHaveLength(3);
+    // jsdom 默认矩形全是 0，需伪造屏幕坐标才能触发 FLIP。
+    for (const [index, card] of cards.entries()) {
+      card.getBoundingClientRect = () =>
+        ({
+          x: index * 40,
+          y: 100,
+          left: index * 40,
+          top: 100,
+          right: index * 40 + 60,
+          bottom: 180,
+          width: 60,
+          height: 80,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+
+    panel.setDrawInterval(0.25);
+    panel.update(250);
+
+    const nextCards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+    expect(nextCards).toHaveLength(4);
+    const reflowing = nextCards.filter((card) => card.classList.contains('is-reflowing'));
+    expect(reflowing.length).toBeGreaterThan(0);
+    for (const card of reflowing) {
+      expect(card.style.transition).toContain('transform');
+    }
 
     panel.dispose();
   });
@@ -171,6 +206,29 @@ describe('单机手牌交互', () => {
     expect(first.classList.contains('is-selected')).toBe(true);
     expect(second.classList.contains('is-selected')).toBe(false);
     expect(third.classList.contains('is-selected')).toBe(false);
+
+    panel.dispose();
+  });
+
+  it('临时选牌按下与划入新牌时都会挂上划过轻晃类', () => {
+    const panel = createHandPanel();
+    const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
+    const [first, second] = cards as [HTMLElement, HTMLElement];
+    // jsdom 不会播发牌动画，手动结束 is-dealing，否则轻晃会被跳过。
+    for (const card of cards) card.classList.remove('is-dealing');
+    const hit = vi.fn(() => first);
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: hit,
+    });
+
+    first.dispatchEvent(pointerEvent('pointerdown', 11));
+    expect(first.classList.contains('is-wobbling')).toBe(true);
+
+    hit.mockReturnValue(second);
+    document.querySelector('#hand-cards')!.dispatchEvent(pointerEvent('pointermove', 11, 40, 10));
+    expect(second.classList.contains('is-preview')).toBe(true);
+    expect(second.classList.contains('is-wobbling')).toBe(true);
 
     panel.dispose();
   });
