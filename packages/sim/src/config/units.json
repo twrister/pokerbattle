@@ -86,7 +86,7 @@
     "bodyScale": 1.2,
     "mass": 2.6,
     "maxHp": 400,
-    "damage": 120,
+    "damage": 100,
     "attackInterval": 24,
     "attackWindup": 9,
     "range": 5,
@@ -99,5 +99,41 @@
       "targetRange": 3,
       "amount": 120
     }
+  },
+  "hero_mage": {
+    "id": "hero_mage",
+    "name": "法师（召唤）",
+    "radius": 0.6,
+    "bodyScale": 1.2,
+    "mass": 2.6,
+    "maxHp": 400,
+    "damage": 100,
+    "attackInterval": 24,
+    "attackWindup": 9,
+    "range": 5,
+    "moveSpeed": 1,
+    "sightRange": 40,
+    "attackKind": "projectile",
+    "projectileSpeed": 9,
+    "summon": {
+      "cooldown": 100,
+      "unitTypeId": "summoned_skeleton"
+    }
+  },
+  "summoned_skeleton": {
+    "id": "summoned_skeleton",
+    "name": "骷髅兵（召唤物）",
+    "radius": 0.3,
+    "bodyScale": 0.6,
+    "mass": 1.5,
+    "maxHp": 300,
+    "damage": 50,
+    "attackInterval": 20,
+    "attackWindup": 7,
+    "range": 0.3,
+    "moveSpeed": 1.5,
+    "sightRange": 40,
+    "attackKind": "melee",
+    "projectileSpeed": 9
   }
 }

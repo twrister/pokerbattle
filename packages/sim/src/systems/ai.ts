@@ -32,8 +32,8 @@ export function updateAi(world: World): void {
       continue;
     }
 
-    // 治疗前摇期间站定蓄力，优先朝锁定的受疗友军转向
-    if (unit.healWindupLeft > 0) {
+    // 英雄技能前摇期间站定蓄力；治疗会额外朝锁定的受疗友军转向
+    if (unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) {
       unit.state = UnitState.Idle;
       clearPath(unit);
       const aim = world.getUnit(unit.healCastTargetId) ?? world.getUnit(unit.targetId);
@@ -127,7 +127,7 @@ function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distS
   const charge = unit.config.charge;
   if (!charge) return false;
   if (unit.chargeCooldown > 0) return false;
-  if (unit.windupLeft > 0 || unit.healWindupLeft > 0) return false;
+  if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) return false;
 
   const minSq = mul(charge.triggerMin, charge.triggerMin);
   const maxSq = mul(charge.triggerMax, charge.triggerMax);

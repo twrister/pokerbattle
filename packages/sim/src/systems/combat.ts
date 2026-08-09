@@ -22,8 +22,8 @@ export function updateCombat(world: World): void {
       if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
       continue;
     }
-    // 治疗施法前摇期间不普攻，避免与技能前摇抢动作
-    if (unit.healWindupLeft > 0) {
+    // 英雄技能前摇期间不普攻，避免与技能动作和结算重叠
+    if (unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) {
       if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
       continue;
     }

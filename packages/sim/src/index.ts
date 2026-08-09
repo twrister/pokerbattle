@@ -16,6 +16,8 @@ export {
   type HealConfigDraft,
   type InspireConfig,
   type InspireConfigDraft,
+  type SummonConfig,
+  type SummonConfigDraft,
   type UnitConfig,
   type UnitConfigDraft,
   type UnitTypeId,

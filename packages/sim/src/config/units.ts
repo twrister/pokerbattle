@@ -6,7 +6,9 @@ export type UnitTypeId =
   | 'ranged_archer'
   | 'melee_cavalry'
   | 'hero_king'
-  | 'hero_queen';
+  | 'hero_queen'
+  | 'hero_mage'
+  | 'summoned_skeleton';
 
 /** 攻击方式：近战单体、近战范围、远程追踪弹 */
 export type AttackKind =
@@ -52,6 +54,12 @@ export interface HealConfig {
   amount: Fx;
 }
 
+/** 法师自动召唤单位的类型与冷却参数。 */
+export interface SummonConfig {
+  cooldown: Fx;
+  unitTypeId: UnitTypeId;
+}
+
 /**
  * 兵种配置。所有数值都是定点数，扩到 10 个兵种只是往 UNIT_CONFIGS 里加行，
  * 不需要新增任何类或分支逻辑（有技能的兵种除外，需接对应系统）。
@@ -87,6 +95,8 @@ export interface UnitConfig {
   inspire?: InspireConfig;
   /** 可选自动单体治疗；有此字段的兵种由 heroSkills 系统驱动 */
   heal?: HealConfig;
+  /** 可选自动召唤技能；有此字段的兵种由 heroSkills 系统驱动 */
+  summon?: SummonConfig;
 }
 
 /** 冲刺技能浮点草稿（与 JSON / 面板往返一致） */
@@ -116,6 +126,12 @@ export interface HealConfigDraft {
   amount: number;
 }
 
+/** 召唤技能浮点草稿 */
+export interface SummonConfigDraft {
+  cooldown: number;
+  unitTypeId: UnitTypeId;
+}
+
 /**
  * 人类可读的浮点草稿。调试面板与 units.json 都用这套，
  * 写入模拟前再 fromFloat，避免在 UI 层直接碰定点。
@@ -140,6 +156,7 @@ export interface UnitConfigDraft {
   charge?: ChargeConfigDraft;
   inspire?: InspireConfigDraft;
   heal?: HealConfigDraft;
+  summon?: SummonConfigDraft;
 }
 
 /**
@@ -162,6 +179,7 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     charge: config.charge ? { ...config.charge } : undefined,
     inspire: config.inspire ? { ...config.inspire } : undefined,
     heal: config.heal ? { ...config.heal } : undefined,
+    summon: config.summon ? { ...config.summon } : undefined,
   };
 }
 
@@ -190,6 +208,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.charge = source.charge ? { ...source.charge } : undefined;
   target.inspire = source.inspire ? { ...source.inspire } : undefined;
   target.heal = source.heal ? { ...source.heal } : undefined;
+  target.summon = source.summon ? { ...source.summon } : undefined;
 }
 
 /** 把草稿里的攻击方式还原成运行时 AttackKind */
@@ -234,6 +253,14 @@ function healFromDraft(draft: HealConfigDraft): HealConfig {
   };
 }
 
+/** 浮点召唤草稿 → 定点 */
+function summonFromDraft(draft: SummonConfigDraft): SummonConfig {
+  return {
+    cooldown: fromFloat(draft.cooldown),
+    unitTypeId: draft.unitTypeId,
+  };
+}
+
 /** 单条浮点草稿转运行时定点配置 */
 function configFromDraft(draft: UnitConfigDraft): UnitConfig {
   return {
@@ -255,6 +282,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
     inspire: draft.inspire ? inspireFromDraft(draft.inspire) : undefined,
     heal: draft.heal ? healFromDraft(draft.heal) : undefined,
+    summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
   };
 }
 
@@ -334,6 +362,12 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
       amount: toFloat(config.heal.amount),
     };
   }
+  if (config.summon) {
+    draft.summon = {
+      cooldown: toFloat(config.summon.cooldown),
+      unitTypeId: config.summon.unitTypeId,
+    };
+  }
   return draft;
 }
 
@@ -380,6 +414,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.charge = draft.charge ? chargeFromDraft(draft.charge) : undefined;
     target.inspire = draft.inspire ? inspireFromDraft(draft.inspire) : undefined;
     target.heal = draft.heal ? healFromDraft(draft.heal) : undefined;
+    target.summon = draft.summon ? summonFromDraft(draft.summon) : undefined;
   }
   recomputeMaxUnitRadius();
 }

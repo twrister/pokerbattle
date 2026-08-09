@@ -1,5 +1,6 @@
-import { type Fx, ONE, mul } from '../math/fixed.js';
+import { type Fx, ONE, fromFloat, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
+import { getUnitConfig } from '../config/units.js';
 import { BuffOp, type Buff } from '../stats/buff.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -8,6 +9,8 @@ const neighbors: number[] = [];
 
 /** 施法特效持续逻辑帧（约 0.8 秒），覆盖 Teleport 动画播放窗口。 */
 const CAST_FX_TICKS = 16;
+/** 召唤物与施法者碰撞圈之间留出少量空隙，避免出生帧完全重叠。 */
+const SUMMON_SPAWN_GAP = fromFloat(0.1);
 
 /**
  * 维护英雄专属技能。
@@ -17,6 +20,7 @@ export function updateHeroSkills(world: World): void {
   removeExpiredInspires(world);
   updateKingInspires(world);
   updateQueenHeals(world);
+  updateMageSummons(world);
 }
 
 /**
@@ -138,6 +142,51 @@ function resolveQueenHeal(world: World, queen: Unit): void {
   target.hp = Math.min(target.stats.maxHp, target.hp + heal.amount);
   // 特效落在受疗单位脚底，半径仅供渲染缩放
   world.spawnHealEffect(target.pos.x, target.pos.y, target.config.radius);
+}
+
+/**
+ * 法师自动召唤：技能就绪后进入与普攻同长的施法前摇，
+ * 前摇结束时在当前朝向前方生成一名同阵营骷髅兵。
+ */
+function updateMageSummons(world: World): void {
+  for (const mage of world.units) {
+    const summon = mage.config.summon;
+    if (mage.dead || !summon) continue;
+
+    if (mage.summonCooldown > 0) {
+      mage.summonCooldown = Math.max(0, mage.summonCooldown - ONE);
+    }
+
+    if (mage.summonWindupLeft > 0) {
+      mage.summonWindupLeft -= ONE;
+      if (mage.summonWindupLeft <= 0) {
+        mage.summonWindupLeft = 0;
+        resolveMageSummon(world, mage);
+      }
+      continue;
+    }
+
+    if (mage.summonCooldown > 0) continue;
+
+    mage.summonCooldown = summon.cooldown;
+    mage.summonWindupLeft = mage.stats.attackWindup;
+    mage.castFxLeft = CAST_FX_TICKS;
+    // 技能起手打断普攻前摇，确保两套动作和结算不会重叠。
+    mage.windupLeft = 0;
+    if (mage.summonWindupLeft <= 0) resolveMageSummon(world, mage);
+  }
+}
+
+/** 在法师面前生成召唤物；World 会负责将落点限制在场地内。 */
+function resolveMageSummon(world: World, mage: Unit): void {
+  const summon = mage.config.summon;
+  if (!summon || mage.dead) return;
+
+  const summonedConfig = getUnitConfig(summon.unitTypeId);
+  const distance = mage.config.radius + summonedConfig.radius + SUMMON_SPAWN_GAP;
+  const x = mage.pos.x + mul(mage.facing.x, distance);
+  const y = mage.pos.y + mul(mage.facing.y, distance);
+  world.spawnUnit(mage.faction, summon.unitTypeId, x, y);
 }
 
 /** 按生命比例、再按实体 id 选出单体治疗目标，保证所有端作出相同决定；排除女王自身。 */

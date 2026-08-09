@@ -220,6 +220,8 @@ export class World {
       h = mix(h, unit.healCooldown);
       h = mix(h, unit.healWindupLeft);
       h = mix(h, unit.healCastTargetId);
+      h = mix(h, unit.summonCooldown);
+      h = mix(h, unit.summonWindupLeft);
       h = mix(h, unit.castFxLeft);
       h = mix(h, unit.aoeHitFxLeft);
     }

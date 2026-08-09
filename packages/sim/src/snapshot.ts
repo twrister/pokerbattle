@@ -27,7 +27,7 @@ export interface UnitSnapshot {
   charging: boolean;
   /** 受到国王振奋时，渲染层显示持续光环 */
   inspired: boolean;
-  /** 正在施放技能（冲刺前摇 / 治疗施法），渲染层播放施法特效 */
+  /** 正在施放技能（冲刺 / 治疗 / 召唤前摇），渲染层播放施法特效 */
   casting: boolean;
   /** 本帧刚吃到范围伤害，渲染层同步加强闪红与轻抖 */
   aoeHit: boolean;
@@ -85,9 +85,12 @@ export function takeSnapshot(world: World): Snapshot {
       facingY: toFloat(unit.facing.y),
       radius: toFloat(unit.config.radius),
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
-      // 普攻 / 冲刺蓄力 / 治疗施法前摇共用同一套攻击蓄力姿势
+      // 普攻与各类技能前摇共用同一套攻击蓄力姿势
       attacking:
-        unit.windupLeft > 0 || unit.chargeWindupLeft > 0 || unit.healWindupLeft > 0,
+        unit.windupLeft > 0
+        || unit.chargeWindupLeft > 0
+        || unit.healWindupLeft > 0
+        || unit.summonWindupLeft > 0,
       charging: unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0,
       inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
       // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）

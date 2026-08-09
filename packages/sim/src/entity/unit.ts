@@ -75,6 +75,13 @@ export interface Unit {
   healWindupLeft: Fx;
   /** 本次治疗前摇锁定的友军 id；无施法时为 NO_TARGET */
   healCastTargetId: number;
+  /** 法师召唤技能的冷却剩余（tick）；无召唤技能的单位恒为 0 */
+  summonCooldown: Fx;
+  /**
+   * 召唤施法前摇剩余（tick）；时长复用 attackWindup，
+   * 期间站定且不会同时进行普通攻击。
+   */
+  summonWindupLeft: Fx;
   /**
    * 施法特效剩余逻辑帧。仅驱动快照 `casting`，不参与战斗判定。
    * 骑兵冲刺前摇走 chargeWindupLeft，不占用本字段。
@@ -131,6 +138,8 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     healCooldown: 0,
     healWindupLeft: 0,
     healCastTargetId: NO_TARGET,
+    summonCooldown: 0,
+    summonWindupLeft: 0,
     castFxLeft: 0,
     aoeHitFxLeft: 0,
     base,

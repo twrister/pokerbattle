@@ -56,6 +56,20 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 171 / 179,
     sourceFacing: -1,
   },
+  hero_mage: {
+    frontUrl: 'units/mage-front.png',
+    backUrl: 'units/mage-back.png',
+    heightMul: 4.1,
+    aspect: 181 / 203,
+    sourceFacing: 1,
+  },
+  summoned_skeleton: {
+    frontUrl: 'units/skeleton-front.png',
+    backUrl: 'units/skeleton-back.png',
+    heightMul: 3.8,
+    aspect: 164 / 203,
+    sourceFacing: 1,
+  },
 };
 
 /** 所有精灵共用的面片：单位尺寸、底边锚定在 y=0（脚踩地面），靠 scale 放大 */

@@ -194,8 +194,8 @@ export class UnitView {
     this.inspireAura.position.y = 0.035;
     this.inspireAura.visible = false;
 
-    // 仅骑兵 / 女王挂施法特效；国王光环是持续效果，不需要瞬间施法动画
-    if (config.charge || config.heal) {
+    // 仅主动技能挂施法特效；国王光环是持续效果，不需要瞬间施法动画
+    if (config.charge || config.heal || config.summon) {
       this.castFx = new THREE.Group();
       this.castFx.visible = false;
       for (const sheet of CAST_SHEETS) {
