@@ -1,6 +1,7 @@
 import { type Fx, div, mul } from '../math/fixed.js';
 import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
+import { isBuildingConfig } from '../config/units.js';
 import { TICK_RATE_FX, WAYPOINT_ARRIVE_DIST } from '../config/tuning.js';
 import { UnitState } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -14,6 +15,7 @@ import type { World } from '../world.js';
 export function updateMovement(world: World): void {
   for (const unit of world.units) {
     if (unit.dead || unit.state !== UnitState.Seek) continue;
+    if (isBuildingConfig(unit.config)) continue;
     // 普攻/技能前摇期间站定，不能边走边抬手（冲刺走 cavalry 系统，不会进 Seek）
     if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) continue;
 

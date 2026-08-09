@@ -1,17 +1,29 @@
 import {
   Faction,
+  UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  type CardFormation,
   type UnitTypeId,
   fromFloat,
+  getFormationBuildingTypeId,
+  isBuildingConfig,
+  isBuildingOnlyFormation,
+  placeBuildingCommand,
   resolveFormationSpawns,
+  snapBuildingCenter,
   spawnCommand,
 } from '@pb/sim';
 import { SimLoop } from './loop.js';
 import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import {
+  enableBuildingPlacement,
+  type BuildingPlacementHandle,
+} from './input/buildingPlacement.js';
+import {
   blueHalfSafeAnchor,
   enablePlacement,
+  isBuildingInsideBlueHalf,
   isFormationInsideBlueHalf,
   screenToSim,
 } from './input/placement.js';
@@ -89,11 +101,64 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   const loop = new SimLoop(20260806);
 
+  /** 放兵与建造互斥：同一时间只挂一种地面点击监听 */
+  let disableUnitPlacement = (): void => {};
+  let disableBuildingPlacementFn = (): void => {};
+  /** 单机拖拽建筑时的绿格预览句柄 */
+  let soloBuildingPreview: BuildingPlacementHandle | null = null;
+
+  const stopSoloBuildingPreview = (): void => {
+    if (!soloBuildingPreview) return;
+    soloBuildingPreview.dispose();
+    soloBuildingPreview = null;
+  };
+
+  /** 按下建筑阵型：立刻铺绿色可放置格，仅预览不监听画布点击。 */
+  const onBuildingDragStart = (formation: CardFormation): void => {
+    const typeId = getFormationBuildingTypeId(formation);
+    if (!typeId) return;
+    stopSoloBuildingPreview();
+    soloBuildingPreview = enableBuildingPlacement({
+      domElement: sceneContext.renderer.domElement,
+      camera: sceneContext.camera,
+      groundPlane: sceneContext.groundPlane,
+      scene: sceneContext.scene,
+      world: loop.world,
+      getFaction: () => Faction.Blue,
+      getTypeId: () => typeId,
+      blueHalfOnly: true,
+      listenInput: false,
+      onPlace: () => {},
+    });
+  };
+
   /**
    * 蓝方出兵：拖拽给屏幕落点，点击按钮则退回半场中央的安全点。
    * 整阵越界直接拒绝（不逐单位 clamp，否则贴边阵型会被压扁重叠），由手牌面板提示重放。
+   * 单建筑：松手落成 PlaceBuilding（吸附 + 半场 + 重叠）；拖拽过程中的绿格由 onBuildingDrag* 负责。
    */
   const requestSpawn = (request: FormationSpawnRequest): boolean => {
+    if (isBuildingOnlyFormation(request.formation)) {
+      const typeId = getFormationBuildingTypeId(request.formation)!;
+      const footprint = UNIT_CONFIGS[typeId].footprint;
+      const anchor = request.point
+        ? screenToSim(
+            sceneContext.renderer.domElement,
+            sceneContext.camera,
+            sceneContext.groundPlane,
+            request.point.clientX,
+            request.point.clientY,
+          )
+        : blueHalfSafeAnchor(request.formation);
+      if (!anchor) return false;
+      const cx = snapBuildingCenter(anchor.x, footprint);
+      const cy = snapBuildingCenter(anchor.y, footprint);
+      if (!isBuildingInsideBlueHalf(cx, cy, footprint)) return false;
+      if (!loop.world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy))) return false;
+      loop.enqueue(placeBuildingCommand(Faction.Blue, typeId, fromFloat(cx), fromFloat(cy)));
+      return true;
+    }
+
     const anchor = request.point
       ? screenToSim(
           sceneContext.renderer.domElement,
@@ -116,7 +181,15 @@ function enterBattleSession(mode: BattleMode): () => void {
   };
 
   const handPanel = isSolo
-    ? createHandPanel({ drawIntervalSeconds: 3, onRequestSpawn: requestSpawn })
+    ? createHandPanel({
+        drawIntervalSeconds: 3,
+        onRequestSpawn: requestSpawn,
+        onBuildingDragStart,
+        onBuildingDragMove: (clientX, clientY) => {
+          soloBuildingPreview?.syncPointer(clientX, clientY);
+        },
+        onBuildingDragEnd: stopSoloBuildingPreview,
+      })
     : null;
 
   const clearBattlefield = (): void => {
@@ -125,11 +198,49 @@ function enterBattleSession(mode: BattleMode): () => void {
   };
 
   const thumbFrame = getFormationThumbnailFrameSettings();
+
+  const bindUnitPlacement = (): void => {
+    disableUnitPlacement();
+    disableBuildingPlacementFn();
+    disableUnitPlacement = () => {};
+    disableBuildingPlacementFn = () => {};
+    if (isSolo) return;
+    disableUnitPlacement = enablePlacement({
+      domElement: sceneContext.renderer.domElement,
+      camera: sceneContext.camera,
+      groundPlane: sceneContext.groundPlane,
+      onPlace: (simX, simY) => {
+        loop.enqueue(spawnCommand(panel.faction, panel.unitType, fromFloat(simX), fromFloat(simY)));
+      },
+    });
+  };
+
+  const bindBuildingPlacement = (typeId: UnitTypeId): void => {
+    disableUnitPlacement();
+    disableBuildingPlacementFn();
+    disableUnitPlacement = () => {};
+    const handle = enableBuildingPlacement({
+      domElement: sceneContext.renderer.domElement,
+      camera: sceneContext.camera,
+      groundPlane: sceneContext.groundPlane,
+      scene: sceneContext.scene,
+      world: loop.world,
+      getFaction: () => panel.faction,
+      getTypeId: () => typeId,
+      onPlace: (command) => loop.enqueue(command),
+    });
+    disableBuildingPlacementFn = () => handle.dispose();
+  };
+
   const panel = createPanel({
     loop,
     onClear: clearBattlefield,
     enableSpawnControls: !isSolo,
     onRandomPk: () => spawnRandomPk(loop, clearBattlefield),
+    onBuildingModeChange: (typeId) => {
+      if (typeId) bindBuildingPlacement(typeId);
+      else bindUnitPlacement();
+    },
     ...(isSolo
       ? {
           soloCameraAngle: {
@@ -158,16 +269,8 @@ function enterBattleSession(mode: BattleMode): () => void {
     panel.refreshUnitLabels();
   });
 
-  const disablePlacement = isSolo
-    ? () => {}
-    : enablePlacement({
-        domElement: sceneContext.renderer.domElement,
-        camera: sceneContext.camera,
-        groundPlane: sceneContext.groundPlane,
-        onPlace: (simX, simY) => {
-          loop.enqueue(spawnCommand(panel.faction, panel.unitType, fromFloat(simX), fromFloat(simY)));
-        },
-      });
+  // createPanel 初始化会回调 onBuildingModeChange(null)；沙盒下由此挂上放兵监听
+  if (!isSolo && !panel.buildingType) bindUnitPlacement();
 
   const returnToMenu = (): void => screens.show('menu');
   backButton.addEventListener('click', returnToMenu);
@@ -201,7 +304,9 @@ function enterBattleSession(mode: BattleMode): () => void {
     hud.classList.remove('is-solo');
     container.classList.remove('is-solo');
     backButton.removeEventListener('click', returnToMenu);
-    disablePlacement();
+    disableUnitPlacement();
+    disableBuildingPlacementFn();
+    stopSoloBuildingPreview();
     handPanel?.dispose();
     panel.dispose();
     // 断开已离开会话的清场回调，避免隐藏期间误触保存仍引用旧 loop
@@ -273,10 +378,11 @@ function spawnBrawl(target: SimLoop): void {
   }
 }
 
-/** 从全部兵种里随机抽一个，仅用于沙盒对战测试 */
+/** 从可移动兵种里随机抽一个，仅用于沙盒对战测试（排除建筑） */
 function pickRandomUnitType(): UnitTypeId {
-  const index = Math.floor(Math.random() * UNIT_TYPE_IDS.length);
-  return UNIT_TYPE_IDS[index]!;
+  const mobile = UNIT_TYPE_IDS.filter((id) => !isBuildingConfig(UNIT_CONFIGS[id]));
+  const index = Math.floor(Math.random() * mobile.length);
+  return mobile[index]!;
 }
 
 /** 清空后双方各随机上场一个单位，方便快速测 1v1 */

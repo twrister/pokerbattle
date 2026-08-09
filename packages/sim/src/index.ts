@@ -35,6 +35,7 @@ export {
   dumpDefaultUnitConfigDrafts,
   dumpUnitConfigDrafts,
   getUnitConfig,
+  isBuildingConfig,
   recomputeMaxUnitRadius,
   resetUnitConfigsToDefault,
   toUnitConfigDraft,
@@ -43,6 +44,7 @@ export {
   CARD_FORMATIONS,
   FORMATION_COL_SPACING,
   FORMATION_ROW_SPACING,
+  FORMATION_THUMB_SCALE,
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
   applyCardFormationDrafts,
@@ -59,9 +61,12 @@ export {
   type FormationSpawnPoint,
   type FormationUnitEntry,
   type HandCategory,
+  getFormationBuildingTypeId,
   getFormationsFor,
+  isBuildingOnlyFormation,
   resolveFormationSpawns,
   resolveFormationSpawnsFx,
+  validateBuildingOnlyRows,
 } from './config/cardFormations.js';
 
 export { type Attributes } from './stats/attributes.js';
@@ -73,8 +78,21 @@ export { type Projectile } from './entity/projectile.js';
 export { NavGrid } from './nav/grid.js';
 export { PathFinder } from './nav/astar.js';
 export { SpatialHash } from './spatial/hash.js';
+export {
+  type BuildingCellRect,
+  buildingCellRange,
+  isBuildingRectInsideArena,
+  snapBuildingCenter,
+} from './nav/buildingGrid.js';
 
-export { type Command, CommandKind, type SpawnCommand, spawnCommand } from './commands.js';
+export {
+  type Command,
+  CommandKind,
+  type PlaceBuildingCommand,
+  type SpawnCommand,
+  placeBuildingCommand,
+  spawnCommand,
+} from './commands.js';
 export {
   type AoePulseEffectSnapshot,
   type HealEffectSnapshot,

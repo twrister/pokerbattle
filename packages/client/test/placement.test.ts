@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { Faction, createCardFormation, resolveFormationSpawns } from '@pb/sim';
+import {
+  Faction,
+  World,
+  createCardFormation,
+  fromFloat,
+  resolveFormationSpawns,
+} from '@pb/sim';
+import {
+  collectPlaceableBuildingCells,
+  collectPlaceableBuildingCenters,
+} from '../src/input/buildingPlacement.js';
 import {
   BLUE_HALF_MAX_Y,
   blueHalfSafeAnchor,
+  blueHalfSafeBuildingAnchor,
+  isBuildingInsideBlueHalf,
   isFormationInsideBlueHalf,
 } from '../src/input/placement.js';
 import { ARENA_W } from '../src/view/coords.js';
@@ -63,5 +75,48 @@ describe('蓝方阵型落点校验', () => {
       rowSpacing: 2,
     });
     expect(blueHalfSafeAnchor(oversized)).toBeNull();
+  });
+
+  it('单建筑阵型安全锚点保证整块占地在蓝方半场内', () => {
+    const tower = createCardFormation('single', {
+      id: 'test_tower',
+      name: '防御塔',
+      rows: [['building_tower']],
+    });
+    const anchor = blueHalfSafeAnchor(tower)!;
+    expect(anchor).not.toBeNull();
+    expect(isBuildingInsideBlueHalf(anchor.x, anchor.y, 2)).toBe(true);
+
+    const baseAnchor = blueHalfSafeBuildingAnchor(4)!;
+    expect(baseAnchor).not.toBeNull();
+    expect(isBuildingInsideBlueHalf(baseAnchor.x, baseAnchor.y, 4)).toBe(true);
+    // 中心贴近中线时，4×4 会跨出蓝方半场
+    expect(isBuildingInsideBlueHalf(ARENA_W / 2, BLUE_HALF_MAX_Y, 4)).toBe(false);
+  });
+});
+
+describe('建造模式可放置目标格', () => {
+  it('半场约束下只枚举蓝方合法中心，且排除已占格', () => {
+    const world = new World(1);
+    const empty = collectPlaceableBuildingCenters(world, 'building_tower', true);
+    expect(empty.length).toBeGreaterThan(0);
+    expect(empty.every((c) => isBuildingInsideBlueHalf(c.x, c.y, 2))).toBe(true);
+
+    const placed = empty[0]!;
+    world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(placed.x), fromFloat(placed.y));
+    const after = collectPlaceableBuildingCenters(world, 'building_tower', true);
+    // 2×2 会挡住邻接吸附位，合法中心数应明显减少且不含原中心
+    expect(after.length).toBeLessThan(empty.length);
+    expect(after.some((c) => c.x === placed.x && c.y === placed.y)).toBe(false);
+  });
+
+  it('可放置高亮按 1×1 格去重，避免 footprint 矩形叠色', () => {
+    const world = new World(1);
+    const cells = collectPlaceableBuildingCells(world, 'building_tower', true);
+    expect(cells.length).toBeGreaterThan(0);
+    const keys = new Set(cells.map((c) => `${c.x},${c.y}`));
+    expect(keys.size).toBe(cells.length);
+    // 空场时 2×2 足迹铺满蓝方半场：18×16 = 288 格
+    expect(cells.length).toBe(ARENA_W * BLUE_HALF_MAX_Y);
   });
 });

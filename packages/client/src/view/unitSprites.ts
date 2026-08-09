@@ -84,6 +84,22 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 164 / 203,
     sourceFacing: 1,
   },
+  // 建筑正背同图，无朝向切换；尺寸由 unitView 按 footprint 铺满，底边对齐占地格最下方
+  building_base: {
+    frontUrl: 'buildings/base.png',
+    backUrl: 'buildings/base.png',
+    heightMul: 1,
+    // 与 buildings/base.png 像素尺寸一致，避免按旧图宽高比拉伸
+    aspect: 235 / 291,
+    sourceFacing: 1,
+  },
+  building_tower: {
+    frontUrl: 'buildings/tower.png',
+    backUrl: 'buildings/tower.png',
+    heightMul: 1,
+    aspect: 177 / 222,
+    sourceFacing: 1,
+  },
 };
 
 /** 所有精灵共用的面片：单位尺寸、底边锚定在 y=0（脚踩地面），靠 scale 放大 */

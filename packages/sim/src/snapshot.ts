@@ -20,6 +20,8 @@ export interface UnitSnapshot {
   facingX: number;
   facingY: number;
   radius: number;
+  /** 占地边长（整数格）；0 表示普通单位 */
+  footprint: number;
   hpRatio: number;
   /** 正在出手前摇，渲染层可以据此播放攻击动作 */
   attacking: boolean;
@@ -86,6 +88,7 @@ export function takeSnapshot(world: World): Snapshot {
       facingX: toFloat(unit.facing.x),
       facingY: toFloat(unit.facing.y),
       radius: toFloat(unit.config.radius),
+      footprint: unit.config.footprint,
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
       // 普攻与各类技能前摇共用同一套攻击蓄力姿势
       attacking:

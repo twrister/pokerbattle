@@ -1,6 +1,6 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
 import { Faction } from '../entity/unit.js';
-import { UNIT_TYPE_IDS, type UnitTypeId } from './units.js';
+import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
 import rawCardFormations from './cardFormations.json';
 
 /** 发牌限制可识别的全部牌型 id。 */
@@ -57,6 +57,8 @@ export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
 export const FORMATION_COL_SPACING = 1.2;
 /** 相邻排的默认前后间距（格）；row 越大越靠后。 */
 export const FORMATION_ROW_SPACING = 1.4;
+/** 阵型按钮缩略图默认放大倍率；只影响按钮处兵种显示。 */
+export const FORMATION_THUMB_SCALE = 2;
 
 /** 搭配中的单个兵种条目（由 rows 汇总，供 UI 统计）。 */
 export interface FormationUnitEntry {
@@ -88,6 +90,8 @@ export interface CardFormation {
   /** 可选覆盖默认间距；缺省用全局 FORMATION_*_SPACING。 */
   colSpacing: number;
   rowSpacing: number;
+  /** 按钮缩略图兵种放大倍率；缺省用 FORMATION_THUMB_SCALE。 */
+  thumbScale: number;
 }
 
 /** 解析后的世界坐标出生点（浮点格坐标，出兵前再 fromFloat）。 */
@@ -106,6 +110,8 @@ export interface FormationDraft {
   rows: UnitTypeId[][];
   colSpacing?: number;
   rowSpacing?: number;
+  /** 按钮缩略图放大；缺省 FORMATION_THUMB_SCALE。 */
+  thumbScale?: number;
 }
 
 /** 所有牌型下的阵型草稿集合。 */
@@ -133,6 +139,11 @@ function unitsFromSlots(slots: readonly FormationSlot[]): FormationUnitEntry[] {
   return order.map((typeId) => ({ typeId, count: counts.get(typeId)! }));
 }
 
+/** 解析阵型按钮放大倍率；非法或未配置时回落默认。 */
+function resolveThumbScale(value: number | undefined): number {
+  return Number.isFinite(value) && (value as number) > 0 ? (value as number) : FORMATION_THUMB_SCALE;
+}
+
 /** 从 JSON 加载并回填 category / slots / units。 */
 function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory, CardFormation[]> {
   const out = {} as Record<HandCategory, CardFormation[]>;
@@ -156,6 +167,7 @@ function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory,
           Number.isFinite(entry.rowSpacing) && (entry.rowSpacing as number) > 0
             ? (entry.rowSpacing as number)
             : FORMATION_ROW_SPACING,
+        thumbScale: resolveThumbScale(entry.thumbScale),
       };
     });
   }
@@ -181,6 +193,7 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
       Number.isFinite(draft.rowSpacing) && (draft.rowSpacing as number) > 0
         ? (draft.rowSpacing as number)
         : FORMATION_ROW_SPACING,
+    thumbScale: resolveThumbScale(draft.thumbScale),
   };
 }
 
@@ -200,6 +213,7 @@ function cloneDrafts(source: CardFormationDrafts): CardFormationDrafts {
       rows: entry.rows.map((row) => [...row]),
       ...(entry.colSpacing === undefined ? {} : { colSpacing: entry.colSpacing }),
       ...(entry.rowSpacing === undefined ? {} : { rowSpacing: entry.rowSpacing }),
+      ...(entry.thumbScale === undefined ? {} : { thumbScale: entry.thumbScale }),
     }));
   }
   return out;
@@ -215,6 +229,7 @@ export function dumpCardFormationDrafts(): CardFormationDrafts {
       rows: formation.rows.map((row) => [...row]),
       colSpacing: formation.colSpacing,
       rowSpacing: formation.rowSpacing,
+      thumbScale: formation.thumbScale,
     }));
   }
   return out;
@@ -249,15 +264,54 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
           if (!allowedTypes.has(typeId)) return `阵型「${id}」包含未知兵种「${String(typeId)}」`;
         }
       }
+      // 建筑只能单独成阵：恰好 1 个槽位且该槽是建筑，不可与兵种混编
+      const buildingError = validateBuildingOnlyRows(formation.rows, id);
+      if (buildingError) return buildingError;
       if (formation.colSpacing !== undefined && (!Number.isFinite(formation.colSpacing) || formation.colSpacing <= 0)) {
         return `阵型「${id}」横向间距必须大于 0`;
       }
       if (formation.rowSpacing !== undefined && (!Number.isFinite(formation.rowSpacing) || formation.rowSpacing <= 0)) {
         return `阵型「${id}」排间距必须大于 0`;
       }
+      if (formation.thumbScale !== undefined && (!Number.isFinite(formation.thumbScale) || formation.thumbScale <= 0)) {
+        return `阵型「${id}」阵型放大必须大于 0`;
+      }
     }
   }
   return null;
+}
+
+/**
+ * 建筑阵型约束：不含建筑则通过；含建筑则必须恰好一个建筑槽、无其它单位。
+ * 供校验与编辑器复用。
+ */
+export function validateBuildingOnlyRows(
+  rows: readonly (readonly UnitTypeId[])[],
+  formationId = '',
+): string | null {
+  const flat = rows.flat();
+  const buildingCount = flat.filter((typeId) => isBuildingConfig(UNIT_CONFIGS[typeId])).length;
+  if (buildingCount === 0) return null;
+  if (flat.length === 1 && buildingCount === 1) return null;
+  const label = formationId ? `阵型「${formationId}」` : '该阵型';
+  return `${label}若包含建筑，则只能配置单个建筑（不可与其它单位混编）`;
+}
+
+/** 是否为合法的单建筑阵型（恰好一个建筑槽）。 */
+export function isBuildingOnlyFormation(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): boolean {
+  return validateBuildingOnlyRows(formation.rows) === null
+    && formation.rows.flat().length === 1
+    && isBuildingConfig(UNIT_CONFIGS[formation.rows.flat()[0]!]);
+}
+
+/** 单建筑阵型的建筑 typeId；非单建筑阵型返回 null。 */
+export function getFormationBuildingTypeId(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): UnitTypeId | null {
+  if (!isBuildingOnlyFormation(formation)) return null;
+  return formation.rows.flat()[0]!;
 }
 
 /** 校验通过后原地更新运行时阵型，使已引用 CARD_FORMATIONS 的 UI 即刻读到新数据。 */

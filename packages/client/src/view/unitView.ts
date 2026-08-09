@@ -42,6 +42,13 @@ export class UnitView {
   private readonly hpBaseY: number;
   /** 空中单位只抬高角色与血条，碰撞圈和阴影仍留在地面标示落点。 */
   private readonly isAir: boolean;
+  /** 有占地的建筑：无朝向切换、贴图宽铺满占地、底边对齐格子最下方。 */
+  private readonly isBuilding: boolean;
+  /**
+   * 建筑贴图/阴影相对逻辑中心沿 scene +Z 的偏移（= footprint/2）。
+   * sim 低 Y 为画面下方，对应 scene +Z，把底边落到占地格最靠下的那条边。
+   */
+  private readonly buildingBaseOffsetZ: number = 0;
   /** 振奋状态的脚下光环，默认隐藏并在快照标记时脉冲显示。 */
   private readonly inspireAura: THREE.Mesh;
 
@@ -111,9 +118,13 @@ export class UnitView {
 
     const config = UNIT_CONFIGS[typeId];
     this.isAir = config.movementLayer === 'air';
+    this.isBuilding = config.footprint > 0;
     // 碰撞圈用真实半径；显示半径 = 铁卫基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
+    const footprint = config.footprint;
+    // 建筑贴图底边对齐占地格最下方（画面下方 = scene +Z）
+    this.buildingBaseOffsetZ = this.isBuilding ? footprint / 2 : 0;
     const color = bodyColor(faction, typeId);
     const sharedSprites = getSpriteMaterials(typeId);
 
@@ -126,8 +137,14 @@ export class UnitView {
         front: sharedSprites.front.clone(),
         back: sharedSprites.back.clone(),
       };
-      this.spriteSize = bodyRadius * spriteDef.heightMul;
-      this.spriteWidth = this.spriteSize * spriteDef.aspect;
+      if (this.isBuilding) {
+        // 贴图宽度铺满占地，高度按素材宽高比推算；底边落到占地格最下方
+        this.spriteWidth = footprint;
+        this.spriteSize = footprint / Math.max(0.05, spriteDef.aspect);
+      } else {
+        this.spriteSize = bodyRadius * spriteDef.heightMul;
+        this.spriteWidth = this.spriteSize * spriteDef.aspect;
+      }
       this.spriteSourceFacing = spriteDef.sourceFacing;
       topY = this.spriteSize;
 
@@ -135,15 +152,18 @@ export class UnitView {
       this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
 
       this.billboard = new THREE.Group();
+      this.billboard.position.z = this.buildingBaseOffsetZ;
       this.billboard.add(this.sprite);
       this.group.add(this.billboard);
 
-      // 公告板不投实时阴影，脚下放一片软阴影圆片压住地面
-      const blob = new THREE.Mesh(BLOB_SHADOW_GEOMETRY, BLOB_SHADOW_MATERIAL);
-      blob.rotation.x = -Math.PI / 2;
-      blob.position.y = 0.02;
-      blob.scale.setScalar(bodyRadius * 0.9);
-      this.group.add(blob);
+      // 建筑不投影子；普通单位用软阴影圆片压住地面
+      if (!this.isBuilding) {
+        const blob = new THREE.Mesh(BLOB_SHADOW_GEOMETRY, BLOB_SHADOW_MATERIAL);
+        blob.rotation.x = -Math.PI / 2;
+        blob.position.y = 0.02;
+        blob.scale.setScalar(bodyRadius * 0.9);
+        this.group.add(blob);
+      }
     } else {
       const height = bodyRadius * 2.6;
       topY = height;
@@ -178,15 +198,28 @@ export class UnitView {
       this.group.add(this.yaw);
     }
 
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(radius * 0.86, radius, 32),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.03;
+    // 普通单位画碰撞圈；建筑放置后不画占地格，只靠贴图表达位置
+    if (!this.isBuilding) {
+      const groundMark = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 0.86, radius, 32),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+        }),
+      );
+      groundMark.rotation.x = -Math.PI / 2;
+      groundMark.position.y = 0.03;
+      this.group.add(groundMark);
+    }
 
     this.inspireAura = new THREE.Mesh(
-      new THREE.RingGeometry(radius * 1.08, radius * 1.22, 32),
+      new THREE.RingGeometry(
+        this.isBuilding ? footprint * 0.52 : radius * 1.08,
+        this.isBuilding ? footprint * 0.58 : radius * 1.22,
+        32,
+      ),
       new THREE.MeshBasicMaterial({
         color: 0xffdc6b,
         transparent: true,
@@ -215,7 +248,9 @@ export class UnitView {
       this.group.add(this.castFx);
     }
 
-    this.barWidth = Math.max(0.75, bodyRadius * 2.4);
+    this.barWidth = this.isBuilding
+      ? Math.max(1.2, footprint * 0.85)
+      : Math.max(0.75, bodyRadius * 2.4);
     const barHeight = 0.13;
     // 底/前景几乎共面时，远距深度精度塌缩会让后画的透明底条盖住前景（闪烁→只剩底色）。
     // 两层都走透明队列 + 关掉 depthWrite，靠 renderOrder 保证前景永远后画。
@@ -239,11 +274,12 @@ export class UnitView {
     );
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
-    this.hpBaseY = topY + 0.35;
-    this.hpAnchor.position.y = this.hpBaseY;
+    this.hpBaseY = topY + (this.isBuilding ? 0.45 : 0.35);
+    // 血条跟建筑贴图一起落到格子底边上方，避免仍挂在占地中心
+    this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetZ);
     this.hpAnchor.add(hpBack, this.hpFill);
 
-    this.group.add(ring, this.inspireAura, this.hpAnchor);
+    this.group.add(this.inspireAura, this.hpAnchor);
   }
 
   update(
@@ -271,8 +307,16 @@ export class UnitView {
 
     if (this.billboard && this.sprite) {
       this.billboard.quaternion.copy(camera.quaternion);
-      this.updateSpriteDirection(sceneX, sceneZ, facingX, facingZ, camera);
-      this.applySpritePose(state, attacking, timeSec);
+      if (this.isBuilding) {
+        // 建筑无朝向：固定正面、不做行走/攻击程序动画
+        this.sprite.material = this.spriteMaterials!.front;
+        this.sprite.position.set(0, 0, 0);
+        this.sprite.rotation.z = 0;
+        this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
+      } else {
+        this.updateSpriteDirection(sceneX, sceneZ, facingX, facingZ, camera);
+        this.applySpritePose(state, attacking, timeSec);
+      }
     } else if (this.yaw) {
       if (facingX !== 0 || facingZ !== 0) {
         // 本地 +Z 转到 (facingX, facingZ)，所以角度是 atan2(x, z) 而不是常见的 atan2(y, x)

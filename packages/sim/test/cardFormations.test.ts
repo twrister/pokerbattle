@@ -7,10 +7,12 @@ import {
   HAND_CATEGORY_ORDER,
   applyCardFormationDrafts,
   dumpCardFormationDrafts,
-  resetCardFormationsToDefault,
-  validateCardFormationDrafts,
+  getFormationBuildingTypeId,
   getFormationsFor,
+  isBuildingOnlyFormation,
+  resetCardFormationsToDefault,
   resolveFormationSpawns,
+  validateCardFormationDrafts,
 } from '../src/index.js';
 
 describe('牌型兵种阵型配置', () => {
@@ -29,6 +31,7 @@ describe('牌型兵种阵型配置', () => {
         );
         expect(formation.colSpacing).toBeGreaterThan(0);
         expect(formation.rowSpacing).toBeGreaterThan(0);
+        expect(formation.thumbScale).toBe(2);
       }
     }
   });
@@ -90,6 +93,7 @@ describe('牌型兵种阵型配置', () => {
       'rocket_royal',
       'pair_grunts',
       'pair_archers',
+      'pair_custom_3',
     ]);
   });
 
@@ -98,6 +102,7 @@ describe('牌型兵种阵型配置', () => {
     const formation = drafts.pair[0]!;
     formation.rows = [['ranged_archer'], ['melee_grunt']];
     formation.colSpacing = 2;
+    formation.thumbScale = 2.5;
     applyCardFormationDrafts(drafts);
 
     expect(CARD_FORMATIONS.pair[0]!.slots).toEqual([
@@ -105,10 +110,27 @@ describe('牌型兵种阵型配置', () => {
       { typeId: 'melee_grunt', row: 1, col: 0 },
     ]);
     expect(CARD_FORMATIONS.pair[0]!.colSpacing).toBe(2);
+    expect(CARD_FORMATIONS.pair[0]!.thumbScale).toBe(2.5);
 
     const invalid = dumpCardFormationDrafts();
     invalid.pair[0]!.rows = [['not_a_unit' as never]];
     expect(validateCardFormationDrafts(invalid)).toContain('未知兵种');
     resetCardFormationsToDefault();
+  });
+
+  it('允许单建筑阵型，拒绝建筑与兵种混编', () => {
+    const drafts = dumpCardFormationDrafts();
+    drafts.single[0]!.rows = [['building_tower']];
+    expect(validateCardFormationDrafts(drafts)).toBeNull();
+    expect(isBuildingOnlyFormation(drafts.single[0]!)).toBe(true);
+    expect(getFormationBuildingTypeId(drafts.single[0]!)).toBe('building_tower');
+
+    const mixed = dumpCardFormationDrafts();
+    mixed.single[0]!.rows = [['building_tower', 'melee_grunt']];
+    expect(validateCardFormationDrafts(mixed)).toContain('只能配置单个建筑');
+
+    const multiBuilding = dumpCardFormationDrafts();
+    multiBuilding.single[0]!.rows = [['building_base'], ['building_tower']];
+    expect(validateCardFormationDrafts(multiBuilding)).toContain('只能配置单个建筑');
   });
 });

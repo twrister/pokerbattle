@@ -1,5 +1,6 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
+import { isBuildingConfig } from '../config/units.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
@@ -16,6 +17,8 @@ import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
 export function updateTargeting(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
+    // 建筑本期不索敌；仍可作为敌军目标被其它单位选中
+    if (isBuildingConfig(unit.config)) continue;
 
     // 仅用于出生错峰；锁定后不再周期重置
     if (unit.retargetIn > 0) {

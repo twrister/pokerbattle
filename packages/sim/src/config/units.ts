@@ -10,7 +10,9 @@ export type UnitTypeId =
   | 'hero_mage'
   | 'hero_archmage'
   | 'dragon'
-  | 'summoned_skeleton';
+  | 'summoned_skeleton'
+  | 'building_base'
+  | 'building_tower';
 
 export type MovementLayer = 'ground' | 'air';
 
@@ -96,6 +98,11 @@ export interface UnitConfig {
   /** 移动碰撞层；空中与地面单位互不推挤。 */
   movementLayer: MovementLayer;
   attack: AttackKind;
+  /**
+   * 占地边长（整数格）。> 0 表示建筑：不移动、不索敌，碰撞按方形处理。
+   * 用整数而非定点，便于格子吸附与占格表运算。
+   */
+  footprint: number;
   /** 可选冲刺技能；有此字段的兵种由 cavalry 系统驱动 */
   charge?: ChargeConfig;
   /** 可选振奋光环；有此字段的兵种由 heroSkills 系统驱动 */
@@ -162,6 +169,8 @@ export interface UnitConfigDraft {
   projectileSpeed: number;
   /** 仅范围弹道攻击时有意义 */
   aoeRadius: number;
+  /** 占地边长（整数格）；缺省或 0 表示普通单位 */
+  footprint?: number;
   /** 有则随 JSON 往返，保存时不得丢失 */
   charge?: ChargeConfigDraft;
   inspire?: InspireConfigDraft;
@@ -188,6 +197,7 @@ function cloneAttack(attack: AttackKind): AttackKind {
 function cloneConfig(config: UnitConfig): UnitConfig {
   return {
     ...config,
+    footprint: config.footprint,
     attack: cloneAttack(config.attack),
     charge: config.charge ? { ...config.charge } : undefined,
     inspire: config.inspire ? { ...config.inspire } : undefined,
@@ -218,6 +228,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.moveSpeed = source.moveSpeed;
   target.sightRange = source.sightRange;
   target.movementLayer = source.movementLayer;
+  target.footprint = source.footprint;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
   target.inspire = source.inspire ? { ...source.inspire } : undefined;
@@ -300,12 +311,24 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     moveSpeed: fromFloat(draft.moveSpeed),
     sightRange: fromFloat(draft.sightRange),
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
+    footprint: normalizeFootprint(draft.footprint),
     attack: attackFromDraft(draft),
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
     inspire: draft.inspire ? inspireFromDraft(draft.inspire) : undefined,
     heal: draft.heal ? healFromDraft(draft.heal) : undefined,
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
   };
+}
+
+/** 占地必须是正整数；缺省/非法回落为 0（普通单位）。 */
+function normalizeFootprint(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value as number) <= 0) return 0;
+  return Math.floor(value as number);
+}
+
+/** 有占地即为建筑：不移动、不索敌，碰撞按方形处理 */
+export function isBuildingConfig(config: UnitConfig): boolean {
+  return config.footprint > 0;
 }
 
 /** 从 units.json 加载并转成定点配置表 */
@@ -328,9 +351,13 @@ export const UNIT_TYPE_IDS = Object.keys(UNIT_CONFIGS) as UnitTypeId[];
 /** 全兵种最大半径。空间哈希的格子大小以它为准；改配置后需 recompute。 */
 export let MAX_UNIT_RADIUS: Fx = 0;
 
-/** 按当前 UNIT_CONFIGS 重算最大半径 */
+/** 按当前 UNIT_CONFIGS 重算最大半径；建筑不进空间哈希，跳过以免格子过大。 */
 export function recomputeMaxUnitRadius(): void {
-  MAX_UNIT_RADIUS = UNIT_TYPE_IDS.reduce((acc, id) => Math.max(acc, UNIT_CONFIGS[id].radius), 0);
+  MAX_UNIT_RADIUS = UNIT_TYPE_IDS.reduce((acc, id) => {
+    const config = UNIT_CONFIGS[id];
+    if (isBuildingConfig(config)) return acc;
+    return Math.max(acc, config.radius);
+  }, 0);
 }
 
 recomputeMaxUnitRadius();
@@ -362,6 +389,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
         : 9,
     aoeRadius: config.attack.kind === 'projectile_aoe' ? toFloat(config.attack.aoeRadius) : 0,
   };
+  if (config.footprint > 0) draft.footprint = config.footprint;
   if (config.charge) {
     draft.charge = {
       cooldown: toFloat(config.charge.cooldown),
@@ -437,6 +465,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.moveSpeed = fromFloat(draft.moveSpeed);
     target.sightRange = fromFloat(draft.sightRange);
     target.movementLayer = draft.movementLayer === 'air' ? 'air' : 'ground';
+    target.footprint = normalizeFootprint(draft.footprint);
     target.attack = attackFromDraft(draft);
     // 与文件一致：缺省技能键表示该兵种无此技能
     target.charge = draft.charge ? chargeFromDraft(draft.charge) : undefined;

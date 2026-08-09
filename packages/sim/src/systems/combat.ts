@@ -1,6 +1,6 @@
 import { ONE, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
-import { MAX_UNIT_RADIUS } from '../config/units.js';
+import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -17,6 +17,8 @@ const neighbors: number[] = [];
 export function updateCombat(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
+    // TODO: 建筑攻击能力后续在此放开（配 attack/range/damage 后去掉早退）
+    if (isBuildingConfig(unit.config)) continue;
     // 冲刺中不普攻，冷却仍照常走，避免落地瞬间连砍
     if (unit.state === UnitState.Charge) {
       if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;

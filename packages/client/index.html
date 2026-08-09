@@ -481,6 +481,19 @@
         align-items: flex-end;
       }
 
+      #panel-building {
+        bottom: 110px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+      }
+
+      #panel-building.is-building [data-building][aria-pressed='true'] {
+        outline: 2px solid var(--accent, #3dd68c);
+      }
+
       #panel-help {
         bottom: 16px;
         left: 16px;
@@ -491,6 +504,7 @@
 
       #hud.is-solo #btn-brawl,
       #hud.is-solo #panel-spawn,
+      #hud.is-solo #panel-building,
       #hud.is-solo [data-sandbox-help] {
         display: none;
       }
@@ -819,7 +833,8 @@
         touch-action: none;
       }
 
-      #hand-formations .formation-option {
+      /* 与卡组页「按钮显示」预览共用，保证所见即所得。 */
+      .formation-option {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1272,7 +1287,39 @@
         min-height: clamp(300px, 40vh, 520px);
       }
 
-      #deck-preview {
+      .deck-preview-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .deck-preview-tabs {
+        display: inline-flex;
+        gap: 4px;
+      }
+
+      .deck-preview-tab {
+        min-height: 28px;
+        padding: 4px 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 7px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text-dim);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .deck-preview-tab.is-active {
+        border-color: rgba(99, 214, 138, 0.8);
+        background: rgba(51, 104, 87, 0.7);
+        color: var(--text);
+      }
+
+      /* 3D / 按钮叠在同一格，切换页签不改变预览区高度。 */
+      .deck-preview-stage {
         position: relative;
         min-height: clamp(260px, 34vh, 480px);
         height: 100%;
@@ -1281,10 +1328,37 @@
         background: linear-gradient(155deg, #172433, #0d141d);
       }
 
+      #deck-preview,
+      #deck-preview-button {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      #deck-preview.is-hidden,
+      #deck-preview-button.is-hidden {
+        display: none;
+      }
+
       #deck-preview canvas {
         display: block;
         width: 100%;
         height: 100%;
+      }
+
+      #deck-preview-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      #deck-preview-button.is-hidden {
+        display: none;
+      }
+
+      #deck-preview-button .formation-option {
+        cursor: default;
       }
 
       #deck-status {
@@ -1319,7 +1393,7 @@
           min-height: clamp(280px, 44vh, 460px);
         }
 
-        #deck-preview {
+        .deck-preview-stage {
           min-height: clamp(240px, 38vh, 420px);
         }
       }
@@ -1392,9 +1466,36 @@
         <section class="deck-content">
           <nav id="deck-category-list" class="deck-column" aria-label="牌型"></nav>
           <nav id="deck-formation-list" class="deck-column" aria-label="阵型列表"></nav>
-          <section class="deck-preview-panel" aria-label="3D 阵型预览">
-            <div class="deck-section-title">3D 阵型预览（蓝方视角）</div>
-            <div id="deck-preview"></div>
+          <section class="deck-preview-panel" aria-label="阵型预览">
+            <div class="deck-preview-header">
+              <div class="deck-section-title">阵型预览（蓝方视角）</div>
+              <div class="deck-preview-tabs" role="tablist" aria-label="预览方式">
+                <button
+                  id="deck-preview-tab-3d"
+                  class="deck-preview-tab is-active"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  data-preview-mode="3d"
+                >
+                  3D 预览
+                </button>
+                <button
+                  id="deck-preview-tab-button"
+                  class="deck-preview-tab"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  data-preview-mode="button"
+                >
+                  按钮显示
+                </button>
+              </div>
+            </div>
+            <div class="deck-preview-stage">
+              <div id="deck-preview" role="tabpanel"></div>
+              <div id="deck-preview-button" class="is-hidden" role="tabpanel" aria-label="阵型按钮预览"></div>
+            </div>
           </section>
           <section class="deck-editor-panel" aria-label="阵型编辑">
             <div id="deck-editor"></div>
@@ -1471,7 +1572,7 @@
           </div>
           <div class="thumb-frame-row">
             <label for="formation-thumb-margin">
-              阵型边距 <span id="formation-thumb-margin-value" class="thumb-frame-value">1.00</span>
+              阵型边距 <span id="formation-thumb-margin-value" class="thumb-frame-value">2.00</span>
             </label>
             <input
               id="formation-thumb-margin"
@@ -1479,7 +1580,7 @@
               min="0"
               max="2"
               step="0.05"
-              value="1"
+              value="2"
             />
           </div>
         </div>
@@ -1516,11 +1617,23 @@
         </div>
       </section>
 
+      <section class="panel" id="panel-building">
+        <div>
+          <div class="title">建造</div>
+          <div class="btn-row" id="building-group">
+            <button type="button" data-building="building_base" aria-pressed="false">基地 4×4</button>
+            <button type="button" data-building="building_tower" aria-pressed="false">防御塔 2×2</button>
+            <button type="button" id="btn-building-cancel" aria-pressed="false">退出建造</button>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" id="panel-help">
         <div class="title">操作</div>
-        <div data-sandbox-help><kbd>左键</kbd> 点击地面放兵</div>
+        <div data-sandbox-help><kbd>左键</kbd> 点击地面放兵 / 建造</div>
         <div data-sandbox-help><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
         <div data-sandbox-help><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
+        <div data-sandbox-help>建造面板：吸附格子放置，不可重叠</div>
         <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 清空</div>
       </section>
 

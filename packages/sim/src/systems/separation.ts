@@ -1,7 +1,7 @@
-import { type Fx, ONE, div, mul, sqrt } from '../math/fixed.js';
+import { type Fx, ONE, div, fromFloat, mul, sqrt } from '../math/fixed.js';
 import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
-import { MAX_UNIT_RADIUS } from '../config/units.js';
+import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import {
   ATTACK_PUSH_DEEP_RATIO,
   ATTACK_PUSH_SCALE,
@@ -10,7 +10,7 @@ import {
   SEPARATION_STRENGTH,
   TICK_RATE_FX,
 } from '../config/tuning.js';
-import { UnitState } from '../entity/unit.js';
+import { UnitState, type Unit } from '../entity/unit.js';
 import type { World } from '../world.js';
 
 /** 复用的邻居缓冲，避免每帧每单位都新建数组 */
@@ -25,25 +25,31 @@ const neighbors: number[] = [];
  *
  * Attack 状态下的浅层重叠会被弱化推挤，减少站定输出被弹飞；
  * 深层重叠仍全量解开。单 tick 推挤位移还有上限，避免多邻居叠加瞬移。
+ *
+ * 建筑是方形占地：在圆-圆循环前先做圆-AABB 解叠，建筑本身不动。
  */
 export function resolveSeparation(world: World): void {
   const units = world.units;
   const grid = world.unitGrid;
 
   for (let iter = 0; iter < SEPARATION_ITERATIONS; iter++) {
-    // 上一轮已经改过位置，每轮都要重建哈希
+    // 上一轮已经改过位置，每轮都要重建哈希；建筑不入哈希
     grid.clear();
     for (let i = 0; i < units.length; i++) {
       const unit = units[i]!;
       if (unit.dead) continue;
-      grid.insert(i, unit.pos.x, unit.pos.y);
       unit.push.x = 0;
       unit.push.y = 0;
+      if (isBuildingConfig(unit.config)) continue;
+      grid.insert(i, unit.pos.x, unit.pos.y);
     }
+
+    // 先把地面单位推出建筑 AABB，再解单位间圆-圆重叠
+    resolveBuildingSeparation(world);
 
     for (let i = 0; i < units.length; i++) {
       const a = units[i]!;
-      if (a.dead) continue;
+      if (a.dead || isBuildingConfig(a.config)) continue;
       grid.query(a.pos.x, a.pos.y, a.config.radius + MAX_UNIT_RADIUS, neighbors);
 
       for (let k = 0; k < neighbors.length; k++) {
@@ -51,7 +57,7 @@ export function resolveSeparation(world: World): void {
         // 只处理 i < j 的一半配对，既去重又让遍历顺序完全由下标决定
         if (j <= i) continue;
         const b = units[j]!;
-        if (b.dead) continue;
+        if (b.dead || isBuildingConfig(b.config)) continue;
         // 空中与地面单位处于不同移动层，双方都不会被彼此顶开。
         if (a.config.movementLayer !== b.config.movementLayer) continue;
 
@@ -100,6 +106,7 @@ export function resolveSeparation(world: World): void {
     for (let i = 0; i < units.length; i++) {
       const unit = units[i]!;
       if (unit.dead) continue;
+      if (isBuildingConfig(unit.config)) continue;
       // 冲刺中不受软碰撞推挤，保证直线冲锋不被挤歪
       if (unit.state === UnitState.Charge) continue;
 
@@ -116,4 +123,72 @@ export function resolveSeparation(world: World): void {
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
     }
   }
+}
+
+/**
+ * 圆 vs 建筑 AABB：把单位中心夹到矩形得最近点，穿透则沿法线推出单位。
+ * 建筑侧位移恒为 0；空中单位不受阻挡。
+ */
+function resolveBuildingSeparation(world: World): void {
+  const units = world.units;
+  for (let bi = 0; bi < units.length; bi++) {
+    const building = units[bi]!;
+    if (building.dead || !isBuildingConfig(building.config)) continue;
+
+    const half = fromFloat(building.config.footprint / 2);
+    const minX = building.pos.x - half;
+    const maxX = building.pos.x + half;
+    const minY = building.pos.y - half;
+    const maxY = building.pos.y + half;
+
+    for (let ui = 0; ui < units.length; ui++) {
+      const unit = units[ui]!;
+      if (unit.dead || isBuildingConfig(unit.config)) continue;
+      if (unit.config.movementLayer === 'air') continue;
+      if (unit.state === UnitState.Charge) continue;
+
+      pushUnitOutOfAabb(unit, minX, minY, maxX, maxY);
+    }
+  }
+}
+
+/** 将单位圆推出半开 AABB；完全在外则不动。 */
+function pushUnitOutOfAabb(unit: Unit, minX: Fx, minY: Fx, maxX: Fx, maxY: Fx): void {
+  const cx = unit.pos.x;
+  const cy = unit.pos.y;
+  // 最近点 = clamp 到矩形（开区间内侧用 max-epsilon 没必要，闭边即可）
+  const closestX = cx < minX ? minX : cx > maxX ? maxX : cx;
+  const closestY = cy < minY ? minY : cy > maxY ? maxY : cy;
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  const r = unit.config.radius;
+  const gapSq = mul(dx, dx) + mul(dy, dy);
+
+  // 圆心在矩形内部：沿最短轴推出
+  if (dx === 0 && dy === 0 && cx >= minX && cx <= maxX && cy >= minY && cy <= maxY) {
+    const distLeft = cx - minX;
+    const distRight = maxX - cx;
+    const distBottom = cy - minY;
+    const distTop = maxY - cy;
+    if (distLeft <= distRight && distLeft <= distBottom && distLeft <= distTop) {
+      unit.push.x += minX - r - cx;
+    } else if (distRight <= distBottom && distRight <= distTop) {
+      unit.push.x += maxX + r - cx;
+    } else if (distBottom <= distTop) {
+      unit.push.y += minY - r - cy;
+    } else {
+      unit.push.y += maxY + r - cy;
+    }
+    return;
+  }
+
+  if (gapSq >= mul(r, r)) return;
+  const gap = sqrt(gapSq);
+  if (gap <= 0) return;
+  const penetration = r - gap;
+  const nx = div(dx, gap);
+  const ny = div(dy, gap);
+  // 建筑解叠用全量推出，避免单位慢慢钻进墙里
+  unit.push.x += mul(nx, penetration);
+  unit.push.y += mul(ny, penetration);
 }

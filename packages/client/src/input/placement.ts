@@ -1,5 +1,16 @@
 import * as THREE from 'three';
-import { Faction, resolveFormationSpawns, type CardFormation, type FormationSpawnPoint } from '@pb/sim';
+import {
+  Faction,
+  UNIT_CONFIGS,
+  buildingCellRange,
+  getFormationBuildingTypeId,
+  isBuildingOnlyFormation,
+  isBuildingRectInsideArena,
+  resolveFormationSpawns,
+  snapBuildingCenter,
+  type CardFormation,
+  type FormationSpawnPoint,
+} from '@pb/sim';
 import { ARENA_H, ARENA_W, toSimX, toSimY } from '../view/coords.js';
 
 /** 蓝方可出兵区域：整个宽度 + 靠近己方的半场（含中线）。 */
@@ -64,10 +75,31 @@ export function isFormationInsideBlueHalf(points: readonly FormationSpawnPoint[]
 }
 
 /**
+ * 吸附后的建筑占地是否完全落在蓝方半场（含中线）内。
+ * 用占格半开区间判断，避免半截建筑跨过中线。
+ */
+export function isBuildingInsideBlueHalf(
+  centerX: number,
+  centerY: number,
+  footprint: number,
+): boolean {
+  const snappedX = snapBuildingCenter(centerX, footprint);
+  const snappedY = snapBuildingCenter(centerY, footprint);
+  const rect = buildingCellRange(snappedX, snappedY, footprint);
+  if (!isBuildingRectInsideArena(rect, ARENA_W, ARENA_H)) return false;
+  return rect.minY >= 0 && rect.maxY <= BLUE_HALF_MAX_Y;
+}
+
+/**
  * 点击按钮自动出兵时的落点：从蓝方半场中央出发，再按阵型包围盒把锚点推回合法区域。
  * 阵型本身比半场还大时返回 null，由调用方提示玩家。
+ * 单建筑阵型改为按占地边长推算安全中心。
  */
 export function blueHalfSafeAnchor(formation: CardFormation): SimPoint | null {
+  if (isBuildingOnlyFormation(formation)) {
+    const typeId = getFormationBuildingTypeId(formation)!;
+    return blueHalfSafeBuildingAnchor(UNIT_CONFIGS[typeId].footprint);
+  }
   const centerX = ARENA_W / 2;
   const centerY = BLUE_HALF_MAX_Y / 2;
   const points = resolveFormationSpawns(formation, Faction.Blue, centerX, centerY);
@@ -77,6 +109,22 @@ export function blueHalfSafeAnchor(formation: CardFormation): SimPoint | null {
   const offsetY = shiftIntoRange(Math.min(...ys), Math.max(...ys), 0, BLUE_HALF_MAX_Y);
   if (offsetX === null || offsetY === null) return null;
   return { x: centerX + offsetX, y: centerY + offsetY };
+}
+
+/** 蓝方半场内可容纳指定占地的吸附中心；半场装不下则返回 null。 */
+export function blueHalfSafeBuildingAnchor(footprint: number): SimPoint | null {
+  const size = Math.max(1, Math.floor(footprint));
+  if (size > ARENA_W || size > BLUE_HALF_MAX_Y) return null;
+  const half = size / 2;
+  // 半开区间 [half, width-half] / [half, blueMax-half] 内吸附
+  const minCenter = half;
+  const maxCenterX = ARENA_W - half;
+  const maxCenterY = BLUE_HALF_MAX_Y - half;
+  if (minCenter > maxCenterX || minCenter > maxCenterY) return null;
+  const cx = snapBuildingCenter((minCenter + maxCenterX) / 2, size);
+  const cy = snapBuildingCenter((minCenter + maxCenterY) / 2, size);
+  if (!isBuildingInsideBlueHalf(cx, cy, size)) return null;
+  return { x: cx, y: cy };
 }
 
 /** 求把 [min, max] 整体推入 [low, high] 所需的位移；区间本身超长则无解。 */

@@ -1,8 +1,13 @@
-import type { Fx } from './math/fixed.js';
+import { type Fx, fromFloat, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
-import { MAX_UNIT_RADIUS, type UnitTypeId, getUnitConfig } from './config/units.js';
+import {
+  MAX_UNIT_RADIUS,
+  type UnitTypeId,
+  getUnitConfig,
+  isBuildingConfig,
+} from './config/units.js';
 import {
   AIR_PROJECTILE_HEIGHT,
   GROUND_PROJECTILE_HEIGHT,
@@ -11,6 +16,11 @@ import {
 import { type Projectile, createProjectile } from './entity/projectile.js';
 import { type AoePulseEffect, type AoePulseKind, type HealEffect } from './entity/effect.js';
 import { type Faction, type Unit, createUnit } from './entity/unit.js';
+import {
+  buildingCellRange,
+  isBuildingRectInsideArena,
+  snapBuildingCenter,
+} from './nav/buildingGrid.js';
 import { NavGrid } from './nav/grid.js';
 import { PathFinder } from './nav/astar.js';
 import { SpatialHash } from './spatial/hash.js';
@@ -48,6 +58,10 @@ export class World {
   readonly projectiles: Projectile[] = [];
   readonly healEffects: HealEffect[] = [];
   readonly aoePulseEffects: AoePulseEffect[] = [];
+  /** 1 格分辨率的建筑占格表，用于放置重叠校验（与 NAV 半格网格独立） */
+  private readonly buildingCells: Uint8Array;
+  readonly buildingCols: number;
+  readonly buildingRows: number;
 
   tick = 0;
   private nextEntityId = 1;
@@ -61,6 +75,9 @@ export class World {
     this.pathFinder = new PathFinder(this.nav);
     // 格子取「最大半径的两倍」，保证任意两个可能重叠的单位一定落在相邻格内
     this.unitGrid = new SpatialHash(ARENA_WIDTH, ARENA_HEIGHT, MAX_UNIT_RADIUS * 2);
+    this.buildingCols = toFloat(ARENA_WIDTH);
+    this.buildingRows = toFloat(ARENA_HEIGHT);
+    this.buildingCells = new Uint8Array(this.buildingCols * this.buildingRows);
   }
 
   getUnit(id: number): Unit | undefined {
@@ -69,6 +86,14 @@ export class World {
 
   spawnUnit(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): Unit {
     const config = getUnitConfig(typeId);
+    // 建筑必须走 spawnBuilding，保证占格与寻路阻挡同步写入
+    if (isBuildingConfig(config)) {
+      const building = this.spawnBuilding(faction, typeId, x, y);
+      if (!building) {
+        throw new Error(`无法在 (${toFloat(x)}, ${toFloat(y)}) 放置建筑 ${typeId}`);
+      }
+      return building;
+    }
     const unit = createUnit(
       this.nextEntityId++,
       typeId,
@@ -81,6 +106,112 @@ export class World {
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
     return unit;
+  }
+
+  /**
+   * 校验建筑落点：已吸附中心、整块在场内、且与已有建筑不重叠。
+   * 坐标为定点世界坐标（调用方应先 snap）。
+   */
+  canPlaceBuilding(typeId: UnitTypeId, centerX: Fx, centerY: Fx): boolean {
+    const config = getUnitConfig(typeId);
+    if (!isBuildingConfig(config)) return false;
+    const rect = buildingCellRange(toFloat(centerX), toFloat(centerY), config.footprint);
+    if (!isBuildingRectInsideArena(rect, this.buildingCols, this.buildingRows)) return false;
+    for (let gy = rect.minY; gy < rect.maxY; gy++) {
+      for (let gx = rect.minX; gx < rect.maxX; gx++) {
+        if (this.buildingCells[gy * this.buildingCols + gx] !== 0) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 放置建筑：吸附格子 → 写占格/Nav 阻挡 → 挤开区域内单位。
+   * 非法落点返回 null（指令层静默丢弃，保持确定性）。
+   */
+  spawnBuilding(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): Unit | null {
+    const config = getUnitConfig(typeId);
+    if (!isBuildingConfig(config)) return null;
+    const snappedX = fromFloat(snapBuildingCenter(toFloat(x), config.footprint));
+    const snappedY = fromFloat(snapBuildingCenter(toFloat(y), config.footprint));
+    if (!this.canPlaceBuilding(typeId, snappedX, snappedY)) return null;
+
+    const unit = createUnit(this.nextEntityId++, typeId, faction, snappedX, snappedY);
+    unit.retargetIn = 0;
+    this.setBuildingOccupation(unit, true);
+    this.evictUnitsFromBuilding(unit);
+    this.units.push(unit);
+    this.unitsById.set(unit.id, unit);
+    return unit;
+  }
+
+  /** 建筑死亡或清空时解除占地与寻路阻挡 */
+  releaseBuilding(unit: Unit): void {
+    if (!isBuildingConfig(unit.config)) return;
+    this.setBuildingOccupation(unit, false);
+  }
+
+  /** 同步写入/清除 buildingCells 与 NavGrid 半开矩形阻挡 */
+  private setBuildingOccupation(unit: Unit, occupied: boolean): void {
+    const footprint = unit.config.footprint;
+    const half = fromFloat(footprint / 2);
+    const minX = unit.pos.x - half;
+    const minY = unit.pos.y - half;
+    const maxX = unit.pos.x + half;
+    const maxY = unit.pos.y + half;
+    this.nav.setBlockedWorldRectExclusive(minX, minY, maxX, maxY, occupied);
+
+    const rect = buildingCellRange(toFloat(unit.pos.x), toFloat(unit.pos.y), footprint);
+    const flag = occupied ? 1 : 0;
+    for (let gy = rect.minY; gy < rect.maxY; gy++) {
+      for (let gx = rect.minX; gx < rect.maxX; gx++) {
+        this.buildingCells[gy * this.buildingCols + gx] = flag;
+      }
+    }
+  }
+
+  /**
+   * 放置瞬间把压在占地内的地面单位沿最短轴推出（矩形边 + 半径）。
+   * 空中单位不受影响；后续帧由 separation 的 AABB 解叠维持。
+   */
+  private evictUnitsFromBuilding(building: Unit): void {
+    const half = fromFloat(building.config.footprint / 2);
+    const minX = building.pos.x - half;
+    const maxX = building.pos.x + half;
+    const minY = building.pos.y - half;
+    const maxY = building.pos.y + half;
+
+    for (const unit of this.units) {
+      if (unit.dead || unit.id === building.id) continue;
+      if (isBuildingConfig(unit.config)) continue;
+      if (unit.config.movementLayer === 'air') continue;
+
+      const r = unit.config.radius;
+      const left = minX - r;
+      const right = maxX + r;
+      const bottom = minY - r;
+      const top = maxY + r;
+      if (unit.pos.x <= left || unit.pos.x >= right || unit.pos.y <= bottom || unit.pos.y >= top) {
+        continue;
+      }
+
+      const distLeft = unit.pos.x - left;
+      const distRight = right - unit.pos.x;
+      const distBottom = unit.pos.y - bottom;
+      const distTop = top - unit.pos.y;
+      // 四向距离用整数比较保证确定性；等距时优先左右再上下
+      if (distLeft <= distRight && distLeft <= distBottom && distLeft <= distTop) {
+        unit.pos.x = left;
+      } else if (distRight <= distBottom && distRight <= distTop) {
+        unit.pos.x = right;
+      } else if (distBottom <= distTop) {
+        unit.pos.y = bottom;
+      } else {
+        unit.pos.y = top;
+      }
+      unit.pos.x = clampToArena(unit.pos.x, ARENA_WIDTH, unit.config.radius);
+      unit.pos.y = clampToArena(unit.pos.y, ARENA_HEIGHT, unit.config.radius);
+    }
   }
 
   spawnProjectile(from: Unit, target: Unit, damage: Fx, speed: Fx, aoeRadius: Fx = 0): Projectile {
@@ -178,6 +309,8 @@ export class World {
     for (let read = 0; read < this.units.length; read++) {
       const unit = this.units[read]!;
       if (unit.dead) {
+        // 拆除前先解除占格与寻路阻挡，避免「鬼墙」
+        this.releaseBuilding(unit);
         this.unitsById.delete(unit.id);
         continue;
       }
@@ -203,6 +336,8 @@ export class World {
     this.healEffects.length = 0;
     this.aoePulseEffects.length = 0;
     this.unitsById.clear();
+    this.buildingCells.fill(0);
+    this.nav.clearBlocked();
     this.tick = 0;
     this.nextEntityId = 1;
     this.nextEffectId = 1;

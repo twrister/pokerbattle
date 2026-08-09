@@ -1,5 +1,6 @@
 import { mul } from '../math/fixed.js';
 import { copy, distSq, normalize, turnToward, vec } from '../math/vec2.js';
+import { isBuildingConfig } from '../config/units.js';
 import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -23,6 +24,10 @@ const desiredFacing = vec();
 export function updateAi(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
+    if (isBuildingConfig(unit.config)) {
+      unit.state = UnitState.Idle;
+      continue;
+    }
 
     // 冲刺中锁定状态，只把朝向对齐冲刺方向
     if (unit.state === UnitState.Charge) {

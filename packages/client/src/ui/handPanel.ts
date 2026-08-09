@@ -1,5 +1,6 @@
 import {
   getFormationsFor,
+  isBuildingOnlyFormation,
   UNIT_CONFIGS,
   type CardFormation,
   type UnitTypeId,
@@ -21,6 +22,8 @@ const MIN_DRAW_INTERVAL_MS = 250;
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
 /** 拖到战场但整阵越界时的提示。 */
 const STATUS_INVALID_DROP = '请在己方半场内放置完整阵型';
+/** 拖拽建筑阵型时的操作提示。 */
+const STATUS_BUILDING_DRAG = '拖到绿色格子上松手放置';
 /** 箭头弧顶相对首尾连线的最大抬高像素。 */
 const ARROW_MAX_LIFT = 180;
 
@@ -36,6 +39,12 @@ export interface HandPanelOptions {
   deck?: PokerDeck;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
+  /** 开始拖拽单建筑阵型：进入放置预览（绿格）。 */
+  onBuildingDragStart?: (formation: CardFormation) => void;
+  /** 拖拽建筑时同步吸附预览位置。 */
+  onBuildingDragMove?: (clientX: number, clientY: number) => void;
+  /** 结束建筑拖拽（松手或取消）：卸下绿格预览。 */
+  onBuildingDragEnd?: () => void;
   /** 出兵成功且出牌动画结束后的回调。 */
   onPlay?: (cards: readonly PlayingCard[], formation: CardFormation | null) => void;
 }
@@ -92,6 +101,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let dragButtonRect: DOMRect | null = null;
   /** 指针手势已处理过一次放置，抑制紧随其后的合成 click。 */
   let suppressClick = false;
+  /** 当前拖拽是否为单建筑阵型（决定是否走绿格预览）。 */
+  let draggingBuilding = false;
 
   root.classList.add('is-active');
   for (const card of deck.drawMany(INITIAL_HAND_SIZE)) knownCardIds.delete(card.id);
@@ -202,6 +213,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /**
    * 出兵共用流程：先向外请求落点，只有成功才播出牌动画并回收手牌。
    * 失败时保留选牌与阵型按钮，玩家可以换个位置重试。
+   * 单建筑阵型同样走此处：拖拽预览在 pointerdown 已开启，松手带 point 落成。
    */
   const requestPlay = (
     formation: CardFormation,
@@ -255,7 +267,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncSelection();
   };
 
-  /** 按下阵型按钮：捕获指针并开始画拖拽箭头，此时还不消耗任何手牌。 */
+  /** 按下阵型按钮：捕获指针并开始画拖拽箭头；建筑则立刻进入绿格放置预览。 */
   const onFormationPointerDown = (event: PointerEvent): void => {
     if (playing || event.button !== 0) return;
     const button = (event.target as Element).closest<HTMLButtonElement>(
@@ -263,46 +275,60 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     );
     if (!button || button.disabled) return;
     const formationId = button.dataset.formationId;
-    if (!formationId || !formations.some((entry) => entry.id === formationId)) return;
+    const formation = formations.find((entry) => entry.id === formationId) ?? null;
+    if (!formation) return;
     event.preventDefault();
-    dragFormationId = formationId;
+    dragFormationId = formation.id;
     dragPointerId = event.pointerId;
     dragButtonRect = button.getBoundingClientRect();
+    draggingBuilding = isBuildingOnlyFormation(formation);
     formationsElement.setPointerCapture(event.pointerId);
     drawArrow(event.clientX, event.clientY);
+    if (draggingBuilding) {
+      options.onBuildingDragStart?.(formation);
+      options.onBuildingDragMove?.(event.clientX, event.clientY);
+      setStatus(STATUS_BUILDING_DRAG);
+    }
   };
 
   const onFormationPointerMove = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     drawArrow(event.clientX, event.clientY);
+    if (draggingBuilding) options.onBuildingDragMove?.(event.clientX, event.clientY);
   };
 
   /**
    * 松手判定：按钮内 = 自动放置，战场上 = 指定落点，其余区域 = 取消。
-   * 取消与失败都不消耗手牌，玩家可以直接再来一次。
+   * 建筑在按下时已进入预览；先落成再卸绿格，避免预览先 dispose 导致校验脱节。
    */
   const onFormationPointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
     const buttonRect = dragButtonRect;
-    endFormationDrag(event.pointerId);
+    const wasBuilding = draggingBuilding;
+    const clientX = event.clientX;
+    const clientY = event.clientY;
     suppressClick = true;
-    if (!formation) return;
+    if (!formation) {
+      endFormationDrag(event.pointerId);
+      return;
+    }
 
-    if (buttonRect && isInsideRect(buttonRect, event.clientX, event.clientY)) {
+    if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
+      // 建筑点按不拖出：半场安全点自动落成
       requestPlay(formation, null);
-      return;
+    } else if (isOverBattlefield(clientX, clientY)) {
+      requestPlay(formation, { clientX, clientY });
+    } else if (wasBuilding) {
+      setStatus('');
     }
-    if (isOverBattlefield(event.clientX, event.clientY)) {
-      requestPlay(formation, { clientX: event.clientX, clientY: event.clientY });
-      return;
-    }
-    setStatus('');
+    endFormationDrag(event.pointerId);
   };
 
   const onFormationPointerCancel = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     endFormationDrag(event.pointerId);
+    setStatus('');
   };
 
   /** 键盘/辅助技术触发的点击等价于自动放置；指针手势已处理过的 click 直接吞掉。 */
@@ -330,15 +356,18 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   formationsElement.addEventListener('pointercancel', onFormationPointerCancel);
   formationsElement.addEventListener('click', onFormationClick);
 
-  /** 结束一次出兵手势：释放指针捕获、清状态并收起箭头。 */
+  /** 结束一次出兵手势：释放指针捕获、卸建筑绿格预览并收起箭头。 */
   function endFormationDrag(pointerId: number): void {
     if (formationsElement.hasPointerCapture(pointerId)) {
       formationsElement.releasePointerCapture(pointerId);
     }
+    const wasBuilding = draggingBuilding;
     dragFormationId = null;
     dragPointerId = null;
     dragButtonRect = null;
+    draggingBuilding = false;
     hideArrow();
+    if (wasBuilding) options.onBuildingDragEnd?.();
   }
 
   /** 从按钮中心向指针画一条弧线，末端箭头随弧线切线旋转。 */
@@ -550,6 +579,10 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     },
     dispose() {
       disposed = true;
+      if (draggingBuilding) {
+        draggingBuilding = false;
+        options.onBuildingDragEnd?.();
+      }
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();
       cardsElement.removeEventListener('pointerdown', onPointerDown);

@@ -145,6 +145,17 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
+    },
+    {
+      "id": "two_pair_custom_2",
+      "name": "防塔御",
+      "rows": [
+        [
+          "building_tower"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
     }
   ],
   "triple": [
@@ -171,6 +182,17 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
+    },
+    {
+      "id": "triple_custom_3",
+      "name": "防塔御",
+      "rows": [
+        [
+          "building_tower"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
     }
   ],
   "straight3": [
@@ -184,6 +206,17 @@
         [
           "ranged_archer",
           "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "straight3_custom_2",
+      "name": "防塔御",
+      "rows": [
+        [
+          "building_tower"
         ]
       ],
       "colSpacing": 1.2,
@@ -214,6 +247,17 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
+    },
+    {
+      "id": "pair_custom_3",
+      "name": "城堡",
+      "rows": [
+        [
+          "building_base"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
     }
   ],
   "single": [
@@ -234,6 +278,17 @@
       "rows": [
         [
           "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "single_custom_3",
+      "name": "防御塔",
+      "rows": [
+        [
+          "building_tower"
         ]
       ],
       "colSpacing": 1.2,

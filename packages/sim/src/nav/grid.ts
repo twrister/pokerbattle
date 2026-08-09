@@ -57,13 +57,33 @@ export class NavGrid {
     this.blockedCount += value ? 1 : -1;
   }
 
-  /** 把一块矩形区域标记为障碍，坐标是世界坐标 */
+  /** 把一块矩形区域标记为障碍，坐标是世界坐标（闭区间，含 max 所在 cell） */
   setBlockedRect(minX: Fx, minY: Fx, maxX: Fx, maxY: Fx, value = true): void {
     for (let cy = this.cellY(minY); cy <= this.cellY(maxY); cy++) {
       for (let cx = this.cellX(minX); cx <= this.cellX(maxX); cx++) {
         this.setBlockedCell(cx, cy, value);
       }
     }
+  }
+
+  /**
+   * 按半开世界矩形 [min, max) 标记障碍。
+   * 建筑占地用半开区间，避免 max 恰好落在格线上时多挡一格。
+   */
+  setBlockedWorldRectExclusive(minX: Fx, minY: Fx, maxX: Fx, maxY: Fx, value = true): void {
+    const maxCx = this.cellX(maxX - 1);
+    const maxCy = this.cellY(maxY - 1);
+    for (let cy = this.cellY(minY); cy <= maxCy; cy++) {
+      for (let cx = this.cellX(minX); cx <= maxCx; cx++) {
+        this.setBlockedCell(cx, cy, value);
+      }
+    }
+  }
+
+  /** 清空全部静态障碍（建筑拆除 / 清空战场时用） */
+  clearBlocked(): void {
+    this.blocked.fill(0);
+    this.blockedCount = 0;
   }
 
   centerX(cx: number): Fx {

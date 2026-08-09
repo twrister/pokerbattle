@@ -11,6 +11,7 @@ import type { Faction } from './entity/unit.js';
  */
 export const CommandKind = {
   Spawn: 0,
+  PlaceBuilding: 1,
 } as const;
 export type CommandKind = (typeof CommandKind)[keyof typeof CommandKind];
 
@@ -22,8 +23,26 @@ export interface SpawnCommand {
   y: Fx;
 }
 
-export type Command = SpawnCommand;
+/** 放置建筑；坐标为点击点，sim 内会吸附到合法格心后再校验重叠。 */
+export interface PlaceBuildingCommand {
+  kind: typeof CommandKind.PlaceBuilding;
+  faction: Faction;
+  typeId: UnitTypeId;
+  x: Fx;
+  y: Fx;
+}
+
+export type Command = SpawnCommand | PlaceBuildingCommand;
 
 export function spawnCommand(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): SpawnCommand {
   return { kind: CommandKind.Spawn, faction, typeId, x, y };
+}
+
+export function placeBuildingCommand(
+  faction: Faction,
+  typeId: UnitTypeId,
+  x: Fx,
+  y: Fx,
+): PlaceBuildingCommand {
+  return { kind: CommandKind.PlaceBuilding, faction, typeId, x, y };
 }

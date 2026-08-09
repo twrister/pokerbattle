@@ -1,6 +1,7 @@
 import { mul } from '../math/fixed.js';
 import { distSq, set, vec } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
+import { isBuildingConfig } from '../config/units.js';
 import { REPATH_GOAL_TOLERANCE, REPATH_INTERVAL } from '../config/tuning.js';
 import { UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -21,6 +22,7 @@ export function updatePaths(world: World): void {
 
   for (const unit of world.units) {
     if (unit.dead || unit.state !== UnitState.Seek) continue;
+    if (isBuildingConfig(unit.config)) continue;
 
     const target = world.getUnit(unit.targetId);
     if (!isAlive(target)) continue;

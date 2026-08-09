@@ -1,10 +1,18 @@
-import { Faction, UNIT_CONFIGS, UNIT_TYPE_IDS, type UnitTypeId } from '@pb/sim';
+import {
+  Faction,
+  UNIT_CONFIGS,
+  UNIT_TYPE_IDS,
+  isBuildingConfig,
+  type UnitTypeId,
+} from '@pb/sim';
 import type { SimLoop } from '../loop.js';
 
 /** 可切换的倍速档位 */
 const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
 /** 状态栏刷新间隔，60fps 刷文本纯属浪费还看不清 */
 const STATS_REFRESH_MS = 150;
+/** 沙盒可出兵的非建筑兵种（建筑走独立建造面板） */
+const MOBILE_UNIT_TYPE_IDS = UNIT_TYPE_IDS.filter((id) => !isBuildingConfig(UNIT_CONFIGS[id]));
 
 export interface PanelOptions {
   loop: SimLoop;
@@ -15,6 +23,8 @@ export interface PanelOptions {
   onBrawl?: () => void;
   /** 清空后双方各随机一个兵种 1v1 */
   onRandomPk?: () => void;
+  /** 建造模式切换：传入建筑 typeId 进入，null 退出 */
+  onBuildingModeChange?: (typeId: UnitTypeId | null) => void;
   /** 单机正交镜头俯仰角；传入后绑定运行控制里的滑条 */
   soloCameraAngle?: {
     initial: number;
@@ -38,6 +48,8 @@ export interface PanelHandle {
   readonly faction: Faction;
   /** 当前选中的兵种 */
   readonly unitType: UnitTypeId;
+  /** 当前建造中的建筑类型；null 表示未在建造模式 */
+  readonly buildingType: UnitTypeId | null;
   updateStats: (fps: number) => void;
   /** 配置面板改了兵种显示名后刷新底部按钮文案 */
   refreshUnitLabels: () => void;
@@ -51,12 +63,16 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const spawnControlsEnabled = options.enableSpawnControls ?? true;
 
   let faction: Faction = Faction.Blue;
-  let unitType: UnitTypeId = UNIT_TYPE_IDS[0]!;
+  let unitType: UnitTypeId = MOBILE_UNIT_TYPE_IDS[0]!;
+  let buildingType: UnitTypeId | null = null;
   let speedIndex = 0;
   let lastStatsAt = 0;
 
   const factionGroup = required<HTMLDivElement>('#faction-group');
   const unitGroup = required<HTMLDivElement>('#unit-group');
+  const buildingPanel = required<HTMLElement>('#panel-building');
+  const buildingGroup = required<HTMLDivElement>('#building-group');
+  const buildingCancelButton = required<HTMLButtonElement>('#btn-building-cancel');
   const pauseButton = required<HTMLButtonElement>('#btn-pause');
   const stepButton = required<HTMLButtonElement>('#btn-step');
   const speedButton = required<HTMLButtonElement>('#btn-speed');
@@ -78,8 +94,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const fpsOut = required<HTMLElement>('#stat-fps');
 
   if (spawnControlsEnabled) {
-    // 兵种按钮直接由配置表生成，加新兵种不需要动 HTML
-    for (const typeId of UNIT_TYPE_IDS) {
+    // 兵种按钮只列可移动单位；建筑走独立建造面板
+    for (const typeId of MOBILE_UNIT_TYPE_IDS) {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.unit = typeId;
@@ -98,9 +114,25 @@ export function createPanel(options: PanelOptions): PanelHandle {
 
   function selectUnit(next: UnitTypeId): void {
     unitType = next;
+    // 选兵种时退出建造，避免两种放置模式叠在一起
+    setBuildingType(null);
     for (const button of unitGroup.querySelectorAll('button')) {
       button.setAttribute('aria-pressed', String(button.dataset.unit === next));
     }
+  }
+
+  /** 进入/退出建造模式，并同步按钮态与外部放置监听 */
+  function setBuildingType(next: UnitTypeId | null): void {
+    if (next && !isBuildingConfig(UNIT_CONFIGS[next])) return;
+    // 状态未变则不回调，避免初始化 selectUnit 时在 panel 赋值前挂监听
+    if (next === buildingType) return;
+    buildingType = next;
+    buildingPanel.classList.toggle('is-building', next !== null);
+    for (const button of buildingGroup.querySelectorAll<HTMLButtonElement>('button[data-building]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.building === next));
+    }
+    buildingCancelButton.setAttribute('aria-pressed', String(next === null));
+    options.onBuildingModeChange?.(next);
   }
 
   function togglePause(): void {
@@ -136,7 +168,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
       case 'Digit9': {
         if (!spawnControlsEnabled) break;
         const index = Number(event.code.slice(5)) - 1;
-        const next = UNIT_TYPE_IDS[index];
+        const next = MOBILE_UNIT_TYPE_IDS[index];
         if (next) selectUnit(next);
         break;
       }
@@ -185,7 +217,19 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.formationThumbnailFrame?.onChange({ unitDisplayScale, frameMargin });
   };
 
-  if (spawnControlsEnabled) factionGroup.addEventListener('click', selectFactionFromButton);
+  const onBuildingGroupClick = (event: Event): void => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('button[data-building]');
+    if (!button?.dataset.building) return;
+    const typeId = button.dataset.building as UnitTypeId;
+    setBuildingType(buildingType === typeId ? null : typeId);
+  };
+  const onBuildingCancel = (): void => setBuildingType(null);
+
+  if (spawnControlsEnabled) {
+    factionGroup.addEventListener('click', selectFactionFromButton);
+    buildingGroup.addEventListener('click', onBuildingGroupClick);
+    buildingCancelButton.addEventListener('click', onBuildingCancel);
+  }
   pauseButton.addEventListener('click', togglePause);
   stepButton.addEventListener('click', stepOnce);
   speedButton.addEventListener('click', cycleSpeed);
@@ -222,6 +266,9 @@ export function createPanel(options: PanelOptions): PanelHandle {
     get unitType() {
       return unitType;
     },
+    get buildingType() {
+      return buildingType;
+    },
     updateStats(fps: number) {
       const now = performance.now();
       if (now - lastStatsAt < STATS_REFRESH_MS) return;
@@ -240,7 +287,17 @@ export function createPanel(options: PanelOptions): PanelHandle {
       }
     },
     dispose() {
-      if (spawnControlsEnabled) factionGroup.removeEventListener('click', selectFactionFromButton);
+      if (spawnControlsEnabled) {
+        factionGroup.removeEventListener('click', selectFactionFromButton);
+        buildingGroup.removeEventListener('click', onBuildingGroupClick);
+        buildingCancelButton.removeEventListener('click', onBuildingCancel);
+        // 只复位 UI，不再回调挂监听——外层已自行 unbind
+        buildingType = null;
+        buildingPanel.classList.remove('is-building');
+        for (const button of buildingGroup.querySelectorAll<HTMLButtonElement>('button[data-building]')) {
+          button.setAttribute('aria-pressed', 'false');
+        }
+      }
       pauseButton.removeEventListener('click', togglePause);
       stepButton.removeEventListener('click', stepOnce);
       speedButton.removeEventListener('click', cycleSpeed);

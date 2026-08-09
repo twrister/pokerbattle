@@ -23,7 +23,7 @@ const THUMBNAIL_HEIGHT = Math.round((THUMBNAIL_WIDTH * 98) / 128);
 /** 按钮内兵种相对「刚好装进取景」再放大的倍率（默认值，可被运行控制覆盖）。 */
 export const DEFAULT_UNIT_DISPLAY_SCALE = 2;
 /** 阵型包围盒外扩的世界单位（默认值，可被运行控制覆盖）。 */
-export const DEFAULT_FRAME_MARGIN = 1;
+export const DEFAULT_FRAME_MARGIN = 2;
 /** 等待共享立绘贴图就绪的最长帧数；超时仍出图，避免按钮一直空着。 */
 const MAX_TEXTURE_WAIT_FRAMES = 180;
 /** 取景时按最高立绘估算的顶部空间（世界单位）。 */
@@ -71,10 +71,20 @@ let queue: Promise<unknown> = Promise.resolve();
 /** 无 WebGL（如 jsdom）时置位，后续请求直接返回 null 不再重试。 */
 let unavailable = false;
 
+/** 阵型自身放大 × 运行控制相对倍率，得到最终按钮取景放大。 */
+function effectiveUnitDisplayScale(formation: CardFormation): number {
+  return clamp(
+    formation.thumbScale * (unitDisplayScale / DEFAULT_UNIT_DISPLAY_SCALE),
+    1,
+    3,
+  );
+}
+
 /** 缓存键带上 rows、间距与取景参数，改配置或滑条后按钮能立刻换新图。 */
 export function formationThumbnailKey(formation: CardFormation): string {
   const rows = formation.rows.map((row) => row.join(',')).join('|');
-  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${rows}#s${unitDisplayScale.toFixed(2)}#m${frameMargin.toFixed(2)}`;
+  const scale = effectiveUnitDisplayScale(formation);
+  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${rows}#s${scale.toFixed(2)}#m${frameMargin.toFixed(2)}`;
 }
 
 /** 取阵型缩略图 dataURL；同一阵型只渲染一次，无 WebGL 环境返回 null。 */
@@ -143,7 +153,7 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
 
   // 与战场一致：sim 的 +y 朝向敌方，在场景里是 -z，镜头留在 +z 侧俯视。
   const placed = points.map((point) => ({ typeId: point.typeId, x: point.x, z: -point.y }));
-  frameCamera(active.camera, placed);
+  frameCamera(active.camera, placed, effectiveUnitDisplayScale(formation));
 
   const views: UnitView[] = [];
   for (const unit of placed) {
@@ -177,6 +187,7 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
 function frameCamera(
   camera: THREE.OrthographicCamera,
   units: ReadonlyArray<{ x: number; z: number }>,
+  displayScale: number,
 ): void {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -236,8 +247,8 @@ function frameCamera(
   let height = Math.max(neededH, (halfWNeeded * 2) / aspect);
   let width = height * aspect;
   // 以锚点为中心整体缩小视锥，实现兵种放大。
-  height /= unitDisplayScale;
-  width /= unitDisplayScale;
+  height /= displayScale;
+  width /= displayScale;
   const halfW = width / 2;
   camera.left = cx - halfW;
   camera.right = cx + halfW;
