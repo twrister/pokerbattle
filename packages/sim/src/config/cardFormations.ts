@@ -334,6 +334,16 @@ export function captureCardFormationsAsDefault(): void {
   defaultDrafts = dumpCardFormationDrafts();
 }
 
+/** 按 id 查找阵型；出牌指令展开与校验共用。 */
+export function findFormationById(formationId: string): CardFormation | undefined {
+  for (const category of HAND_CATEGORY_ORDER) {
+    for (const formation of CARD_FORMATIONS[category]) {
+      if (formation.id === formationId) return formation;
+    }
+  }
+  return undefined;
+}
+
 /**
  * 按牌型强度顺序取命中牌型的搭配并集，并以 id 去重。
  * 同一搭配不会因多重牌型命中而重复出现。

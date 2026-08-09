@@ -23,6 +23,7 @@ import {
   createCastSheetMaterial,
   getCastSheetGeometry,
 } from './castEffectSprites.js';
+import { viewNearSign } from './coords.js';
 
 /**
  * 单位视图。各兵种用参考立绘做成公告板精灵（始终面向相机的面片），
@@ -42,13 +43,13 @@ export class UnitView {
   private readonly hpBaseY: number;
   /** 空中单位只抬高角色与血条，碰撞圈和阴影仍留在地面标示落点。 */
   private readonly isAir: boolean;
-  /** 有占地的建筑：无朝向切换、贴图宽铺满占地、底边对齐格子最下方。 */
+  /** 有占地的建筑：无朝向切换、贴图宽铺满占地、底边对齐画面近端格边。 */
   private readonly isBuilding: boolean;
   /**
-   * 建筑贴图/阴影相对逻辑中心沿 scene +Z 的偏移（= footprint/2）。
-   * sim 低 Y 为画面下方，对应 scene +Z，把底边落到占地格最靠下的那条边。
+   * 建筑贴图相对逻辑中心的底边偏移幅度（= footprint/2）。
+   * 实际 Z 符号随镜头近端翻转：蓝方视角 +Z，红方视角 -Z。
    */
-  private readonly buildingBaseOffsetZ: number = 0;
+  private readonly buildingBaseOffsetMag: number = 0;
   /** 振奋状态的脚下光环，默认隐藏并在快照标记时脉冲显示。 */
   private readonly inspireAura: THREE.Mesh;
 
@@ -123,8 +124,8 @@ export class UnitView {
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
     const footprint = config.footprint;
-    // 建筑贴图底边对齐占地格最下方（画面下方 = scene +Z）
-    this.buildingBaseOffsetZ = this.isBuilding ? footprint / 2 : 0;
+    // 幅度固定；首帧 update 再按镜头近端决定 +Z / -Z
+    this.buildingBaseOffsetMag = this.isBuilding ? footprint / 2 : 0;
     const color = bodyColor(faction, typeId);
     // 建筑按阵营取红/蓝专属贴图；普通单位仍共用一套立绘
     const sharedSprites = getSpriteMaterials(typeId, faction);
@@ -139,7 +140,7 @@ export class UnitView {
         back: sharedSprites.back.clone(),
       };
       if (this.isBuilding) {
-        // 贴图宽度铺满占地，高度按素材宽高比推算；底边落到占地格最下方
+        // 贴图宽度铺满占地，高度按素材宽高比推算；底边落到画面近端格边
         this.spriteWidth = footprint;
         this.spriteSize = footprint / Math.max(0.05, spriteDef.aspect);
       } else {
@@ -153,7 +154,8 @@ export class UnitView {
       this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
 
       this.billboard = new THREE.Group();
-      this.billboard.position.z = this.buildingBaseOffsetZ;
+      // 初始按蓝方近端占位；update 里随镜头翻转
+      this.billboard.position.z = this.buildingBaseOffsetMag;
       this.billboard.add(this.sprite);
       this.group.add(this.billboard);
 
@@ -276,11 +278,19 @@ export class UnitView {
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
     this.hpBaseY = topY + (this.isBuilding ? 0.45 : 0.35);
-    // 血条跟建筑贴图一起落到格子底边上方，避免仍挂在占地中心
-    this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetZ);
+    // 血条跟建筑贴图一起落到近端格边上方；符号在 update 里与贴图同步
+    this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetMag);
     this.hpAnchor.add(hpBack, this.hpFill);
 
     this.group.add(this.inspireAura, this.hpAnchor);
+  }
+
+  /** 把建筑贴图与血条锚到当前镜头的画面下方格边（蓝 +Z / 红 -Z）。 */
+  private applyBuildingNearEdge(camera: THREE.Camera): void {
+    if (!this.isBuilding || !this.billboard) return;
+    const offsetZ = this.buildingBaseOffsetMag * viewNearSign(camera);
+    this.billboard.position.z = offsetZ;
+    this.hpAnchor.position.z = offsetZ;
   }
 
   update(
@@ -309,11 +319,12 @@ export class UnitView {
     if (this.billboard && this.sprite) {
       this.billboard.quaternion.copy(camera.quaternion);
       if (this.isBuilding) {
-        // 建筑无朝向：固定正面、不做行走/攻击程序动画
+        // 建筑无朝向：固定正面、不做行走/攻击程序动画；底边随视角贴齐近端格边
         this.sprite.material = this.spriteMaterials!.front;
         this.sprite.position.set(0, 0, 0);
         this.sprite.rotation.z = 0;
         this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
+        this.applyBuildingNearEdge(camera);
       } else {
         this.updateSpriteDirection(sceneX, sceneZ, facingX, facingZ, camera);
         this.applySpritePose(state, attacking, timeSec);

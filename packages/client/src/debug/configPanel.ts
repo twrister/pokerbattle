@@ -354,11 +354,14 @@ async function persistDraftsToFile(
   }
 }
 
+/** 无本地记录时默认收起，避免进战时整屏遮挡战场。 */
 function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(COLLAPSE_KEY) === '1';
+    const stored = localStorage.getItem(COLLAPSE_KEY);
+    if (stored === null) return true;
+    return stored === '1';
   } catch {
-    return false;
+    return true;
   }
 }
 

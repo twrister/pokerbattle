@@ -7,15 +7,18 @@ describe('页面状态管理', () => {
     const leaveSolo = vi.fn();
     const leaveSandbox = vi.fn();
     const leaveDeckConfig = vi.fn();
+    const leaveVersus = vi.fn();
     const enterMenu = vi.fn(() => leaveMenu);
     const enterSolo = vi.fn(() => leaveSolo);
     const enterSandbox = vi.fn(() => leaveSandbox);
     const enterDeckConfig = vi.fn(() => leaveDeckConfig);
+    const enterVersus = vi.fn(() => leaveVersus);
     const screens = createScreenController({
       menu: enterMenu,
       solo: enterSolo,
       sandbox: enterSandbox,
       'deck-config': enterDeckConfig,
+      versus: enterVersus,
     });
 
     expect(screens.current).toBeNull();
@@ -49,6 +52,7 @@ describe('页面状态管理', () => {
       solo: () => vi.fn(),
       sandbox: () => vi.fn(),
       'deck-config': () => vi.fn(),
+      versus: () => vi.fn(),
     });
 
     screens.show('menu');

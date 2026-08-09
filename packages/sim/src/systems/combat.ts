@@ -1,9 +1,9 @@
 import { ONE, mul } from '../math/fixed.js';
-import { distSq } from '../math/vec2.js';
 import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
+import { isWithinAttackReach } from './combatRange.js';
 
 /** 复用邻居缓冲，避免每帧分配 */
 const neighbors: number[] = [];
@@ -68,9 +68,7 @@ function resolveAttack(world: World, unit: Unit): void {
   // 近战够不着飞行单位，前摇打空但不退冷却
   if (attack.kind === 'melee' && target.config.movementLayer === 'air') return;
 
-  const reach =
-    unit.stats.range + unit.config.radius + target.config.radius + ATTACK_RANGE_TOLERANCE;
-  if (distSq(unit.pos.x, unit.pos.y, target.pos.x, target.pos.y) > mul(reach, reach)) return;
+  if (!isWithinAttackReach(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
   if (attack.kind === 'melee') {
     target.hp -= unit.stats.damage;
@@ -92,11 +90,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
   // 主目标在空中则整次近战范围落空
   if (target.config.movementLayer === 'air') return;
 
-  const primaryReach =
-    unit.stats.range + unit.config.radius + target.config.radius + ATTACK_RANGE_TOLERANCE;
-  if (distSq(unit.pos.x, unit.pos.y, target.pos.x, target.pos.y) > mul(primaryReach, primaryReach)) {
-    return;
-  }
+  if (!isWithinAttackReach(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
   // 查询半径取「自身射程 + 双方最大半径 + 容差」，再按每个敌人各自 reach 过滤
   const queryRadius =
@@ -118,9 +112,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
     // 近战范围砍不到飞行单位
     if (other.config.movementLayer === 'air') continue;
 
-    const reach =
-      unit.stats.range + unit.config.radius + other.config.radius + ATTACK_RANGE_TOLERANCE;
-    if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) > mul(reach, reach)) continue;
+    if (!isWithinAttackReach(unit, other, ATTACK_RANGE_TOLERANCE)) continue;
 
     other.hp -= unit.stats.damage;
     // 标记范围受击，渲染层据此同步加强闪红

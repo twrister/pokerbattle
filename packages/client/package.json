@@ -18,6 +18,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@pb/net": "workspace:*",
     "@pb/sim": "workspace:*",
     "three": "^0.185.1"
   }

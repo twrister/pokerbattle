@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @pb/client dev",
+    "dev:server": "pnpm --filter @pb/server dev",
+    "dev:online": "concurrently -k -n client,server -c cyan,magenta \"pnpm --filter @pb/client dev\" \"pnpm --filter @pb/server dev\"",
     "build": "pnpm --filter @pb/client build",
     "preview": "pnpm --filter @pb/client preview",
     "official": "pnpm build && pnpm preview",
@@ -12,6 +14,7 @@
     "check": "pnpm -r check"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@11.20.0+sha512.9a6f330a95b66446ea088faf1521405a8a01f07fde7124cc9958dfed52d4bb436737e65b08f85f37b46fcba375092558ac51262b816844b22f63406ed166bfee"

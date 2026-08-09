@@ -1,6 +1,7 @@
 export interface MainMenuOptions {
   onStartSandbox: () => void;
   onStartSolo: () => void;
+  onStartVersus: () => void;
   onOpenDeckConfig: () => void;
 }
 
@@ -14,6 +15,7 @@ export interface MainMenuHandle {
 export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const root = required<HTMLElement>('#main-menu');
   const soloButton = required<HTMLButtonElement>('#btn-solo', root);
+  const matchButton = required<HTMLButtonElement>('#btn-match', root);
   const sandboxButton = required<HTMLButtonElement>('#btn-sandbox', root);
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const status = required<HTMLElement>('#lobby-status', root);
@@ -29,9 +31,11 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
 
   const startSandbox = (): void => options.onStartSandbox();
   const startSolo = (): void => options.onStartSolo();
+  const startVersus = (): void => options.onStartVersus();
   const openDeckConfig = (): void => options.onOpenDeckConfig();
 
   soloButton.addEventListener('click', startSolo);
+  matchButton.addEventListener('click', startVersus);
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   for (const button of placeholderButtons) {
@@ -50,6 +54,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     },
     dispose() {
       soloButton.removeEventListener('click', startSolo);
+      matchButton.removeEventListener('click', startVersus);
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       for (const button of placeholderButtons) {

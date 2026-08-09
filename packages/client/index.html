@@ -552,6 +552,13 @@
         bottom: max(16px, env(safe-area-inset-bottom));
       }
 
+      /* 联机：禁运行控制/改表/操作提示，避免调试面板盖住战场或误操作 */
+      #hud.is-versus #panel-controls,
+      #hud.is-versus #panel-config,
+      #hud.is-versus #panel-help {
+        display: none !important;
+      }
+
       /* 锚在右下角；column-reverse 让标题+切换钮始终贴底，展开收起位置不变 */
       #panel-config {
         bottom: 16px;
@@ -1507,9 +1514,9 @@
               单机模式
               <small>SOLO</small>
             </button>
-            <button id="btn-match" class="play-entry" type="button" data-placeholder="匹配">
-              匹配
-              <small>COMING SOON</small>
+            <button id="btn-match" class="play-entry" type="button">
+              联机对战
+              <small>VERSUS</small>
             </button>
           </div>
           <div id="lobby-status" role="status" aria-live="polite">功能正在筹备中</div>
@@ -1672,10 +1679,10 @@
         </div>
       </section>
 
-      <section class="panel" id="panel-config">
+      <section class="panel is-collapsed" id="panel-config">
         <div class="config-header">
           <div class="title">单位参数</div>
-          <button id="btn-config-toggle" type="button" aria-expanded="true">收起</button>
+          <button id="btn-config-toggle" type="button" aria-expanded="false">展开</button>
         </div>
         <div id="config-body">
           <div class="config-scroll">

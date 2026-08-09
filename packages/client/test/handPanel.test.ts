@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Rng } from '@pb/sim';
 import { createPokerCards, PokerDeck, type PlayingCard } from '../src/cards/deck.js';
 import { createHandPanel, type FormationSpawnRequest } from '../src/ui/handPanel.js';
 
@@ -174,6 +175,22 @@ describe('单机手牌交互', () => {
     expect(label).toContain('前：');
     expect(label).toContain('后：');
 
+    panel.dispose();
+  });
+
+  it('手牌未变时 syncFromDeck 不重建搭配按钮，避免悬停闪烁', () => {
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      externalDraw: true,
+    });
+    selectAllCards();
+    const before = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    expect(before).toBeTruthy();
+
+    panel.syncFromDeck();
+    panel.syncFromDeck();
+
+    expect(document.querySelector('.formation-option')).toBe(before);
     panel.dispose();
   });
 
@@ -374,7 +391,7 @@ describe('单机手牌交互', () => {
 
   it('补牌重渲不会冲掉拖拽或落点提示', () => {
     const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => false);
-    // 4 张入堆、开局抽 3，留 1 张给补牌触发 render → syncSelection
+    // 先抽满再把 9 打回牌堆：手牌固定为 3-4-5 顺子，牌堆留 1 张供补牌触发重渲
     const ids = ['3-spades', '4-hearts', '5-clubs', '9-diamonds'];
     const all = createPokerCards();
     const cards = ids.map((id) => {
@@ -382,8 +399,11 @@ describe('单机手牌交互', () => {
       if (!found) throw new Error(`测试牌不存在：${id}`);
       return found;
     });
+    const deck = new PokerDeck(cards, new Rng(1));
+    deck.drawMany(4);
+    deck.play(['9-diamonds']);
     const panel = createHandPanel({
-      deck: new PokerDeck(cards, () => 0),
+      deck,
       onRequestSpawn,
       drawIntervalSeconds: 0.25,
     });
@@ -681,8 +701,8 @@ function deckWithCards(ids: readonly string[]): PokerDeck {
     if (!found) throw new Error(`测试牌不存在：${id}`);
     return found;
   });
-  // 随机源恒为 0：加权抽取总会落到当前列表第一张。
-  const deck = new PokerDeck(cards, () => 0);
+  // 固定种子：牌堆仅含目标牌，抽完即可得到确定手牌。
+  const deck = new PokerDeck(cards, new Rng(1));
   deck.drawMany(ids.length);
   return deck;
 }

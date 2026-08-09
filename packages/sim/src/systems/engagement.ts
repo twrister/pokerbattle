@@ -5,7 +5,9 @@ import {
   ENGAGEMENT_SLOT_COUNT,
   ENGAGEMENT_SLOT_INSET,
 } from '../config/tuning.js';
+import { isBuildingConfig } from '../config/units.js';
 import type { Unit } from '../entity/unit.js';
+import { computeBuildingEngageGoal } from './combatRange.js';
 
 /** ≈ 1/√2，用于对角槽位方向；配置期常量，tick 内不再出现浮点 */
 const INV_SQRT2: Fx = 46341; // fromFloat(0.707107) ≈ 46341
@@ -63,6 +65,11 @@ export function computeEngageGoal(attacker: Unit, target: Unit, out: Vec2): Vec2
       ? attacker.engageSlot
       : 0;
   const dir = SLOT_DIRS[slot]!;
+
+  // 建筑占地是方形：槽位放在扩大 AABB 外缘，避免对角目标点落进 footprint
+  if (isBuildingConfig(target.config)) {
+    return computeBuildingEngageGoal(attacker, target, dir, out);
+  }
 
   const contact = attacker.config.radius + target.config.radius;
   const reach = attacker.stats.range + contact;

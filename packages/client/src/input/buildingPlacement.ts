@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import {
+  Faction,
   UNIT_CONFIGS,
-  type Faction,
+  halfCourtYRange,
+  isBuildingInsideHalfCourt,
   type UnitTypeId,
   buildingCellRange,
   fromFloat,
@@ -11,7 +13,7 @@ import {
   type World,
 } from '@pb/sim';
 import { ARENA_H, ARENA_W, toSceneX, toSceneZ } from '../view/coords.js';
-import { BLUE_HALF_MAX_Y, isBuildingInsideBlueHalf, screenToSim } from './placement.js';
+import { screenToSim } from './placement.js';
 
 export interface BuildingPlacementOptions {
   domElement: HTMLElement;
@@ -22,8 +24,10 @@ export interface BuildingPlacementOptions {
   getFaction: () => Faction;
   getTypeId: () => UnitTypeId;
   onPlace: (command: ReturnType<typeof placeBuildingCommand>) => void;
-  /** 为 true 时只高亮/允许蓝方半场落点（单机出阵） */
+  /** 为 true 时只高亮/允许蓝方半场落点（单机出阵）；优先于 halfCourtFaction */
   blueHalfOnly?: boolean;
+  /** 限定己方半场；联机红方传 Faction.Red */
+  halfCourtFaction?: Faction;
   /**
    * 是否监听画布点击放置。
    * 单机从手牌拖拽时由外部松手落成，应设为 false，只保留绿格与吸附预览。
@@ -64,21 +68,23 @@ export function collectPlaceableBuildingCenters(
   world: World,
   typeId: UnitTypeId,
   blueHalfOnly: boolean,
+  halfCourtFaction?: Faction,
 ): Array<{ x: number; y: number }> {
   const config = UNIT_CONFIGS[typeId];
   if (!isBuildingConfig(config)) return [];
   const size = Math.max(1, Math.floor(config.footprint));
   const half = size / 2;
-  const maxY = blueHalfOnly ? BLUE_HALF_MAX_Y : ARENA_H;
+  const faction = halfCourtFaction ?? (blueHalfOnly ? Faction.Blue : undefined);
+  const yRange = faction !== undefined ? halfCourtYRange(faction) : { minY: 0, maxY: ARENA_H };
   const centers: Array<{ x: number; y: number }> = [];
 
-  for (let y = half; y <= maxY - half + 1e-6; y += 1) {
+  for (let y = yRange.minY + half; y <= yRange.maxY - half + 1e-6; y += 1) {
     for (let x = half; x <= ARENA_W - half + 1e-6; x += 1) {
       const cx = snapBuildingCenter(x, size);
       const cy = snapBuildingCenter(y, size);
       // 未对齐的采样点跳过，保证每个合法中心只出现一次
       if (Math.abs(cx - x) > 1e-6 || Math.abs(cy - y) > 1e-6) continue;
-      if (blueHalfOnly && !isBuildingInsideBlueHalf(cx, cy, size)) continue;
+      if (faction !== undefined && !isBuildingInsideHalfCourt(cx, cy, size, faction)) continue;
       if (!world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy))) continue;
       centers.push({ x: cx, y: cy });
     }
@@ -94,6 +100,7 @@ export function collectPlaceableBuildingCells(
   world: World,
   typeId: UnitTypeId,
   blueHalfOnly: boolean,
+  halfCourtFaction?: Faction,
 ): Array<{ x: number; y: number }> {
   const config = UNIT_CONFIGS[typeId];
   if (!isBuildingConfig(config)) return [];
@@ -101,7 +108,7 @@ export function collectPlaceableBuildingCells(
   const seen = new Set<string>();
   const cells: Array<{ x: number; y: number }> = [];
 
-  for (const center of collectPlaceableBuildingCenters(world, typeId, blueHalfOnly)) {
+  for (const center of collectPlaceableBuildingCenters(world, typeId, blueHalfOnly, halfCourtFaction)) {
     const rect = buildingCellRange(center.x, center.y, footprint);
     for (let gy = rect.minY; gy < rect.maxY; gy++) {
       for (let gx = rect.minX; gx < rect.maxX; gx++) {
@@ -131,10 +138,12 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     getTypeId,
     onPlace,
     blueHalfOnly = false,
+    halfCourtFaction,
     listenInput = true,
     exitAfterPlace = false,
     onExit,
   } = options;
+  const courtFaction = halfCourtFaction ?? (blueHalfOnly ? Faction.Blue : undefined);
 
   const root = new THREE.Group();
   root.name = 'building-placement';
@@ -191,7 +200,7 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
       clearSlots();
       return;
     }
-    const cells = collectPlaceableBuildingCells(world, typeId, blueHalfOnly);
+    const cells = collectPlaceableBuildingCells(world, typeId, blueHalfOnly, courtFaction);
 
     if (slotMesh) {
       slotsGroup.remove(slotMesh);
@@ -243,7 +252,8 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     const footprint = config.footprint;
     const cx = snapBuildingCenter(point.x, footprint);
     const cy = snapBuildingCenter(point.y, footprint);
-    const inHalf = !blueHalfOnly || isBuildingInsideBlueHalf(cx, cy, footprint);
+    const inHalf =
+      courtFaction === undefined || isBuildingInsideHalfCourt(cx, cy, footprint, courtFaction);
     const valid = inHalf && world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy));
     lastValid = valid;
     lastCenterX = cx;

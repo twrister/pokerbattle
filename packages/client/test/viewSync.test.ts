@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AIR_UNIT_HOVER_HEIGHT,
   Faction,
+  UNIT_CONFIGS,
   UnitState,
   World,
   fromFloat,
@@ -124,6 +125,34 @@ describe('渲染同步', () => {
     expect(SPRITE_DEFS.building_base?.frontUrl).toBe('buildings/base.png');
     expect(SPRITE_DEFS.building_base?.frontUrlRed).toBe('buildings/base_red.png');
     expect(SPRITE_DEFS.building_tower?.frontUrlRed).toBe('buildings/tower_red.png');
+  });
+
+  it('建筑贴图底边随镜头近端翻转（蓝 +Z / 红 -Z）', () => {
+    const half = UNIT_CONFIGS.building_base.footprint / 2;
+    const unitView = new UnitView(Faction.Red, 'building_base');
+    const findBillboard = (): THREE.Group | undefined =>
+      unitView.group.children.find(
+        (child) =>
+          child instanceof THREE.Group &&
+          child.children.some(
+            (nested) => nested instanceof THREE.Mesh && nested.geometry === SPRITE_GEOMETRY,
+          ),
+      ) as THREE.Group | undefined;
+
+    const blueCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+    blueCam.position.set(0, 10, 10);
+    blueCam.lookAt(0, 0, 0);
+    blueCam.updateMatrixWorld();
+    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, blueCam);
+    expect(findBillboard()?.position.z).toBeCloseTo(half, 5);
+
+    const redCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+    redCam.position.set(0, 10, -10);
+    redCam.lookAt(0, 0, 0);
+    redCam.updateMatrixWorld();
+    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, redCam);
+    expect(findBillboard()?.position.z).toBeCloseTo(-half, 5);
+    unitView.dispose();
   });
 
   it('龙使用正背面精灵并让角色悬浮在地面标记上方', () => {

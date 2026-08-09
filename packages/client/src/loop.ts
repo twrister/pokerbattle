@@ -1,8 +1,20 @@
-import { type Command, type Snapshot, TICK_RATE, World, takeSnapshot } from '@pb/sim';
+import {
+  MatchState,
+  type Command,
+  type Snapshot,
+  TICK_RATE,
+  World,
+  takeSnapshot,
+} from '@pb/sim';
 
 const STEP_MS = 1000 / TICK_RATE;
 /** 单帧最多补几个逻辑帧。标签页切回来时时间差可能有好几秒，不设上限会卡死。 */
 const MAX_CATCHUP_STEPS = 8;
+
+export interface SimLoopOptions {
+  /** 为 true 时用 MatchState（牌堆+出牌校验），单机/联机对局用；沙盒仍走裸 World。 */
+  withMatch?: boolean;
+}
 
 /**
  * 固定步长驱动器。
@@ -12,6 +24,7 @@ const MAX_CATCHUP_STEPS = 8;
  */
 export class SimLoop {
   readonly world: World;
+  readonly match: MatchState | null;
   paused = false;
   speed = 1;
 
@@ -21,8 +34,14 @@ export class SimLoop {
   private accumulator = 0;
   private readonly pending: Command[] = [];
 
-  constructor(seed = 1) {
-    this.world = new World(seed);
+  constructor(seed = 1, options: SimLoopOptions = {}) {
+    if (options.withMatch) {
+      this.match = new MatchState(seed);
+      this.world = this.match.world;
+    } else {
+      this.match = null;
+      this.world = new World(seed);
+    }
     this.curr = takeSnapshot(this.world);
     this.prev = this.curr;
   }
@@ -49,7 +68,8 @@ export class SimLoop {
   }
 
   stepOnce(): void {
-    this.world.step(this.pending);
+    if (this.match) this.match.step(this.pending);
+    else this.world.step(this.pending);
     this.pending.length = 0;
     this.prev = this.curr;
     this.curr = takeSnapshot(this.world);
@@ -62,7 +82,12 @@ export class SimLoop {
   }
 
   reset(): void {
-    this.world.clear();
+    if (this.match) {
+      this.match.clear();
+      this.match.seedStartingCastles();
+    } else {
+      this.world.clear();
+    }
     this.pending.length = 0;
     this.accumulator = 0;
     this.curr = takeSnapshot(this.world);

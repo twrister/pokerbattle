@@ -1,17 +1,17 @@
 import {
+  detectHandCategories,
+  findStrongestHand,
   getFormationsFor,
   isBuildingOnlyFormation,
-  UNIT_CONFIGS,
-  type CardFormation,
-  type UnitTypeId,
-} from '@pb/sim';
-import {
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
   PokerDeck,
+  UNIT_CONFIGS,
+  type CardFormation,
   type PlayingCard,
-} from '../cards/deck.js';
-import { detectHandCategories, findStrongestHand } from '../cards/handCategory.js';
+  type UnitTypeId,
+} from '@pb/sim';
+import { cardImageUrl } from '../cards/cardImageUrl.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
 const PLAY_ANIMATION_MS = 360;
@@ -44,6 +44,15 @@ export interface FormationSpawnRequest {
 export interface HandPanelOptions {
   drawIntervalSeconds?: number;
   deck?: PokerDeck;
+  /**
+   * 抽牌由 MatchState tick 驱动时设为 true：update 不再按墙钟抽牌。
+   * 可配合 getDrawRemainingMs 显示倒计时。
+   */
+  externalDraw?: boolean;
+  /** 出牌扣牌由 MatchState.step 负责时设为 true，避免与面板本地 deck.play 双重消耗。 */
+  externalCardConsume?: boolean;
+  /** 外部倒计时（毫秒）；提供则覆盖内部 remainingMs 显示。 */
+  getDrawRemainingMs?: () => number;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
   /**
@@ -68,6 +77,8 @@ export interface HandPanelHandle {
   readonly deck: PokerDeck;
   update: (deltaMs: number) => void;
   setDrawInterval: (seconds: number) => void;
+  /** MatchState 步进后同步手牌 DOM（外部抽牌/扣牌时用）。 */
+  syncFromDeck: () => void;
   /** 取景参数变更后重渲当前阵型按钮缩略图。 */
   refreshFormations: () => void;
   dispose: () => void;
@@ -109,6 +120,16 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let layoutGeneration = 0;
   /** 用于丢弃上一批阵型按钮尚未返回的缩略图。 */
   let thumbnailGeneration = 0;
+  /**
+   * 上次 syncFromDeck/render 同步过的手牌 id 序列。
+   * MatchState 每 tick 都会调 syncFromDeck，手牌未变时跳过重建，避免搭配按钮 :hover 闪烁。
+   */
+  let lastSyncedHandSignature = '';
+  /**
+   * 上次渲染的阵型按钮签名（含显隐）。
+   * syncSelection 较频繁，列表未变时保留 DOM，避免悬停态被 replaceChildren 冲掉。
+   */
+  let lastFormationRenderKey = '';
   /** 正在拖拽的阵型 id；null 表示当前没有出兵手势。 */
   let dragFormationId: string | null = null;
   let dragPointerId: number | null = null;
@@ -125,7 +146,10 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let actionStatus: string | null = null;
 
   root.classList.add('is-active');
-  for (const card of deck.drawMany(INITIAL_HAND_SIZE)) knownCardIds.delete(card.id);
+  // MatchState 已发过初始手牌时不要再抽，否则两端牌面会分叉
+  if (deck.hand.length === 0) {
+    deck.drawMany(INITIAL_HAND_SIZE);
+  }
   render();
 
   /** 按锚点到当前牌刷新临时选中闭区间；绝不在按下期间改正式选中。 */
@@ -262,8 +286,12 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const timer = window.setTimeout(() => {
       pendingTimers.delete(timer);
       if (disposed) return;
-      const playedCards = deck.play(playedIds);
+      // 联机/MatchState：扣牌已在 step 内完成，这里只清 UI 状态
+      const playedCards = options.externalCardConsume
+        ? cards
+        : deck.play(playedIds);
       for (const card of playedCards) knownCardIds.delete(card.id);
+      for (const id of playedIds) knownCardIds.delete(id);
       selected.clear();
       formations = [];
       playing = false;
@@ -504,6 +532,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
   }
 
+  /** 手牌 id 有序列表，用作外部同步是否需要重建 DOM 的判据。 */
+  function handSignature(): string {
+    return deck.hand.map((card) => card.id).join('\0');
+  }
+
   /** 重建最多十张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
     const previousRects = captureCardRects();
@@ -523,7 +556,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
         <span class="playing-card-inner">
           <span class="playing-card-face playing-card-back"></span>
           <span class="playing-card-face playing-card-front">
-            <img src="${card.imageUrl}" alt="${card.label}" draggable="false" />
+            <img src="${cardImageUrl(card)}" alt="${card.label}" draggable="false" />
           </span>
         </span>
       `;
@@ -539,6 +572,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       }
     });
     cardsElement.replaceChildren(fragment);
+    lastSyncedHandSignature = handSignature();
     syncStatus();
     // 先恢复选中拉高，再量新坐标，避免 FLIP 把选中态高度差算进去。
     syncSelection();
@@ -556,20 +590,28 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardElement.classList.toggle('is-preview', isPreview);
       cardElement.setAttribute('aria-pressed', String(isSelected));
     }
-    renderFormations();
+    renderFormations(false);
     selectBestButton.disabled = playing || deck.hand.length === 0;
     refreshStatus();
   }
 
   /** 根据正式选中牌识别牌型并列出兵种搭配按钮（只放 3D 缩略图，说明走 aria-label）。 */
-  function renderFormations(): void {
+  function renderFormations(force: boolean): void {
     const selectedCards = deck.hand.filter((card) => selected.has(card.id));
     const categories = detectHandCategories(selectedCards);
     formations = getFormationsFor(categories);
+    const visible = formations.length > 0 && !playing;
+    const renderKey = visible ? formations.map((formation) => formation.id).join('\0') : '';
+    // 列表未变时保留按钮节点，否则每 tick/每次 syncSelection 都会打断 :hover。
+    if (!force && renderKey === lastFormationRenderKey) {
+      formationsElement.classList.toggle('is-visible', visible);
+      return;
+    }
+    lastFormationRenderKey = renderKey;
     formationsElement.replaceChildren();
-    formationsElement.classList.toggle('is-visible', formations.length > 0 && !playing);
+    formationsElement.classList.toggle('is-visible', visible);
     const generation = ++thumbnailGeneration;
-    if (formations.length === 0 || playing) return;
+    if (!visible) return;
 
     const fragment = document.createDocumentFragment();
     for (const formation of formations) {
@@ -610,14 +652,26 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   function syncStatus(): void {
     pileCount.textContent = String(deck.availableCount);
     handCount.textContent = `${deck.hand.length}/${MAX_HAND_SIZE}`;
+    const ms = options.getDrawRemainingMs?.() ?? remainingMs;
     countdown.textContent =
-      deck.hand.length >= MAX_HAND_SIZE ? '已满' : `${Math.max(remainingMs, 0) / 1000}`.replace(/(\.\d).*$/, '$1') + 's';
+      deck.hand.length >= MAX_HAND_SIZE
+        ? '已满'
+        : `${Math.max(ms, 0) / 1000}`.replace(/(\.\d).*$/, '$1') + 's';
   }
 
   return {
     deck,
     update(deltaMs: number) {
-      if (disposed || playing || deck.hand.length >= MAX_HAND_SIZE) {
+      if (disposed) {
+        syncStatus();
+        return;
+      }
+      // MatchState 负责抽牌时只刷新倒计时文案
+      if (options.externalDraw) {
+        syncStatus();
+        return;
+      }
+      if (playing || deck.hand.length >= MAX_HAND_SIZE) {
         syncStatus();
         return;
       }
@@ -636,8 +690,20 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       remainingMs = Math.min(remainingMs, nextInterval);
       syncStatus();
     },
+    syncFromDeck() {
+      if (disposed || playing) {
+        syncStatus();
+        return;
+      }
+      // 仅倒计时/牌数变化时不要整页重建，否则搭配按钮会每 tick 闪一次。
+      if (handSignature() === lastSyncedHandSignature) {
+        syncStatus();
+        return;
+      }
+      render();
+    },
     refreshFormations() {
-      renderFormations();
+      renderFormations(true);
     },
     dispose() {
       disposed = true;

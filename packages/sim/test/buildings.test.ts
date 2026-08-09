@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Faction } from '../src/entity/unit.js';
+import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { buildingCellRange, snapBuildingCenter } from '../src/nav/buildingGrid.js';
 import { CommandKind, placeBuildingCommand } from '../src/commands.js';
@@ -84,5 +84,24 @@ describe('建筑系统', () => {
     world.step([placeBuildingCommand(Faction.Blue, 'building_base', fromFloat(1), fromFloat(1))]);
     expect(world.units.length).toBe(0);
     expect(CommandKind.PlaceBuilding).toBe(1);
+  });
+
+  it('近战贴基地四角可进入攻击并造成伤害', () => {
+    // 占地 [7,11)×[14,18)，四角外侧（碰撞圆贴角）
+    const corners: ReadonlyArray<readonly [number, number]> = [
+      [6.6, 13.6],
+      [11.4, 13.6],
+      [6.6, 18.4],
+      [11.4, 18.4],
+    ];
+    for (const [x, y] of corners) {
+      const world = new World(1);
+      const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(16))!;
+      const hp0 = base.hp;
+      const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(x), fromFloat(y));
+      for (let i = 0; i < 60; i++) world.step();
+      expect(unit.state, `corner (${x},${y}) should Attack`).toBe(UnitState.Attack);
+      expect(base.hp, `corner (${x},${y}) should deal damage`).toBeLessThan(hp0);
+    }
   });
 });

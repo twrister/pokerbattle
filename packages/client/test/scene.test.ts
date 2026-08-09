@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARENA_H, ARENA_W } from '../src/view/coords.js';
+import { ARENA_H, ARENA_W, viewNearSign } from '../src/view/coords.js';
+import { Faction } from '@pb/sim';
 import {
   applySoloCameraPose,
   calculateSoloOrthoBounds,
@@ -22,6 +23,26 @@ describe('单机正交镜头', () => {
     expect(camera.position.y).toBeCloseTo(camera.position.z, 5);
     expect(camera.position.z).toBeGreaterThan(0);
     expect(camera.up.y).toBe(1);
+  });
+
+  it('红方视角从 -Z 侧俯视，己方仍在画面下方', () => {
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+    applySoloCameraPose(camera, 45, Faction.Red);
+    expect(camera.position.z).toBeLessThan(0);
+    expect(camera.position.y).toBeCloseTo(-camera.position.z, 5);
+    expect(viewNearSign(camera)).toBe(-1);
+
+    applySoloCameraPose(camera, 90, Faction.Red);
+    expect(camera.up.z).toBe(1);
+    expect(viewNearSign(camera)).toBe(-1);
+  });
+
+  it('蓝方视角近端符号为 +1（斜视与正上俯视）', () => {
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+    applySoloCameraPose(camera, 45, Faction.Blue);
+    expect(viewNearSign(camera)).toBe(1);
+    applySoloCameraPose(camera, 90, Faction.Blue);
+    expect(viewNearSign(camera)).toBe(1);
   });
 
   it('90° 时退回正上俯视并保持蓝方在画面下方', () => {

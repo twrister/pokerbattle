@@ -4,6 +4,7 @@ import { isBuildingConfig } from '../config/units.js';
 import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
+import { isWithinAttackReach } from './combatRange.js';
 import { NO_ENGAGE_SLOT } from './engagement.js';
 
 const desiredFacing = vec();
@@ -67,15 +68,10 @@ export function updateAi(world: World): void {
       continue;
     }
 
-    // 射程按边缘到边缘算，所以要把双方的碰撞半径都加上，
-    // 否则大体型单位会因为半径撑开而永远够不到对方
-    const contact = unit.config.radius + target.config.radius;
-    const enterReach = unit.stats.range + contact;
-    const exitReach = enterReach + ATTACK_EXIT_HYSTERESIS;
+    // 单位目标按双方圆半径边缘距；建筑目标按占地 AABB 表面距（见 combatRange）
     const gapSq = distSq(unit.pos.x, unit.pos.y, target.pos.x, target.pos.y);
-
-    const inEnter = gapSq <= mul(enterReach, enterReach);
-    const inExit = gapSq <= mul(exitReach, exitReach);
+    const inEnter = isWithinAttackReach(unit, target);
+    const inExit = isWithinAttackReach(unit, target, ATTACK_EXIT_HYSTERESIS);
 
     if (unit.state === UnitState.Attack ? inExit : inEnter) {
       unit.state = UnitState.Attack;

@@ -1,4 +1,4 @@
-export type AppScreen = 'menu' | 'deck-config' | 'sandbox' | 'solo';
+export type AppScreen = 'menu' | 'deck-config' | 'sandbox' | 'solo' | 'versus';
 export type EnterScreen = () => () => void;
 
 export interface ScreenController {

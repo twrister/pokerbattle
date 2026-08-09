@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { ARENA_HEIGHT, ARENA_WIDTH, toFloat } from '@pb/sim';
 
 /** 场地尺寸的浮点版本，渲染层用 */
@@ -9,6 +10,17 @@ export const ARENA_H = toFloat(ARENA_HEIGHT);
  * Y 轴取反：sim +Y（朝敌方）→ scene -Z，这样镜头在 +Z 侧时蓝方半场在画面下方。
  * 所有坐标转换都收敛到这几个函数，别的地方不要自己算偏移。
  */
+
+/**
+ * 画面近端（己方 / 画面下方）在 scene Z 上的符号，与 applySoloCameraPose 的 towardNear 一致。
+ * 斜视读 camera.position.z；正上俯视 position.z≈0，改用 up.z（近端与画面上方相反）。
+ */
+export function viewNearSign(camera: THREE.Camera): number {
+  if (Math.abs(camera.position.z) > 1e-3) return Math.sign(camera.position.z);
+  if (Math.abs(camera.up.z) > 1e-3) return -Math.sign(camera.up.z);
+  return 1;
+}
+
 export function toSceneX(simX: number): number {
   return simX - ARENA_W / 2;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Rng } from '@pb/sim';
 import {
   FRESH_CARD_WEIGHT,
   MAX_HAND_SIZE,
@@ -6,6 +7,7 @@ import {
   RETURNED_CARD_WEIGHT,
   createPokerCards,
 } from '../src/cards/deck.js';
+import { cardImageUrl } from '../src/cards/cardImageUrl.js';
 
 describe('单机扑克牌堆', () => {
   it('生成包含四花色和大小王的 54 张唯一牌', () => {
@@ -14,11 +16,11 @@ describe('单机扑克牌堆', () => {
     expect(cards).toHaveLength(54);
     expect(new Set(cards.map((card) => card.id))).toHaveLength(54);
     expect(cards.filter((card) => card.rank === 'JOKER')).toHaveLength(2);
-    expect(cards.find((card) => card.id === 'A-spades')?.imageUrl).toBe('/cards/A_1.png');
+    expect(cardImageUrl(cards.find((card) => card.id === 'A-spades')!)).toBe('/cards/A_1.png');
   });
 
   it('抽牌离开有限牌堆且不能突破十张手牌上限', () => {
-    const deck = new PokerDeck(createPokerCards(), () => 0);
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const drawn = deck.drawMany(20);
 
     expect(drawn).toHaveLength(MAX_HAND_SIZE);
@@ -29,7 +31,7 @@ describe('单机扑克牌堆', () => {
   });
 
   it('出牌后回到牌堆并永久使用更低抽取权重', () => {
-    const deck = new PokerDeck(createPokerCards(), () => 0);
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const [card] = deck.drawMany(1);
 
     expect(card).toBeDefined();
@@ -46,7 +48,7 @@ describe('单机扑克牌堆', () => {
     const allCards = createPokerCards();
     const ids = ['3-diamonds', 'A-clubs', 'joker-red', '2-hearts', 'joker-black', 'K-spades'];
     const cards = ids.map((id) => allCards.find((card) => card.id === id)!);
-    const deck = new PokerDeck(cards, () => 0);
+    const deck = new PokerDeck(cards, new Rng(1));
 
     deck.drawMany(cards.length);
 

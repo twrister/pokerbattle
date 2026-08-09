@@ -52,6 +52,7 @@ export {
   createCardFormation,
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
+  findFormationById,
   resetCardFormationsToDefault,
   validateCardFormationDrafts,
   type CardFormation,
@@ -68,6 +69,31 @@ export {
   resolveFormationSpawnsFx,
   validateBuildingOnlyRows,
 } from './config/cardFormations.js';
+export {
+  HALF_COURT_MID_Y,
+  halfCourtSafeAnchor,
+  halfCourtSafeBuildingAnchor,
+  halfCourtYRange,
+  isBuildingInsideHalfCourt,
+  isFormationInsideHalfCourt,
+  type SimPoint as HalfCourtPoint,
+} from './config/halfCourt.js';
+
+export {
+  FRESH_CARD_WEIGHT,
+  INITIAL_HAND_SIZE,
+  MAX_HAND_SIZE,
+  PokerDeck,
+  RETURNED_CARD_WEIGHT,
+  compareCardsByStrength,
+  createPokerCards,
+  getCardStrength,
+  type CardRank,
+  type CardSuit,
+  type PlayingCard,
+} from './cards/deck.js';
+export { detectHandCategories, findStrongestHand } from './cards/handCategory.js';
+export { DRAW_INTERVAL_TICKS, MatchState } from './match/matchState.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';
@@ -89,8 +115,10 @@ export {
   type Command,
   CommandKind,
   type PlaceBuildingCommand,
+  type PlayFormationCommand,
   type SpawnCommand,
   placeBuildingCommand,
+  playFormationCommand,
   spawnCommand,
 } from './commands.js';
 export {

@@ -105,10 +105,18 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 export default defineConfig({
   plugins: [unitConfigWritePlugin(), cardFormationWritePlugin()],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
-  server: { host: true, port: 8081, open: true },
+  // /ws 代理到权威服务器，前端统一连同源路径，避免跨域与双端口硬编码
+  server: {
+    host: true,
+    port: 8081,
+    open: true,
+    proxy: {
+      '/ws': { target: 'ws://localhost:8090', ws: true },
+    },
+  },
+  // 与 sim 一样直接吃 TS 源码，改协议可热更新
+  optimizeDeps: { exclude: ['@pb/sim', '@pb/net'] },
   // 正式服：预览 build 产物，隐藏单位参数 / 单机运行控制 / 卡组编辑入口
   preview: { host: true, port: 8080, strictPort: true },
   build: { target: 'es2022' },
-  // @pb/sim 直接以 TS 源码形式被引用，跳过依赖预打包，改动可即时热更新
-  optimizeDeps: { exclude: ['@pb/sim'] },
 });

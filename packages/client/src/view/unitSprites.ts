@@ -87,7 +87,7 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 164 / 203,
     sourceFacing: 1,
   },
-  // 建筑正背同图，无朝向切换；尺寸由 unitView 按 footprint 铺满，底边对齐占地格最下方
+  // 建筑正背同图，无朝向切换；尺寸由 unitView 按 footprint 铺满，底边对齐画面近端格边
   building_base: {
     frontUrl: 'buildings/base.png',
     backUrl: 'buildings/base.png',
