@@ -133,28 +133,70 @@ function enterBattleSession(mode: BattleMode): () => void {
   };
 
   /**
-   * 蓝方出兵：拖拽给屏幕落点，点击按钮则退回半场中央的安全点。
-   * 整阵越界直接拒绝（不逐单位 clamp，否则贴边阵型会被压扁重叠），由手牌面板提示重放。
-   * 单建筑：松手落成 PlaceBuilding（吸附 + 半场 + 重叠）；拖拽过程中的绿格由 onBuildingDrag* 负责。
+   * 校验蓝方落点是否可出兵/建造（不入队）。
+   * 非建筑：point 为 null 时用半场安全锚点（按钮内自动放置）。
+   * 建筑：必须带屏幕落点，不支持自动放置。
    */
-  const requestSpawn = (request: FormationSpawnRequest): boolean => {
-    if (isBuildingOnlyFormation(request.formation)) {
-      const typeId = getFormationBuildingTypeId(request.formation)!;
+  const canSpawnAt = (
+    formation: CardFormation,
+    point: { clientX: number; clientY: number } | null,
+  ): boolean => {
+    if (isBuildingOnlyFormation(formation)) {
+      // 建筑只能拖到战场指定格，拒绝 null 自动锚点
+      if (!point) return false;
+      const typeId = getFormationBuildingTypeId(formation)!;
       const footprint = UNIT_CONFIGS[typeId].footprint;
-      const anchor = request.point
-        ? screenToSim(
-            sceneContext.renderer.domElement,
-            sceneContext.camera,
-            sceneContext.groundPlane,
-            request.point.clientX,
-            request.point.clientY,
-          )
-        : blueHalfSafeAnchor(request.formation);
+      const anchor = screenToSim(
+        sceneContext.renderer.domElement,
+        sceneContext.camera,
+        sceneContext.groundPlane,
+        point.clientX,
+        point.clientY,
+      );
       if (!anchor) return false;
       const cx = snapBuildingCenter(anchor.x, footprint);
       const cy = snapBuildingCenter(anchor.y, footprint);
       if (!isBuildingInsideBlueHalf(cx, cy, footprint)) return false;
-      if (!loop.world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy))) return false;
+      return loop.world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy));
+    }
+
+    const anchor = point
+      ? screenToSim(
+          sceneContext.renderer.domElement,
+          sceneContext.camera,
+          sceneContext.groundPlane,
+          point.clientX,
+          point.clientY,
+        )
+      : blueHalfSafeAnchor(formation);
+    if (!anchor) return false;
+    const points = resolveFormationSpawns(formation, Faction.Blue, anchor.x, anchor.y);
+    return isFormationInsideBlueHalf(points);
+  };
+
+  /**
+   * 蓝方出兵：拖拽给屏幕落点；非建筑点击按钮则退回半场中央安全点。
+   * 整阵越界直接拒绝（不逐单位 clamp，否则贴边阵型会被压扁重叠），由手牌面板提示重放。
+   * 单建筑：必须拖到战场松手落成 PlaceBuilding（吸附 + 半场 + 重叠）；绿格由 onBuildingDrag* 负责。
+   */
+  const requestSpawn = (request: FormationSpawnRequest): boolean => {
+    if (!canSpawnAt(request.formation, request.point)) return false;
+
+    if (isBuildingOnlyFormation(request.formation)) {
+      const typeId = getFormationBuildingTypeId(request.formation)!;
+      const footprint = UNIT_CONFIGS[typeId].footprint;
+      // canSpawnAt 已拒绝 null；此处 point 必有值
+      const point = request.point!;
+      const anchor = screenToSim(
+        sceneContext.renderer.domElement,
+        sceneContext.camera,
+        sceneContext.groundPlane,
+        point.clientX,
+        point.clientY,
+      );
+      if (!anchor) return false;
+      const cx = snapBuildingCenter(anchor.x, footprint);
+      const cy = snapBuildingCenter(anchor.y, footprint);
       loop.enqueue(placeBuildingCommand(Faction.Blue, typeId, fromFloat(cx), fromFloat(cy)));
       return true;
     }
@@ -171,7 +213,6 @@ function enterBattleSession(mode: BattleMode): () => void {
     if (!anchor) return false;
 
     const points = resolveFormationSpawns(request.formation, Faction.Blue, anchor.x, anchor.y);
-    if (!isFormationInsideBlueHalf(points)) return false;
     for (const point of points) {
       loop.enqueue(
         spawnCommand(Faction.Blue, point.typeId, fromFloat(point.x), fromFloat(point.y)),
@@ -184,6 +225,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     ? createHandPanel({
         drawIntervalSeconds: 3,
         onRequestSpawn: requestSpawn,
+        canDropAt: (point, formation) => canSpawnAt(formation, point),
         onBuildingDragStart,
         onBuildingDragMove: (clientX, clientY) => {
           soloBuildingPreview?.syncPointer(clientX, clientY);

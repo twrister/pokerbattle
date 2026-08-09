@@ -770,14 +770,22 @@
         display: flex;
       }
 
-      /* 命令区常驻一行提示高度，出现/消失不会顶动下方手牌。 */
+      /*
+       * 手牌提示：无阵型时落在 hand-bar 正中；有阵型时抬到工具栏上方整行，
+       * 避免与搭配按钮抢位，且显隐不顶动手牌。
+       */
       #hand-status {
-        min-height: 1.5em;
-        margin-bottom: 3px;
+        grid-area: formations;
+        align-self: center;
+        justify-self: center;
+        z-index: 1;
+        height: 30px;
         padding: 0 10px;
         color: transparent;
-        font-size: 11px;
+        font-size: 20px;
+        line-height: 30px;
         text-align: center;
+        pointer-events: none;
         transition: color 0.18s;
       }
 
@@ -790,8 +798,9 @@
         position: relative;
         display: grid;
         grid-template-columns: 1fr auto 1fr;
+        grid-template-areas: 'info formations actions';
         align-items: center;
-        gap: 8px;
+        column-gap: 8px;
         width: min(100vw, calc(100svh * 0.5625));
         min-height: 98px;
         margin-bottom: 4px;
@@ -801,7 +810,21 @@
         pointer-events: auto;
       }
 
+      /* 有牌型按钮时：提示独占上方一行，下方仍是信息 / 阵型 / 推荐 */
+      .hand-bar:has(#hand-formations.is-visible) {
+        grid-template-areas:
+          'status status status'
+          'info formations actions';
+        grid-template-rows: 30px auto;
+        row-gap: 3px;
+      }
+
+      .hand-bar:has(#hand-formations.is-visible) #hand-status {
+        grid-area: status;
+      }
+
       .hand-toolbar-info {
+        grid-area: info;
         display: flex;
         flex-direction: column;
         align-items: flex-start;
@@ -811,6 +834,7 @@
       }
 
       .hand-toolbar-actions {
+        grid-area: actions;
         display: flex;
         align-items: center;
         justify-self: end;
@@ -822,8 +846,9 @@
         font-variant-numeric: tabular-nums;
       }
 
-      /* 兵种搭配按钮居中；无可用搭配时中间留空，左右信息位置不变。 */
+      /* 兵种搭配按钮居中；无可用搭配时中间留给 #hand-status，左右信息位置不变。 */
       #hand-formations {
+        grid-area: formations;
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
@@ -914,6 +939,15 @@
 
       #hand-arrow-head {
         fill: rgba(120, 232, 176, 0.95);
+      }
+
+      /* 落点非法时箭头改红，与建筑预览非法色一致 */
+      #hand-arrow.is-invalid #hand-arrow-path {
+        stroke: rgba(240, 83, 83, 0.9);
+      }
+
+      #hand-arrow.is-invalid #hand-arrow-head {
+        fill: rgba(240, 83, 83, 0.95);
       }
 
       #hand-cards {
@@ -1638,8 +1672,8 @@
       </section>
 
       <section id="solo-hand" aria-label="手牌">
-        <div id="hand-status" role="status" aria-live="polite"></div>
         <div class="hand-bar">
+          <div id="hand-status" role="status" aria-live="polite"></div>
           <div class="hand-toolbar-info">
             <span>牌堆 <strong id="hand-pile-count">54</strong></span>
             <span>手牌 <strong id="hand-count">0/10</strong></span>
@@ -1657,7 +1691,8 @@
     <!-- 出兵拖拽箭头层：铺满视口、不吃事件，坐标直接用 client 像素 -->
     <svg id="hand-arrow" aria-hidden="true">
       <path id="hand-arrow-path"></path>
-      <polygon id="hand-arrow-head" points="0,0 -26,-11 -19,0 -26,11"></polygon>
+      <!-- 箭头尖朝屏幕上方（SVG Y 向下，故翼展落在 +Y） -->
+      <polygon id="hand-arrow-head" points="0,0 -11,26 0,19 11,26"></polygon>
     </svg>
 
     <script type="module" src="/src/main.ts"></script>

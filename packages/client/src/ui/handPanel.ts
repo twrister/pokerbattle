@@ -20,14 +20,21 @@ const LAYOUT_MOVE_MS = 280;
 const MIN_DRAW_INTERVAL_MS = 250;
 /** 选了牌但拼不出牌型时的提示。 */
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
+/** 选中超过牌型上限（5 张）时的提示。 */
+const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
 /** 拖到战场但整阵越界时的提示。 */
 const STATUS_INVALID_DROP = '请在己方半场内放置完整阵型';
 /** 拖拽建筑阵型时的操作提示。 */
 const STATUS_BUILDING_DRAG = '拖到绿色格子上松手放置';
+/** 单次出牌可识别的牌型最多张数。 */
+const MAX_CATEGORY_CARDS = 5;
 /** 箭头弧顶相对首尾连线的最大抬高像素。 */
 const ARROW_MAX_LIFT = 180;
 
-/** 一次出兵请求；point 为拖拽落点屏幕坐标，点按钮自动放置时为 null。 */
+/**
+ * 一次出兵请求；point 为拖拽落点屏幕坐标。
+ * 非建筑阵型点按钮自动放置时为 null；单建筑阵型必须带战场落点。
+ */
 export interface FormationSpawnRequest {
   formation: CardFormation;
   cards: readonly PlayingCard[];
@@ -39,6 +46,14 @@ export interface HandPanelOptions {
   deck?: PokerDeck;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
+  /**
+   * 拖拽时校验落点是否可放置；point 为 null 表示非建筑的按钮内自动放置。
+   * 未提供时：按钮内/战场上视为可放，其余区域为非法。
+   */
+  canDropAt?: (
+    point: { clientX: number; clientY: number } | null,
+    formation: CardFormation,
+  ) => boolean;
   /** 开始拖拽单建筑阵型：进入放置预览（绿格）。 */
   onBuildingDragStart?: (formation: CardFormation) => void;
   /** 拖拽建筑时同步吸附预览位置。 */
@@ -103,6 +118,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let suppressClick = false;
   /** 当前拖拽是否为单建筑阵型（决定是否走绿格预览）。 */
   let draggingBuilding = false;
+  /**
+   * 拖拽/落点等操作提示；有值时优先于选牌提示。
+   * 发牌与 syncSelection 只走 refreshStatus，不会冲掉这里的文案。
+   */
+  let actionStatus: string | null = null;
 
   root.classList.add('is-active');
   for (const card of deck.drawMany(INITIAL_HAND_SIZE)) knownCardIds.delete(card.id);
@@ -223,11 +243,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const cards = deck.hand.filter((card) => selected.has(card.id));
     if (cards.length === 0) return false;
     if (options.onRequestSpawn?.({ formation, cards, point }) === false) {
-      setStatus(STATUS_INVALID_DROP);
+      setActionStatus(STATUS_INVALID_DROP);
       return false;
     }
 
-    setStatus('');
+    setActionStatus(null);
     const playedIds = cards.map((card) => card.id);
     playing = true;
     formationsElement.querySelectorAll<HTMLButtonElement>('.formation-option').forEach((button) => {
@@ -287,7 +307,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (draggingBuilding) {
       options.onBuildingDragStart?.(formation);
       options.onBuildingDragMove?.(event.clientX, event.clientY);
-      setStatus(STATUS_BUILDING_DRAG);
+      setActionStatus(STATUS_BUILDING_DRAG);
     }
   };
 
@@ -298,7 +318,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   };
 
   /**
-   * 松手判定：按钮内 = 自动放置，战场上 = 指定落点，其余区域 = 取消。
+   * 松手判定：非建筑在按钮内 = 自动放置；建筑必须拖到战场松手，按钮内/场外一律取消。
    * 建筑在按下时已进入预览；先落成再卸绿格，避免预览先 dispose 导致校验脱节。
    */
   const onFormationPointerUp = (event: PointerEvent): void => {
@@ -315,12 +335,13 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
 
     if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
-      // 建筑点按不拖出：半场安全点自动落成
-      requestPlay(formation, null);
+      // 建筑禁止点击/按钮内自动放置，必须拖到绿格上松手
+      if (wasBuilding) setActionStatus(null);
+      else requestPlay(formation, null);
     } else if (isOverBattlefield(clientX, clientY)) {
       requestPlay(formation, { clientX, clientY });
     } else if (wasBuilding) {
-      setStatus('');
+      setActionStatus(null);
     }
     endFormationDrag(event.pointerId);
   };
@@ -328,10 +349,13 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const onFormationPointerCancel = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     endFormationDrag(event.pointerId);
-    setStatus('');
+    setActionStatus(null);
   };
 
-  /** 键盘/辅助技术触发的点击等价于自动放置；指针手势已处理过的 click 直接吞掉。 */
+  /**
+   * 非建筑：键盘/辅助技术触发的点击等价于自动放置。
+   * 建筑：只提示拖拽，不落成；指针手势已处理过的 click 直接吞掉。
+   */
   const onFormationClick = (event: Event): void => {
     if (suppressClick) {
       suppressClick = false;
@@ -342,7 +366,12 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     );
     if (!button || button.disabled) return;
     const formation = formations.find((entry) => entry.id === button.dataset.formationId) ?? null;
-    if (formation) requestPlay(formation, null);
+    if (!formation) return;
+    if (isBuildingOnlyFormation(formation)) {
+      setActionStatus(STATUS_BUILDING_DRAG);
+      return;
+    }
+    requestPlay(formation, null);
   };
 
   cardsElement.addEventListener('pointerdown', onPointerDown);
@@ -370,27 +399,60 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (wasBuilding) options.onBuildingDragEnd?.();
   }
 
-  /** 从按钮中心向指针画一条弧线，末端箭头随弧线切线旋转。 */
+  /**
+   * 从按钮中心向指针画弧线；控制点放在终点正下方，使二次贝塞尔末端切线始终朝上，
+   * 箭头尖也固定朝上。非法落点时整条箭头变红。
+   */
   function drawArrow(toX: number, toY: number): void {
     if (!dragButtonRect) return;
     const fromX = dragButtonRect.left + dragButtonRect.width / 2;
     const fromY = dragButtonRect.top + dragButtonRect.height / 2;
-    const lift = Math.min(Math.hypot(toX - fromX, toY - fromY) * 0.45, ARROW_MAX_LIFT) + 40;
-    const controlX = (fromX + toX) / 2;
-    const controlY = (fromY + toY) / 2 - lift;
+    // 二次贝塞尔末端切线方向为 P2−P1；控制点在终点下方即可保证切线朝屏幕上方
+    const approach = Math.min(Math.hypot(toX - fromX, toY - fromY) * 0.45, ARROW_MAX_LIFT) + 40;
+    const controlX = toX;
+    const controlY = toY + approach;
     arrowPath.setAttribute('d', `M ${fromX} ${fromY} Q ${controlX} ${controlY} ${toX} ${toY}`);
-    const angle = (Math.atan2(toY - controlY, toX - controlX) * 180) / Math.PI;
-    arrowHead.setAttribute('transform', `translate(${toX} ${toY}) rotate(${angle})`);
+    arrowHead.setAttribute('transform', `translate(${toX} ${toY})`);
+    arrowLayer.classList.toggle('is-invalid', !isArrowDropValid(toX, toY));
     arrowLayer.classList.add('is-visible');
   }
 
+  /** 当前拖拽落点是否可放置：非建筑可在按钮内自动放置；建筑仅战场坐标可放。 */
+  function isArrowDropValid(clientX: number, clientY: number): boolean {
+    const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
+    if (!formation || !dragButtonRect) return false;
+    if (isInsideRect(dragButtonRect, clientX, clientY)) {
+      // 建筑没有自动落点，停留在按钮上视为非法
+      if (isBuildingOnlyFormation(formation)) return false;
+      return options.canDropAt?.(null, formation) !== false;
+    }
+    if (!isOverBattlefield(clientX, clientY)) return false;
+    return options.canDropAt?.({ clientX, clientY }, formation) !== false;
+  }
+
   function hideArrow(): void {
-    arrowLayer.classList.remove('is-visible');
+    arrowLayer.classList.remove('is-visible', 'is-invalid');
     arrowPath.removeAttribute('d');
   }
 
-  /** 提示区留一行高度常驻，出现/消失不会顶动下方手牌。 */
-  function setStatus(text: string): void {
+  /** 设置/清除操作提示，再与选牌提示合并刷新。 */
+  function setActionStatus(text: string | null): void {
+    actionStatus = text && text.length > 0 ? text : null;
+    refreshStatus();
+  }
+
+  /**
+   * 刷新 #hand-status：操作提示优先，否则按选牌张数/牌型给出提示。
+   * 发牌重渲只应调用本函数，避免冲掉拖拽/落点文案。
+   */
+  function refreshStatus(): void {
+    let selectionStatus = '';
+    if (!playing && selected.size > MAX_CATEGORY_CARDS) {
+      selectionStatus = STATUS_TOO_MANY_CARDS;
+    } else if (!playing && selected.size > 0 && formations.length === 0) {
+      selectionStatus = STATUS_NO_CATEGORY;
+    }
+    const text = actionStatus ?? selectionStatus;
     statusElement.textContent = text;
     statusElement.classList.toggle('is-visible', text.length > 0);
   }
@@ -496,7 +558,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
     renderFormations();
     selectBestButton.disabled = playing || deck.hand.length === 0;
-    setStatus(!playing && selected.size > 0 && formations.length === 0 ? STATUS_NO_CATEGORY : '');
+    refreshStatus();
   }
 
   /** 根据正式选中牌识别牌型并列出兵种搭配按钮（只放 3D 缩略图，说明走 aria-label）。 */
@@ -596,7 +658,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       formationsElement.removeEventListener('pointercancel', onFormationPointerCancel);
       formationsElement.removeEventListener('click', onFormationClick);
       hideArrow();
-      setStatus('');
+      setActionStatus(null);
       cardsElement.replaceChildren();
       formationsElement.replaceChildren();
       formationsElement.classList.remove('is-visible');
