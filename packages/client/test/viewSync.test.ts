@@ -120,6 +120,12 @@ describe('渲染同步', () => {
     expect(scene.children.length).toBe(0);
   });
 
+  it('红方建筑使用专属贴图路径', () => {
+    expect(SPRITE_DEFS.building_base?.frontUrl).toBe('buildings/base.png');
+    expect(SPRITE_DEFS.building_base?.frontUrlRed).toBe('buildings/base_red.png');
+    expect(SPRITE_DEFS.building_tower?.frontUrlRed).toBe('buildings/tower_red.png');
+  });
+
   it('龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
     expect(SPRITE_DEFS.dragon?.frontUrl).toBe('units/dragon-front.png');
     expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');

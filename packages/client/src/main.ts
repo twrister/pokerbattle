@@ -104,6 +104,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   battleView.reset();
 
   const loop = new SimLoop(20260806);
+  // 单机开局即摆双方主堡，清场后也要重刷
+  if (isSolo) seedSoloStartingCastles(loop);
 
   /** 放兵与建造互斥：同一时间只挂一种地面点击监听 */
   let disableUnitPlacement = (): void => {};
@@ -240,6 +242,7 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   const clearBattlefield = (): void => {
     loop.reset();
+    if (isSolo) seedSoloStartingCastles(loop);
     battleView.invalidateUnitViews();
   };
 
@@ -408,6 +411,29 @@ function disposeApp(): void {
 }
 
 window.addEventListener('pagehide', disposeApp, { once: true });
+
+/**
+ * 单机开局：双方半场底端各落一座主堡（王室战争式国王塔位置）。
+ * 4×4 足迹贴齐各自底边：蓝方占 y∈[0,4)，红方占 y∈[28,32)。
+ */
+function seedSoloStartingCastles(target: SimLoop): void {
+  const footprint = UNIT_CONFIGS.building_base.footprint;
+  const centerX = ARENA_W / 2;
+  const edgeInset = footprint / 2;
+  target.enqueue(
+    placeBuildingCommand(Faction.Blue, 'building_base', fromFloat(centerX), fromFloat(edgeInset)),
+  );
+  target.enqueue(
+    placeBuildingCommand(
+      Faction.Red,
+      'building_base',
+      fromFloat(centerX),
+      fromFloat(ARENA_H - edgeInset),
+    ),
+  );
+  // 立刻结算指令，首帧就能看到城堡，而不是空场闪一下
+  target.stepOnce();
+}
 
 /** 一键摆一场混战，用来快速验证寻路、推挤和战斗结算 */
 function spawnBrawl(target: SimLoop): void {

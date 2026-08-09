@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { UnitTypeId } from '@pb/sim';
+import { Faction, type UnitTypeId } from '@pb/sim';
 
 /**
  * 单位精灵资源。参考图是白底像素风立绘，这里在加载时把白色背景抠成透明，
@@ -7,9 +7,12 @@ import type { UnitTypeId } from '@pb/sim';
  */
 
 export interface SpriteDef {
-  /** 面向相机与背向相机时使用的透明贴图 */
+  /** 面向相机与背向相机时使用的透明贴图（默认/蓝方） */
   frontUrl: string;
   backUrl: string;
+  /** 红方正背面贴图；缺省则与蓝方共用 */
+  frontUrlRed?: string;
+  backUrlRed?: string;
   /** 精灵可视高度 = 铁卫基准半径 × 体型 × 此值（图片四周有留白，倍率略大于圆柱时代的 2.6） */
   heightMul: number;
   /** 图片宽高比，避免非正方形素材被横向拉伸 */
@@ -88,14 +91,18 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
   building_base: {
     frontUrl: 'buildings/base.png',
     backUrl: 'buildings/base.png',
+    frontUrlRed: 'buildings/base_red.png',
+    backUrlRed: 'buildings/base_red.png',
     heightMul: 1,
-    // 与 buildings/base.png 像素尺寸一致，避免按旧图宽高比拉伸
+    // 与 buildings/base.png / base_red.png 像素尺寸一致，避免按旧图宽高比拉伸
     aspect: 235 / 291,
     sourceFacing: 1,
   },
   building_tower: {
     frontUrl: 'buildings/tower.png',
     backUrl: 'buildings/tower.png',
+    frontUrlRed: 'buildings/tower_red.png',
+    backUrlRed: 'buildings/tower_red.png',
     heightMul: 1,
     aspect: 177 / 222,
     sourceFacing: 1,
@@ -119,25 +126,51 @@ export interface SpriteMaterials {
   back: THREE.MeshBasicMaterial;
 }
 
-const materialCache = new Map<UnitTypeId, SpriteMaterials>();
+const materialCache = new Map<string, SpriteMaterials>();
 const textureCache = new Map<string, THREE.Texture>();
+
+/** 按阵营解析正背面贴图 URL；无红方专属图时回退蓝方。 */
+function resolveSpriteUrls(
+  def: SpriteDef,
+  faction: Faction,
+): { frontUrl: string; backUrl: string } {
+  if (faction === Faction.Red && def.frontUrlRed) {
+    return {
+      frontUrl: def.frontUrlRed,
+      backUrl: def.backUrlRed ?? def.frontUrlRed,
+    };
+  }
+  return { frontUrl: def.frontUrl, backUrl: def.backUrl };
+}
+
+/** 材质缓存键：有红方专属贴图时按阵营拆分，否则蓝红共用一份。 */
+function spriteMaterialCacheKey(typeId: UnitTypeId, faction: Faction): string {
+  const def = SPRITE_DEFS[typeId];
+  if (def?.frontUrlRed && faction === Faction.Red) return `${typeId}:red`;
+  return `${typeId}:blue`;
+}
 
 /**
  * 取某兵种正面/背面的共享材质；无立绘的兵种返回 null。
- * 新素材自带透明通道，直接加载即可，不再进行白底抠图。
+ * 建筑可按阵营换皮；普通单位蓝红共用同一套立绘。
  */
-export function getSpriteMaterials(typeId: UnitTypeId): SpriteMaterials | null {
+export function getSpriteMaterials(
+  typeId: UnitTypeId,
+  faction: Faction = Faction.Blue,
+): SpriteMaterials | null {
   const def = SPRITE_DEFS[typeId];
   if (!def) return null;
 
-  let materials = materialCache.get(typeId);
+  const cacheKey = spriteMaterialCacheKey(typeId, faction);
+  let materials = materialCache.get(cacheKey);
   if (materials) return materials;
 
+  const urls = resolveSpriteUrls(def, faction);
   materials = {
-    front: createSpriteMaterial(def.frontUrl),
-    back: createSpriteMaterial(def.backUrl),
+    front: createSpriteMaterial(urls.frontUrl),
+    back: createSpriteMaterial(urls.backUrl),
   };
-  materialCache.set(typeId, materials);
+  materialCache.set(cacheKey, materials);
   return materials;
 }
 

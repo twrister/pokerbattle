@@ -126,7 +126,8 @@ export class UnitView {
     // 建筑贴图底边对齐占地格最下方（画面下方 = scene +Z）
     this.buildingBaseOffsetZ = this.isBuilding ? footprint / 2 : 0;
     const color = bodyColor(faction, typeId);
-    const sharedSprites = getSpriteMaterials(typeId);
+    // 建筑按阵营取红/蓝专属贴图；普通单位仍共用一套立绘
+    const sharedSprites = getSpriteMaterials(typeId, faction);
 
     let topY: number;
     if (sharedSprites) {
