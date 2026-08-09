@@ -104,9 +104,9 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 export default defineConfig({
   plugins: [unitConfigWritePlugin(), cardFormationWritePlugin()],
-  // host: true 表示监听所有网卡，局域网内其它设备可以直接访问
+  // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: { host: true, port: 8081, open: true },
-  // 预览服务器跑的是 build 产物，用来把沙盒发给同事试玩
+  // 正式服：预览 build 产物，隐藏单位参数 / 单机运行控制 / 卡组编辑入口
   preview: { host: true, port: 8080, strictPort: true },
   build: { target: 'es2022' },
   // @pb/sim 直接以 TS 源码形式被引用，跳过依赖预打包，改动可即时热更新

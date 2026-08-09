@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @pb/client dev",
     "build": "pnpm --filter @pb/client build",
     "preview": "pnpm --filter @pb/client preview",
+    "official": "pnpm build && pnpm preview",
     "test": "pnpm -r test",
     "check": "pnpm -r check"
   },

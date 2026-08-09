@@ -17,6 +17,7 @@ import {
   type HandCategory,
   type UnitTypeId,
 } from '@pb/sim';
+import { IS_DEV_SERVER } from '../env.js';
 import { createFormationPreview, type FormationPreviewHandle } from '../view/formationPreview.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
@@ -62,9 +63,12 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   const back = (): void => options.onBack();
   backButton.addEventListener('click', back);
-  addFormationButton.addEventListener('click', addFormation);
-  saveButton.addEventListener('click', save);
-  resetButton.addEventListener('click', reset);
+  // 新增/编辑/重置/保存仅开发服开放；正式服只保留浏览与预览
+  if (IS_DEV_SERVER) {
+    addFormationButton.addEventListener('click', addFormation);
+    saveButton.addEventListener('click', save);
+    resetButton.addEventListener('click', reset);
+  }
   tab3d.addEventListener('click', () => setPreviewMode('3d'));
   tabButton.addEventListener('click', () => setPreviewMode('button'));
 
@@ -170,7 +174,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
         button.addEventListener('click', () => {
           formationIndex = index;
           renderFormationList();
-          renderEditor();
+          if (IS_DEV_SERVER) renderEditor();
           refreshPreview();
         });
         return button;
@@ -367,7 +371,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   function renderAll(): void {
     renderCategories();
     renderFormationList();
-    renderEditor();
+    if (IS_DEV_SERVER) renderEditor();
+    else editor.replaceChildren();
     refreshPreview();
   }
 

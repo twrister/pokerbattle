@@ -19,6 +19,8 @@ export interface PanelOptions {
   onClear: () => void;
   /** 是否启用沙盒的阵营、兵种选择和对应快捷键。 */
   enableSpawnControls?: boolean;
+  /** 是否启用暂停/单步/倍速/清空等运行控制（正式服单机关闭）。 */
+  enableRuntimeControls?: boolean;
   /** 沙盒专用的快速开团预设；单机模式不提供。 */
   onBrawl?: () => void;
   /** 清空后双方各随机一个兵种 1v1 */
@@ -61,6 +63,7 @@ export interface PanelHandle {
 export function createPanel(options: PanelOptions): PanelHandle {
   const { loop } = options;
   const spawnControlsEnabled = options.enableSpawnControls ?? true;
+  const runtimeControlsEnabled = options.enableRuntimeControls ?? true;
 
   let faction: Faction = Faction.Blue;
   let unitType: UnitTypeId = MOBILE_UNIT_TYPE_IDS[0]!;
@@ -179,16 +182,20 @@ export function createPanel(options: PanelOptions): PanelHandle {
         if (spawnControlsEnabled) selectFaction(Faction.Red);
         break;
       case 'Space':
+        if (!runtimeControlsEnabled) break;
         event.preventDefault();
         togglePause();
         break;
       case 'KeyN':
+        if (!runtimeControlsEnabled) break;
         loop.stepOnce();
         break;
       case 'KeyR':
+        if (!runtimeControlsEnabled) break;
         options.onClear();
         break;
       case 'KeyB':
+        if (!runtimeControlsEnabled) break;
         options.onBrawl?.();
         break;
     }
@@ -230,29 +237,31 @@ export function createPanel(options: PanelOptions): PanelHandle {
     buildingGroup.addEventListener('click', onBuildingGroupClick);
     buildingCancelButton.addEventListener('click', onBuildingCancel);
   }
-  pauseButton.addEventListener('click', togglePause);
-  stepButton.addEventListener('click', stepOnce);
-  speedButton.addEventListener('click', cycleSpeed);
-  if (options.onBrawl) brawlButton.addEventListener('click', options.onBrawl);
-  if (options.onRandomPk) randomPkButton.addEventListener('click', options.onRandomPk);
-  clearButton.addEventListener('click', options.onClear);
-  if (options.soloCameraAngle) {
-    cameraAngleInput.value = String(Math.round(options.soloCameraAngle.initial));
-    cameraAngleValue.textContent = `${cameraAngleInput.value}°`;
-    cameraAngleInput.addEventListener('input', onCameraAngleInput);
-  }
-  if (options.soloDrawInterval) {
-    drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
-    drawIntervalInput.addEventListener('input', onDrawIntervalInput);
-  }
-  if (options.formationThumbnailFrame) {
-    const { initialUnitDisplayScale, initialFrameMargin } = options.formationThumbnailFrame;
-    thumbScaleInput.value = String(initialUnitDisplayScale);
-    thumbMarginInput.value = String(initialFrameMargin);
-    thumbScaleValue.textContent = initialUnitDisplayScale.toFixed(2);
-    thumbMarginValue.textContent = initialFrameMargin.toFixed(2);
-    thumbScaleInput.addEventListener('input', onFormationThumbFrameInput);
-    thumbMarginInput.addEventListener('input', onFormationThumbFrameInput);
+  if (runtimeControlsEnabled) {
+    pauseButton.addEventListener('click', togglePause);
+    stepButton.addEventListener('click', stepOnce);
+    speedButton.addEventListener('click', cycleSpeed);
+    if (options.onBrawl) brawlButton.addEventListener('click', options.onBrawl);
+    if (options.onRandomPk) randomPkButton.addEventListener('click', options.onRandomPk);
+    clearButton.addEventListener('click', options.onClear);
+    if (options.soloCameraAngle) {
+      cameraAngleInput.value = String(Math.round(options.soloCameraAngle.initial));
+      cameraAngleValue.textContent = `${cameraAngleInput.value}°`;
+      cameraAngleInput.addEventListener('input', onCameraAngleInput);
+    }
+    if (options.soloDrawInterval) {
+      drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
+      drawIntervalInput.addEventListener('input', onDrawIntervalInput);
+    }
+    if (options.formationThumbnailFrame) {
+      const { initialUnitDisplayScale, initialFrameMargin } = options.formationThumbnailFrame;
+      thumbScaleInput.value = String(initialUnitDisplayScale);
+      thumbMarginInput.value = String(initialFrameMargin);
+      thumbScaleValue.textContent = initialUnitDisplayScale.toFixed(2);
+      thumbMarginValue.textContent = initialFrameMargin.toFixed(2);
+      thumbScaleInput.addEventListener('input', onFormationThumbFrameInput);
+      thumbMarginInput.addEventListener('input', onFormationThumbFrameInput);
+    }
   }
   window.addEventListener('keydown', onKeyDown);
 
@@ -298,21 +307,23 @@ export function createPanel(options: PanelOptions): PanelHandle {
           button.setAttribute('aria-pressed', 'false');
         }
       }
-      pauseButton.removeEventListener('click', togglePause);
-      stepButton.removeEventListener('click', stepOnce);
-      speedButton.removeEventListener('click', cycleSpeed);
-      if (options.onBrawl) brawlButton.removeEventListener('click', options.onBrawl);
-      if (options.onRandomPk) randomPkButton.removeEventListener('click', options.onRandomPk);
-      clearButton.removeEventListener('click', options.onClear);
-      if (options.soloCameraAngle) {
-        cameraAngleInput.removeEventListener('input', onCameraAngleInput);
-      }
-      if (options.soloDrawInterval) {
-        drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
-      }
-      if (options.formationThumbnailFrame) {
-        thumbScaleInput.removeEventListener('input', onFormationThumbFrameInput);
-        thumbMarginInput.removeEventListener('input', onFormationThumbFrameInput);
+      if (runtimeControlsEnabled) {
+        pauseButton.removeEventListener('click', togglePause);
+        stepButton.removeEventListener('click', stepOnce);
+        speedButton.removeEventListener('click', cycleSpeed);
+        if (options.onBrawl) brawlButton.removeEventListener('click', options.onBrawl);
+        if (options.onRandomPk) randomPkButton.removeEventListener('click', options.onRandomPk);
+        clearButton.removeEventListener('click', options.onClear);
+        if (options.soloCameraAngle) {
+          cameraAngleInput.removeEventListener('input', onCameraAngleInput);
+        }
+        if (options.soloDrawInterval) {
+          drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+        }
+        if (options.formationThumbnailFrame) {
+          thumbScaleInput.removeEventListener('input', onFormationThumbFrameInput);
+          thumbMarginInput.removeEventListener('input', onFormationThumbFrameInput);
+        }
       }
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();

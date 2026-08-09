@@ -16,6 +16,7 @@ import {
 import { SimLoop } from './loop.js';
 import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
+import { IS_DEV_SERVER } from './env.js';
 import {
   enableBuildingPlacement,
   type BuildingPlacementHandle,
@@ -43,6 +44,9 @@ import { BattleView } from './view/viewSync.js';
 const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
 const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
+
+// 供 CSS 区分开发服 / 正式服可见功能
+document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
 
 // 兵种参数在 @pb/sim 加载 units.json 时已生效，无需再 hydrate
 
@@ -240,6 +244,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   };
 
   const thumbFrame = getFormationThumbnailFrameSettings();
+  // 正式服单机不开放运行控制；沙盒调试控件两种服都保留
+  const runtimeControlsEnabled = IS_DEV_SERVER || !isSolo;
 
   const bindUnitPlacement = (): void => {
     disableUnitPlacement();
@@ -278,35 +284,41 @@ function enterBattleSession(mode: BattleMode): () => void {
     loop,
     onClear: clearBattlefield,
     enableSpawnControls: !isSolo,
-    onRandomPk: () => spawnRandomPk(loop, clearBattlefield),
+    enableRuntimeControls: runtimeControlsEnabled,
+    onRandomPk: runtimeControlsEnabled
+      ? () => spawnRandomPk(loop, clearBattlefield)
+      : undefined,
     onBuildingModeChange: (typeId) => {
       if (typeId) bindBuildingPlacement(typeId);
       else bindUnitPlacement();
     },
     ...(isSolo
-      ? {
-          soloCameraAngle: {
-            initial: sceneContext.getSoloCameraAngle(),
-            onChange: (degrees) => sceneContext.setSoloCameraAngle(degrees),
-          },
-          soloDrawInterval: {
-            initialSeconds: 3,
-            onChange: (seconds) => handPanel?.setDrawInterval(seconds),
-          },
-          formationThumbnailFrame: {
-            initialUnitDisplayScale: thumbFrame.unitDisplayScale,
-            initialFrameMargin: thumbFrame.frameMargin,
-            onChange: (settings) => {
-              setFormationThumbnailFrameSettings(settings);
-              handPanel?.refreshFormations();
+      ? IS_DEV_SERVER
+        ? {
+            soloCameraAngle: {
+              initial: sceneContext.getSoloCameraAngle(),
+              onChange: (degrees) => sceneContext.setSoloCameraAngle(degrees),
             },
-          },
-        }
+            soloDrawInterval: {
+              initialSeconds: 3,
+              onChange: (seconds) => handPanel?.setDrawInterval(seconds),
+            },
+            formationThumbnailFrame: {
+              initialUnitDisplayScale: thumbFrame.unitDisplayScale,
+              initialFrameMargin: thumbFrame.frameMargin,
+              onChange: (settings) => {
+                setFormationThumbnailFrameSettings(settings);
+                handPanel?.refreshFormations();
+              },
+            },
+          }
+        : {}
       : { onBrawl: () => spawnBrawl(loop) }),
   });
 
-  const configPanel = ensureConfigPanel();
-  configPanel.setOnApplied(() => {
+  // 单位参数面板仅开发服挂载
+  const configPanel = IS_DEV_SERVER ? ensureConfigPanel() : null;
+  configPanel?.setOnApplied(() => {
     clearBattlefield();
     panel.refreshUnitLabels();
   });
@@ -352,7 +364,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     handPanel?.dispose();
     panel.dispose();
     // 断开已离开会话的清场回调，避免隐藏期间误触保存仍引用旧 loop
-    configPanel.setOnApplied(() => {});
+    configPanel?.setOnApplied(() => {});
     battleView.reset();
   };
 }

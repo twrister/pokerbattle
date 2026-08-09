@@ -6,11 +6,14 @@
 
 ```bash
 pnpm install
-pnpm dev      # 开发服务器
-pnpm test     # 确定性回归 + 战斗行为 + 渲染同步测试
-pnpm check    # 全仓类型检查
-pnpm build    # 生产构建
+pnpm dev              # 开发服 http://localhost:8081 （含调试面板与配置写回）
+pnpm official         # 正式服 http://localhost:8080 （build + preview）
+pnpm test             # 确定性回归 + 战斗行为 + 渲染同步测试
+pnpm check            # 全仓类型检查
+pnpm build            # 生产构建
 ```
+
+开发服专属：单位参数面板、单机运行控制、卡组页的新增阵型 / 阵型编辑区 / 重置与保存。
 
 打开页面后：左键点地面放兵，拖拽转视角，滚轮缩放。`1` `2` `3` 切兵种，`Q` `E` 切阵营，空格暂停，`N` 单步，`B` 一键开团，`R` 清空。
 

@@ -35,6 +35,24 @@
         display: none !important;
       }
 
+      /* 正式服（无 html.is-dev）：隐藏仅开发服可用的调试/编辑入口 */
+      html:not(.is-dev) #panel-config,
+      html:not(.is-dev) #hud.is-solo #panel-controls,
+      html:not(.is-dev) #btn-deck-add-formation,
+      html:not(.is-dev) .deck-editor-panel,
+      html:not(.is-dev) #btn-deck-reset,
+      html:not(.is-dev) #btn-deck-save,
+      html:not(.is-dev) .dev-only,
+      html.is-dev .prod-only {
+        display: none !important;
+      }
+
+      /* 正式服无编辑区：单行高度仍由牌型列表撑开，不强制占满视口 */
+      html:not(.is-dev) .deck-content {
+        flex: 0 1 auto;
+        grid-template-rows: auto;
+      }
+
       #main-menu {
         position: fixed;
         inset: 0;
@@ -472,19 +490,34 @@
         transform: translateX(-50%);
       }
 
-      #panel-spawn {
+      /* 底部居中：建造在上、出兵在下，用 gap 错开避免互相遮挡 */
+      #panel-bottom-dock {
+        position: absolute;
         bottom: 16px;
         left: 50%;
         transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        pointer-events: none;
+      }
+
+      #panel-bottom-dock .panel {
+        position: relative;
+        bottom: auto;
+        left: auto;
+        transform: none;
+        pointer-events: auto;
+      }
+
+      #panel-spawn {
         display: flex;
         gap: 20px;
         align-items: flex-end;
       }
 
       #panel-building {
-        bottom: 110px;
-        left: 50%;
-        transform: translateX(-50%);
         display: flex;
         gap: 16px;
         align-items: flex-end;
@@ -503,8 +536,7 @@
       }
 
       #hud.is-solo #btn-brawl,
-      #hud.is-solo #panel-spawn,
-      #hud.is-solo #panel-building,
+      #hud.is-solo #panel-bottom-dock,
       #hud.is-solo [data-sandbox-help] {
         display: none;
       }
@@ -1206,11 +1238,12 @@
         display: grid;
         flex: 1;
         grid-template-columns: minmax(86px, 0.55fr) minmax(120px, 0.8fr) minmax(0, 2fr);
-        /* 上行预览区 + 下行整宽编辑，预览占更多高度便于看间距 */
-        grid-template-rows: minmax(300px, 1.45fr) minmax(0, 1fr);
+        /* 首行高度跟牌型列表；编辑区吃剩余空间 */
+        grid-template-rows: auto minmax(0, 1fr);
         gap: 10px;
         min-width: 0;
         min-height: 0;
+        align-items: stretch;
       }
 
       .deck-column,
@@ -1228,6 +1261,13 @@
         flex-direction: column;
         gap: 6px;
         overflow: auto;
+      }
+
+      /* 牌型列表按内容定高，作为 deck-content 首行高度基准 */
+      #deck-category-list {
+        height: fit-content;
+        overflow: visible;
+        align-self: start;
       }
 
       .deck-category,
@@ -1318,7 +1358,8 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: 8px;
-        min-height: clamp(300px, 40vh, 520px);
+        /* 高度跟随牌型列表所撑开的网格行，不再单独设最小高度抢主导 */
+        min-height: 0;
       }
 
       .deck-preview-header {
@@ -1355,7 +1396,7 @@
       /* 3D / 按钮叠在同一格，切换页签不改变预览区高度。 */
       .deck-preview-stage {
         position: relative;
-        min-height: clamp(260px, 34vh, 480px);
+        min-height: 0;
         height: 100%;
         overflow: hidden;
         border-radius: 8px;
@@ -1415,7 +1456,14 @@
       @media (max-width: 580px) {
         .deck-content {
           grid-template-columns: 1fr 1fr;
+          /* 首行仍由牌型列表定高，预览/编辑各占后续行 */
           grid-template-rows: auto auto minmax(280px, 1.3fr);
+        }
+
+        /* 正式服无编辑区：预览行单独给最小可视高度 */
+        html:not(.is-dev) .deck-content {
+          flex: 1;
+          grid-template-rows: auto minmax(280px, 1.3fr);
         }
 
         .deck-editor-panel,
@@ -1494,7 +1542,10 @@
           <h1>卡组阵型</h1>
         </header>
         <section class="deck-toolbar">
-          <div class="deck-toolbar-copy">选择牌型与阵型，前排朝向敌方；编辑会实时更新 2D 站位与 3D 预览。</div>
+          <div class="deck-toolbar-copy">
+            <span class="dev-only">选择牌型与阵型，前排朝向敌方；编辑会实时更新 2D 站位与 3D 预览。</span>
+            <span class="prod-only">选择牌型与阵型，前排朝向敌方；可切换 3D / 按钮预览。</span>
+          </div>
           <button id="btn-deck-add-formation" type="button">新增阵型</button>
         </section>
         <section class="deck-content">
@@ -1537,7 +1588,8 @@
         </section>
         <footer class="deck-footer">
           <div id="deck-status" role="status" aria-live="polite">
-            编辑完成后保存；仅 pnpm dev 可写回配置文件。
+            <span class="dev-only">编辑完成后保存；仅开发服可写回配置文件。</span>
+            <span class="prod-only">正式服仅浏览阵型，编辑请使用开发服（8081）。</span>
           </div>
           <button id="btn-deck-reset" type="button">重置</button>
           <button id="btn-deck-save" type="button">保存配置</button>
@@ -1637,30 +1689,32 @@
         </div>
       </section>
 
-      <section class="panel" id="panel-spawn">
-        <div>
-          <div class="title">阵营</div>
-          <div class="btn-row" id="faction-group">
-            <button type="button" data-faction="0" aria-pressed="true">蓝方</button>
-            <button type="button" data-faction="1" aria-pressed="false">红方</button>
+      <div id="panel-bottom-dock">
+        <section class="panel" id="panel-building">
+          <div>
+            <div class="title">建造</div>
+            <div class="btn-row" id="building-group">
+              <button type="button" data-building="building_base" aria-pressed="false">基地 4×4</button>
+              <button type="button" data-building="building_tower" aria-pressed="false">防御塔 2×2</button>
+              <button type="button" id="btn-building-cancel" aria-pressed="false">退出建造</button>
+            </div>
           </div>
-        </div>
-        <div>
-          <div class="title">兵种</div>
-          <div class="btn-row" id="unit-group"></div>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel" id="panel-building">
-        <div>
-          <div class="title">建造</div>
-          <div class="btn-row" id="building-group">
-            <button type="button" data-building="building_base" aria-pressed="false">基地 4×4</button>
-            <button type="button" data-building="building_tower" aria-pressed="false">防御塔 2×2</button>
-            <button type="button" id="btn-building-cancel" aria-pressed="false">退出建造</button>
+        <section class="panel" id="panel-spawn">
+          <div>
+            <div class="title">阵营</div>
+            <div class="btn-row" id="faction-group">
+              <button type="button" data-faction="0" aria-pressed="true">蓝方</button>
+              <button type="button" data-faction="1" aria-pressed="false">红方</button>
+            </div>
           </div>
-        </div>
-      </section>
+          <div>
+            <div class="title">兵种</div>
+            <div class="btn-row" id="unit-group"></div>
+          </div>
+        </section>
+      </div>
 
       <section class="panel" id="panel-help">
         <div class="title">操作</div>
