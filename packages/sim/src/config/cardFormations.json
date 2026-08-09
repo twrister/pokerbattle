@@ -249,6 +249,28 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
+    },
+    {
+      "id": "single_archmage",
+      "name": "单大法师",
+      "rows": [
+        [
+          "hero_archmage"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "single_dragon",
+      "name": "单龙",
+      "rows": [
+        [
+          "dragon"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
     }
   ]
 }

@@ -154,7 +154,7 @@ export class BattleView {
       const from = prev.projectiles.find((p) => p.id === projectile.id) ?? projectile;
       mesh.position.set(
         toSceneX(lerp(from.x, projectile.x, alpha)),
-        0.9,
+        lerp(from.height, projectile.height, alpha),
         toSceneZ(lerp(from.y, projectile.y, alpha)),
       );
     }

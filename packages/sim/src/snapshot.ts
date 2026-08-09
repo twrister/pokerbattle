@@ -38,6 +38,8 @@ export interface ProjectileSnapshot {
   faction: Faction;
   x: number;
   y: number;
+  /** 离地高度，供渲染把弹道抬到发射点（如龙头） */
+  height: number;
 }
 
 /** 女王单体治疗落在受疗单位上的反馈效果。 */
@@ -102,7 +104,13 @@ export function takeSnapshot(world: World): Snapshot {
   const projectiles: ProjectileSnapshot[] = [];
   for (const p of world.projectiles) {
     if (p.dead) continue;
-    projectiles.push({ id: p.id, faction: p.faction, x: toFloat(p.pos.x), y: toFloat(p.pos.y) });
+    projectiles.push({
+      id: p.id,
+      faction: p.faction,
+      x: toFloat(p.pos.x),
+      y: toFloat(p.pos.y),
+      height: p.height,
+    });
   }
 
   const healEffects: HealEffectSnapshot[] = [];

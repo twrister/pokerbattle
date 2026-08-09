@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+  AIR_UNIT_HOVER_HEIGHT,
   BODY_SCALE_REFERENCE,
   Faction,
   UNIT_CONFIGS,
@@ -38,6 +39,9 @@ export class UnitView {
   private readonly hpAnchor = new THREE.Group();
   private readonly hpFill: THREE.Mesh;
   private readonly barWidth: number;
+  private readonly hpBaseY: number;
+  /** 空中单位只抬高角色与血条，碰撞圈和阴影仍留在地面标示落点。 */
+  private readonly isAir: boolean;
   /** 振奋状态的脚下光环，默认隐藏并在快照标记时脉冲显示。 */
   private readonly inspireAura: THREE.Mesh;
 
@@ -106,6 +110,7 @@ export class UnitView {
     this.key = viewKey(faction, typeId);
 
     const config = UNIT_CONFIGS[typeId];
+    this.isAir = config.movementLayer === 'air';
     // 碰撞圈用真实半径；显示半径 = 铁卫基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
@@ -234,7 +239,8 @@ export class UnitView {
     );
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
-    this.hpAnchor.position.y = topY + 0.35;
+    this.hpBaseY = topY + 0.35;
+    this.hpAnchor.position.y = this.hpBaseY;
     this.hpAnchor.add(hpBack, this.hpFill);
 
     this.group.add(ring, this.inspireAura, this.hpAnchor);
@@ -275,6 +281,7 @@ export class UnitView {
       // 冲刺高亮略强于普攻前摇，方便在混战里辨认
       this.bodyMaterial!.emissiveIntensity = charging ? 1.05 : attacking ? 0.75 : this.baseEmissive;
     }
+    this.updateFlightHeight(timeSec);
 
     const ratio = Math.max(0, Math.min(1, hpRatio));
     this.hpFill.scale.x = Math.max(ratio, 0.0001);
@@ -289,6 +296,16 @@ export class UnitView {
 
     this.updateCastFx(casting, timeSec, camera);
     this.applyHitTint(timeSec);
+  }
+
+  /** 让空中角色缓慢悬浮，同时保持地面圈和阴影不离地，便于判断实际战斗位置。 */
+  private updateFlightHeight(timeSec: number): void {
+    const hover = this.isAir
+      ? AIR_UNIT_HOVER_HEIGHT + Math.sin(timeSec * AIR_HOVER_SPEED + this.phase) * AIR_HOVER_AMPLITUDE
+      : 0;
+    if (this.billboard) this.billboard.position.y = hover;
+    if (this.yaw) this.yaw.position.y = hover;
+    this.hpAnchor.position.y = this.hpBaseY + hover;
   }
 
   /** 施法边沿重启 Teleport 序列帧；持续施法时播完循环，结束则隐藏。 */
@@ -495,3 +512,6 @@ const WHITE_COLOR = new THREE.Color(0xffffff);
 const HIT_FLASH_COLOR = new THREE.Color(0xff3a3a);
 /** 受击 tint 插值临时色，避免每帧 new Color */
 const HIT_TINT_COLOR = new THREE.Color();
+/** 飞行单位轻微浮动参数；基准离地高度与 sim 弹道出生点共用 AIR_UNIT_HOVER_HEIGHT。 */
+const AIR_HOVER_AMPLITUDE = 0.08;
+const AIR_HOVER_SPEED = 2.2;

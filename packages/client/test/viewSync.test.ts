@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Faction, World, fromFloat, takeSnapshot } from '@pb/sim';
+import {
+  AIR_UNIT_HOVER_HEIGHT,
+  Faction,
+  UnitState,
+  World,
+  fromFloat,
+  takeSnapshot,
+} from '@pb/sim';
 import {
   ARENA_H,
   ARENA_W,
@@ -11,6 +18,8 @@ import {
   toSimY,
 } from '../src/view/coords.js';
 import { BattleView } from '../src/view/viewSync.js';
+import { UnitView } from '../src/view/unitView.js';
+import { SPRITE_DEFS, SPRITE_GEOMETRY } from '../src/view/unitSprites.js';
 
 /**
  * 这些用例只跑场景图，不创建 WebGL 上下文，所以能在 Node 里直接执行。
@@ -109,5 +118,38 @@ describe('渲染同步', () => {
     const withoutEffect = takeSnapshot(world);
     view.render(withEffect, withoutEffect, 1, camera);
     expect(scene.children.length).toBe(0);
+  });
+
+  it('龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
+    expect(SPRITE_DEFS.dragon?.frontUrl).toBe('units/dragon-front.png');
+    expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');
+
+    const unitView = new UnitView(Faction.Blue, 'dragon');
+    camera.position.set(0, 10, 10);
+    camera.updateMatrixWorld();
+    unitView.update(
+      0,
+      0,
+      1,
+      0,
+      1,
+      UnitState.Idle,
+      false,
+      false,
+      false,
+      false,
+      0,
+      camera,
+    );
+
+    const billboard = unitView.group.children.find(
+      (child) =>
+        child instanceof THREE.Group &&
+        child.children.some(
+          (nested) => nested instanceof THREE.Mesh && nested.geometry === SPRITE_GEOMETRY,
+        ),
+    );
+    expect(billboard?.position.y).toBeGreaterThan(AIR_UNIT_HOVER_HEIGHT - 0.05);
+    unitView.dispose();
   });
 });

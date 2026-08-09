@@ -52,6 +52,8 @@ export function resolveSeparation(world: World): void {
         if (j <= i) continue;
         const b = units[j]!;
         if (b.dead) continue;
+        // 空中与地面单位处于不同移动层，双方都不会被彼此顶开。
+        if (a.config.movementLayer !== b.config.movementLayer) continue;
 
         const dx = b.pos.x - a.pos.x;
         const dy = b.pos.y - a.pos.y;

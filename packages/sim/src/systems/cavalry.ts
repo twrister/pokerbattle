@@ -85,6 +85,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
+    if (other.config.movementLayer === 'air') continue;
     if (unit.chargeHits.includes(other.id)) continue;
 
     const dx = other.pos.x - unit.pos.x;
@@ -125,6 +126,8 @@ function hasEnemyBodyContact(world: World, unit: Unit): boolean {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
+    // 飞行单位不参与冲刺体碰判定
+    if (other.config.movementLayer === 'air') continue;
 
     const minDist = unit.config.radius + other.config.radius;
     if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) < mul(minDist, minDist)) {

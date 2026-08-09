@@ -12,7 +12,21 @@ export interface Projectile {
   readonly faction: Faction;
   pos: Vec2;
   targetId: number;
+  /** 目标最后一次有效位置；范围弹在目标提前死亡后仍飞向这里。 */
+  impactPos: Vec2;
+  /** 命中判定沿用发射时目标碰撞圈，目标移除后也能稳定落地。 */
+  targetRadius: Fx;
   damage: Fx;
+  /** 大于 0 时不造成单体直伤，改为在 impactPos 结算范围伤害。 */
+  aoeRadius: Fx;
+  /** 当前渲染离地高度，飞行中在 start/end 之间插值。 */
+  height: number;
+  /** 发射点高度（如龙头 2.5）。 */
+  startHeight: number;
+  /** 目标点高度：地面单位为 0，空中单位与出生高度对齐。 */
+  endHeight: number;
+  /** 发射瞬间到目标的水平距离，用于高度插值进度。 */
+  startDist: Fx;
   /** 飞行速度，单位/秒 */
   speed: Fx;
   dead: boolean;
@@ -24,8 +38,30 @@ export function createProjectile(
   x: Fx,
   y: Fx,
   targetId: number,
+  targetX: Fx,
+  targetY: Fx,
+  targetRadius: Fx,
   damage: Fx,
   speed: Fx,
+  aoeRadius: Fx,
+  startHeight: number,
+  endHeight: number,
+  startDist: Fx,
 ): Projectile {
-  return { id, faction, pos: vec(x, y), targetId, damage, speed, dead: false };
+  return {
+    id,
+    faction,
+    pos: vec(x, y),
+    targetId,
+    impactPos: vec(targetX, targetY),
+    targetRadius,
+    damage,
+    aoeRadius,
+    height: startHeight,
+    startHeight,
+    endHeight,
+    startDist,
+    speed,
+    dead: false,
+  };
 }

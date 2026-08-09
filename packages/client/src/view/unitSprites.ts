@@ -63,6 +63,20 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 181 / 203,
     sourceFacing: 1,
   },
+  hero_archmage: {
+    frontUrl: 'units/archmage-front.png',
+    backUrl: 'units/archmage-back.png',
+    heightMul: 4.1,
+    aspect: 172 / 202,
+    sourceFacing: 1,
+  },
+  dragon: {
+    frontUrl: 'units/dragon-front.png',
+    backUrl: 'units/dragon-back.png',
+    heightMul: 4.1,
+    aspect: 285 / 197,
+    sourceFacing: 1,
+  },
   summoned_skeleton: {
     frontUrl: 'units/skeleton-front.png',
     backUrl: 'units/skeleton-back.png',

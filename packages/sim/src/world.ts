@@ -1,8 +1,13 @@
 import type { Fx } from './math/fixed.js';
+import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
 import { MAX_UNIT_RADIUS, type UnitTypeId, getUnitConfig } from './config/units.js';
-import { RETARGET_INTERVAL } from './config/tuning.js';
+import {
+  AIR_PROJECTILE_HEIGHT,
+  GROUND_PROJECTILE_HEIGHT,
+  RETARGET_INTERVAL,
+} from './config/tuning.js';
 import { type Projectile, createProjectile } from './entity/projectile.js';
 import { type AoePulseEffect, type AoePulseKind, type HealEffect } from './entity/effect.js';
 import { type Faction, type Unit, createUnit } from './entity/unit.js';
@@ -78,15 +83,29 @@ export class World {
     return unit;
   }
 
-  spawnProjectile(from: Unit, targetId: number, damage: Fx, speed: Fx): Projectile {
+  spawnProjectile(from: Unit, target: Unit, damage: Fx, speed: Fx, aoeRadius: Fx = 0): Projectile {
+    // 空中单位从头部吐弹；打地面时落点高度为 0，打空中则保持同高
+    const startHeight =
+      from.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : GROUND_PROJECTILE_HEIGHT;
+    const endHeight = target.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : 0;
+    const dx = target.pos.x - from.pos.x;
+    const dy = target.pos.y - from.pos.y;
+    const startDist = lengthOf(dx, dy);
     const projectile = createProjectile(
       this.nextEntityId++,
       from.faction,
       from.pos.x,
       from.pos.y,
-      targetId,
+      target.id,
+      target.pos.x,
+      target.pos.y,
+      target.config.radius,
       damage,
       speed,
+      aoeRadius,
+      startHeight,
+      endHeight,
+      startDist,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -230,6 +249,10 @@ export class World {
       h = mix(h, projectile.pos.x);
       h = mix(h, projectile.pos.y);
       h = mix(h, projectile.targetId);
+      h = mix(h, projectile.impactPos.x);
+      h = mix(h, projectile.impactPos.y);
+      h = mix(h, projectile.targetRadius);
+      h = mix(h, projectile.aoeRadius);
     }
     for (const effect of this.healEffects) {
       h = mix(h, effect.id);

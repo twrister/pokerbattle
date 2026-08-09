@@ -30,6 +30,7 @@ const NUMERIC_FIELDS: Array<{
   { key: 'moveSpeed', label: '移速', step: '0.1', hint: '单位/秒' },
   { key: 'sightRange', label: '索敌', step: '1' },
   { key: 'projectileSpeed', label: '弹速', step: '0.5', hint: '仅远程' },
+  { key: 'aoeRadius', label: '范围半径', step: '0.1', hint: '仅范围弹道' },
 ];
 
 export interface ConfigPanelOptions {
@@ -133,13 +134,21 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
       const value = draft[field.key];
       if (typeof value !== 'number') continue;
       // 弹速只在远程时显示，近战隐藏避免误导
-      if (field.key === 'projectileSpeed' && draft.attackKind !== 'projectile') continue;
+      if (
+        field.key === 'projectileSpeed' &&
+        draft.attackKind !== 'projectile' &&
+        draft.attackKind !== 'projectile_aoe'
+      ) {
+        continue;
+      }
+      if (field.key === 'aoeRadius' && draft.attackKind !== 'projectile_aoe') continue;
       section.appendChild(
         makeNumberRow(typeId, field.key, field.label, value, field.step, field.hint),
       );
     }
 
     section.appendChild(makeAttackKindRow(typeId, draft.attackKind));
+    section.appendChild(makeMovementLayerRow(typeId, draft.movementLayer));
     return section;
   }
 
@@ -206,6 +215,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
       ['melee', '近战'],
       ['melee_aoe', '近战范围'],
       ['projectile', '远程弹道'],
+      ['projectile_aoe', '落点范围弹道'],
     ] as const) {
       const option = document.createElement('option');
       option.value = value;
@@ -218,6 +228,31 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
       readAllFormsIntoDrafts();
       renderForm();
     });
+    row.appendChild(select);
+    return row;
+  }
+
+  /** 创建移动碰撞层选择器，让飞行属性经调试面板保存时保持可见、可编辑。 */
+  function makeMovementLayerRow(
+    typeId: UnitTypeId,
+    layer: UnitConfigDraft['movementLayer'],
+  ): HTMLLabelElement {
+    const row = document.createElement('label');
+    row.className = 'config-row';
+    row.innerHTML = `<span class="config-label">移动层</span>`;
+    const select = document.createElement('select');
+    select.dataset.unit = typeId;
+    select.dataset.field = 'movementLayer';
+    for (const [value, text] of [
+      ['ground', '地面'],
+      ['air', '空中'],
+    ] as const) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      option.selected = value === layer;
+      select.appendChild(option);
+    }
     row.appendChild(select);
     return row;
   }
@@ -236,11 +271,17 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
       }
       if (field === 'attackKind') {
         draft.attackKind =
-          el.value === 'projectile'
+          el.value === 'projectile_aoe'
+            ? 'projectile_aoe'
+            : el.value === 'projectile'
             ? 'projectile'
             : el.value === 'melee_aoe'
               ? 'melee_aoe'
               : 'melee';
+        continue;
+      }
+      if (field === 'movementLayer') {
+        draft.movementLayer = el.value === 'air' ? 'air' : 'ground';
         continue;
       }
       const num = Number(el.value);
@@ -344,6 +385,7 @@ function assignNumericField(
     case 'moveSpeed':
     case 'sightRange':
     case 'projectileSpeed':
+    case 'aoeRadius':
       draft[field] = value;
       break;
     default:

@@ -126,6 +126,8 @@ function updateHealSeek(unit: Unit, ally: Unit): void {
 function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distSq>): boolean {
   const charge = unit.config.charge;
   if (!charge) return false;
+  // 冲刺是地面近战技，不对空中单位起手
+  if (target.config.movementLayer === 'air') return false;
   if (unit.chargeCooldown > 0) return false;
   if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) return false;
 

@@ -1,0 +1,179 @@
+import { describe, expect, it } from 'vitest';
+import { AIR_PROJECTILE_HEIGHT } from '../src/config/tuning.js';
+import { Faction, UnitState } from '../src/entity/unit.js';
+import { fromFloat, toFloat } from '../src/math/fixed.js';
+import { dist } from '../src/math/vec2.js';
+import { takeSnapshot } from '../src/snapshot.js';
+import { resolveSeparation } from '../src/systems/separation.js';
+import { updateCombat } from '../src/systems/combat.js';
+import { updateProjectiles } from '../src/systems/projectiles.js';
+import { World } from '../src/world.js';
+
+/** 推进弹道系统直到指定飞行物结束，避免测试依赖完整 AI 流水线。 */
+function flyUntilImpact(world: World, projectileId: number, maxTicks = 100): void {
+  for (let i = 0; i < maxTicks; i++) {
+    const projectile = world.projectiles.find((item) => item.id === projectileId);
+    if (!projectile || projectile.dead) return;
+    updateProjectiles(world);
+  }
+  throw new Error('范围弹未在预期 tick 内落地');
+}
+
+describe('飞行龙', () => {
+  it('加载指定基础参数与落点范围弹道', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+
+    expect(toFloat(dragon.config.radius)).toBeCloseTo(0.6, 3);
+    expect(toFloat(dragon.config.bodyScale)).toBeCloseTo(1.3, 3);
+    expect(toFloat(dragon.config.mass)).toBeCloseTo(3, 3);
+    expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(1000, 3);
+    expect(toFloat(dragon.stats.damage)).toBeCloseTo(80, 3);
+    expect(toFloat(dragon.stats.attackInterval)).toBeCloseTo(30, 3);
+    expect(toFloat(dragon.stats.attackWindup)).toBeCloseTo(10, 3);
+    expect(toFloat(dragon.stats.range)).toBeCloseTo(1.5, 3);
+    expect(dragon.config.movementLayer).toBe('air');
+    expect(dragon.config.attack.kind).toBe('projectile_aoe');
+    if (dragon.config.attack.kind === 'projectile_aoe') {
+      expect(toFloat(dragon.config.attack.speed)).toBeCloseTo(9, 3);
+      expect(toFloat(dragon.config.attack.aoeRadius)).toBeCloseTo(2, 3);
+    }
+  });
+
+  it('空中与地面单位互不推挤', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+    const ground = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(16));
+    const dragonStart = { ...dragon.pos };
+    const groundStart = { ...ground.pos };
+
+    resolveSeparation(world);
+
+    expect(dragon.pos).toEqual(dragonStart);
+    expect(ground.pos).toEqual(groundStart);
+  });
+
+  it('同为空中单位时仍会互相推挤', () => {
+    const world = new World(1);
+    const a = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+    const b = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+
+    resolveSeparation(world);
+
+    expect(dist(a.pos.x, a.pos.y, b.pos.x, b.pos.y)).toBeGreaterThan(0);
+  });
+
+  it('弹道落地后只对半径 2 内敌人各造成一次范围伤害', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
+    const splash = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(11.5), fromFloat(10));
+    const outside = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12.1), fromFloat(10));
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10.5), fromFloat(10));
+    const hp = new Map(world.units.map((unit) => [unit.id, unit.hp]));
+    const projectile = world.spawnProjectile(
+      dragon,
+      target,
+      dragon.stats.damage,
+      fromFloat(9),
+      fromFloat(2),
+    );
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(toFloat(hp.get(target.id)! - target.hp)).toBeCloseTo(80, 3);
+    expect(toFloat(hp.get(splash.id)! - splash.hp)).toBeCloseTo(80, 3);
+    expect(outside.hp).toBe(hp.get(outside.id));
+    expect(ally.hp).toBe(hp.get(ally.id));
+    expect(target.aoeHitFxLeft).toBeGreaterThan(0);
+    expect(splash.aoeHitFxLeft).toBeGreaterThan(0);
+    expect(world.aoePulseEffects).toHaveLength(1);
+    expect(toFloat(world.aoePulseEffects[0]!.radius)).toBeCloseTo(2, 3);
+  });
+
+  it('主目标提前死亡后仍飞向最后位置并触发爆炸', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
+    const splash = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(11), fromFloat(10));
+    const splashHp = splash.hp;
+    const projectile = world.spawnProjectile(
+      dragon,
+      target,
+      dragon.stats.damage,
+      fromFloat(9),
+      fromFloat(2),
+    );
+    target.hp = 0;
+    target.dead = true;
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(splash.hp).toBeLessThan(splashHp);
+    expect(projectile.dead).toBe(true);
+    expect(world.aoePulseEffects).toHaveLength(1);
+  });
+
+  it('近战不能锁定或命中空中单位', () => {
+    const world = new World(1);
+    const melee = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(15));
+    const dragon = world.spawnUnit(Faction.Red, 'dragon', fromFloat(9), fromFloat(16));
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(20));
+    dragon.stats.damage = 0;
+    ground.stats.damage = 0;
+
+    for (let i = 0; i < 40; i++) world.step();
+
+    expect(melee.targetId).toBe(ground.id);
+    expect(dragon.hp).toBe(dragon.stats.maxHp);
+  });
+
+  it('龙弹道从 2.5 高度发射，打地面时落点高度为 0', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
+    const projectile = world.spawnProjectile(
+      dragon,
+      target,
+      dragon.stats.damage,
+      fromFloat(9),
+      fromFloat(2),
+    );
+
+    expect(projectile.height).toBe(2.5);
+    expect(projectile.startHeight).toBe(AIR_PROJECTILE_HEIGHT);
+    expect(projectile.endHeight).toBe(0);
+    expect(takeSnapshot(world).projectiles[0]!.height).toBe(2.5);
+
+    flyUntilImpact(world, projectile.id);
+    expect(projectile.height).toBe(0);
+  });
+
+  it('龙攻击空中单位时改为单体且无范围脉冲', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const airTarget = world.spawnUnit(Faction.Red, 'dragon', fromFloat(9), fromFloat(11.5));
+    const splash = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10.5), fromFloat(11.5));
+    airTarget.stats.damage = 0;
+    splash.stats.damage = 0;
+    const airHp = airTarget.hp;
+    const splashHp = splash.hp;
+
+    dragon.state = UnitState.Attack;
+    dragon.targetId = airTarget.id;
+    dragon.attackCooldown = 0;
+    // 前摇剩 1 tick，本帧走完即结算，避免再开一轮 10 tick 前摇
+    dragon.windupLeft = fromFloat(1);
+    updateCombat(world);
+
+    const projectile = world.projectiles[0]!;
+    expect(projectile).toBeDefined();
+    expect(toFloat(projectile.aoeRadius)).toBe(0);
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(toFloat(airHp - airTarget.hp)).toBeCloseTo(80, 3);
+    expect(splash.hp).toBe(splashHp);
+    expect(world.aoePulseEffects).toHaveLength(0);
+  });
+});

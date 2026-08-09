@@ -68,8 +68,12 @@ function findNearestEnemy(world: World, unit: Unit): number {
   let bestId = NO_TARGET;
   let bestDistSq: Fx = 0;
 
+  // 近战/冲刺够不着飞行层，索敌时直接跳过，避免贴脸空挥
+  const meleeOnly = unit.config.attack.kind === 'melee' || unit.config.attack.kind === 'melee_aoe';
+
   for (const other of world.units) {
     if (other.dead || other.faction === unit.faction) continue;
+    if (meleeOnly && other.config.movementLayer === 'air') continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d > sightSq) continue;
     // 等距时取 id 小的，保证任何机器上选出的都是同一个目标

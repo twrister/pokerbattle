@@ -58,5 +58,15 @@ export const TURN_RATE: Fx = fromFloat(0.35);
 /** 出手瞬间目标已略微走出射程时的容差，避免近战永远差一点点打不到 */
 export const ATTACK_RANGE_TOLERANCE: Fx = fromFloat(0.35);
 
+/** 空中单位角色离地悬浮高度（场景单位），供渲染与弹道出生点对齐。 */
+export const AIR_UNIT_HOVER_HEIGHT = 1.4;
+/** 地面远程弹道默认离地高度。 */
+export const GROUND_PROJECTILE_HEIGHT = 0.9;
+/**
+ * 空中单位弹道出生高度：约等于悬浮高度 + 龙头相对脚底的位置，
+ * 让火球从龙头吐出而不是脚底。
+ */
+export const AIR_PROJECTILE_HEIGHT = 2.5;
+
 /** A* 单次搜索的节点上限，防病态地形把一帧算爆 */
 export const ASTAR_NODE_BUDGET = 3000;

@@ -8,13 +8,18 @@ export type UnitTypeId =
   | 'hero_king'
   | 'hero_queen'
   | 'hero_mage'
+  | 'hero_archmage'
+  | 'dragon'
   | 'summoned_skeleton';
 
-/** 攻击方式：近战单体、近战范围、远程追踪弹 */
+export type MovementLayer = 'ground' | 'air';
+
+/** 攻击方式：近战单体、近战范围、远程追踪弹、落点范围弹 */
 export type AttackKind =
   | { kind: 'melee' }
   | { kind: 'melee_aoe' }
-  | { kind: 'projectile'; speed: Fx };
+  | { kind: 'projectile'; speed: Fx }
+  | { kind: 'projectile_aoe'; speed: Fx; aoeRadius: Fx };
 
 /** 冲刺技能参数。只有骑兵等具备冲锋的兵种才填写。 */
 export interface ChargeConfig {
@@ -88,6 +93,8 @@ export interface UnitConfig {
   moveSpeed: Fx;
   /** 索敌半径。默认给到能覆盖全场，等价于「攻击场上最近的敌人」 */
   sightRange: Fx;
+  /** 移动碰撞层；空中与地面单位互不推挤。 */
+  movementLayer: MovementLayer;
   attack: AttackKind;
   /** 可选冲刺技能；有此字段的兵种由 cavalry 系统驱动 */
   charge?: ChargeConfig;
@@ -149,9 +156,12 @@ export interface UnitConfigDraft {
   range: number;
   moveSpeed: number;
   sightRange: number;
-  attackKind: 'melee' | 'melee_aoe' | 'projectile';
-  /** 仅 attackKind === 'projectile' 时有意义 */
+  movementLayer: MovementLayer;
+  attackKind: 'melee' | 'melee_aoe' | 'projectile' | 'projectile_aoe';
+  /** 仅弹道攻击时有意义 */
   projectileSpeed: number;
+  /** 仅范围弹道攻击时有意义 */
+  aoeRadius: number;
   /** 有则随 JSON 往返，保存时不得丢失 */
   charge?: ChargeConfigDraft;
   inspire?: InspireConfigDraft;
@@ -168,6 +178,9 @@ export const BODY_SCALE_REFERENCE = 0.45;
 /** 深拷贝攻击方式，避免共享引用 */
 function cloneAttack(attack: AttackKind): AttackKind {
   if (attack.kind === 'projectile') return { kind: 'projectile', speed: attack.speed };
+  if (attack.kind === 'projectile_aoe') {
+    return { kind: 'projectile_aoe', speed: attack.speed, aoeRadius: attack.aoeRadius };
+  }
   return { kind: attack.kind };
 }
 
@@ -204,6 +217,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.range = source.range;
   target.moveSpeed = source.moveSpeed;
   target.sightRange = source.sightRange;
+  target.movementLayer = source.movementLayer;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
   target.inspire = source.inspire ? { ...source.inspire } : undefined;
@@ -215,6 +229,13 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
 function attackFromDraft(draft: UnitConfigDraft): AttackKind {
   if (draft.attackKind === 'projectile') {
     return { kind: 'projectile', speed: fromFloat(draft.projectileSpeed) };
+  }
+  if (draft.attackKind === 'projectile_aoe') {
+    return {
+      kind: 'projectile_aoe',
+      speed: fromFloat(draft.projectileSpeed),
+      aoeRadius: fromFloat(draft.aoeRadius),
+    };
   }
   if (draft.attackKind === 'melee_aoe') return { kind: 'melee_aoe' };
   return { kind: 'melee' };
@@ -278,6 +299,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     range: fromFloat(draft.range),
     moveSpeed: fromFloat(draft.moveSpeed),
     sightRange: fromFloat(draft.sightRange),
+    movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
     attack: attackFromDraft(draft),
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
     inspire: draft.inspire ? inspireFromDraft(draft.inspire) : undefined,
@@ -332,8 +354,13 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     range: toFloat(config.range),
     moveSpeed: toFloat(config.moveSpeed),
     sightRange: toFloat(config.sightRange),
+    movementLayer: config.movementLayer,
     attackKind: config.attack.kind,
-    projectileSpeed: config.attack.kind === 'projectile' ? toFloat(config.attack.speed) : 9,
+    projectileSpeed:
+      config.attack.kind === 'projectile' || config.attack.kind === 'projectile_aoe'
+        ? toFloat(config.attack.speed)
+        : 9,
+    aoeRadius: config.attack.kind === 'projectile_aoe' ? toFloat(config.attack.aoeRadius) : 0,
   };
   if (config.charge) {
     draft.charge = {
@@ -409,6 +436,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.range = fromFloat(draft.range);
     target.moveSpeed = fromFloat(draft.moveSpeed);
     target.sightRange = fromFloat(draft.sightRange);
+    target.movementLayer = draft.movementLayer === 'air' ? 'air' : 'ground';
     target.attack = attackFromDraft(draft);
     // 与文件一致：缺省技能键表示该兵种无此技能
     target.charge = draft.charge ? chargeFromDraft(draft.charge) : undefined;

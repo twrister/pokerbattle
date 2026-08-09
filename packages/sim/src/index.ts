@@ -4,18 +4,27 @@ export { type Vec2, vec } from './math/vec2.js';
 export { Rng } from './math/rng.js';
 
 export { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
-export { REPATH_INTERVAL, RETARGET_INTERVAL, TICK_RATE } from './config/tuning.js';
+export {
+  AIR_PROJECTILE_HEIGHT,
+  AIR_UNIT_HOVER_HEIGHT,
+  GROUND_PROJECTILE_HEIGHT,
+  REPATH_INTERVAL,
+  RETARGET_INTERVAL,
+  TICK_RATE,
+} from './config/tuning.js';
 export {
   BODY_SCALE_REFERENCE,
   MAX_UNIT_RADIUS,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  type AttackKind,
   type ChargeConfig,
   type ChargeConfigDraft,
   type HealConfig,
   type HealConfigDraft,
   type InspireConfig,
   type InspireConfigDraft,
+  type MovementLayer,
   type SummonConfig,
   type SummonConfigDraft,
   type UnitConfig,

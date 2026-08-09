@@ -63,6 +63,8 @@ function resolveAttack(world: World, unit: Unit): void {
 
   const target = world.getUnit(unit.targetId);
   if (!isAlive(target)) return;
+  // 近战够不着飞行单位，前摇打空但不退冷却
+  if (attack.kind === 'melee' && target.config.movementLayer === 'air') return;
 
   const reach =
     unit.stats.range + unit.config.radius + target.config.radius + ATTACK_RANGE_TOLERANCE;
@@ -72,7 +74,10 @@ function resolveAttack(world: World, unit: Unit): void {
     target.hp -= unit.stats.damage;
     return;
   }
-  world.spawnProjectile(unit, target.id, unit.stats.damage, attack.speed);
+  // 对空只打单体：范围弹道打到空中目标时关掉落地爆炸
+  let aoeRadius = attack.kind === 'projectile_aoe' ? attack.aoeRadius : 0;
+  if (aoeRadius > 0 && target.config.movementLayer === 'air') aoeRadius = 0;
+  world.spawnProjectile(unit, target, unit.stats.damage, attack.speed, aoeRadius);
 }
 
 /**
@@ -82,6 +87,8 @@ function resolveAttack(world: World, unit: Unit): void {
 function resolveMeleeAoe(world: World, unit: Unit): void {
   const target = world.getUnit(unit.targetId);
   if (!isAlive(target)) return;
+  // 主目标在空中则整次近战范围落空
+  if (target.config.movementLayer === 'air') return;
 
   const primaryReach =
     unit.stats.range + unit.config.radius + target.config.radius + ATTACK_RANGE_TOLERANCE;
@@ -106,6 +113,8 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
+    // 近战范围砍不到飞行单位
+    if (other.config.movementLayer === 'air') continue;
 
     const reach =
       unit.stats.range + unit.config.radius + other.config.radius + ATTACK_RANGE_TOLERANCE;
