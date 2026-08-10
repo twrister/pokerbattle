@@ -61,4 +61,17 @@ describe('单机扑克牌堆', () => {
       '2-hearts',
     ]);
   });
+
+  it('reset 清空手牌与回收权重，恢复为全新一副牌', () => {
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    const [card] = deck.drawMany(1);
+    deck.play([card!.id]);
+    expect(deck.getAvailableWeight(card!.id)).toBe(RETURNED_CARD_WEIGHT);
+
+    deck.reset();
+
+    expect(deck.hand).toHaveLength(0);
+    expect(deck.availableCount).toBe(54);
+    expect(deck.getAvailableWeight(card!.id)).toBe(FRESH_CARD_WEIGHT);
+  });
 });

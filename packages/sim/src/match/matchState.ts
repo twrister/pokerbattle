@@ -85,8 +85,9 @@ export class MatchState {
   /** 清空战场与牌堆，回到开局发牌状态。 */
   clear(): void {
     this.world.clear();
-    this.decks[Faction.Blue] = new PokerDeck(createPokerCards(), this.world.rng);
-    this.decks[Faction.Red] = new PokerDeck(createPokerCards(), this.world.rng);
+    // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象
+    this.decks[Faction.Blue].reset();
+    this.decks[Faction.Red].reset();
     this.decks[Faction.Blue].drawMany(INITIAL_HAND_SIZE);
     this.decks[Faction.Red].drawMany(INITIAL_HAND_SIZE);
   }

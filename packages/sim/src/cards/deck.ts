@@ -179,6 +179,18 @@ export class PokerDeck {
     return this.available.get(cardId)?.weight;
   }
 
+  /**
+   * 原地清空手牌与牌堆权重，恢复为全新一副牌。
+   * 保持实例引用不变，避免 UI 仍握着旧 deck 导致清空后无法出牌。
+   */
+  reset(cards: readonly PlayingCard[] = createPokerCards()): void {
+    this.available.clear();
+    this.cardsInHand.clear();
+    for (const card of cards) {
+      this.available.set(card.id, { card, weight: FRESH_CARD_WEIGHT });
+    }
+  }
+
   /** 牌堆+手牌指纹，供 MatchState 对账。 */
   hash(): number {
     let h = 0x811c9dc5;

@@ -700,6 +700,13 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
         syncStatus();
         return;
       }
+      // 清空重发后旧选中可能已不在手中，先剔除再渲染，避免幽灵选中挡出兵。
+      for (const id of [...selected]) {
+        if (!deck.hasInHand(id)) selected.delete(id);
+      }
+      for (const id of [...preview]) {
+        if (!deck.hasInHand(id)) preview.delete(id);
+      }
       render();
     },
     refreshFormations() {
