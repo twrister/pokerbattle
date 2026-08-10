@@ -36,9 +36,13 @@ export function isWithinAttackReach(attacker: Unit, target: Unit, reachBonus: Fx
   return distSq(attacker.pos.x, attacker.pos.y, target.pos.x, target.pos.y) <= mul(reach, reach);
 }
 
+/** ≈ 1/√2；对角槽把 expand 压到 expand/√2，使角外表面距回到 expand（不超出射程） */
+const INV_SQRT2: Fx = 46341;
+
 /**
  * 建筑攻击环：把单位停在「占地向外扩大 clearance」的方形外缘上。
  * 对角槽落在角外，避免圆形环目标点掉进 footprint 被 A* 挤到角上够不着。
+ * 对角方向表面距本为 expand·√2，需把 expand 缩到 expand/√2，否则远程会停在射程外永久 Seek。
  */
 export function computeBuildingEngageGoal(
   attacker: Unit,
@@ -49,12 +53,16 @@ export function computeBuildingEngageGoal(
   // 与圆形环一致：优先略进入射程；近战 range 被 inset 吃光时贴碰撞外缘
   let stopGap = attacker.stats.range - ENGAGEMENT_SLOT_INSET;
   if (stopGap < 0) stopGap = 0;
-  const expand = attacker.config.radius + stopGap;
-  const halfExt = fromFloat(building.config.footprint / 2) + expand;
+  let expand = attacker.config.radius + stopGap;
 
   // 从中心沿 dir 打到扩大 AABB 边界：t = halfExt / max(|dx|,|dy|)
   const ax = abs(dir.x);
   const ay = abs(dir.y);
+  // 对角角点到占地表面距 = expand·√2；压 expand 使表面距回到 expand ≤ reach - inset
+  if (ax > 0 && ay > 0) {
+    expand = mul(expand, INV_SQRT2);
+  }
+  const halfExt = fromFloat(building.config.footprint / 2) + expand;
   const denom = max(ax, ay);
   const t = denom > 0 ? div(halfExt, denom) : halfExt;
   const x = building.pos.x + mul(dir.x, t);

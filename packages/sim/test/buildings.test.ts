@@ -104,4 +104,23 @@ describe('建筑系统', () => {
       expect(base.hp, `corner (${x},${y}) should deal damage`).toBeLessThan(hp0);
     }
   });
+
+  it('远程从对角方向接近基地可进入攻击并造成伤害', () => {
+    // 来自东南/西南等对角，易分到对角攻击环槽；修复前会停在射程外永久 Seek
+    const approaches: ReadonlyArray<readonly [number, number]> = [
+      [14, 11],
+      [4, 11],
+      [14, 21],
+      [4, 21],
+    ];
+    for (const [x, y] of approaches) {
+      const world = new World(1);
+      const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(16))!;
+      const hp0 = base.hp;
+      const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(x), fromFloat(y));
+      for (let i = 0; i < 400; i++) world.step();
+      expect(archer.state, `approach (${x},${y}) should Attack`).toBe(UnitState.Attack);
+      expect(base.hp, `approach (${x},${y}) should deal damage`).toBeLessThan(hp0);
+    }
+  });
 });
