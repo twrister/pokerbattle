@@ -16,8 +16,9 @@ const desiredFacing = vec();
 /**
  * 单位行为决策。
  *
- * 只负责「决定这一帧要干什么」并写回状态与朝向，具体的移动、伤害结算
- * 分别由后面的系统执行。之后要换成行为树，替换这个文件即可，
+ * 只负责「决定这一帧要干什么」并写回状态；站定/冲刺时顺带写朝向。
+ * Seek 移动中的朝向由 movement 按当前路点更新，避免绕路时面朝目标侧身走。
+ * 具体位移、伤害结算分别由后面的系统执行。之后要换成行为树，替换这个文件即可，
  * 数据结构和其它系统都不用动。
  *
  * Attack 使用进入/退出双阈值：进来用正常射程，退出多留一段迟滞，
@@ -92,7 +93,11 @@ export function updateAi(world: World): void {
       unit.state = UnitState.Seek;
     }
 
-    if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {
+    // Seek 朝向交给 movement；此处只给站定/冲刺对齐目标或冲刺方向
+    if (
+      unit.state !== UnitState.Seek
+      && (desiredFacing.x !== 0 || desiredFacing.y !== 0)
+    ) {
       turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);
     }
   }
@@ -123,7 +128,11 @@ function updateHealSeek(unit: Unit, ally: Unit): void {
     unit.state = UnitState.Seek;
   }
 
-  if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {
+  // 治疗到位后站定朝向友军；赶路时仍由 movement 跟路径
+  if (
+    unit.state !== UnitState.Seek
+    && (desiredFacing.x !== 0 || desiredFacing.y !== 0)
+  ) {
     turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);
   }
 }

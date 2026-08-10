@@ -21,6 +21,7 @@ describe('单机手牌交互', () => {
         <div id="hand-draw-pile">
           <span id="hand-draw-pile-top"></span>
         </div>
+        <div id="hand-full-hint"></div>
         <button id="btn-select-best"></button>
         <div id="hand-cards"></div>
       </section>
@@ -81,13 +82,18 @@ describe('单机手牌交互', () => {
       'Q-hearts',
     ]);
     const fullPanel = createHandPanel({ deck: fullDeck });
+    const fullHint = document.querySelector<HTMLElement>('#hand-full-hint')!;
     expect(pile.classList.contains('is-full')).toBe(true);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+    expect(fullHint.textContent).toBe('手牌已满10张');
+    expect(fullHint.classList.contains('is-visible')).toBe(true);
 
     fullDeck.play([fullDeck.hand[0]!.id]);
     fullPanel.syncFromDeck();
     expect(pile.classList.contains('is-full')).toBe(false);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+    expect(fullHint.textContent).toBe('');
+    expect(fullHint.classList.contains('is-visible')).toBe(false);
 
     fullPanel.dispose();
   });

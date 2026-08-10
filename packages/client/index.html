@@ -1179,10 +1179,32 @@
 
       .hand-toolbar-info {
         grid-area: info;
+        position: relative;
         display: flex;
-        align-items: flex-start;
+        flex-direction: column;
+        align-items: center;
         justify-self: start;
         min-width: 0;
+      }
+
+      /* 手牌满时叠在牌堆正上方，提醒玩家先出牌才能继续补牌。 */
+      #hand-full-hint {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        z-index: 2;
+        transform: translateX(-50%);
+        margin-bottom: calc(2 * var(--hu));
+        color: transparent;
+        font-size: calc(16 * var(--hu));
+        line-height: 1.25;
+        white-space: nowrap;
+        pointer-events: none;
+        transition: color 0.18s;
+      }
+
+      #hand-full-hint.is-visible {
+        color: #ffcf9c;
       }
 
       .hand-toolbar-actions {
@@ -1406,8 +1428,8 @@
       }
 
       .playing-card + .playing-card {
-        /* 720 设计态下 clamp 上限为 -30px，按柱宽等比保持叠牌密度。 */
-        margin-left: calc(-30 * var(--hu));
+        /* 牌宽 96hu，左缘间距 56hu → 重叠 40；720 设计态下为 56px。 */
+        margin-left: calc(-40 * var(--hu));
       }
 
       /* 普通悬停轻晃；正式选中/预览/布局位移时不播，预览划过改由 is-wobbling 补播。 */
@@ -2462,6 +2484,7 @@
         <div class="hand-bar">
           <div id="hand-status" role="status" aria-live="polite"></div>
           <div class="hand-toolbar-info">
+            <div id="hand-full-hint" role="status" aria-live="polite"></div>
             <div id="hand-draw-pile" role="img" aria-label="牌堆正在准备补牌">
               <span class="hand-draw-pile-card is-bottom"></span>
               <span class="hand-draw-pile-card is-middle"></span>

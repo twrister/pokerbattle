@@ -1,13 +1,13 @@
 import { type Fx, div, mul } from '../math/fixed.js';
-import { lengthOf } from '../math/vec2.js';
+import { lengthOf, turnToward } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { isBuildingConfig } from '../config/units.js';
-import { TICK_RATE_FX, WAYPOINT_ARRIVE_DIST } from '../config/tuning.js';
+import { TICK_RATE_FX, TURN_RATE, WAYPOINT_ARRIVE_DIST } from '../config/tuning.js';
 import { UnitState } from '../entity/unit.js';
 import type { World } from '../world.js';
 
 /**
- * 沿路径推进位置。
+ * 沿路径推进位置，并把朝向对齐本帧实际要走的路段。
  *
  * 一个 tick 的位移可能跨过好几个路点（路径被拉直后相邻拐点可以很近），
  * 所以用「剩余步长」循环消耗，而不是一帧只走一个路点，否则转角处会明显减速。
@@ -27,6 +27,8 @@ export function updateMovement(world: World): void {
     }
 
     let remaining: Fx = div(unit.stats.moveSpeed, TICK_RATE_FX);
+    // 每 tick 只按首个有效路段转向一次，避免连跨多路点时 TURN_RATE 被叠乘
+    let facedPath = false;
 
     while (remaining > 0 && unit.pathIndex < unit.path.length) {
       const waypoint = unit.path[unit.pathIndex]!;
@@ -37,6 +39,10 @@ export function updateMovement(world: World): void {
       if (gap <= WAYPOINT_ARRIVE_DIST) {
         unit.pathIndex++;
         continue;
+      }
+      if (!facedPath) {
+        turnToward(unit.facing, unit.facing, div(dx, gap), div(dy, gap), TURN_RATE);
+        facedPath = true;
       }
       if (gap <= remaining) {
         unit.pos.x = waypoint.x;

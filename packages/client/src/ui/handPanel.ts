@@ -105,6 +105,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const arrowHead = required<SVGPolygonElement>('#hand-arrow-head');
   const drawPile = required<HTMLElement>('#hand-draw-pile');
   const drawPileTop = required<HTMLElement>('#hand-draw-pile-top');
+  const fullHint = required<HTMLElement>('#hand-full-hint');
   const deck = options.deck ?? new PokerDeck();
   /** 正式选中：松开后确认，可出牌；表现上拉高出牌堆半截。 */
   const selected = new Set<string>();
@@ -680,7 +681,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
     // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认 3s 夹断 6s 倒计时。
     const intervalMs = Math.max(options.getDrawIntervalMs?.() ?? drawIntervalMs, 1);
-    const isFull = deck.hand.length >= MAX_HAND_SIZE;
+    const handCount = deck.hand.length;
+    const isFull = handCount >= MAX_HAND_SIZE;
     const isEmpty = deck.availableCount === 0;
     // 剩余时间从 1 递减到 0，供牌堆由顶向下收缩黑色遮罩；满手保持满遮罩，空堆则无遮罩。
     const progress = isFull
@@ -695,6 +697,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       'aria-label',
       isFull ? '手牌已满，牌堆等待出牌' : isEmpty ? '牌堆已空' : '牌堆正在准备补牌',
     );
+    // 满手时在牌堆旁明示上限张数，引导玩家先出牌腾出手牌位。
+    fullHint.textContent = isFull ? `手牌已满${handCount}张` : '';
+    fullHint.classList.toggle('is-visible', isFull);
   }
 
   return {
