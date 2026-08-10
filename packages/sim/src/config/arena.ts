@@ -1,9 +1,9 @@
 import { type Fx, HALF, clamp, fromInt } from '../math/fixed.js';
 
-/** 场地宽（横向格数），沿用王室战争的 18 x 32 比例 */
+/** 场地宽（横向格数） */
 export const ARENA_WIDTH: Fx = fromInt(18);
-/** 场地高（纵向格数） */
-export const ARENA_HEIGHT: Fx = fromInt(32);
+/** 场地高：双方各 15 格，中间河道 1 格。 */
+export const ARENA_HEIGHT: Fx = fromInt(31);
 
 /** 导航网格分辨率：半格一个 cell，够细也不至于让 A* 节点数爆炸 */
 export const NAV_CELL_SIZE: Fx = HALF;

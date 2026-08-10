@@ -69,9 +69,10 @@ describe('单机正交镜头', () => {
 
     expect(bounds.left).toBeLessThanOrEqual(-10);
     expect(bounds.right).toBeGreaterThanOrEqual(10);
-    // 下方留白后视锥上偏，仍须包住含 1 格边距的战场（半高 17）
-    expect(bounds.top).toBeGreaterThanOrEqual(16.9);
-    expect(bounds.bottom).toBeLessThanOrEqual(-16.9);
+    // 下方留白后视锥上偏，仍须包住含 1 格边距的战场。
+    const halfHeightWithPadding = ARENA_H / 2 + 1;
+    expect(bounds.top).toBeGreaterThanOrEqual(halfHeightWithPadding - 0.1);
+    expect(bounds.bottom).toBeLessThanOrEqual(-halfHeightWithPadding + 0.1);
   });
 
   it('在更宽或更窄的容器中都保持完整战场（正上俯视）', () => {
@@ -79,8 +80,9 @@ describe('单机正交镜头', () => {
       const bounds = calculateSoloOrthoBounds(aspect, 90);
       expect(bounds.left).toBeLessThanOrEqual(-9);
       expect(bounds.right).toBeGreaterThanOrEqual(9);
-      expect(bounds.top).toBeGreaterThanOrEqual(16);
-      expect(bounds.bottom).toBeLessThanOrEqual(-16);
+      const halfHeightWithPadding = ARENA_H / 2 + 1;
+      expect(bounds.top).toBeGreaterThanOrEqual(halfHeightWithPadding - 0.1);
+      expect(bounds.bottom).toBeLessThanOrEqual(-halfHeightWithPadding + 0.1);
     }
   });
 

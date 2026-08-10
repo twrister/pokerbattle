@@ -6,6 +6,7 @@ import {
   snapBuildingCenter,
 } from '../nav/buildingGrid.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './arena.js';
+import { ARENA_RIVER_MAX_Y, ARENA_RIVER_MIN_Y } from './arenaTerrain.js';
 import {
   getFormationBuildingTypeId,
   isBuildingOnlyFormation,
@@ -18,18 +19,18 @@ import { UNIT_CONFIGS } from './units.js';
 /** 场地浮点宽高，半场规则与客户端射线落点共用同一套数值。 */
 const ARENA_W = toFloat(ARENA_WIDTH);
 const ARENA_H = toFloat(ARENA_HEIGHT);
-/** 中线 Y（含）：蓝方半场上沿 / 红方半场下沿。 */
-export const HALF_COURT_MID_Y = ARENA_H / 2;
+/** 蓝方部署区上沿；保留旧名称以兼容客户端放置逻辑。 */
+export const HALF_COURT_MID_Y = ARENA_RIVER_MIN_Y;
 
 export interface SimPoint {
   x: number;
   y: number;
 }
 
-/** 返回阵营己方半场的 Y 闭区间（含中线）。 */
+/** 返回阵营己方部署区的 Y 边界；中间河道和桥面均不可部署。 */
 export function halfCourtYRange(faction: Faction): { minY: number; maxY: number } {
   if (faction === Faction.Blue) return { minY: 0, maxY: HALF_COURT_MID_Y };
-  return { minY: HALF_COURT_MID_Y, maxY: ARENA_H };
+  return { minY: ARENA_RIVER_MAX_Y, maxY: ARENA_H };
 }
 
 /**
@@ -42,7 +43,11 @@ export function isFormationInsideHalfCourt(
 ): boolean {
   const { minY, maxY } = halfCourtYRange(faction);
   return points.every(
-    (point) => point.x >= 0 && point.x <= ARENA_W && point.y >= minY && point.y <= maxY,
+    (point) =>
+      point.x >= 0
+      && point.x <= ARENA_W
+      && point.y >= minY
+      && (faction === Faction.Blue ? point.y < maxY : point.y <= maxY),
   );
 }
 
@@ -80,7 +85,8 @@ export function halfCourtSafeAnchor(formation: CardFormation, faction: Faction):
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   const offsetX = shiftIntoRange(Math.min(...xs), Math.max(...xs), 0, ARENA_W);
-  const offsetY = shiftIntoRange(Math.min(...ys), Math.max(...ys), minY, maxY);
+  const maxDeployY = faction === Faction.Blue ? maxY - 1e-6 : maxY;
+  const offsetY = shiftIntoRange(Math.min(...ys), Math.max(...ys), minY, maxDeployY);
   if (offsetX === null || offsetY === null) return null;
   return { x: centerX + offsetX, y: centerY + offsetY };
 }

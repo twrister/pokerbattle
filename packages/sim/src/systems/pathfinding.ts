@@ -43,6 +43,19 @@ export function updatePaths(world: World): void {
     const goalMoved =
       distSq(unit.pathGoal.x, unit.pathGoal.y, engageGoal.x, engageGoal.y) > goalToleranceSq;
     const pathExhausted = unit.pathIndex >= unit.path.length;
+
+    // 空军不受河道和建筑导航阻挡，直接飞向交战目标。
+    if (unit.config.movementLayer === 'air') {
+      if (!pathExhausted && unit.repathIn > 0 && !goalMoved) continue;
+      unit.path.length = 0;
+      unit.path.push(vec(engageGoal.x, engageGoal.y));
+      unit.pathIndex = 0;
+      unit.pathGoal.x = engageGoal.x;
+      unit.pathGoal.y = engageGoal.y;
+      unit.repathIn = REPATH_INTERVAL;
+      continue;
+    }
+
     if (!pathExhausted && unit.repathIn > 0 && !goalMoved) continue;
 
     const found = world.pathFinder.findPath(

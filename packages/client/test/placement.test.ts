@@ -4,6 +4,7 @@ import {
   World,
   createCardFormation,
   fromFloat,
+  halfCourtYRange,
   resolveFormationSpawns,
 } from '@pb/sim';
 import {
@@ -17,7 +18,8 @@ import {
   isBuildingInsideBlueHalf,
   isFormationInsideBlueHalf,
 } from '../src/input/placement.js';
-import { ARENA_W } from '../src/view/coords.js';
+import { collectHalfCourtPlaceableCells } from '../src/input/placeableHighlight.js';
+import { ARENA_H, ARENA_W } from '../src/view/coords.js';
 
 /** 造一个两排四人的方阵，横向/排间距固定，便于按格算边界。 */
 function squadFormation(): ReturnType<typeof createCardFormation> {
@@ -116,7 +118,26 @@ describe('建造模式可放置目标格', () => {
     expect(cells.length).toBeGreaterThan(0);
     const keys = new Set(cells.map((c) => `${c.x},${c.y}`));
     expect(keys.size).toBe(cells.length);
-    // 空场时 2×2 足迹铺满蓝方半场：18×16 = 288 格
-    expect(cells.length).toBe(ARENA_W * BLUE_HALF_MAX_Y);
+    // 河道前的完整格都可被 2×2 足迹覆盖：18×15 = 270 格
+    expect(cells.length).toBe(ARENA_W * Math.floor(BLUE_HALF_MAX_Y));
+  });
+});
+
+describe('拖拽部署区高亮', () => {
+  it('只枚举蓝方半场内的完整格心', () => {
+    const { minY, maxY } = halfCourtYRange(Faction.Blue);
+    const cells = collectHalfCourtPlaceableCells(Faction.Blue);
+
+    expect(cells.every((cell) => cell.x >= 0 && cell.x <= ARENA_W)).toBe(true);
+    expect(cells.every((cell) => cell.y >= minY && cell.y < maxY)).toBe(true);
+    expect(cells).toHaveLength(ARENA_W * (Math.floor(maxY) - Math.ceil(minY)));
+  });
+
+  it('只枚举红方半场内的完整格心', () => {
+    const { minY, maxY } = halfCourtYRange(Faction.Red);
+    const cells = collectHalfCourtPlaceableCells(Faction.Red);
+
+    expect(cells.every((cell) => cell.y >= minY && cell.y < maxY)).toBe(true);
+    expect(cells).toHaveLength(ARENA_W * (ARENA_H - Math.ceil(minY)));
   });
 });

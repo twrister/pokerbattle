@@ -41,14 +41,17 @@ export interface BuildingPlacementOptions {
 
 const VALID_COLOR = 0x3dd68c;
 const INVALID_COLOR = 0xf05353;
-/** 全场可放置目标格：单层 1×1，略淡以免盖住光标预览 */
-const SLOT_OPACITY = 0.26;
-/** 格子略缩小，露出格线，避免视觉粘成一整块 */
-const SLOT_SCALE = 0.92;
+/** 建筑可放置区域与兵种部署区统一使用白色。 */
+const SLOT_COLOR = 0xffffff;
+/** 全场可放置目标格：降低透明度以免盖住战场和光标预览。 */
+const SLOT_OPACITY = 0.1;
+/** 格子完整贴合，形成连续部署区而不留间距。 */
+const SLOT_SCALE = 1;
+const SLOT_FADE_DURATION_MS = 160;
 const PREVIEW_FILL_OPACITY = 0.38;
 
 export interface BuildingPlacementHandle {
-  /** 世界占格变化后刷新绿色目标格 */
+  /** 世界占格变化后刷新白色目标格 */
   refreshSlots: () => void;
   /** 用屏幕坐标同步光标吸附预览（拖拽悬停时用） */
   syncPointer: (clientX: number, clientY: number) => void;
@@ -124,7 +127,7 @@ export function collectPlaceableBuildingCells(
 }
 
 /**
- * 建筑放置模式：场景铺满可放置绿色目标格，指针吸附预览（合法绿 / 非法红），
+ * 建筑放置模式：场景铺满可放置白色目标格，指针吸附预览（合法绿 / 非法红），
  * 点击合法格下发 PlaceBuilding。与放兵点击监听互斥，由调用方切换。
  */
 export function enableBuildingPlacement(options: BuildingPlacementOptions): BuildingPlacementHandle {
@@ -177,21 +180,22 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
   preview.add(fill, edges);
 
   const slotMat = new THREE.MeshBasicMaterial({
-    color: VALID_COLOR,
+    color: SLOT_COLOR,
     transparent: true,
-    opacity: SLOT_OPACITY,
+    opacity: 0,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
   let slotMesh: THREE.InstancedMesh | null = null;
   let disposed = false;
+  let slotFadeFrameId: number | null = null;
 
   let lastValid = false;
   let lastCenterX = 0;
   let lastCenterY = 0;
   let lastFootprint = 0;
 
-  /** 按「去重后的 1×1 格」铺绿色目标区，避免 footprint 矩形互相叠色 */
+  /** 按「去重后的 1×1 格」铺无缝白色目标区，避免 footprint 矩形互相叠色。 */
   const refreshSlots = (): void => {
     if (disposed) return;
     const typeId = getTypeId();
@@ -233,6 +237,24 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     slotsGroup.remove(slotMesh);
     slotMesh.geometry.dispose();
     slotMesh = null;
+  };
+
+  /** 平滑调整目标格透明度，避免进入或退出放置模式时画面突变。 */
+  const fadeSlotsTo = (targetOpacity: number, onComplete?: () => void): void => {
+    if (slotFadeFrameId !== null) cancelAnimationFrame(slotFadeFrameId);
+    const startOpacity = slotMat.opacity;
+    const startedAt = performance.now();
+    const tick = (now: number): void => {
+      const progress = Math.min((now - startedAt) / SLOT_FADE_DURATION_MS, 1);
+      slotMat.opacity = startOpacity + (targetOpacity - startOpacity) * progress;
+      if (progress < 1) {
+        slotFadeFrameId = requestAnimationFrame(tick);
+        return;
+      }
+      slotFadeFrameId = null;
+      onComplete?.();
+    };
+    slotFadeFrameId = requestAnimationFrame(tick);
   };
 
   /** 按当前兵种占地刷新光标预览尺寸与颜色 */
@@ -314,6 +336,7 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
   };
 
   refreshSlots();
+  fadeSlotsTo(SLOT_OPACITY);
   if (listenInput) {
     domElement.addEventListener('pointermove', onPointerMove);
     domElement.addEventListener('pointerdown', onPointerDown, true);
@@ -325,19 +348,23 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     syncPointer: syncPreview,
     tryPlaceAt,
     dispose: () => {
+      if (disposed) return;
       disposed = true;
       if (listenInput) {
         domElement.removeEventListener('pointermove', onPointerMove);
         domElement.removeEventListener('pointerdown', onPointerDown, true);
         window.removeEventListener('keydown', onKeyDown);
       }
-      clearSlots();
-      scene.remove(root);
-      fill.geometry.dispose();
-      fillMat.dispose();
-      edges.geometry.dispose();
-      lineMat.dispose();
-      slotMat.dispose();
+      preview.visible = false;
+      fadeSlotsTo(0, () => {
+        clearSlots();
+        scene.remove(root);
+        fill.geometry.dispose();
+        fillMat.dispose();
+        edges.geometry.dispose();
+        lineMat.dispose();
+        slotMat.dispose();
+      });
     },
   };
 }

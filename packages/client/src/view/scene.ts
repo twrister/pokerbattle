@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Faction } from '@pb/sim';
+import { ARENA_BRIDGES, ARENA_RIVER_MAX_Y, ARENA_RIVER_MIN_Y, Faction } from '@pb/sim';
 import { ARENA_H, ARENA_W } from './coords.js';
 
 /** 单机正交斜视角默认俯仰角（相对水平面，度） */
@@ -97,7 +97,11 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
 
   scene.add(createArenaGrid());
   scene.add(createArenaBorder());
-  scene.add(createHalfCourtLine());
+  const halfCourtLine = createHalfCourtLine();
+  const arenaTerrain = createArenaTerrain();
+  scene.add(halfCourtLine);
+  scene.add(arenaTerrain);
+  setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
 
   const resize = (): void => {
     const width = container.clientWidth || window.innerWidth;
@@ -126,6 +130,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
       mode = next;
       viewFaction = nextFaction;
       ({ camera, controls } = createCamera(mode, renderer.domElement, soloCameraAngleDeg, viewFaction));
+      setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
       resize();
     },
     getSoloCameraAngle() {
@@ -234,7 +239,7 @@ export function applySoloCameraPose(
 }
 
 /**
- * 按当前斜视角把战场四角投到相机空间，再配平宽高比，保证 18×32 场地始终完整可见。
+ * 按当前斜视角把战场四角投到相机空间，再配平宽高比，保证 18×31 场地始终完整可见。
  */
 export function calculateSoloOrthoBounds(
   aspect: number,
@@ -295,7 +300,7 @@ export function calculateSoloOrthoBounds(
   };
 }
 
-/** 容器变化时更新投影；正交镜头始终按宽高比例完整包住 18×32 战场。 */
+/** 容器变化时更新投影；正交镜头始终按宽高比例完整包住 18×31 战场。 */
 function resizeCamera(
   camera: THREE.Camera,
   aspect: number,
@@ -318,7 +323,7 @@ function resizeCamera(
   }
 }
 
-/** 一格一线的参考网格。GridHelper 只能画正方形，场地是 18x32 所以自己拼。 */
+/** 一格一线的参考网格。GridHelper 只能画正方形，场地是 18×31 所以自己拼。 */
 function createArenaGrid(): THREE.LineSegments {
   const halfW = ARENA_W / 2;
   const halfH = ARENA_H / 2;
@@ -363,4 +368,50 @@ function createHalfCourtLine(): THREE.Line {
     new THREE.BufferGeometry().setFromPoints(points),
     new THREE.LineBasicMaterial({ color: 0x6b7a92 }),
   );
+}
+
+/** 单机/联机对局的中线河道与双桥；沙盒保留原有空场地中线。 */
+function createArenaTerrain(): THREE.Group {
+  const terrain = new THREE.Group();
+  const riverHeight = ARENA_RIVER_MAX_Y - ARENA_RIVER_MIN_Y;
+  const river = new THREE.Mesh(
+    new THREE.PlaneGeometry(ARENA_W, riverHeight),
+    new THREE.MeshStandardMaterial({ color: 0x173c4d, roughness: 0.72, metalness: 0.08 }),
+  );
+  river.rotation.x = -Math.PI / 2;
+  river.position.set(0, 0.025, ARENA_H / 2 - (ARENA_RIVER_MIN_Y + riverHeight / 2));
+  river.receiveShadow = true;
+  terrain.add(river);
+
+  const bridgeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8b6a42,
+    roughness: 0.82,
+    metalness: 0,
+  });
+  for (const bridge of ARENA_BRIDGES) {
+    const bridgeDeck = new THREE.Mesh(
+      new THREE.BoxGeometry(bridge.maxX - bridge.minX, 0.1, riverHeight),
+      bridgeMaterial,
+    );
+    bridgeDeck.position.set(
+      bridge.minX + (bridge.maxX - bridge.minX) / 2 - ARENA_W / 2,
+      0.07,
+      ARENA_H / 2 - (ARENA_RIVER_MIN_Y + riverHeight / 2),
+    );
+    bridgeDeck.castShadow = true;
+    bridgeDeck.receiveShadow = true;
+    terrain.add(bridgeDeck);
+  }
+  return terrain;
+}
+
+/** 按场景模式切换对局河桥与沙盒中线，避免沙盒地形发生变化。 */
+function setArenaTerrainVisibility(
+  mode: SceneMode,
+  halfCourtLine: THREE.Line,
+  arenaTerrain: THREE.Group,
+): void {
+  const isSolo = mode === 'solo';
+  halfCourtLine.visible = !isSolo;
+  arenaTerrain.visible = isSolo;
 }

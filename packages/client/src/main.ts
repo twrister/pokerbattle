@@ -28,6 +28,11 @@ import {
   type BuildingPlacementHandle,
 } from './input/buildingPlacement.js';
 import {
+  collectHalfCourtPlaceableCells,
+  showPlaceableHighlight,
+  type PlaceableHighlightHandle,
+} from './input/placeableHighlight.js';
+import {
   enablePlacement,
   isBuildingInsideBlueHalf,
   isFormationInsideBlueHalf,
@@ -123,11 +128,28 @@ function enterBattleSession(mode: BattleMode): () => void {
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
+  let placeableHighlight: PlaceableHighlightHandle | null = null;
 
   const stopSoloBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
     soloBuildingPreview.dispose();
     soloBuildingPreview = null;
+  };
+
+  /** 清除当前手牌拖拽所显示的白色部署区。 */
+  const stopPlaceableHighlight = (): void => {
+    if (!placeableHighlight) return;
+    placeableHighlight.dispose();
+    placeableHighlight = null;
+  };
+
+  /** 显示蓝方半场的基础部署区，具体阵型边界仍由落点校验处理。 */
+  const startPlaceableHighlight = (): void => {
+    stopPlaceableHighlight();
+    placeableHighlight = showPlaceableHighlight(
+      sceneContext.scene,
+      collectHalfCourtPlaceableCells(Faction.Blue),
+    );
   };
 
   const onBuildingDragStart = (formation: CardFormation): void => {
@@ -246,6 +268,8 @@ function enterBattleSession(mode: BattleMode): () => void {
           soloBuildingPreview?.syncPointer(clientX, clientY);
         },
         onBuildingDragEnd: stopSoloBuildingPreview,
+        onPlaceableHighlightStart: startPlaceableHighlight,
+        onPlaceableHighlightEnd: stopPlaceableHighlight,
       })
     : null;
 
@@ -379,6 +403,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     disableUnitPlacement();
     disableBuildingPlacementFn();
     stopSoloBuildingPreview();
+    stopPlaceableHighlight();
     handPanel?.dispose();
     panel.dispose();
     configPanel?.setOnApplied(() => {});
@@ -453,10 +478,24 @@ function runVersusSession(
   battleView.reset();
 
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
+  let placeableHighlight: PlaceableHighlightHandle | null = null;
   const stopBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
     soloBuildingPreview.dispose();
     soloBuildingPreview = null;
+  };
+
+  /** 清除当前手牌拖拽所显示的白色部署区。 */
+  const stopPlaceableHighlight = (): void => {
+    if (!placeableHighlight) return;
+    placeableHighlight.dispose();
+    placeableHighlight = null;
+  };
+
+  /** 显示本地阵营半场的基础部署区，具体阵型边界仍由落点校验处理。 */
+  const startPlaceableHighlight = (): void => {
+    stopPlaceableHighlight();
+    placeableHighlight = showPlaceableHighlight(sceneContext.scene, collectHalfCourtPlaceableCells(faction));
   };
 
   const canSpawnAt = (
@@ -566,6 +605,8 @@ function runVersusSession(
     },
     onBuildingDragMove: (clientX, clientY) => soloBuildingPreview?.syncPointer(clientX, clientY),
     onBuildingDragEnd: stopBuildingPreview,
+    onPlaceableHighlightStart: startPlaceableHighlight,
+    onPlaceableHighlightEnd: stopPlaceableHighlight,
   });
 
   // 联机禁用运行控制；面板只读 world 统计，挂一个只读壳避免改 SimLoop API
@@ -628,6 +669,7 @@ function runVersusSession(
     container.classList.remove('is-solo', 'is-versus');
     backButton.removeEventListener('click', returnToMenu);
     stopBuildingPreview();
+    stopPlaceableHighlight();
     handPanel.dispose();
     panel.dispose();
     battleView.reset();

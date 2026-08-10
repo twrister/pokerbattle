@@ -11,6 +11,7 @@ import {
   isBuildingOnlyFormation,
   resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
+import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import { isBuildingInsideHalfCourt, isFormationInsideHalfCourt } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { TICK_RATE } from '../config/tuning.js';
@@ -32,6 +33,7 @@ export class MatchState {
 
   constructor(seed = 1) {
     this.world = new World(seed);
+    applyArenaTerrain(this.world.nav);
     // 双方牌堆共用 world.rng，抽牌顺序固定为蓝→红，保证确定性
     this.decks = {
       [Faction.Blue]: new PokerDeck(createPokerCards(), this.world.rng),
@@ -85,6 +87,7 @@ export class MatchState {
   /** 清空战场与牌堆，回到开局发牌状态。 */
   clear(): void {
     this.world.clear();
+    applyArenaTerrain(this.world.nav);
     // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象
     this.decks[Faction.Blue].reset();
     this.decks[Faction.Red].reset();

@@ -5,6 +5,13 @@ export { Rng } from './math/rng.js';
 
 export { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
 export {
+  ARENA_BRIDGES,
+  ARENA_RIVER_MAX_Y,
+  ARENA_RIVER_MIN_Y,
+  applyArenaTerrain,
+  type ArenaBridge,
+} from './config/arenaTerrain.js';
+export {
   AIR_PROJECTILE_HEIGHT,
   AIR_UNIT_HOVER_HEIGHT,
   GROUND_PROJECTILE_HEIGHT,

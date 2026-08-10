@@ -25,7 +25,7 @@ const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
 /** 拖到战场但整阵越界时的提示。 */
 const STATUS_INVALID_DROP = '请在己方半场内放置完整阵型';
 /** 拖拽建筑阵型时的操作提示。 */
-const STATUS_BUILDING_DRAG = '拖到绿色格子上松手放置';
+const STATUS_BUILDING_DRAG = '拖到白色格子上松手放置';
 /** 单次出牌可识别的牌型最多张数。 */
 const MAX_CATEGORY_CARDS = 5;
 /** 箭头弧顶相对首尾连线的最大抬高像素。 */
@@ -63,12 +63,16 @@ export interface HandPanelOptions {
     point: { clientX: number; clientY: number } | null,
     formation: CardFormation,
   ) => boolean;
-  /** 开始拖拽单建筑阵型：进入放置预览（绿格）。 */
+  /** 开始拖拽单建筑阵型：进入放置预览（白色格）。 */
   onBuildingDragStart?: (formation: CardFormation) => void;
   /** 拖拽建筑时同步吸附预览位置。 */
   onBuildingDragMove?: (clientX: number, clientY: number) => void;
-  /** 结束建筑拖拽（松手或取消）：卸下绿格预览。 */
+  /** 结束建筑拖拽（松手或取消）：卸下白色格预览。 */
   onBuildingDragEnd?: () => void;
+  /** 非建筑阵型持续拖拽 0.5 秒后：显示场地可放置区域。 */
+  onPlaceableHighlightStart?: (formation: CardFormation) => void;
+  /** 非建筑阵型拖拽结束或取消：隐藏场地可放置区域。 */
+  onPlaceableHighlightEnd?: () => void;
   /** 出兵成功且出牌动画结束后的回调。 */
   onPlay?: (cards: readonly PlayingCard[], formation: CardFormation | null) => void;
 }
@@ -315,7 +319,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncSelection();
   };
 
-  /** 按下阵型按钮：捕获指针并开始画拖拽箭头；建筑则立刻进入绿格放置预览。 */
+  /** 按下阵型按钮：捕获指针并开始画拖拽箭头；建筑则立刻进入白色格放置预览。 */
   const onFormationPointerDown = (event: PointerEvent): void => {
     if (playing || event.button !== 0) return;
     const button = (event.target as Element).closest<HTMLButtonElement>(
@@ -336,6 +340,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       options.onBuildingDragStart?.(formation);
       options.onBuildingDragMove?.(event.clientX, event.clientY);
       setActionStatus(STATUS_BUILDING_DRAG);
+    } else {
+      options.onPlaceableHighlightStart?.(formation);
     }
   };
 
@@ -413,7 +419,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   formationsElement.addEventListener('pointercancel', onFormationPointerCancel);
   formationsElement.addEventListener('click', onFormationClick);
 
-  /** 结束一次出兵手势：释放指针捕获、卸建筑绿格预览并收起箭头。 */
+  /** 结束一次出兵手势：释放指针捕获、卸建筑白色格预览并收起箭头。 */
   function endFormationDrag(pointerId: number): void {
     if (formationsElement.hasPointerCapture(pointerId)) {
       formationsElement.releasePointerCapture(pointerId);
@@ -425,6 +431,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     draggingBuilding = false;
     hideArrow();
     if (wasBuilding) options.onBuildingDragEnd?.();
+    else options.onPlaceableHighlightEnd?.();
   }
 
   /**
@@ -717,6 +724,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       if (draggingBuilding) {
         draggingBuilding = false;
         options.onBuildingDragEnd?.();
+      } else if (dragPointerId !== null) {
+        options.onPlaceableHighlightEnd?.();
       }
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();
