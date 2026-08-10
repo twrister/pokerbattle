@@ -20,7 +20,7 @@ const NUMERIC_FIELDS: Array<{
   hint?: string;
 }> = [
   { key: 'radius', label: '半径', step: '0.05', hint: '碰撞' },
-  { key: 'bodyScale', label: '体型', step: '0.05', hint: '铁卫=1' },
+  { key: 'bodyScale', label: '体型', step: '0.05', hint: '民兵=1' },
   { key: 'mass', label: '质量', step: '0.1', hint: '推挤权重' },
   { key: 'maxHp', label: '生命', step: '10' },
   { key: 'damage', label: '伤害', step: '5' },

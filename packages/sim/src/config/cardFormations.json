@@ -19,7 +19,7 @@
   "bomb": [
     {
       "id": "bomb_cavalry",
-      "name": "双骑兵",
+      "name": "双皇家骑士",
       "rows": [
         [
           "melee_cavalry",
@@ -81,7 +81,7 @@
   "straight5": [
     {
       "id": "straight5_wave",
-      "name": "五铁卫",
+      "name": "五民兵",
       "rows": [
         [
           "melee_grunt",
@@ -98,7 +98,7 @@
   "straight4": [
     {
       "id": "straight4_line",
-      "name": "四铁卫",
+      "name": "四民兵",
       "rows": [
         [
           "melee_grunt",
@@ -114,7 +114,7 @@
   "triple_with_one": [
     {
       "id": "triple_one_support",
-      "name": "铁卫带弓",
+      "name": "民兵带弓",
       "rows": [
         [
           "melee_grunt",
@@ -132,7 +132,7 @@
   "two_pair": [
     {
       "id": "two_pair_split",
-      "name": "铁卫弓手各二",
+      "name": "民兵弓手各二",
       "rows": [
         [
           "melee_grunt",
@@ -161,7 +161,7 @@
   "triple": [
     {
       "id": "triple_grunts",
-      "name": "三铁卫",
+      "name": "三民兵",
       "rows": [
         [
           "melee_grunt",
@@ -174,7 +174,7 @@
     },
     {
       "id": "triple_cavalry",
-      "name": "单骑兵",
+      "name": "单皇家骑士",
       "rows": [
         [
           "melee_cavalry"
@@ -198,7 +198,7 @@
   "straight3": [
     {
       "id": "straight3_mix",
-      "name": "铁卫弓手",
+      "name": "民兵弓手",
       "rows": [
         [
           "melee_grunt"
@@ -226,7 +226,7 @@
   "pair": [
     {
       "id": "pair_grunts",
-      "name": "双铁卫",
+      "name": "双民兵",
       "rows": [
         [
           "melee_grunt",
@@ -263,7 +263,7 @@
   "single": [
     {
       "id": "single_grunt",
-      "name": "单铁卫",
+      "name": "单民兵",
       "rows": [
         [
           "melee_grunt"

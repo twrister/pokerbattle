@@ -3,6 +3,7 @@ export interface MainMenuOptions {
   onStartSolo: () => void;
   onStartVersus: () => void;
   onOpenDeckConfig: () => void;
+  onOpenCodex: () => void;
 }
 
 export interface MainMenuHandle {
@@ -18,6 +19,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const matchButton = required<HTMLButtonElement>('#btn-match', root);
   const sandboxButton = required<HTMLButtonElement>('#btn-sandbox', root);
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
+  const codexButton = required<HTMLButtonElement>('#btn-codex', root);
   const soloEasyButton = required<HTMLButtonElement>('#btn-solo-easy', root);
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
@@ -64,11 +66,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     options.onStartVersus();
   };
   const openDeckConfig = (): void => options.onOpenDeckConfig();
+  const openCodex = (): void => options.onOpenCodex();
 
   soloButton.addEventListener('click', openSoloDialog);
   matchButton.addEventListener('click', openOnlineDialog);
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
+  codexButton.addEventListener('click', openCodex);
   soloEasyButton.addEventListener('click', startSoloEasy);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
   for (const button of placeholderButtons) {
@@ -95,6 +99,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       matchButton.removeEventListener('click', openOnlineDialog);
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
+      codexButton.removeEventListener('click', openCodex);
       soloEasyButton.removeEventListener('click', startSoloEasy);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
       for (const button of placeholderButtons) {

@@ -1,7 +1,7 @@
 {
   "melee_grunt": {
     "id": "melee_grunt",
-    "name": "铁卫（近战）",
+    "name": "民兵（近战）",
     "radius": 0.5,
     "bodyScale": 1,
     "mass": 3,
@@ -55,7 +55,7 @@
   },
   "melee_cavalry": {
     "id": "melee_cavalry",
-    "name": "骑兵（冲刺）",
+    "name": "皇家骑士（冲刺）",
     "radius": 0.7,
     "bodyScale": 1.4,
     "mass": 3.2,
@@ -174,7 +174,7 @@
   },
   "dragon": {
     "id": "dragon",
-    "name": "龙（飞行范围）",
+    "name": "巨龙（飞行范围）",
     "radius": 0.6,
     "bodyScale": 1.3,
     "mass": 3,

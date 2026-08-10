@@ -25,7 +25,7 @@ export interface UnitSnapshot {
   hpRatio: number;
   /** 正在出手前摇，渲染层可以据此播放攻击动作 */
   attacking: boolean;
-  /** 骑兵冲刺中，渲染层可以提高高亮 */
+  /** 皇家骑士冲刺中，渲染层可以提高高亮 */
   charging: boolean;
   /** 受到国王振奋时，渲染层显示持续光环 */
   inspired: boolean;
@@ -40,7 +40,7 @@ export interface ProjectileSnapshot {
   faction: Faction;
   x: number;
   y: number;
-  /** 离地高度，供渲染把弹道抬到发射点（如龙头） */
+  /** 离地高度，供渲染把弹道抬到发射点（如巨龙头） */
   height: number;
 }
 

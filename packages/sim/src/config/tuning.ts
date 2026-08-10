@@ -63,8 +63,8 @@ export const AIR_UNIT_HOVER_HEIGHT = 1.4;
 /** 地面远程弹道默认离地高度。 */
 export const GROUND_PROJECTILE_HEIGHT = 0.9;
 /**
- * 空中单位弹道出生高度：约等于悬浮高度 + 龙头相对脚底的位置，
- * 让火球从龙头吐出而不是脚底。
+ * 空中单位弹道出生高度：约等于悬浮高度 + 巨龙头相对脚底的位置，
+ * 让火球从巨龙头吐出而不是脚底。
  */
 export const AIR_PROJECTILE_HEIGHT = 2.5;
 

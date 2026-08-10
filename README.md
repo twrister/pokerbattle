@@ -46,7 +46,7 @@ packages/
 
 无特殊技能时，往 [config/units.ts](packages/sim/src/config/units.ts) 的 `UNIT_CONFIGS` 加一行即可，HUD 兵种按钮和渲染视图会自动跟上。
 
-带冲刺等技能时，除配置外还要在对应系统里接线（例如骑兵的 `charge` 配置由 [systems/cavalry.ts](packages/sim/src/systems/cavalry.ts) 驱动）。
+带冲刺等技能时，除配置外还要在对应系统里接线（例如皇家骑士的 `charge` 配置由 [systems/cavalry.ts](packages/sim/src/systems/cavalry.ts) 驱动）。
 
 ## 加一个 Buff
 

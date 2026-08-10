@@ -36,7 +36,7 @@ describe('牌型兵种阵型配置', () => {
     }
   });
 
-  it('铁卫弓手各二：前排铁卫、后排弓手', () => {
+  it('民兵弓手各二：前排民兵、后排弓手', () => {
     const formation = CARD_FORMATIONS.two_pair.find((entry) => entry.id === 'two_pair_split');
     expect(formation).toBeDefined();
     expect(formation!.rows).toEqual([

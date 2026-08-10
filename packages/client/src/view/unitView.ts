@@ -29,7 +29,7 @@ import { viewNearSign } from './coords.js';
  * 单位视图。各兵种用参考立绘做成公告板精灵（始终面向相机的面片），
  * 配合程序化的待机/行走/攻击动作；贴图按兵种共享，材质按视图克隆以便单独受击染色。
  * 没有立绘的兵种沿用纯色圆柱占位。
- * 地面上那圈亮环仍是真实碰撞圈；精灵/圆柱大小只看体型（相对铁卫=1），与碰撞半径无关。
+ * 地面上那圈亮环仍是真实碰撞圈；精灵/圆柱大小只看体型（相对民兵=1），与碰撞半径无关。
  */
 export class UnitView {
   readonly key: string;
@@ -123,7 +123,7 @@ export class UnitView {
     this.isAir = config.movementLayer === 'air';
     this.isBuilding = config.footprint > 0;
     this.isDetonator = !!config.detonate;
-    // 碰撞圈用真实半径；显示半径 = 铁卫基准 × 体型，与碰撞完全解耦
+    // 碰撞圈用真实半径；显示半径 = 民兵基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
     const footprint = config.footprint;
@@ -467,7 +467,7 @@ export class UnitView {
 
   /**
    * 按状态摆精灵姿势，全部是廉价的正弦程序动画：
-   * - 前摇（含骑兵冲刺蓄力）：向目标反方向后仰蓄力（与面向相反）；
+   * - 前摇（含皇家骑士冲刺蓄力）：向目标反方向后仰蓄力（与面向相反）；
    * - 出手：前摇结束瞬间触发，朝面向一侧快速前倾突刺；
    * - 行走/冲刺位移：上下弹跳 + 左右摇摆，模拟小碎步；
    * - 待机：轻微的呼吸浮动与拉伸。

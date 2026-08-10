@@ -35,6 +35,7 @@ import {
 } from './input/placement.js';
 import { connectVersusSession } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
+import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
@@ -61,8 +62,10 @@ const mainMenu = createMainMenu({
   onStartSolo: () => screens.show('solo'),
   onStartVersus: () => screens.show('versus'),
   onOpenDeckConfig: () => screens.show('deck-config'),
+  onOpenCodex: () => screens.show('codex'),
 });
 const deckConfigPage = createDeckConfigPage({ onBack: () => screens.show('menu') });
+const codexPage = createCodexPage({ onBack: () => screens.show('menu') });
 
 /**
  * 战斗场景与配置面板跨「大厅 ↔ 单机/沙盒/联机」复用。
@@ -649,6 +652,10 @@ screens = createScreenController({
     deckConfigPage.show();
     return () => deckConfigPage.hide();
   },
+  codex: () => {
+    codexPage.show();
+    return () => codexPage.hide();
+  },
   sandbox: enterSandbox,
   solo: enterSolo,
   versus: enterVersus,
@@ -666,6 +673,7 @@ function disposeApp(): void {
   disposeFormationThumbnailRenderer();
   mainMenu.dispose();
   deckConfigPage.dispose();
+  codexPage.dispose();
 }
 
 window.addEventListener('pagehide', disposeApp, { once: true });

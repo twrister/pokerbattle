@@ -4,7 +4,7 @@ import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
-describe('骑兵冲刺', () => {
+describe('皇家骑士冲刺', () => {
   it('CD 就绪且目标在 2～2.5 格时进入冲刺并前进约 3 格', () => {
     const world = new World(1);
     // 中心距 2.25，落在触发窗内；双方尚未索敌前不会互相走近

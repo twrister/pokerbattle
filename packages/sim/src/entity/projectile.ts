@@ -21,7 +21,7 @@ export interface Projectile {
   aoeRadius: Fx;
   /** 当前渲染离地高度，飞行中在 start/end 之间插值。 */
   height: number;
-  /** 发射点高度（如龙头 2.5）。 */
+  /** 发射点高度（如巨龙头 2.5）。 */
   startHeight: number;
   /** 目标点高度：地面单位为 0，空中单位与出生高度对齐。 */
   endHeight: number;

@@ -431,7 +431,7 @@ function numberInput(
   return row;
 }
 
-/** 把阵型 rows 格式化为「前：铁卫x2 / 后：弓手x2」，与手牌阵型按钮 aria 文案一致。 */
+/** 把阵型 rows 格式化为「前：民兵x2 / 后：弓手x2」，与手牌阵型按钮 aria 文案一致。 */
 function formatFormationUnits(formation: CardFormation): string {
   if (formation.rows.length === 0) return '';
   if (formation.rows.length === 1) {
@@ -445,7 +445,7 @@ function formatFormationUnits(formation: CardFormation): string {
     .join(' / ');
 }
 
-/** 单排兵种短标签，如「铁卫x2 · 弓手x1」。 */
+/** 单排兵种短标签，如「民兵x2 · 弓手x1」。 */
 function formatRowUnits(row: readonly UnitTypeId[]): string {
   const counts = new Map<UnitTypeId, number>();
   const order: UnitTypeId[] = [];

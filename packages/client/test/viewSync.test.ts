@@ -155,7 +155,7 @@ describe('渲染同步', () => {
     unitView.dispose();
   });
 
-  it('龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
+  it('巨龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
     expect(SPRITE_DEFS.dragon?.frontUrl).toBe('units/dragon-front.png');
     expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');
 

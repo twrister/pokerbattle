@@ -19,7 +19,7 @@ function flyUntilImpact(world: World, projectileId: number, maxTicks = 100): voi
   throw new Error('范围弹未在预期 tick 内落地');
 }
 
-describe('飞行龙', () => {
+describe('飞行巨龙', () => {
   it('加载指定基础参数与落点范围弹道', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
@@ -128,11 +128,11 @@ describe('飞行龙', () => {
     expect(dragon.hp).toBe(dragon.stats.maxHp);
   });
 
-  it('有敌方建筑时龙不锁更近的近战地面兵', () => {
+  it('有敌方建筑时巨龙不锁更近的近战地面兵', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
     const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
-    // 比基地中心更近，但打不到空中——有建筑时不应引走龙
+    // 比基地中心更近，但打不到空中——有建筑时不应引走巨龙
     const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
     dragon.retargetIn = 0;
     melee.stats.damage = 0;
@@ -142,7 +142,7 @@ describe('飞行龙', () => {
     expect(dragon.targetId).toBe(base.id);
   });
 
-  it('龙追建筑时近战贴脸应改火', () => {
+  it('巨龙追建筑时近战贴脸应改火', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
     const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
@@ -152,14 +152,14 @@ describe('飞行龙', () => {
     expect(dragon.targetId).toBe(base.id);
     expect(dragon.state).toBe(UnitState.Seek);
 
-    // 圆心距 2，落在龙攻击射程内（约 2.6），应打断推家改火
+    // 圆心距 2，落在巨龙攻击射程内（约 2.6），应打断推家改火
     const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(8));
     for (let i = 0; i < 5; i++) world.step();
 
     expect(dragon.targetId).toBe(melee.id);
   });
 
-  it('龙锁近战后拉开出射程应弃目标并回锁建筑', () => {
+  it('巨龙锁近战后拉开出射程应弃目标并回锁建筑', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
     const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
@@ -180,7 +180,7 @@ describe('飞行龙', () => {
     expect(dragon.targetId).toBe(base.id);
   });
 
-  it('无建筑时龙仍会锁近战地面兵', () => {
+  it('无建筑时巨龙仍会锁近战地面兵', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
     const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
@@ -192,7 +192,7 @@ describe('飞行龙', () => {
     expect(dragon.targetId).toBe(melee.id);
   });
 
-  it('有建筑时龙仍会锁更近的对空威胁', () => {
+  it('有建筑时巨龙仍会锁更近的对空威胁', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
     world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24));
@@ -205,7 +205,7 @@ describe('飞行龙', () => {
     expect(dragon.targetId).toBe(archer.id);
   });
 
-  it('龙弹道从 2.5 高度发射，打地面时落点高度为 0', () => {
+  it('巨龙弹道从 2.5 高度发射，打地面时落点高度为 0', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
     const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
@@ -226,7 +226,7 @@ describe('飞行龙', () => {
     expect(projectile.height).toBe(0);
   });
 
-  it('龙攻击空中单位时改为单体且无范围脉冲', () => {
+  it('巨龙攻击空中单位时改为单体且无范围脉冲', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
     const airTarget = world.spawnUnit(Faction.Red, 'dragon', fromFloat(9), fromFloat(11.5));

@@ -1595,6 +1595,237 @@
         color: #ffab9e;
       }
 
+      #codex {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: auto;
+        background:
+          radial-gradient(circle at 78% 12%, rgba(81, 126, 168, 0.24), transparent 35%),
+          #0a1018;
+      }
+
+      .codex-shell {
+        gap: calc(20 * var(--hu));
+        overflow: auto;
+      }
+
+      .codex-header,
+      .codex-toolbar,
+      .codex-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .codex-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(12 * var(--hu));
+      }
+
+      .codex-header h1 {
+        margin: 0;
+        font-size: calc(34 * var(--hu));
+      }
+
+      .codex-back,
+      .codex-category,
+      .codex-unit-card {
+        border: 1px solid var(--panel-border);
+        border-radius: calc(9 * var(--hu));
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .codex-back {
+        min-height: calc(34 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+      }
+
+      .codex-toolbar {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      .codex-toolbar-copy {
+        margin: 0;
+        color: var(--text-dim);
+        line-height: 1.6;
+      }
+
+      .codex-category-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(7 * var(--hu));
+      }
+
+      .codex-category {
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+        color: var(--text-dim);
+      }
+
+      .codex-category.is-active,
+      .codex-unit-card.is-active {
+        border-color: rgba(99, 214, 138, 0.8);
+        background: rgba(45, 92, 77, 0.75);
+        color: #effff5;
+      }
+
+      .codex-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(calc(230 * var(--hu)), 0.8fr);
+        gap: calc(12 * var(--hu));
+        align-items: start;
+      }
+
+      .codex-unit-list,
+      .codex-detail {
+        border: 1px solid var(--panel-border);
+        border-radius: calc(12 * var(--hu));
+        background: rgba(18, 27, 38, 0.84);
+      }
+
+      .codex-unit-list {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: calc(8 * var(--hu));
+        padding: calc(10 * var(--hu));
+      }
+
+      .codex-unit-card {
+        display: grid;
+        min-height: calc(132 * var(--hu));
+        place-items: center;
+        gap: calc(5 * var(--hu));
+        padding: calc(9 * var(--hu)) calc(6 * var(--hu)) calc(7 * var(--hu));
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .codex-unit-art {
+        display: block;
+        width: min(100%, calc(82 * var(--hu)));
+        height: calc(82 * var(--hu));
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .codex-unit-name {
+        color: inherit;
+        font-size: calc(12 * var(--hu));
+        font-weight: 650;
+      }
+
+      .codex-detail {
+        display: grid;
+        gap: calc(15 * var(--hu));
+        padding: calc(16 * var(--hu));
+      }
+
+      .codex-detail-header {
+        display: flex;
+        align-items: center;
+        gap: calc(14 * var(--hu));
+        min-width: 0;
+      }
+
+      .codex-detail-art {
+        width: calc(88 * var(--hu));
+        height: calc(88 * var(--hu));
+        flex: 0 0 auto;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .codex-detail-category {
+        margin: 0 0 calc(4 * var(--hu));
+        color: var(--accent);
+        font-size: calc(11 * var(--hu));
+        letter-spacing: 0.12em;
+      }
+
+      .codex-detail-header h2 {
+        margin: 0;
+        font-size: calc(28 * var(--hu));
+      }
+
+      .codex-detail-summary {
+        margin: 0;
+        color: var(--text-dim);
+        line-height: 1.6;
+      }
+
+      .codex-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: max(1px, calc(1 * var(--hu)));
+        margin: 0;
+        overflow: hidden;
+        border: 1px solid rgba(144, 166, 187, 0.16);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(144, 166, 187, 0.16);
+      }
+
+      .codex-stats dt,
+      .codex-stats dd {
+        margin: 0;
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        background: rgba(16, 24, 34, 0.86);
+      }
+
+      .codex-stats dt {
+        color: var(--text-dim);
+        font-size: calc(11 * var(--hu));
+      }
+
+      .codex-stats dd {
+        text-align: right;
+      }
+
+      .codex-stat-bar {
+        height: calc(7 * var(--hu));
+        overflow: hidden;
+        border-radius: calc(4 * var(--hu));
+        background: rgba(137, 160, 181, 0.18);
+      }
+
+      .codex-stat-bar span {
+        display: block;
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #4f8dfd, #63d68a);
+        transition: width 0.2s ease;
+      }
+
+      .codex-skill {
+        padding: calc(11 * var(--hu));
+        border-left: max(1px, calc(2 * var(--hu))) solid rgba(99, 214, 138, 0.7);
+        border-radius: 0 calc(7 * var(--hu)) calc(7 * var(--hu)) 0;
+        background: rgba(99, 214, 138, 0.08);
+      }
+
+      .codex-skill span,
+      .codex-skill strong,
+      .codex-skill p {
+        display: block;
+      }
+
+      .codex-skill span {
+        margin-bottom: calc(4 * var(--hu));
+        color: var(--accent);
+        font-size: calc(11 * var(--hu));
+      }
+
+      .codex-skill p {
+        margin: calc(5 * var(--hu)) 0 0;
+        color: var(--text-dim);
+        line-height: 1.55;
+      }
+
       @media (max-height: 700px) {
         #hud.is-solo #panel-stats,
         #hud.is-solo #panel-help {
@@ -1603,6 +1834,14 @@
       }
 
       @media (max-width: 580px) {
+        .codex-content {
+          grid-template-columns: 1fr;
+        }
+
+        .codex-unit-list {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
         .deck-content {
           grid-template-columns: 1fr 1fr;
           /* 首行仍由牌型列表定高，预览/编辑各占后续行 */
@@ -1670,10 +1909,10 @@
             <span class="nav-label">卡组</span>
             <span class="nav-tag">编辑阵型</span>
           </button>
-          <button class="nav-entry" type="button" data-placeholder="图鉴">
+          <button id="btn-codex" class="nav-entry" type="button">
             <span class="nav-icon" aria-hidden="true">◇</span>
             <span class="nav-label">图鉴</span>
-            <span class="nav-tag">COMING SOON</span>
+            <span class="nav-tag">兵种档案</span>
           </button>
           <button id="btn-sandbox" class="nav-entry" type="button">
             <span class="nav-icon" aria-hidden="true">◎</span>
@@ -1725,6 +1964,23 @@
             </div>
           </div>
         </div>
+      </div>
+    </main>
+
+    <main id="codex" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell codex-shell">
+        <header class="codex-header">
+          <button id="btn-codex-back" class="codex-back" type="button">返回主界面</button>
+          <h1>兵种图鉴</h1>
+        </header>
+        <section class="codex-toolbar">
+          <p class="codex-toolbar-copy">浏览可移动单位的战斗属性与特性，选择兵种查看详细档案。</p>
+          <nav id="codex-category-list" class="codex-category-list" aria-label="兵种分类"></nav>
+        </section>
+        <section class="codex-content">
+          <div id="codex-unit-list" class="codex-unit-list" aria-label="兵种列表"></div>
+          <article id="codex-detail" class="codex-detail" aria-live="polite"></article>
+        </section>
       </div>
     </main>
 

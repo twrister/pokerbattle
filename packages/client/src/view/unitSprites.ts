@@ -13,7 +13,7 @@ export interface SpriteDef {
   /** 红方正背面贴图；缺省则与蓝方共用 */
   frontUrlRed?: string;
   backUrlRed?: string;
-  /** 精灵可视高度 = 铁卫基准半径 × 体型 × 此值（图片四周有留白，倍率略大于圆柱时代的 2.6） */
+  /** 精灵可视高度 = 民兵基准半径 × 体型 × 此值（图片四周有留白，倍率略大于圆柱时代的 2.6） */
   heightMul: number;
   /** 图片宽高比，避免非正方形素材被横向拉伸 */
   aspect: number;

@@ -25,7 +25,7 @@ export type AttackKind =
   | { kind: 'projectile'; speed: Fx }
   | { kind: 'projectile_aoe'; speed: Fx; aoeRadius: Fx };
 
-/** 冲刺技能参数。只有骑兵等具备冲锋的兵种才填写。 */
+/** 冲刺技能参数。只有皇家骑士等具备冲锋的兵种才填写。 */
 export interface ChargeConfig {
   /** 技能冷却（tick），20 tick = 1 秒 */
   cooldown: Fx;
@@ -88,7 +88,7 @@ export interface UnitConfig {
   radius: Fx;
   /**
    * 显示体型倍率，与碰撞半径解耦。
-   * 1 = 铁卫基准（显示半径 = BODY_SCALE_REFERENCE），不影响碰撞。
+   * 1 = 民兵基准（显示半径 = BODY_SCALE_REFERENCE），不影响碰撞。
    */
   bodyScale: Fx;
   /** 推挤权重，体型越大越推不动 */
@@ -198,7 +198,7 @@ export interface UnitConfigDraft {
 }
 
 /**
- * 体型=1 时的显示半径（场景单位），取铁卫出厂碰撞半径作基准。
+ * 体型=1 时的显示半径（场景单位），取民兵出厂碰撞半径作基准。
  * 渲染：显示半径 = BODY_SCALE_REFERENCE × bodyScale，与各兵种 radius 无关。
  */
 export const BODY_SCALE_REFERENCE = 0.45;
@@ -488,7 +488,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     const target = UNIT_CONFIGS[id];
     target.name = draft.name;
     target.radius = fromFloat(draft.radius);
-    // 缺省或非法体型回落为铁卫基准 1，避免 NaN 把精灵缩成看不见
+    // 缺省或非法体型回落为民兵基准 1，避免 NaN 把精灵缩成看不见
     target.bodyScale = fromFloat(
       Number.isFinite(draft.bodyScale) && draft.bodyScale > 0 ? draft.bodyScale : 1,
     );

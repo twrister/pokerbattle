@@ -22,7 +22,7 @@ export const UnitState = {
   Seek: 1,
   /** 目标在射程内，停下输出 */
   Attack: 2,
-  /** 骑兵直线冲刺中，位移与途中命中由 cavalry 系统处理 */
+  /** 皇家骑士直线冲刺中，位移与途中命中由 cavalry 系统处理 */
   Charge: 3,
 } as const;
 export type UnitState = (typeof UnitState)[keyof typeof UnitState];
@@ -91,7 +91,7 @@ export interface Unit {
   detonated: boolean;
   /**
    * 施法特效剩余逻辑帧。仅驱动快照 `casting`，不参与战斗判定。
-   * 骑兵冲刺前摇走 chargeWindupLeft，不占用本字段。
+   * 皇家骑士冲刺前摇走 chargeWindupLeft，不占用本字段。
    */
   castFxLeft: number;
   /**

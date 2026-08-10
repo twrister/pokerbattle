@@ -70,7 +70,7 @@ describe('炸弹兵自爆', () => {
     const dragonHp = dragon.hp;
     const groundHp = ground.hp;
 
-    // 近战索敌不会锁定龙；手动贴身并强制引爆
+    // 近战索敌不会锁定巨龙；手动贴身并强制引爆
     bomber.hp = 0;
     world.step();
 
