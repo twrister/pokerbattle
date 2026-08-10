@@ -22,7 +22,7 @@ const THUMBNAIL_WIDTH = 256;
 const THUMBNAIL_HEIGHT = Math.round((THUMBNAIL_WIDTH * 98) / 128);
 /** 按钮内兵种相对「刚好装进取景」再放大的倍率（默认值，可被运行控制覆盖）。 */
 export const DEFAULT_UNIT_DISPLAY_SCALE = 2;
-/** 阵型包围盒外扩的世界单位（默认值，可被运行控制覆盖）。 */
+/** 阵型包围盒外扩的世界单位。 */
 export const DEFAULT_FRAME_MARGIN = 2;
 /** 等待共享立绘贴图就绪的最长帧数；超时仍出图，避免按钮一直空着。 */
 const MAX_TEXTURE_WAIT_FRAMES = 180;

@@ -18,28 +18,64 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const matchButton = required<HTMLButtonElement>('#btn-match', root);
   const sandboxButton = required<HTMLButtonElement>('#btn-sandbox', root);
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
+  const soloEasyButton = required<HTMLButtonElement>('#btn-solo-easy', root);
+  const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
+  const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
+  const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
   const status = required<HTMLElement>('#lobby-status', root);
   const placeholderButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-placeholder]'),
   );
+  const closeButtons = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('[data-mode-close]'),
+  );
+
+  /** 关闭所有模式弹层，回到纯大厅态。 */
+  const closeModeDialogs = (): void => {
+    hideDialog(soloDialog);
+    hideDialog(onlineDialog);
+  };
 
   const showPlaceholder = (event: Event): void => {
     const button = event.currentTarget as HTMLButtonElement;
     status.textContent = `${button.dataset.placeholder ?? '该功能'}正在筹备中`;
     status.classList.add('is-visible');
+    closeModeDialogs();
+  };
+
+  const openSoloDialog = (): void => {
+    hideDialog(onlineDialog);
+    showDialog(soloDialog);
+  };
+
+  const openOnlineDialog = (): void => {
+    hideDialog(soloDialog);
+    showDialog(onlineDialog);
   };
 
   const startSandbox = (): void => options.onStartSandbox();
-  const startSolo = (): void => options.onStartSolo();
-  const startVersus = (): void => options.onStartVersus();
+  // 简单人机 / 快速匹配：关弹层后走原有进房回调
+  const startSoloEasy = (): void => {
+    closeModeDialogs();
+    options.onStartSolo();
+  };
+  const startOnlineQuick = (): void => {
+    closeModeDialogs();
+    options.onStartVersus();
+  };
   const openDeckConfig = (): void => options.onOpenDeckConfig();
 
-  soloButton.addEventListener('click', startSolo);
-  matchButton.addEventListener('click', startVersus);
+  soloButton.addEventListener('click', openSoloDialog);
+  matchButton.addEventListener('click', openOnlineDialog);
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
+  soloEasyButton.addEventListener('click', startSoloEasy);
+  onlineQuickButton.addEventListener('click', startOnlineQuick);
   for (const button of placeholderButtons) {
     button.addEventListener('click', showPlaceholder);
+  }
+  for (const button of closeButtons) {
+    button.addEventListener('click', closeModeDialogs);
   }
 
   return {
@@ -47,21 +83,40 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
       status.classList.remove('is-visible');
+      closeModeDialogs();
     },
     hide() {
       root.classList.add('is-hidden');
       root.setAttribute('aria-hidden', 'true');
+      closeModeDialogs();
     },
     dispose() {
-      soloButton.removeEventListener('click', startSolo);
-      matchButton.removeEventListener('click', startVersus);
+      soloButton.removeEventListener('click', openSoloDialog);
+      matchButton.removeEventListener('click', openOnlineDialog);
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
+      soloEasyButton.removeEventListener('click', startSoloEasy);
+      onlineQuickButton.removeEventListener('click', startOnlineQuick);
       for (const button of placeholderButtons) {
         button.removeEventListener('click', showPlaceholder);
       }
+      for (const button of closeButtons) {
+        button.removeEventListener('click', closeModeDialogs);
+      }
     },
   };
+}
+
+/** 显示模式弹层。 */
+function showDialog(dialog: HTMLElement): void {
+  dialog.classList.remove('is-hidden');
+  dialog.setAttribute('aria-hidden', 'false');
+}
+
+/** 隐藏模式弹层。 */
+function hideDialog(dialog: HTMLElement): void {
+  dialog.classList.add('is-hidden');
+  dialog.setAttribute('aria-hidden', 'true');
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

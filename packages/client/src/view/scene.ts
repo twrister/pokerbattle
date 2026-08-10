@@ -4,7 +4,7 @@ import { Faction } from '@pb/sim';
 import { ARENA_H, ARENA_W } from './coords.js';
 
 /** 单机正交斜视角默认俯仰角（相对水平面，度） */
-export const DEFAULT_SOLO_CAMERA_ANGLE_DEG = 43;
+export const DEFAULT_SOLO_CAMERA_ANGLE_DEG = 46;
 /** 单机镜头允许的俯仰角范围 */
 export const SOLO_CAMERA_ANGLE_MIN_DEG = 15;
 export const SOLO_CAMERA_ANGLE_MAX_DEG = 90;
@@ -12,10 +12,13 @@ export const SOLO_CAMERA_ANGLE_MAX_DEG = 90;
 const SOLO_CAMERA_DISTANCE = 50;
 const SOLO_VIEW_PADDING = 1;
 /**
- * 战场近端（画面下方）额外留白的世界单位。
+ * 战场近端（画面下方）额外留白的默认世界单位。
  * 取景时把这块空区算进视锥，战场会略上移并略缩小，给底部手牌腾操作空间。
  */
-const SOLO_VIEW_BOTTOM_EXTRA = 5;
+export const DEFAULT_SOLO_VIEW_BOTTOM_EXTRA = 8;
+/** 运行控制可调的底部留白范围 */
+export const SOLO_VIEW_BOTTOM_EXTRA_MIN = 0;
+export const SOLO_VIEW_BOTTOM_EXTRA_MAX = 15;
 /** 接近 90° 时改用正上方位姿，避免 lookAt 与 up 平行产生万向节锁 */
 const SOLO_TOP_DOWN_ANGLE_DEG = 89.5;
 
@@ -37,6 +40,10 @@ export interface SceneContext {
   getSoloCameraAngle(): number;
   /** 运行时调整单机正交镜头俯仰角；沙盒模式下只记值，切回单机时生效 */
   setSoloCameraAngle(degrees: number): void;
+  /** 读取战场近端（画面下方）额外留白 */
+  getSoloViewBottomExtra(): number;
+  /** 运行时调整下方留白；会立刻重算正交视锥 */
+  setSoloViewBottomExtra(value: number): void;
   /** 切换视角阵营（红方镜像，保证己方永远在画面下方） */
   setViewFaction(faction: Faction): void;
   dispose(): void;
@@ -55,6 +62,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
   let mode = options.mode ?? 'sandbox';
   let viewFaction = options.viewFaction ?? Faction.Blue;
   let soloCameraAngleDeg = DEFAULT_SOLO_CAMERA_ANGLE_DEG;
+  let soloViewBottomExtra = DEFAULT_SOLO_VIEW_BOTTOM_EXTRA;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -95,7 +103,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     renderer.setSize(width, height, false);
-    resizeCamera(camera, width / height, soloCameraAngleDeg, viewFaction);
+    resizeCamera(camera, width / height, soloCameraAngleDeg, viewFaction, soloViewBottomExtra);
   };
   resize();
   window.addEventListener('resize', resize);
@@ -127,6 +135,15 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
       soloCameraAngleDeg = clampSoloCameraAngle(degrees);
       if (mode === 'solo' && camera instanceof THREE.OrthographicCamera) {
         applySoloCameraPose(camera, soloCameraAngleDeg, viewFaction);
+        resize();
+      }
+    },
+    getSoloViewBottomExtra() {
+      return soloViewBottomExtra;
+    },
+    setSoloViewBottomExtra(value) {
+      soloViewBottomExtra = clampSoloViewBottomExtra(value);
+      if (mode === 'solo' && camera instanceof THREE.OrthographicCamera) {
         resize();
       }
     },
@@ -182,10 +199,15 @@ export function clampSoloCameraAngle(degrees: number): number {
   return Math.min(SOLO_CAMERA_ANGLE_MAX_DEG, Math.max(SOLO_CAMERA_ANGLE_MIN_DEG, degrees));
 }
 
+/** 把下方留白限制在可调范围内。 */
+export function clampSoloViewBottomExtra(value: number): number {
+  return Math.min(SOLO_VIEW_BOTTOM_EXTRA_MAX, Math.max(SOLO_VIEW_BOTTOM_EXTRA_MIN, value));
+}
+
 /**
  * 设置单机/联机正交镜头位姿。
  * 蓝方从 +Z 侧俯视（己方在画面下方）；红方从 -Z 侧镜像，保证「自己永远在下方」。
- * 角度为相对水平面的俯仰角，43° 为默认斜视，90° 为正上俯视。
+ * 角度为相对水平面的俯仰角，46° 为默认斜视，90° 为正上俯视。
  */
 export function applySoloCameraPose(
   camera: THREE.Camera,
@@ -218,6 +240,7 @@ export function calculateSoloOrthoBounds(
   aspect: number,
   angleDeg: number = DEFAULT_SOLO_CAMERA_ANGLE_DEG,
   viewFaction: Faction = Faction.Blue,
+  bottomExtra: number = DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
 ): {
   left: number;
   right: number;
@@ -231,13 +254,14 @@ export function calculateSoloOrthoBounds(
   const halfH = ARENA_H / 2 + SOLO_VIEW_PADDING;
   // 近端（己方 / 画面底部）多包一段空区，给手牌留白。
   const nearSign = viewFaction === Faction.Blue ? 1 : -1;
+  const nearExtra = clampSoloViewBottomExtra(bottomExtra);
   const corners = [
     new THREE.Vector3(-halfW, 0, -halfH),
     new THREE.Vector3(halfW, 0, -halfH),
     new THREE.Vector3(halfW, 0, halfH),
     new THREE.Vector3(-halfW, 0, halfH),
-    new THREE.Vector3(-halfW, 0, nearSign * (halfH + SOLO_VIEW_BOTTOM_EXTRA)),
-    new THREE.Vector3(halfW, 0, nearSign * (halfH + SOLO_VIEW_BOTTOM_EXTRA)),
+    new THREE.Vector3(-halfW, 0, nearSign * (halfH + nearExtra)),
+    new THREE.Vector3(halfW, 0, nearSign * (halfH + nearExtra)),
   ];
 
   let minX = Infinity;
@@ -277,6 +301,7 @@ function resizeCamera(
   aspect: number,
   soloCameraAngleDeg: number,
   viewFaction: Faction,
+  bottomExtra: number,
 ): void {
   if (camera instanceof THREE.PerspectiveCamera) {
     camera.aspect = aspect;
@@ -284,7 +309,7 @@ function resizeCamera(
     return;
   }
   if (camera instanceof THREE.OrthographicCamera) {
-    const bounds = calculateSoloOrthoBounds(aspect, soloCameraAngleDeg, viewFaction);
+    const bounds = calculateSoloOrthoBounds(aspect, soloCameraAngleDeg, viewFaction, bottomExtra);
     camera.left = bounds.left;
     camera.right = bounds.right;
     camera.top = bounds.top;

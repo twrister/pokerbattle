@@ -6,14 +6,22 @@ import {
   applySoloCameraPose,
   calculateSoloOrthoBounds,
   clampSoloCameraAngle,
+  clampSoloViewBottomExtra,
   DEFAULT_SOLO_CAMERA_ANGLE_DEG,
+  DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
 } from '../src/view/scene.js';
 
 describe('单机正交镜头', () => {
-  it('默认俯仰角为 43°，并限制在 15–90', () => {
-    expect(DEFAULT_SOLO_CAMERA_ANGLE_DEG).toBe(43);
+  it('默认俯仰角为 46°，并限制在 15–90', () => {
+    expect(DEFAULT_SOLO_CAMERA_ANGLE_DEG).toBe(46);
     expect(clampSoloCameraAngle(0)).toBe(15);
     expect(clampSoloCameraAngle(120)).toBe(90);
+  });
+
+  it('默认下方留白为 8，并限制在 0–15', () => {
+    expect(DEFAULT_SOLO_VIEW_BOTTOM_EXTRA).toBe(8);
+    expect(clampSoloViewBottomExtra(-1)).toBe(0);
+    expect(clampSoloViewBottomExtra(20)).toBe(15);
   });
 
   it('45° 斜视角时镜头落在 +Z 侧且朝向原点', () => {

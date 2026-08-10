@@ -307,6 +307,10 @@ function enterBattleSession(mode: BattleMode): () => void {
               initial: sceneContext.getSoloCameraAngle(),
               onChange: (degrees) => sceneContext.setSoloCameraAngle(degrees),
             },
+            soloViewBottomExtra: {
+              initial: sceneContext.getSoloViewBottomExtra(),
+              onChange: (value) => sceneContext.setSoloViewBottomExtra(value),
+            },
             soloDrawInterval: {
               initialSeconds: 3,
               onChange: () => {
@@ -315,7 +319,6 @@ function enterBattleSession(mode: BattleMode): () => void {
             },
             formationThumbnailFrame: {
               initialUnitDisplayScale: thumbFrame.unitDisplayScale,
-              initialFrameMargin: thumbFrame.frameMargin,
               onChange: (settings) => {
                 setFormationThumbnailFrameSettings(settings);
                 handPanel?.refreshFormations();
