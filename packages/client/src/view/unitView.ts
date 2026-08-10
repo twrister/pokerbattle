@@ -559,11 +559,11 @@ export function viewKey(faction: Faction, typeId: UnitTypeId): string {
 
 function bodyColor(faction: Faction, typeId: UnitTypeId): number {
   if (faction === Faction.Blue) {
-    if (typeId === 'melee_grunt') return 0x3f7ae0;
+    if (typeId === 'melee_grunt' || typeId === 'melee_guard') return 0x3f7ae0;
     if (typeId === 'melee_cavalry') return 0x1f9d8a;
     return 0x74b7f7;
   }
-  if (typeId === 'melee_grunt') return 0xd9503f;
+  if (typeId === 'melee_grunt' || typeId === 'melee_guard') return 0xd9503f;
   if (typeId === 'melee_cavalry') return 0xc47a2b;
   return 0xf5926a;
 }

@@ -3,6 +3,7 @@ import rawUnitConfigs from './units.json';
 
 export type UnitTypeId =
   | 'melee_grunt'
+  | 'melee_guard'
   | 'ranged_archer'
   | 'melee_cavalry'
   | 'hero_king'

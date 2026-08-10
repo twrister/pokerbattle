@@ -30,6 +30,13 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 148 / 196,
     sourceFacing: 1,
   },
+  melee_guard: {
+    frontUrl: 'units/guard-front.png',
+    backUrl: 'units/guard-back.png',
+    heightMul: 3.2,
+    aspect: 175 / 214,
+    sourceFacing: -1,
+  },
   ranged_archer: {
     frontUrl: 'units/archer-front.png',
     backUrl: 'units/archer-back.png',
