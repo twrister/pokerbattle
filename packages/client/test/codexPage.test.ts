@@ -25,20 +25,34 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toContain('20%');
     expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
 
-    const allCategory = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-category')).find(
-      (button) => button.textContent === '全部兵种',
-    );
-    expect(allCategory?.classList.contains('is-active')).toBe(true);
+    /** 页签每次渲染会重建，点击前需重新查询。 */
+    const categoryNamed = (name: string): HTMLButtonElement | undefined =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-category')).find(
+        (button) => button.textContent === name,
+      );
 
-    const heroCategory = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-category')).find(
-      (button) => button.textContent === '英雄',
-    );
-    heroCategory?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(4);
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('国王');
+    expect(
+      Array.from(document.querySelectorAll('.codex-category')).map((button) => button.textContent),
+    ).toEqual(['全部兵种', '单兵种', '特殊兵种', '召唤物']);
+    expect(categoryNamed('全部兵种')?.classList.contains('is-active')).toBe(true);
 
+    categoryNamed('单兵种')?.click();
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(8);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
+    ).toEqual(['民兵', '弓手', '卫士', '女王', '国王', '皇家骑士', '法师', '大法师']);
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
+
+    categoryNamed('特殊兵种')?.click();
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(2);
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
+
+    categoryNamed('召唤物')?.click();
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(2);
+
+    categoryNamed('单兵种')?.click();
     const mage = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
-      (button) => button.textContent?.includes('法师'),
+      (button) => button.textContent?.includes('法师') && !button.textContent?.includes('大法师'),
     );
     mage?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');

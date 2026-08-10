@@ -9,7 +9,7 @@ import {
 } from '@pb/sim';
 import { SPRITE_DEFS } from '../view/unitSprites.js';
 
-type CodexCategory = 'regular' | 'hero' | 'summoned';
+type CodexCategory = 'single' | 'special' | 'summoned';
 type CodexFilter = 'all' | CodexCategory;
 
 interface CodexUnit {
@@ -32,10 +32,32 @@ export interface CodexPageHandle {
 
 const CATEGORY_NAMES: Record<CodexFilter, string> = {
   all: '全部兵种',
-  regular: '常规兵种',
-  hero: '英雄',
+  single: '单兵种',
+  special: '特殊兵种',
   summoned: '召唤物',
 };
+
+/** 特殊兵种：战车、巨龙。 */
+const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'dragon']);
+
+/**
+ * 图鉴展示顺序：单兵种按策划指定排列，其后是特殊兵种与召唤物。
+ * 未列入的单位排在同分类末尾，避免新增兵种时被遗漏。
+ */
+const CODEX_DISPLAY_ORDER: readonly UnitTypeId[] = [
+  'melee_grunt',
+  'ranged_archer',
+  'melee_guard',
+  'hero_queen',
+  'hero_king',
+  'melee_cavalry',
+  'hero_mage',
+  'hero_archmage',
+  'ranged_chariot',
+  'dragon',
+  'summoned_skeleton',
+  'summoned_bomber',
+];
 
 const STAT_NAMES: Record<StatKey, string> = {
   hp: '生命',
@@ -45,20 +67,30 @@ const STAT_NAMES: Record<StatKey, string> = {
   moveSpeed: '移速',
 };
 
-/** 以单位 ID 的固定前缀归类，避免依赖展示名称中的括号文本。 */
+/**
+ * 按图鉴页签归类：召唤物看前缀，战车/巨龙归特殊，其余可移动单位归单兵种。
+ */
 function getCategory(typeId: UnitTypeId): CodexCategory {
-  if (typeId.startsWith('hero_')) return 'hero';
   if (typeId.startsWith('summoned_')) return 'summoned';
-  return 'regular';
+  if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';
+  return 'single';
+}
+
+/** 图鉴排序键：优先用展示序，未知 ID 靠后且保持相对稳定。 */
+function getDisplayOrder(typeId: UnitTypeId): number {
+  const index = CODEX_DISPLAY_ORDER.indexOf(typeId);
+  return index === -1 ? CODEX_DISPLAY_ORDER.length : index;
 }
 
 /** 将模拟层配置转为图鉴可展示条目，并排除不可移动的建筑。 */
 function getCodexUnits(): CodexUnit[] {
-  return UNIT_TYPE_IDS.filter((typeId) => !isBuildingConfig(UNIT_CONFIGS[typeId])).map((typeId) => ({
-    typeId,
-    config: UNIT_CONFIGS[typeId],
-    category: getCategory(typeId),
-  }));
+  return UNIT_TYPE_IDS.filter((typeId) => !isBuildingConfig(UNIT_CONFIGS[typeId]))
+    .map((typeId) => ({
+      typeId,
+      config: UNIT_CONFIGS[typeId],
+      category: getCategory(typeId),
+    }))
+    .sort((a, b) => getDisplayOrder(a.typeId) - getDisplayOrder(b.typeId));
 }
 
 /** 图鉴页：用兵种配置和现有立绘生成可筛选的只读单位档案。 */
