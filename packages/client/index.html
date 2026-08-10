@@ -791,8 +791,13 @@
         color: var(--text);
       }
 
-      /* 手牌独立于调试面板锚在单机画面底部，重叠排布确保十张牌仍能完整操作。 */
+      /*
+       * 手牌独立于调试面板锚在单机画面底部，重叠排布确保十张牌仍能完整操作。
+       * --solo-col-w / --hu：以 720 设计宽为基准的等比单位，使各分辨率接近 720×1280 比例。
+       */
       #solo-hand {
+        --solo-col-w: min(100vw, calc(100svh * 0.5625));
+        --hu: calc(var(--solo-col-w) / 720);
         position: absolute;
         right: 0;
         bottom: max(10px, env(safe-area-inset-bottom));
@@ -818,11 +823,11 @@
         align-self: center;
         justify-self: center;
         z-index: 1;
-        height: 30px;
-        padding: 0 10px;
+        height: calc(30 * var(--hu));
+        padding: 0 calc(10 * var(--hu));
         color: transparent;
-        font-size: 20px;
-        line-height: 30px;
+        font-size: calc(20 * var(--hu));
+        line-height: calc(30 * var(--hu));
         text-align: center;
         pointer-events: none;
         transition: color 0.18s;
@@ -839,13 +844,13 @@
         grid-template-columns: 1fr auto 1fr;
         grid-template-areas: 'info formations actions';
         align-items: center;
-        column-gap: 8px;
-        width: min(100vw, calc(100svh * 0.5625));
-        min-height: 98px;
-        margin-bottom: 4px;
-        padding: 0 10px;
+        column-gap: calc(8 * var(--hu));
+        width: var(--solo-col-w);
+        min-height: calc(98 * var(--hu));
+        margin-bottom: calc(4 * var(--hu));
+        padding: 0 calc(10 * var(--hu));
         color: var(--text-dim);
-        font-size: 11px;
+        font-size: calc(11 * var(--hu));
         pointer-events: auto;
       }
 
@@ -854,8 +859,8 @@
         grid-template-areas:
           'status status status'
           'info formations actions';
-        grid-template-rows: 30px auto;
-        row-gap: 3px;
+        grid-template-rows: calc(30 * var(--hu)) auto;
+        row-gap: calc(3 * var(--hu));
       }
 
       .hand-bar:has(#hand-formations.is-visible) #hand-status {
@@ -867,7 +872,7 @@
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        gap: 2px;
+        gap: calc(2 * var(--hu));
         justify-self: start;
         min-width: 0;
       }
@@ -892,7 +897,7 @@
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 20px;
+        gap: calc(20 * var(--hu));
         min-width: 0;
         touch-action: none;
       }
@@ -914,6 +919,15 @@
         font-size: 12px;
         line-height: 1.2;
         cursor: grab;
+      }
+
+      /* 局内手牌栏按设计单位缩放；卡组页预览仍用上方固定 128×98。 */
+      #solo-hand .formation-option {
+        width: calc(128 * var(--hu));
+        height: calc(98 * var(--hu));
+        border-radius: calc(16 * var(--hu));
+        box-shadow: 0 calc(6 * var(--hu)) calc(16 * var(--hu)) rgba(0, 0, 0, 0.28);
+        font-size: calc(12 * var(--hu));
       }
 
       #hand-formations .formation-option:hover {
@@ -939,7 +953,9 @@
       }
 
       #btn-select-best {
-        min-width: 64px;
+        min-width: calc(64 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+        border-radius: calc(8 * var(--hu));
         border-color: rgba(174, 198, 218, 0.42);
         background: linear-gradient(135deg, #3a4a5c, #243040);
         color: #e8f0f8;
@@ -993,10 +1009,10 @@
         display: flex;
         align-items: flex-end;
         justify-content: center;
-        width: min(100vw, calc(100svh * 0.5625));
-        height: 180px;
+        width: var(--solo-col-w);
+        height: calc(180 * var(--hu));
         /* 预留正式选中拉高半截的空间，避免顶到上方阵型区。 */
-        padding: 48px 10px 0;
+        padding: calc(48 * var(--hu)) calc(10 * var(--hu)) 0;
         pointer-events: auto;
         touch-action: none;
       }
@@ -1005,13 +1021,13 @@
         position: relative;
         z-index: calc(var(--card-index) + 1);
         flex: 0 0 auto;
-        width: clamp(62px, 9.7vh, 96px);
+        width: calc(96 * var(--hu));
         aspect-ratio: 312 / 413;
         padding: 0;
         border: 0;
-        border-radius: clamp(7px, 1.1vh, 11px);
+        border-radius: calc(11 * var(--hu));
         background: transparent;
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38);
+        box-shadow: 0 calc(8 * var(--hu)) calc(18 * var(--hu)) rgba(0, 0, 0, 0.38);
         /* 拉高统一走变量，避免动画结束后把正式选中的 transform 锁死在 0。 */
         --card-lift: 0px;
         transform: translateY(var(--card-lift)) rotate(calc((var(--card-index) - 4.5) * 0.35deg));
@@ -1025,7 +1041,8 @@
       }
 
       .playing-card + .playing-card {
-        margin-left: clamp(-46px, -4.2vh, -30px);
+        /* 720 设计态下 clamp 上限为 -30px，按柱宽等比保持叠牌密度。 */
+        margin-left: calc(-30 * var(--hu));
       }
 
       /* 普通悬停轻晃；正式选中/预览/布局位移时不播，预览划过改由 is-wobbling 补播。 */
