@@ -4,7 +4,7 @@ import { isBuildingConfig } from '../config/units.js';
 import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
-import { isWithinAttackReach } from './combatRange.js';
+import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
 import { NO_ENGAGE_SLOT } from './engagement.js';
 
 const desiredFacing = vec();
@@ -128,7 +128,7 @@ function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distS
   const charge = unit.config.charge;
   if (!charge) return false;
   // 冲刺是地面近战技，不对空中单位起手
-  if (target.config.movementLayer === 'air') return false;
+  if (!canAttackTarget(unit, target)) return false;
   if (unit.chargeCooldown > 0) return false;
   if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) return false;
 

@@ -27,7 +27,7 @@ describe('飞行龙', () => {
     expect(toFloat(dragon.config.radius)).toBeCloseTo(0.6, 3);
     expect(toFloat(dragon.config.bodyScale)).toBeCloseTo(1.3, 3);
     expect(toFloat(dragon.config.mass)).toBeCloseTo(3, 3);
-    expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(1000, 3);
+    expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(2000, 3);
     expect(toFloat(dragon.stats.damage)).toBeCloseTo(80, 3);
     expect(toFloat(dragon.stats.attackInterval)).toBeCloseTo(30, 3);
     expect(toFloat(dragon.stats.attackWindup)).toBeCloseTo(10, 3);
@@ -126,6 +126,83 @@ describe('飞行龙', () => {
 
     expect(melee.targetId).toBe(ground.id);
     expect(dragon.hp).toBe(dragon.stats.maxHp);
+  });
+
+  it('有敌方建筑时龙不锁更近的近战地面兵', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    // 比基地中心更近，但打不到空中——有建筑时不应引走龙
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(base.id);
+  });
+
+  it('龙追建筑时近战贴脸应改火', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    dragon.retargetIn = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+    expect(dragon.targetId).toBe(base.id);
+    expect(dragon.state).toBe(UnitState.Seek);
+
+    // 圆心距 2，落在龙攻击射程内（约 2.6），应打断推家改火
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(8));
+    for (let i = 0; i < 5; i++) world.step();
+
+    expect(dragon.targetId).toBe(melee.id);
+  });
+
+  it('龙锁近战后拉开出射程应弃目标并回锁建筑', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+    expect(dragon.targetId).toBe(melee.id);
+
+    // 强制拉开到攻击射程外，再刷基地：飞行单位应立刻弃近战并回锁建筑
+    dragon.pos.x = fromFloat(9);
+    dragon.pos.y = fromFloat(6);
+    melee.pos.x = fromFloat(9);
+    melee.pos.y = fromFloat(16);
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    for (let i = 0; i < 3; i++) world.step();
+
+    expect(dragon.targetId).toBe(base.id);
+  });
+
+  it('无建筑时龙仍会锁近战地面兵', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(melee.id);
+  });
+
+  it('有建筑时龙仍会锁更近的对空威胁', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
+    world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24));
+    const archer = world.spawnUnit(Faction.Red, 'ranged_archer', fromFloat(9), fromFloat(10));
+    dragon.retargetIn = 0;
+    archer.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(archer.id);
   });
 
   it('龙弹道从 2.5 高度发射，打地面时落点高度为 0', () => {

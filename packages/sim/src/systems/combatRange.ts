@@ -21,6 +21,18 @@ export function distSqToBuildingFootprint(px: Fx, py: Fx, building: Unit): Fx {
 }
 
 /**
+ * 攻击层规则：近战/近战范围打不到空中；远程默认可打地/空。
+ * 索敌与战斗结算共用，避免规则漂移。
+ */
+export function canAttackTarget(attacker: Unit, target: Unit): boolean {
+  const kind = attacker.config.attack.kind;
+  if ((kind === 'melee' || kind === 'melee_aoe') && target.config.movementLayer === 'air') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * 攻击者是否够得着目标。
  * 单位：圆心距 vs range + 双方半径；
  * 建筑：圆心到占地表面距 vs range + 自身半径（与方形挤出一致）。

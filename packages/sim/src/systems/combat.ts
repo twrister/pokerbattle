@@ -3,7 +3,7 @@ import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
-import { isWithinAttackReach } from './combatRange.js';
+import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
 
 /** 复用邻居缓冲，避免每帧分配 */
 const neighbors: number[] = [];
@@ -66,7 +66,7 @@ function resolveAttack(world: World, unit: Unit): void {
   const target = world.getUnit(unit.targetId);
   if (!isAlive(target)) return;
   // 近战够不着飞行单位，前摇打空但不退冷却
-  if (attack.kind === 'melee' && target.config.movementLayer === 'air') return;
+  if (!canAttackTarget(unit, target)) return;
 
   if (!isWithinAttackReach(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
@@ -88,7 +88,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
   const target = world.getUnit(unit.targetId);
   if (!isAlive(target)) return;
   // 主目标在空中则整次近战范围落空
-  if (target.config.movementLayer === 'air') return;
+  if (!canAttackTarget(unit, target)) return;
 
   if (!isWithinAttackReach(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
@@ -110,7 +110,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
     // 近战范围砍不到飞行单位
-    if (other.config.movementLayer === 'air') continue;
+    if (!canAttackTarget(unit, other)) continue;
 
     if (!isWithinAttackReach(unit, other, ATTACK_RANGE_TOLERANCE)) continue;
 

@@ -4,11 +4,14 @@ import { isBuildingConfig } from '../config/units.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
-import { isWithinAttackReach } from './combatRange.js';
+import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
 
 /**
- * 选敌：锁定最近敌人后，交战中（已够得着）粘性不换火；目标死亡/消失才完整重索。
- * 追击中（够不着当前目标）若有已进入攻击射程的其它敌军，则打断粘性改火，避免路过近敌挨打不还手。
+ * 选敌策略：
+ * - 交战中（已够得着）粘性不换火。
+ * - 地面：够不着时若有射程内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
+ * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
+ *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
  *
  * 有治疗技能的单位在无敌军时，会改锁最近受伤友军以便寻路过治疗半径；
  * 友军目标不粘性挡敌——每帧仍优先扫描敌军，保证敌方入场后立刻切回进攻。
@@ -29,15 +32,25 @@ export function updateTargeting(world: World): void {
     }
 
     const current = world.getUnit(unit.targetId);
-    // 敌军粘性：已能出手则咬住；够不着时允许被射程内威胁打断
+    // 敌军粘性：已能出手则咬住；够不着时按空/地规则决定是否打断
     if (isAlive(current) && current.faction !== unit.faction) {
       if (isWithinAttackReach(unit, current)) continue;
-      if (!hasInReachEnemyThreat(world, unit, current)) continue;
-      // fall through：下面统一 findNearestEnemy + 重分槽位
+
+      if (unit.config.movementLayer === 'air') {
+        // 非建筑出距立刻弃；建筑出距仅被射程内可打敌军打断
+        if (isBuildingConfig(current.config) && !hasInReachAttackable(world, unit, current)) {
+          continue;
+        }
+        // fall through
+      } else if (!hasInReachEnemyThreat(world, unit, current)) {
+        continue;
+      }
     }
 
     const enemyId = findNearestEnemy(world, unit);
     if (enemyId !== NO_TARGET) {
+      // 重索到同一目标时保留槽位，避免无意义换槽抖路径
+      if (enemyId === unit.targetId) continue;
       unit.targetId = enemyId;
       const target = world.getUnit(enemyId);
       unit.engageSlot = target ? assignEngageSlot(unit, target) : NO_ENGAGE_SLOT;
@@ -67,16 +80,28 @@ export function updateTargeting(world: World): void {
 }
 
 /**
- * 追击中是否存在「已进入攻击射程」的其它敌军。
- * 过滤规则与 findNearestEnemy 一致，额外排除当前目标。
+ * 是否存在「已进入攻击射程且己方可打」的其它敌军（不要求对方能打到自己）。
+ * 供飞行单位打断推家粘性，避免贴脸地面兵被推家过滤漏掉。
+ */
+function hasInReachAttackable(world: World, unit: Unit, current: Unit): boolean {
+  for (const other of world.units) {
+    if (other.dead || other.faction === unit.faction || other.id === current.id) continue;
+    if (!canAttackTarget(unit, other)) continue;
+    if (isWithinAttackReach(unit, other)) return true;
+  }
+  return false;
+}
+
+/**
+ * 地面追击中是否存在「已进入攻击射程」的其它敌军（含推家威胁过滤）。
  */
 function hasInReachEnemyThreat(world: World, unit: Unit, current: Unit): boolean {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
-  const meleeOnly = unit.config.attack.kind === 'melee' || unit.config.attack.kind === 'melee_aoe';
+  const buildingInSight = hasEnemyBuildingInSight(world, unit, sightSq);
 
   for (const other of world.units) {
     if (other.dead || other.faction === unit.faction || other.id === current.id) continue;
-    if (meleeOnly && other.config.movementLayer === 'air') continue;
+    if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d > sightSq) continue;
     if (isWithinAttackReach(unit, other)) return true;
@@ -86,21 +111,24 @@ function hasInReachEnemyThreat(world: World, unit: Unit, current: Unit): boolean
 
 /**
  * 全场线性扫描找最近的敌人。
+ * 优先锁已进攻击射程的可打敌军（保证飞行贴脸改火能真正锁上近战）；
+ * 否则按视野 + 推家过滤选远敌。
  *
  * 这里刻意不用空间哈希：索敌半径覆盖整个场地，按半径查哈希等于把所有格子
  * 都遍历一遍，反而比直接扫单位数组更慢。等以后出现「短视野」兵种再按需切换。
  */
 function findNearestEnemy(world: World, unit: Unit): number {
+  const inReachId = findNearestInReachAttackable(world, unit);
+  if (inReachId !== NO_TARGET) return inReachId;
+
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
+  const buildingInSight = hasEnemyBuildingInSight(world, unit, sightSq);
   let bestId = NO_TARGET;
   let bestDistSq: Fx = 0;
 
-  // 近战/冲刺够不着飞行层，索敌时直接跳过，避免贴脸空挥
-  const meleeOnly = unit.config.attack.kind === 'melee' || unit.config.attack.kind === 'melee_aoe';
-
   for (const other of world.units) {
     if (other.dead || other.faction === unit.faction) continue;
-    if (meleeOnly && other.config.movementLayer === 'air') continue;
+    if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d > sightSq) continue;
     // 等距时取 id 小的，保证任何机器上选出的都是同一个目标
@@ -110,6 +138,46 @@ function findNearestEnemy(world: World, unit: Unit): number {
     }
   }
   return bestId;
+}
+
+/** 最近的已进攻击射程且己方可打的敌军（不受推家威胁过滤）。 */
+function findNearestInReachAttackable(world: World, unit: Unit): number {
+  let bestId = NO_TARGET;
+  let bestDistSq: Fx = 0;
+
+  for (const other of world.units) {
+    if (other.dead || other.faction === unit.faction) continue;
+    if (!canAttackTarget(unit, other)) continue;
+    if (!isWithinAttackReach(unit, other)) continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
+      bestId = other.id;
+      bestDistSq = d;
+    }
+  }
+  return bestId;
+}
+
+/**
+ * 视野内是否存在敌方建筑。有建筑时进入「威胁过滤」模式，避免被无威胁单位引离推家。
+ */
+function hasEnemyBuildingInSight(world: World, unit: Unit, sightSq: Fx): boolean {
+  for (const other of world.units) {
+    if (other.dead || other.faction === unit.faction) continue;
+    if (!isBuildingConfig(other.config)) continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (d <= sightSq) return true;
+  }
+  return false;
+}
+
+/**
+ * 远距索敌候选：必须能打到对方；有敌方建筑在视野时，额外只保留建筑或能打到自己的威胁。
+ */
+function isEnemyTargetCandidate(unit: Unit, other: Unit, buildingInSight: boolean): boolean {
+  if (!canAttackTarget(unit, other)) return false;
+  if (!buildingInSight) return true;
+  return isBuildingConfig(other.config) || canAttackTarget(other, unit);
 }
 
 /** 全场扫描最近的受伤友军（排除自身），供治疗单位在无敌军时寻路接近。 */
