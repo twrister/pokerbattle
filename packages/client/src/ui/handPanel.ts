@@ -98,9 +98,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const arrowLayer = required<SVGElement>('#hand-arrow');
   const arrowPath = required<SVGPathElement>('#hand-arrow-path');
   const arrowHead = required<SVGPolygonElement>('#hand-arrow-head');
-  const pileCount = required<HTMLElement>('#hand-pile-count');
-  const handCount = required<HTMLElement>('#hand-count');
-  const countdown = required<HTMLElement>('#hand-draw-countdown');
+  const drawPile = required<HTMLElement>('#hand-draw-pile');
+  const drawPileTop = required<HTMLElement>('#hand-draw-pile-top');
   const deck = options.deck ?? new PokerDeck();
   /** 正式选中：松开后确认，可出牌；表现上拉高出牌堆半截。 */
   const selected = new Set<string>();
@@ -544,6 +543,18 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     return deck.hand.map((card) => card.id).join('\0');
   }
 
+  /** 把每张新牌的初始变换定位到牌堆顶牌中心，使布局缩放后动画起点仍准确。 */
+  function setDealOrigins(): void {
+    const source = drawPileTop.getBoundingClientRect();
+    const sourceX = source.left + source.width / 2;
+    const sourceY = source.top + source.height / 2;
+    for (const cardElement of cardsElement.querySelectorAll<HTMLElement>('.playing-card.is-dealing')) {
+      const target = cardElement.getBoundingClientRect();
+      cardElement.style.setProperty('--deal-from-x', `${sourceX - target.left - target.width / 2}px`);
+      cardElement.style.setProperty('--deal-from-y', `${sourceY - target.top - target.height / 2}px`);
+    }
+  }
+
   /** 重建最多十张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
     const previousRects = captureCardRects();
@@ -583,6 +594,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncStatus();
     // 先恢复选中拉高，再量新坐标，避免 FLIP 把选中态高度差算进去。
     syncSelection();
+    setDealOrigins();
     animateLayoutShift(previousRects);
   }
 
@@ -655,15 +667,24 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     button.textContent = formation.name;
   }
 
-  /** 同步牌数和补牌倒计时，满手牌时明确显示暂停而不是归零。 */
+  /** 同步牌堆补牌进度；满手时以持续晃动替代倒计时，避免误导玩家仍会抽牌。 */
   function syncStatus(): void {
-    pileCount.textContent = String(deck.availableCount);
-    handCount.textContent = `${deck.hand.length}/${MAX_HAND_SIZE}`;
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
-    countdown.textContent =
-      deck.hand.length >= MAX_HAND_SIZE
-        ? '已满'
-        : `${Math.max(ms, 0) / 1000}`.replace(/(\.\d).*$/, '$1') + 's';
+    const isFull = deck.hand.length >= MAX_HAND_SIZE;
+    const isEmpty = deck.availableCount === 0;
+    // 剩余时间从 1 递减到 0，供牌堆由顶向下收缩黑色遮罩；满手保持满遮罩，空堆则无遮罩。
+    const progress = isFull
+      ? 1
+      : isEmpty
+        ? 0
+        : Math.min(Math.max(ms, 0), drawIntervalMs) / drawIntervalMs;
+    drawPile.style.setProperty('--draw-progress', `${progress * 100}%`);
+    drawPile.classList.toggle('is-full', isFull);
+    drawPile.classList.toggle('is-empty', isEmpty);
+    drawPile.setAttribute(
+      'aria-label',
+      isFull ? '手牌已满，牌堆等待出牌' : isEmpty ? '牌堆已空' : '牌堆正在准备补牌',
+    );
   }
 
   return {

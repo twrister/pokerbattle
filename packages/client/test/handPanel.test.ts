@@ -18,9 +18,9 @@ describe('单机手牌交互', () => {
       <section id="solo-hand">
         <div id="hand-status"></div>
         <div id="hand-formations"></div>
-        <span id="hand-pile-count"></span>
-        <span id="hand-count"></span>
-        <span id="hand-draw-countdown"></span>
+        <div id="hand-draw-pile">
+          <span id="hand-draw-pile-top"></span>
+        </div>
         <button id="btn-select-best"></button>
         <div id="hand-cards"></div>
       </section>
@@ -41,7 +41,9 @@ describe('单机手牌交互', () => {
 
     expect(panel.deck.hand).toHaveLength(3);
     expect(document.querySelectorAll('.playing-card')).toHaveLength(3);
-    expect(document.querySelector('#hand-count')?.textContent).toBe('3/10');
+    expect(document.querySelector<HTMLElement>('#hand-draw-pile')?.style.getPropertyValue('--draw-progress')).toBe(
+      '100%',
+    );
 
     panel.setDrawInterval(0.25);
     panel.update(249);
@@ -50,6 +52,43 @@ describe('单机手牌交互', () => {
     expect(panel.deck.hand).toHaveLength(4);
 
     panel.dispose();
+  });
+
+  it('新牌从牌堆顶牌出发，手牌满后持续晃动直到恢复补牌', () => {
+    const panel = createHandPanel();
+    const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
+    const dealtCards = [...document.querySelectorAll<HTMLElement>('.playing-card.is-dealing')];
+
+    expect(dealtCards).toHaveLength(3);
+    for (const card of dealtCards) {
+      expect(card.style.getPropertyValue('--deal-from-x')).toBe('0px');
+      expect(card.style.getPropertyValue('--deal-from-y')).toBe('0px');
+    }
+
+    panel.dispose();
+
+    const fullDeck = deckWithCards([
+      '3-spades',
+      '4-hearts',
+      '5-clubs',
+      '6-diamonds',
+      '7-spades',
+      '8-hearts',
+      '9-clubs',
+      '10-diamonds',
+      'J-spades',
+      'Q-hearts',
+    ]);
+    const fullPanel = createHandPanel({ deck: fullDeck });
+    expect(pile.classList.contains('is-full')).toBe(true);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+
+    fullDeck.play([fullDeck.hand[0]!.id]);
+    fullPanel.syncFromDeck();
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+
+    fullPanel.dispose();
   });
 
   it('按下为临时选中，松开后切到正式选中并可点搭配出牌', () => {

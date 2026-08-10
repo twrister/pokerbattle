@@ -962,7 +962,7 @@
         color: #ffcf9c;
       }
 
-      /* 牌堆信息固定靠左；阵型按钮居中放大；推荐靠右。无工具栏底框。 */
+      /* 牌堆固定靠左；阵型按钮居中放大；推荐靠右。无工具栏底框。 */
       .hand-bar {
         position: relative;
         display: grid;
@@ -995,9 +995,7 @@
       .hand-toolbar-info {
         grid-area: info;
         display: flex;
-        flex-direction: column;
         align-items: flex-start;
-        gap: calc(2 * var(--hu));
         justify-self: start;
         min-width: 0;
       }
@@ -1010,9 +1008,57 @@
         min-width: 0;
       }
 
-      .hand-toolbar-info strong {
-        color: var(--text);
-        font-variant-numeric: tabular-nums;
+      /* 牌堆顶牌既是补牌进度条，也是新牌飞入动画的视觉起点。 */
+      #hand-draw-pile {
+        position: relative;
+        width: calc(96 * var(--hu));
+        aspect-ratio: 312 / 413;
+        margin: calc(5 * var(--hu)) 0 calc(2 * var(--hu)) calc(4 * var(--hu));
+        transform-origin: center bottom;
+        filter: drop-shadow(0 calc(4 * var(--hu)) calc(7 * var(--hu)) rgba(0, 0, 0, 0.45));
+      }
+
+      .hand-draw-pile-card {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        border: 1px solid rgba(211, 236, 255, 0.3);
+        border-radius: calc(6 * var(--hu));
+        background: #172535 url('/cards/Back.png') center / cover no-repeat;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+      }
+
+      .hand-draw-pile-card.is-bottom {
+        transform: translate(calc(-3 * var(--hu)), calc(4 * var(--hu))) rotate(-3deg);
+        opacity: 0.62;
+      }
+
+      .hand-draw-pile-card.is-middle {
+        transform: translate(calc(2 * var(--hu)), calc(2 * var(--hu))) rotate(2deg);
+        opacity: 0.82;
+      }
+
+      #hand-draw-pile-top {
+        z-index: 1;
+      }
+
+      /* 黑色遮罩从顶部向下覆盖牌背，按剩余补牌时间从满格递减至零。 */
+      #hand-draw-pile-top::after {
+        position: absolute;
+        inset: 0;
+        display: block;
+        content: '';
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.56));
+        clip-path: inset(0 0 calc(100% - var(--draw-progress, 0%)) 0);
+        pointer-events: none;
+      }
+
+      #hand-draw-pile.is-empty {
+        opacity: 0.45;
+      }
+
+      #hand-draw-pile.is-full {
+        animation: draw-pile-wobble 180ms ease-in-out infinite;
       }
 
       /* 兵种搭配按钮居中；无可用搭配时中间留给 #hand-status，左右信息位置不变。 */
@@ -1078,8 +1124,10 @@
       }
 
       #btn-select-best {
+        box-sizing: border-box;
         min-width: calc(64 * var(--hu));
-        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+        height: calc(98 * var(--hu));
+        padding: 0 calc(12 * var(--hu));
         border-radius: calc(8 * var(--hu));
         border-color: rgba(174, 198, 218, 0.42);
         background: linear-gradient(135deg, #3a4a5c, #243040);
@@ -1087,11 +1135,18 @@
         font-weight: 700;
       }
 
+      /* 与兵种搭配按钮一致：悬停提亮描边与亮度。 */
+      #btn-select-best:hover:not(:disabled) {
+        border-color: rgba(200, 220, 236, 0.85);
+        filter: brightness(1.08);
+      }
+
       #btn-select-best:disabled {
         border-color: var(--panel-border);
         background: rgba(255, 255, 255, 0.05);
         color: #697583;
         cursor: default;
+        filter: none;
       }
 
       /* 箭头层浮在最上层但不拦截事件，落点判定仍由画布接收。 */
@@ -1250,7 +1305,7 @@
       @keyframes card-deal {
         0% {
           opacity: 0;
-          transform: translate(42px, 70px) rotate(18deg) scale(0.35);
+          transform: translate(var(--deal-from-x), var(--deal-from-y)) rotate(10deg) scale(0.42);
         }
         62% {
           opacity: 1;
@@ -1284,6 +1339,19 @@
         70% {
           transform: translateY(calc(var(--card-lift, 0px) - 4px))
             rotate(calc((var(--card-index) - 4.5) * 0.35deg + 1.2deg));
+        }
+      }
+
+      @keyframes draw-pile-wobble {
+        0%,
+        100% {
+          transform: rotate(0deg) translateY(0);
+        }
+        25% {
+          transform: rotate(-1.5deg) translateY(calc(-1 * var(--hu)));
+        }
+        65% {
+          transform: rotate(1.5deg) translateY(calc(-0.5 * var(--hu)));
         }
       }
 
@@ -2178,9 +2246,11 @@
         <div class="hand-bar">
           <div id="hand-status" role="status" aria-live="polite"></div>
           <div class="hand-toolbar-info">
-            <span>牌堆 <strong id="hand-pile-count">54</strong></span>
-            <span>手牌 <strong id="hand-count">0/10</strong></span>
-            <span>补牌 <strong id="hand-draw-countdown">3.0s</strong></span>
+            <div id="hand-draw-pile" role="img" aria-label="牌堆正在准备补牌">
+              <span class="hand-draw-pile-card is-bottom"></span>
+              <span class="hand-draw-pile-card is-middle"></span>
+              <span id="hand-draw-pile-top" class="hand-draw-pile-card"></span>
+            </div>
           </div>
           <div id="hand-formations" aria-label="兵种搭配"></div>
           <div class="hand-toolbar-actions">
