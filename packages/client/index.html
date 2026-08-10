@@ -580,9 +580,10 @@
         gap: 10px;
       }
 
-      /* 单机镜头俯仰角 / 下方留白；沙盒不展示 */
+      /* 单机镜头俯仰角 / 下方留白 / 三阶段发牌间隔；沙盒不展示 */
       #solo-camera-angle-row,
-      #solo-view-bottom-extra-row {
+      #solo-view-bottom-extra-row,
+      #solo-draw-intervals {
         display: none;
       }
 
@@ -594,8 +595,14 @@
         align-items: center;
       }
 
+      #hud.is-solo #solo-draw-intervals {
+        display: grid;
+        gap: 6px;
+      }
+
       #solo-camera-angle-row label,
-      #solo-view-bottom-extra-row label {
+      #solo-view-bottom-extra-row label,
+      #solo-draw-intervals label {
         color: var(--text-dim);
         white-space: nowrap;
       }
@@ -612,6 +619,23 @@
         width: 100%;
         accent-color: var(--accent);
         cursor: pointer;
+      }
+
+      #solo-draw-intervals label {
+        display: grid;
+        grid-template-columns: auto 70px;
+        gap: 8px;
+        align-items: center;
+      }
+
+      #solo-draw-intervals input {
+        width: 100%;
+        padding: 4px 6px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font: inherit;
       }
 
       /* 保存为默认：仅单机可调参数时显示 */
@@ -1448,11 +1472,11 @@
       }
 
       .playing-card.is-dealing {
-        animation: card-deal 520ms var(--deal-delay) cubic-bezier(0.2, 0.85, 0.25, 1.15) both;
+        animation: card-deal 620ms var(--deal-delay) linear both;
       }
 
       .playing-card.is-dealing .playing-card-inner {
-        animation: card-flip 520ms var(--deal-delay) cubic-bezier(0.35, 0.1, 0.25, 1) both;
+        animation: card-flip 620ms var(--deal-delay) linear both;
       }
 
       .playing-card.is-playing {
@@ -1467,10 +1491,12 @@
         0% {
           opacity: 0;
           transform: translate(var(--deal-from-x), var(--deal-from-y)) rotate(10deg) scale(0.42);
+          animation-timing-function: cubic-bezier(0.2, 0.72, 0.24, 1);
         }
         62% {
           opacity: 1;
-          transform: translate(-3px, -7px) rotate(-2deg) scale(1.04);
+          transform: translateY(var(--deal-hover-y, -24px)) rotate(-2deg) scale(1.03);
+          animation-timing-function: cubic-bezier(0.24, 0.7, 0.3, 1);
         }
         100% {
           transform: translateY(var(--card-lift, 0px)) rotate(calc((var(--card-index) - 4.5) * 0.35deg));
@@ -1479,8 +1505,12 @@
 
       @keyframes card-flip {
         0%,
-        34% {
+        12% {
           transform: rotateY(180deg);
+          animation-timing-function: cubic-bezier(0.35, 0.1, 0.25, 1);
+        }
+        58% {
+          transform: rotateY(360deg);
         }
         100% {
           transform: rotateY(360deg);
@@ -1514,27 +1544,6 @@
         65% {
           transform: rotate(1.5deg) translateY(calc(-0.5 * var(--hu)));
         }
-      }
-
-      #solo-draw-interval-row {
-        display: none;
-        grid-template-columns: auto 70px;
-        gap: 8px;
-        align-items: center;
-      }
-
-      #hud.is-solo #solo-draw-interval-row {
-        display: grid;
-      }
-
-      #solo-draw-interval {
-        width: 100%;
-        padding: 4px 6px;
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text);
-        font: inherit;
       }
 
       #deck-config {
@@ -2329,7 +2338,7 @@
             <button id="btn-speed" type="button">1x</button>
             <button id="btn-brawl" type="button">开团</button>
             <button id="btn-random-pk" type="button">随机PK</button>
-            <button id="btn-clear" type="button">清空</button>
+            <button id="btn-clear" type="button">重新开局</button>
           </div>
           <div id="solo-camera-angle-row">
             <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">46°</span></label>
@@ -2355,10 +2364,41 @@
               value="8"
             />
           </div>
-          <label id="solo-draw-interval-row" for="solo-draw-interval">
-            发牌间隔
-            <input id="solo-draw-interval" type="number" min="0.25" max="60" step="0.25" value="3" />
-          </label>
+          <div id="solo-draw-intervals">
+            <label for="solo-draw-interval-normal">
+              常规发牌
+              <input
+                id="solo-draw-interval-normal"
+                type="number"
+                min="0.25"
+                max="60"
+                step="0.25"
+                value="6"
+              />
+            </label>
+            <label for="solo-draw-interval-double">
+              倍速发牌
+              <input
+                id="solo-draw-interval-double"
+                type="number"
+                min="0.25"
+                max="60"
+                step="0.25"
+                value="3"
+              />
+            </label>
+            <label for="solo-draw-interval-overtime">
+              加时发牌
+              <input
+                id="solo-draw-interval-overtime"
+                type="number"
+                min="0.25"
+                max="60"
+                step="0.25"
+                value="2"
+              />
+            </label>
+          </div>
           <div class="btn-row" id="controls-defaults-row">
             <button id="btn-controls-save-defaults" type="button">保存为默认</button>
           </div>
@@ -2415,7 +2455,7 @@
         <div data-sandbox-help><kbd>拖拽</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放</div>
         <div data-sandbox-help><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
         <div data-sandbox-help>建造面板：吸附格子放置，不可重叠</div>
-        <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 清空</div>
+        <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 重新开局</div>
       </section>
 
       <section id="solo-hand" aria-label="手牌">

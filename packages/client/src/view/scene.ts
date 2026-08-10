@@ -391,6 +391,7 @@ function createArenaTerrain(): THREE.Group {
   river.receiveShadow = true;
   terrain.add(river);
 
+  // 桥面薄片须低于单位脚下装饰（阴影≈0.031 / 脚圈≈0.033），否则会被深度挡住。
   const bridgeMaterial = new THREE.MeshStandardMaterial({
     color: 0x8b6a42,
     roughness: 0.82,
@@ -398,15 +399,15 @@ function createArenaTerrain(): THREE.Group {
   });
   for (const bridge of ARENA_BRIDGES) {
     const bridgeDeck = new THREE.Mesh(
-      new THREE.BoxGeometry(bridge.maxX - bridge.minX, 0.1, riverHeight),
+      new THREE.PlaneGeometry(bridge.maxX - bridge.minX, riverHeight),
       bridgeMaterial,
     );
+    bridgeDeck.rotation.x = -Math.PI / 2;
     bridgeDeck.position.set(
       bridge.minX + (bridge.maxX - bridge.minX) / 2 - ARENA_W / 2,
-      0.07,
+      0.028,
       ARENA_H / 2 - (ARENA_RIVER_MIN_Y + riverHeight / 2),
     );
-    bridgeDeck.castShadow = true;
     bridgeDeck.receiveShadow = true;
     terrain.add(bridgeDeck);
   }

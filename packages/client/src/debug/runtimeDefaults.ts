@@ -8,15 +8,19 @@ import {
 /** localStorage 键：运行控制「保存为默认」后的参数 */
 const STORAGE_KEY = 'pb.runtimeControls.defaults';
 
-/** 发牌间隔控件默认秒数（与面板 HTML 初值一致）。 */
-export const DEFAULT_DRAW_INTERVAL_SECONDS = 3;
+/** 与 MatchState 默认发牌周期一致（秒）。 */
+export const DEFAULT_NORMAL_DRAW_INTERVAL_SECONDS = 6;
+export const DEFAULT_DOUBLE_SPEED_DRAW_INTERVAL_SECONDS = 3;
+export const DEFAULT_OVERTIME_DRAW_INTERVAL_SECONDS = 2;
 const DRAW_INTERVAL_MIN = 0.25;
 const DRAW_INTERVAL_MAX = 60;
 
 export interface RuntimeDefaults {
   cameraAngle: number;
   viewBottomExtra: number;
-  drawIntervalSeconds: number;
+  normalDrawIntervalSeconds: number;
+  doubleSpeedDrawIntervalSeconds: number;
+  overtimeDrawIntervalSeconds: number;
 }
 
 /** 内置默认；无本地记录或字段非法时回落至此。 */
@@ -24,7 +28,9 @@ export function builtInRuntimeDefaults(): RuntimeDefaults {
   return {
     cameraAngle: DEFAULT_SOLO_CAMERA_ANGLE_DEG,
     viewBottomExtra: DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
-    drawIntervalSeconds: DEFAULT_DRAW_INTERVAL_SECONDS,
+    normalDrawIntervalSeconds: DEFAULT_NORMAL_DRAW_INTERVAL_SECONDS,
+    doubleSpeedDrawIntervalSeconds: DEFAULT_DOUBLE_SPEED_DRAW_INTERVAL_SECONDS,
+    overtimeDrawIntervalSeconds: DEFAULT_OVERTIME_DRAW_INTERVAL_SECONDS,
   };
 }
 
@@ -51,6 +57,11 @@ export function saveRuntimeDefaults(values: RuntimeDefaults): void {
   }
 }
 
+/** 发牌间隔控件合法区间。 */
+export function clampDrawIntervalSeconds(seconds: number): number {
+  return Math.min(DRAW_INTERVAL_MAX, Math.max(DRAW_INTERVAL_MIN, seconds));
+}
+
 /** 夹紧并填补非法字段，避免脏数据把镜头/计时打坏。 */
 function sanitizeRuntimeDefaults(
   values: Partial<RuntimeDefaults>,
@@ -64,14 +75,27 @@ function sanitizeRuntimeDefaults(
     typeof values.viewBottomExtra === 'number' && Number.isFinite(values.viewBottomExtra)
       ? clampSoloViewBottomExtra(values.viewBottomExtra)
       : fallback.viewBottomExtra;
-  const drawIntervalSeconds =
-    typeof values.drawIntervalSeconds === 'number' && Number.isFinite(values.drawIntervalSeconds)
-      ? clampDrawIntervalSeconds(values.drawIntervalSeconds)
-      : fallback.drawIntervalSeconds;
-  return { cameraAngle, viewBottomExtra, drawIntervalSeconds };
+  return {
+    cameraAngle,
+    viewBottomExtra,
+    normalDrawIntervalSeconds: readDrawInterval(
+      values.normalDrawIntervalSeconds,
+      fallback.normalDrawIntervalSeconds,
+    ),
+    doubleSpeedDrawIntervalSeconds: readDrawInterval(
+      values.doubleSpeedDrawIntervalSeconds,
+      fallback.doubleSpeedDrawIntervalSeconds,
+    ),
+    overtimeDrawIntervalSeconds: readDrawInterval(
+      values.overtimeDrawIntervalSeconds,
+      fallback.overtimeDrawIntervalSeconds,
+    ),
+  };
 }
 
-/** 发牌间隔控件合法区间。 */
-function clampDrawIntervalSeconds(seconds: number): number {
-  return Math.min(DRAW_INTERVAL_MAX, Math.max(DRAW_INTERVAL_MIN, seconds));
+/** 非法或缺失时回落默认，合法则夹紧到控件区间。 */
+function readDrawInterval(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? clampDrawIntervalSeconds(value)
+    : fallback;
 }

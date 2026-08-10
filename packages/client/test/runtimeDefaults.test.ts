@@ -19,12 +19,16 @@ describe('运行控制默认参数', () => {
     saveRuntimeDefaults({
       cameraAngle: 60,
       viewBottomExtra: 10,
-      drawIntervalSeconds: 5,
+      normalDrawIntervalSeconds: 5,
+      doubleSpeedDrawIntervalSeconds: 2.5,
+      overtimeDrawIntervalSeconds: 1,
     });
     expect(loadRuntimeDefaults()).toEqual({
       cameraAngle: 60,
       viewBottomExtra: 10,
-      drawIntervalSeconds: 5,
+      normalDrawIntervalSeconds: 5,
+      doubleSpeedDrawIntervalSeconds: 2.5,
+      overtimeDrawIntervalSeconds: 1,
     });
   });
 
@@ -32,12 +36,34 @@ describe('运行控制默认参数', () => {
     saveRuntimeDefaults({
       cameraAngle: 999,
       viewBottomExtra: -3,
-      drawIntervalSeconds: 0,
+      normalDrawIntervalSeconds: 0,
+      doubleSpeedDrawIntervalSeconds: 999,
+      overtimeDrawIntervalSeconds: Number.NaN,
     });
     expect(loadRuntimeDefaults()).toEqual({
       cameraAngle: 90,
       viewBottomExtra: 0,
-      drawIntervalSeconds: 0.25,
+      normalDrawIntervalSeconds: 0.25,
+      doubleSpeedDrawIntervalSeconds: 60,
+      overtimeDrawIntervalSeconds: builtInRuntimeDefaults().overtimeDrawIntervalSeconds,
+    });
+  });
+
+  it('旧版单一发牌间隔字段会被忽略并回落三阶段默认', () => {
+    localStorage.setItem(
+      'pb.runtimeControls.defaults',
+      JSON.stringify({
+        cameraAngle: 45,
+        viewBottomExtra: 8,
+        drawIntervalSeconds: 5,
+      }),
+    );
+    expect(loadRuntimeDefaults()).toEqual({
+      cameraAngle: 45,
+      viewBottomExtra: 8,
+      normalDrawIntervalSeconds: 6,
+      doubleSpeedDrawIntervalSeconds: 3,
+      overtimeDrawIntervalSeconds: 2,
     });
   });
 });

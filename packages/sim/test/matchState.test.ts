@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Faction } from '../src/entity/unit.js';
 import {
+  DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
   DOUBLE_SPEED_START_TICKS,
   MatchState,
+  NORMAL_DRAW_INTERVAL_TICKS,
   NORMAL_PHASE_TICKS,
+  OVERTIME_DRAW_INTERVAL_TICKS,
   OVERTIME_END_TICKS,
 } from '../src/match/matchState.js';
 
@@ -30,14 +33,38 @@ describe('MatchState.clear', () => {
 describe('MatchState 对局规则', () => {
   it('按阶段重置下一张牌倒计时', () => {
     const match = createMatch();
+    expect(match.getDrawIntervalTicks()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
 
     stepTo(match, DOUBLE_SPEED_START_TICKS);
     expect(match.phase).toBe('double_speed');
     expect(match.getTicksUntilDraw()).toBe(60);
+    expect(match.getDrawIntervalTicks()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
 
     stepTo(match, NORMAL_PHASE_TICKS);
     expect(match.phase).toBe('overtime');
     expect(match.getTicksUntilDraw()).toBe(40);
+    expect(match.getDrawIntervalTicks()).toBe(OVERTIME_DRAW_INTERVAL_TICKS);
+  });
+
+  it('可覆盖三阶段发牌间隔并夹住当前倒计时', () => {
+    const match = createMatch();
+    expect(match.getTicksUntilDraw()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
+
+    match.setDrawIntervals({
+      normalTicks: 20,
+      doubleSpeedTicks: 10,
+      overtimeTicks: 8,
+    });
+    expect(match.getDrawIntervalTicks()).toBe(20);
+    expect(match.getTicksUntilDraw()).toBe(20);
+
+    stepTo(match, DOUBLE_SPEED_START_TICKS);
+    expect(match.getDrawIntervalTicks()).toBe(10);
+    expect(match.getTicksUntilDraw()).toBe(10);
+
+    stepTo(match, NORMAL_PHASE_TICKS);
+    expect(match.getDrawIntervalTicks()).toBe(8);
+    expect(match.getTicksUntilDraw()).toBe(8);
   });
 
   it('一方基地被摧毁时立即结束', () => {

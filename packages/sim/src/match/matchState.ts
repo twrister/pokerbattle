@@ -42,6 +42,13 @@ export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 6;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
 export const OVERTIME_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
 
+/** 三阶段补牌周期；单机调试可覆盖，联机保持默认常量。 */
+export interface MatchDrawIntervals {
+  normalTicks: number;
+  doubleSpeedTicks: number;
+  overtimeTicks: number;
+}
+
 /**
  * 联机/单机对局的唯一步进入口：World + 双方牌堆。
  * 刻意不改 World 本身，抽牌与出牌校验都在这一层完成。
@@ -53,6 +60,9 @@ export class MatchState {
   result: MatchResult | null = null;
   private blueCastleId: number | null = null;
   private redCastleId: number | null = null;
+  private normalDrawIntervalTicks = NORMAL_DRAW_INTERVAL_TICKS;
+  private doubleSpeedDrawIntervalTicks = DOUBLE_SPEED_DRAW_INTERVAL_TICKS;
+  private overtimeDrawIntervalTicks = OVERTIME_DRAW_INTERVAL_TICKS;
   private nextDrawTick = NORMAL_DRAW_INTERVAL_TICKS;
 
   constructor(seed = 1) {
@@ -117,6 +127,9 @@ export class MatchState {
     h = mix(h, this.blueCastleId ?? 0);
     h = mix(h, this.redCastleId ?? 0);
     h = mix(h, this.nextDrawTick);
+    h = mix(h, this.normalDrawIntervalTicks);
+    h = mix(h, this.doubleSpeedDrawIntervalTicks);
+    h = mix(h, this.overtimeDrawIntervalTicks);
     return h >>> 0;
   }
 
@@ -133,7 +146,8 @@ export class MatchState {
     this.result = null;
     this.blueCastleId = null;
     this.redCastleId = null;
-    this.nextDrawTick = NORMAL_DRAW_INTERVAL_TICKS;
+    // 保留调试覆盖的发牌间隔，只重置本局倒计时
+    this.nextDrawTick = this.normalDrawIntervalTicks;
   }
 
   /**
@@ -177,6 +191,27 @@ export class MatchState {
     return this.result ? 0 : Math.max(0, this.nextDrawTick - this.world.tick);
   }
 
+  /** 当前阶段一次补牌周期的逻辑帧数，供 UI 遮罩进度与倒计时对齐。 */
+  getDrawIntervalTicks(): number {
+    return this.drawIntervalTicks();
+  }
+
+  /**
+   * 覆盖三阶段发牌间隔（单机调试用）。
+   * 缩短周期时夹住剩余倒计时，避免遮罩进度超过 100%。
+   */
+  setDrawIntervals(intervals: MatchDrawIntervals): void {
+    this.normalDrawIntervalTicks = Math.max(1, Math.floor(intervals.normalTicks));
+    this.doubleSpeedDrawIntervalTicks = Math.max(1, Math.floor(intervals.doubleSpeedTicks));
+    this.overtimeDrawIntervalTicks = Math.max(1, Math.floor(intervals.overtimeTicks));
+    if (this.result) return;
+    const remaining = this.nextDrawTick - this.world.tick;
+    const interval = this.drawIntervalTicks();
+    if (remaining > interval) {
+      this.nextDrawTick = this.world.tick + interval;
+    }
+  }
+
   /**
    * 在战斗清理后按主堡存活和时间边界裁决对局。
    * 主堡同帧归零直接平局，避免依赖系统内部伤害迭代顺序。
@@ -202,7 +237,7 @@ export class MatchState {
         return;
       }
       this.phase = 'overtime';
-      this.nextDrawTick = this.world.tick + OVERTIME_DRAW_INTERVAL_TICKS;
+      this.nextDrawTick = this.world.tick + this.overtimeDrawIntervalTicks;
       return;
     }
 
@@ -213,7 +248,7 @@ export class MatchState {
 
     if (this.world.tick === DOUBLE_SPEED_START_TICKS) {
       this.phase = 'double_speed';
-      this.nextDrawTick = this.world.tick + DOUBLE_SPEED_DRAW_INTERVAL_TICKS;
+      this.nextDrawTick = this.world.tick + this.doubleSpeedDrawIntervalTicks;
     }
   }
 
@@ -225,9 +260,9 @@ export class MatchState {
 
   /** 当前阶段的下一次补牌间隔。 */
   private drawIntervalTicks(): number {
-    if (this.phase === 'normal') return NORMAL_DRAW_INTERVAL_TICKS;
-    if (this.phase === 'double_speed') return DOUBLE_SPEED_DRAW_INTERVAL_TICKS;
-    return OVERTIME_DRAW_INTERVAL_TICKS;
+    if (this.phase === 'normal') return this.normalDrawIntervalTicks;
+    if (this.phase === 'double_speed') return this.doubleSpeedDrawIntervalTicks;
+    return this.overtimeDrawIntervalTicks;
   }
 
   private phaseCode(): number {

@@ -163,10 +163,11 @@ export class UnitView {
       this.group.add(this.billboard);
 
       // 建筑不投影子；普通单位用软阴影圆片压住地面
+      // 高度须高于河桥薄片（约 0.028），否则过桥时会被深度挡住。
       if (!this.isBuilding) {
         const blob = new THREE.Mesh(BLOB_SHADOW_GEOMETRY, BLOB_SHADOW_MATERIAL);
         blob.rotation.x = -Math.PI / 2;
-        blob.position.y = 0.02;
+        blob.position.y = 0.031;
         blob.scale.setScalar(bodyRadius * 0.9);
         this.group.add(blob);
       }
@@ -216,7 +217,8 @@ export class UnitView {
         }),
       );
       groundMark.rotation.x = -Math.PI / 2;
-      groundMark.position.y = 0.03;
+      // 叠在软阴影之上，并高于桥面。
+      groundMark.position.y = 0.033;
       this.group.add(groundMark);
     }
 
@@ -235,7 +237,7 @@ export class UnitView {
       }),
     );
     this.inspireAura.rotation.x = -Math.PI / 2;
-    this.inspireAura.position.y = 0.035;
+    this.inspireAura.position.y = 0.036;
     this.inspireAura.visible = false;
 
     // 仅主动技能挂施法特效；国王光环是持续效果，不需要瞬间施法动画

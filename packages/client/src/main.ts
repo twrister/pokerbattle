@@ -4,6 +4,7 @@ import {
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   type CardFormation,
+  type MatchState,
   type UnitTypeId,
   fromFloat,
   getFormationBuildingTypeId,
@@ -46,7 +47,10 @@ import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
-import { loadRuntimeDefaults } from './debug/runtimeDefaults.js';
+import {
+  loadRuntimeDefaults,
+  type RuntimeDefaults,
+} from './debug/runtimeDefaults.js';
 import { disposeFormationThumbnailRenderer } from './view/formationThumbnail.js';
 import { createScene, type SceneContext } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
@@ -134,6 +138,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   // 单机走 MatchState，与联机共用出牌/抽牌规则，避免双路径漂移
   const loop = new SimLoop(20260806, { withMatch: isSolo });
   if (isSolo) {
+    const runtimeDefaults = loadRuntimeDefaults();
+    applySoloDrawIntervals(loop.match!, runtimeDefaults);
     loop.match!.seedStartingCastles();
     // 立刻拍一帧快照，首帧就能看到城堡
     loop.curr = takeSnapshot(loop.world);
@@ -276,6 +282,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         externalDraw: true,
         externalCardConsume: true,
         getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw() * 1000) / TICK_RATE,
+        getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
         onRequestSpawn: requestSpawn,
         canDropAt: (point, formation) => canSpawnAt(formation, point),
         onBuildingDragStart,
@@ -352,11 +359,9 @@ function enterBattleSession(mode: BattleMode): () => void {
               initial: sceneContext.getSoloViewBottomExtra(),
               onChange: (value) => sceneContext.setSoloViewBottomExtra(value),
             },
-            soloDrawInterval: {
-              initialSeconds: loadRuntimeDefaults().drawIntervalSeconds,
-              onChange: () => {
-                /* 抽牌间隔已由 MatchState 阶段表固定；保留控件以便保存为默认 */
-              },
+            soloDrawIntervals: {
+              initial: loadRuntimeDefaults(),
+              onChange: (intervals) => applySoloDrawIntervals(loop.match!, intervals),
             },
           }
         : {}
@@ -608,6 +613,7 @@ function runVersusSession(
     externalDraw: true,
     externalCardConsume: true,
     getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw() * 1000) / TICK_RATE,
+    getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicks() * 1000) / TICK_RATE,
     onRequestSpawn: requestSpawn,
     canDropAt: (point, formation) => canSpawnAt(formation, point),
     onBuildingDragStart: (formation) => {
@@ -794,6 +800,23 @@ function spawnRandomPk(target: SimLoop, clear: () => void): void {
   const redType = pickRandomUnitType();
   target.enqueue(spawnCommand(Faction.Blue, blueType, fromFloat(x), fromFloat(6)));
   target.enqueue(spawnCommand(Faction.Red, redType, fromFloat(x), fromFloat(ARENA_H - 6)));
+}
+
+/** 把运行控制里的秒数换算成 tick，写回单机 MatchState。 */
+function applySoloDrawIntervals(
+  match: MatchState,
+  intervals: Pick<
+    RuntimeDefaults,
+    | 'normalDrawIntervalSeconds'
+    | 'doubleSpeedDrawIntervalSeconds'
+    | 'overtimeDrawIntervalSeconds'
+  >,
+): void {
+  match.setDrawIntervals({
+    normalTicks: Math.round(intervals.normalDrawIntervalSeconds * TICK_RATE),
+    doubleSpeedTicks: Math.round(intervals.doubleSpeedDrawIntervalSeconds * TICK_RATE),
+    overtimeTicks: Math.round(intervals.overtimeDrawIntervalSeconds * TICK_RATE),
+  });
 }
 
 function requiredElement<T extends Element>(selector: string): T {

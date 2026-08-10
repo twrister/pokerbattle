@@ -6,7 +6,11 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import type { SimLoop } from '../loop.js';
-import { saveRuntimeDefaults } from './runtimeDefaults.js';
+import {
+  clampDrawIntervalSeconds,
+  saveRuntimeDefaults,
+  type RuntimeDefaults,
+} from './runtimeDefaults.js';
 
 /** 可切换的倍速档位 */
 const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
@@ -24,11 +28,11 @@ export interface PanelOptions {
   onClear: () => void;
   /** 是否启用沙盒的阵营、兵种选择和对应快捷键。 */
   enableSpawnControls?: boolean;
-  /** 是否启用暂停/单步/倍速/清空等运行控制（正式服单机关闭）。 */
+  /** 是否启用暂停/单步/倍速/重新开局等运行控制（正式服单机关闭）。 */
   enableRuntimeControls?: boolean;
   /** 沙盒专用的快速开团预设；单机模式不提供。 */
   onBrawl?: () => void;
-  /** 清空后双方各随机一个兵种 1v1 */
+  /** 重新开局后双方各随机一个兵种 1v1 */
   onRandomPk?: () => void;
   /** 建造模式切换：传入建筑 typeId 进入，null 退出 */
   onBuildingModeChange?: (typeId: UnitTypeId | null) => void;
@@ -42,10 +46,22 @@ export interface PanelOptions {
     initial: number;
     onChange: (value: number) => void;
   };
-  /** 单机自动发牌间隔；传入后允许在运行时立即调整。 */
-  soloDrawInterval?: {
-    initialSeconds: number;
-    onChange: (seconds: number) => void;
+  /** 单机三阶段发牌间隔；传入后允许在运行时立即调整。 */
+  soloDrawIntervals?: {
+    initial: Pick<
+      RuntimeDefaults,
+      | 'normalDrawIntervalSeconds'
+      | 'doubleSpeedDrawIntervalSeconds'
+      | 'overtimeDrawIntervalSeconds'
+    >;
+    onChange: (
+      intervals: Pick<
+        RuntimeDefaults,
+        | 'normalDrawIntervalSeconds'
+        | 'doubleSpeedDrawIntervalSeconds'
+        | 'overtimeDrawIntervalSeconds'
+      >,
+    ) => void;
   };
 }
 
@@ -95,7 +111,9 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
   const bottomExtraInput = required<HTMLInputElement>('#solo-view-bottom-extra');
   const bottomExtraValue = required<HTMLElement>('#solo-view-bottom-extra-value');
-  const drawIntervalInput = required<HTMLInputElement>('#solo-draw-interval');
+  const normalDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-normal');
+  const doubleSpeedDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-double');
+  const overtimeDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-overtime');
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -237,26 +255,48 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloViewBottomExtra?.onChange(value);
   };
 
-  /** 校验数字框后再通知手牌，避免编辑中的空值把计时器改成无效状态。 */
+  /** 读取三阶段发牌间隔；任一非法则返回 null，避免半成品写入 MatchState。 */
+  const readDrawIntervals = (): {
+    normalDrawIntervalSeconds: number;
+    doubleSpeedDrawIntervalSeconds: number;
+    overtimeDrawIntervalSeconds: number;
+  } | null => {
+    const normalDrawIntervalSeconds = Number(normalDrawIntervalInput.value);
+    const doubleSpeedDrawIntervalSeconds = Number(doubleSpeedDrawIntervalInput.value);
+    const overtimeDrawIntervalSeconds = Number(overtimeDrawIntervalInput.value);
+    if (
+      !Number.isFinite(normalDrawIntervalSeconds) ||
+      !Number.isFinite(doubleSpeedDrawIntervalSeconds) ||
+      !Number.isFinite(overtimeDrawIntervalSeconds) ||
+      normalDrawIntervalSeconds < 0.25 ||
+      doubleSpeedDrawIntervalSeconds < 0.25 ||
+      overtimeDrawIntervalSeconds < 0.25
+    ) {
+      return null;
+    }
+    return {
+      normalDrawIntervalSeconds: clampDrawIntervalSeconds(normalDrawIntervalSeconds),
+      doubleSpeedDrawIntervalSeconds: clampDrawIntervalSeconds(doubleSpeedDrawIntervalSeconds),
+      overtimeDrawIntervalSeconds: clampDrawIntervalSeconds(overtimeDrawIntervalSeconds),
+    };
+  };
+
+  /** 校验数字框后再写回 MatchState，避免编辑中的空值把计时器改成无效状态。 */
   const onDrawIntervalInput = (): void => {
-    const seconds = Number(drawIntervalInput.value);
-    if (!Number.isFinite(seconds) || seconds < 0.25) return;
-    options.soloDrawInterval?.onChange(seconds);
+    const intervals = readDrawIntervals();
+    if (!intervals) return;
+    options.soloDrawIntervals?.onChange(intervals);
   };
 
   /** 把当前滑条/数字框写入本地默认，供下次进局与刷新后沿用。 */
   const onSaveDefaults = (): void => {
     const cameraAngle = Number(cameraAngleInput.value);
     const viewBottomExtra = Number(bottomExtraInput.value);
-    const drawIntervalSeconds = Number(drawIntervalInput.value);
-    if (
-      !Number.isFinite(cameraAngle) ||
-      !Number.isFinite(viewBottomExtra) ||
-      !Number.isFinite(drawIntervalSeconds)
-    ) {
+    const drawIntervals = readDrawIntervals();
+    if (!Number.isFinite(cameraAngle) || !Number.isFinite(viewBottomExtra) || !drawIntervals) {
       return;
     }
-    saveRuntimeDefaults({ cameraAngle, viewBottomExtra, drawIntervalSeconds });
+    saveRuntimeDefaults({ cameraAngle, viewBottomExtra, ...drawIntervals });
     saveDefaultsButton.textContent = '已保存';
     window.clearTimeout(saveDefaultsTimer);
     saveDefaultsTimer = window.setTimeout(() => {
@@ -296,11 +336,19 @@ export function createPanel(options: PanelOptions): PanelHandle {
       bottomExtraValue.textContent = Number(bottomExtraInput.value).toFixed(1);
       bottomExtraInput.addEventListener('input', onBottomExtraInput);
     }
-    if (options.soloDrawInterval) {
-      drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
-      drawIntervalInput.addEventListener('input', onDrawIntervalInput);
+    if (options.soloDrawIntervals) {
+      normalDrawIntervalInput.value = String(options.soloDrawIntervals.initial.normalDrawIntervalSeconds);
+      doubleSpeedDrawIntervalInput.value = String(
+        options.soloDrawIntervals.initial.doubleSpeedDrawIntervalSeconds,
+      );
+      overtimeDrawIntervalInput.value = String(
+        options.soloDrawIntervals.initial.overtimeDrawIntervalSeconds,
+      );
+      normalDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
+      doubleSpeedDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
+      overtimeDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
     }
-    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawInterval) {
+    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawIntervals) {
       saveDefaultsButton.addEventListener('click', onSaveDefaults);
     }
   }
@@ -362,10 +410,12 @@ export function createPanel(options: PanelOptions): PanelHandle {
         if (options.soloViewBottomExtra) {
           bottomExtraInput.removeEventListener('input', onBottomExtraInput);
         }
-        if (options.soloDrawInterval) {
-          drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+        if (options.soloDrawIntervals) {
+          normalDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+          doubleSpeedDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+          overtimeDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
         }
-        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawInterval) {
+        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawIntervals) {
           saveDefaultsButton.removeEventListener('click', onSaveDefaults);
         }
         window.clearTimeout(saveDefaultsTimer);

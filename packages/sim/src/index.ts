@@ -111,6 +111,7 @@ export {
   NORMAL_PHASE_TICKS,
   OVERTIME_DRAW_INTERVAL_TICKS,
   OVERTIME_END_TICKS,
+  type MatchDrawIntervals,
   type MatchEndReason,
   type MatchPhase,
   type MatchResult,

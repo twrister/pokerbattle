@@ -63,6 +63,7 @@ describe('单机手牌交互', () => {
     for (const card of dealtCards) {
       expect(card.style.getPropertyValue('--deal-from-x')).toBe('0px');
       expect(card.style.getPropertyValue('--deal-from-y')).toBe('0px');
+      expect(card.style.getPropertyValue('--deal-hover-y')).toBe('-24px');
     }
 
     panel.dispose();
@@ -230,6 +231,38 @@ describe('单机手牌交互', () => {
     panel.syncFromDeck();
 
     expect(document.querySelector('.formation-option')).toBe(before);
+    panel.dispose();
+  });
+
+  it('外部发牌倒计时按对局周期归一化遮罩，不被面板本地间隔夹断', () => {
+    let remainingMs = 6000;
+    // 保留牌堆余量，避免 is-empty 把遮罩强制清零掩盖分母问题。
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    deck.drawMany(3);
+    const panel = createHandPanel({
+      deck,
+      drawIntervalSeconds: 3,
+      externalDraw: true,
+      getDrawRemainingMs: () => remainingMs,
+      getDrawIntervalMs: () => 6000,
+    });
+    const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
+
+    panel.update(0);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+
+    remainingMs = 4500;
+    panel.update(0);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('75%');
+
+    remainingMs = 3000;
+    panel.update(0);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('50%');
+
+    remainingMs = 0;
+    panel.update(0);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
     panel.dispose();
   });
 
@@ -485,7 +518,7 @@ describe('单机手牌交互', () => {
     // 纯点击只提示拖拽，不落成
     option.click();
     expect(onRequestSpawn).not.toHaveBeenCalled();
-    expect(document.querySelector('#hand-status')?.textContent).toBe('拖到绿色格子上松手放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('拖到白色格子上松手放置');
 
     // 按下即进入建筑预览；停在按钮上箭头为非法，松开也不自动放置
     option.dispatchEvent(pointerEvent('pointerdown', 50, 120, 500));

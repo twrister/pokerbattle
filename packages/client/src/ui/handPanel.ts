@@ -53,6 +53,11 @@ export interface HandPanelOptions {
   externalCardConsume?: boolean;
   /** 外部倒计时（毫秒）；提供则覆盖内部 remainingMs 显示。 */
   getDrawRemainingMs?: () => number;
+  /**
+   * 外部补牌周期（毫秒）；与 getDrawRemainingMs 配对时用作遮罩分母。
+   * 未提供时回退到面板本地 drawIntervalMs（仅本地墙钟抽牌路径）。
+   */
+  getDrawIntervalMs?: () => number;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
   /**
@@ -552,6 +557,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       const target = cardElement.getBoundingClientRect();
       cardElement.style.setProperty('--deal-from-x', `${sourceX - target.left - target.width / 2}px`);
       cardElement.style.setProperty('--deal-from-y', `${sourceY - target.top - target.height / 2}px`);
+      // 至少保留固定悬停高度，避免布局尚未完成时下落阶段失去层次。
+      const hoverHeight = Math.round(Math.max(24, target.height * 0.22));
+      cardElement.style.setProperty('--deal-hover-y', `-${hoverHeight}px`);
     }
   }
 
@@ -670,6 +678,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /** 同步牌堆补牌进度；满手时以持续晃动替代倒计时，避免误导玩家仍会抽牌。 */
   function syncStatus(): void {
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
+    // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认 3s 夹断 6s 倒计时。
+    const intervalMs = Math.max(options.getDrawIntervalMs?.() ?? drawIntervalMs, 1);
     const isFull = deck.hand.length >= MAX_HAND_SIZE;
     const isEmpty = deck.availableCount === 0;
     // 剩余时间从 1 递减到 0，供牌堆由顶向下收缩黑色遮罩；满手保持满遮罩，空堆则无遮罩。
@@ -677,7 +687,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       ? 1
       : isEmpty
         ? 0
-        : Math.min(Math.max(ms, 0), drawIntervalMs) / drawIntervalMs;
+        : Math.min(Math.max(ms, 0), intervalMs) / intervalMs;
     drawPile.style.setProperty('--draw-progress', `${progress * 100}%`);
     drawPile.classList.toggle('is-full', isFull);
     drawPile.classList.toggle('is-empty', isEmpty);
