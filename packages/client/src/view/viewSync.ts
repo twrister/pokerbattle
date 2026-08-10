@@ -4,6 +4,7 @@ import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
+import { ExplosionEffectView } from './explosionEffectView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -27,6 +28,8 @@ export class BattleView {
   private readonly healEffectPool: HealEffectView[] = [];
   private readonly activeAoePulses = new Map<number, AoePulseEffectView>();
   private readonly aoePulsePool: AoePulseEffectView[] = [];
+  private readonly activeExplosions = new Map<number, ExplosionEffectView>();
+  private readonly explosionPool: ExplosionEffectView[] = [];
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -42,6 +45,7 @@ export class BattleView {
     this.renderProjectiles(prev, curr, alpha);
     this.renderHealEffects(curr);
     this.renderAoePulses(curr);
+    this.renderExplosions(curr, camera);
   }
 
   /** 快照换了才重建索引，同一逻辑帧内的多次渲染直接复用 */
@@ -138,6 +142,28 @@ export class BattleView {
     }
   }
 
+  /** 将炸弹兵爆炸序列帧同步到场景。 */
+  private renderExplosions(curr: Snapshot, camera: THREE.Camera): void {
+    this.seen.clear();
+    for (const effect of curr.explosionEffects) {
+      this.seen.add(effect.id);
+      let view = this.activeExplosions.get(effect.id);
+      if (!view) {
+        view = this.explosionPool.pop() ?? new ExplosionEffectView();
+        this.activeExplosions.set(effect.id, view);
+        this.scene.add(view.group);
+      }
+      view.update(effect, camera);
+    }
+    for (const [id, view] of this.activeExplosions) {
+      if (this.seen.has(id)) continue;
+      this.scene.remove(view.group);
+      this.activeExplosions.delete(id);
+      view.reset();
+      this.explosionPool.push(view);
+    }
+  }
+
   private renderProjectiles(prev: Snapshot, curr: Snapshot, alpha: number): void {
     this.seen.clear();
 
@@ -211,6 +237,12 @@ export class BattleView {
       this.activeAoePulses.delete(id);
       this.aoePulsePool.push(view);
     }
+    for (const [id, view] of this.activeExplosions) {
+      this.scene.remove(view.group);
+      this.activeExplosions.delete(id);
+      view.reset();
+      this.explosionPool.push(view);
+    }
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
@@ -242,6 +274,13 @@ export class BattleView {
       this.aoePulsePool.push(view);
     }
     this.activeAoePulses.clear();
+    for (const [id, view] of this.activeExplosions) {
+      this.scene.remove(view.group);
+      this.activeExplosions.delete(id);
+      view.reset();
+      this.explosionPool.push(view);
+    }
+    this.activeExplosions.clear();
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }

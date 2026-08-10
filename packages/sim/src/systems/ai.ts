@@ -38,8 +38,8 @@ export function updateAi(world: World): void {
       continue;
     }
 
-    // 英雄技能前摇期间站定蓄力；治疗会额外朝锁定的受疗友军转向
-    if (unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) {
+    // 英雄技能前摇 / 炸弹兵引信期间站定蓄力；治疗会额外朝锁定的受疗友军转向
+    if (unit.healWindupLeft > 0 || unit.summonWindupLeft > 0 || unit.detonateWindupLeft > 0) {
       unit.state = UnitState.Idle;
       clearPath(unit);
       const aim = world.getUnit(unit.healCastTargetId) ?? world.getUnit(unit.targetId);

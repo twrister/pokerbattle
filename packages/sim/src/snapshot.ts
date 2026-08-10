@@ -66,12 +66,22 @@ export interface AoePulseEffectSnapshot {
   progress: number;
 }
 
+/** 炸弹兵爆炸序列帧特效。 */
+export interface ExplosionEffectSnapshot {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  progress: number;
+}
+
 export interface Snapshot {
   tick: number;
   units: UnitSnapshot[];
   projectiles: ProjectileSnapshot[];
   healEffects: HealEffectSnapshot[];
   aoePulseEffects: AoePulseEffectSnapshot[];
+  explosionEffects: ExplosionEffectSnapshot[];
 }
 
 export function takeSnapshot(world: World): Snapshot {
@@ -95,11 +105,12 @@ export function takeSnapshot(world: World): Snapshot {
         unit.windupLeft > 0
         || unit.chargeWindupLeft > 0
         || unit.healWindupLeft > 0
-        || unit.summonWindupLeft > 0,
+        || unit.summonWindupLeft > 0
+        || unit.detonateWindupLeft > 0,
       charging: unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0,
       inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
       // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）
-      casting: unit.chargeWindupLeft > 0 || unit.castFxLeft > 0,
+      casting: unit.chargeWindupLeft > 0 || unit.castFxLeft > 0 || unit.detonateWindupLeft > 0,
       aoeHit: unit.aoeHitFxLeft > 0,
     });
   }
@@ -141,10 +152,28 @@ export function takeSnapshot(world: World): Snapshot {
     });
   }
 
-  return { tick: world.tick, units, projectiles, healEffects, aoePulseEffects };
+  const explosionEffects: ExplosionEffectSnapshot[] = [];
+  for (const effect of world.explosionEffects) {
+    explosionEffects.push({
+      id: effect.id,
+      x: toFloat(effect.x),
+      y: toFloat(effect.y),
+      radius: toFloat(effect.radius),
+      progress: 1 - effect.remainingTicks / effect.totalTicks,
+    });
+  }
+
+  return { tick: world.tick, units, projectiles, healEffects, aoePulseEffects, explosionEffects };
 }
 
 /** 空快照，供渲染层在第一帧之前占位 */
 export function emptySnapshot(): Snapshot {
-  return { tick: 0, units: [], projectiles: [], healEffects: [], aoePulseEffects: [] };
+  return {
+    tick: 0,
+    units: [],
+    projectiles: [],
+    healEffects: [],
+    aoePulseEffects: [],
+    explosionEffects: [],
+  };
 }

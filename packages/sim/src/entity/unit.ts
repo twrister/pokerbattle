@@ -83,6 +83,13 @@ export interface Unit {
    */
   summonWindupLeft: Fx;
   /**
+   * 炸弹兵引信剩余（tick）；> 0 时站定蓄力，走完后自爆。
+   * 无自爆技能的单位恒为 0。
+   */
+  detonateWindupLeft: Fx;
+  /** 本单位是否已结算过自爆，避免死亡与引信结束双重引爆 */
+  detonated: boolean;
+  /**
    * 施法特效剩余逻辑帧。仅驱动快照 `casting`，不参与战斗判定。
    * 骑兵冲刺前摇走 chargeWindupLeft，不占用本字段。
    */
@@ -140,6 +147,8 @@ export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: 
     healCastTargetId: NO_TARGET,
     summonCooldown: 0,
     summonWindupLeft: 0,
+    detonateWindupLeft: 0,
+    detonated: false,
     castFxLeft: 0,
     aoeHitFxLeft: 0,
     base,

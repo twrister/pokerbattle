@@ -11,6 +11,7 @@ export type UnitTypeId =
   | 'hero_archmage'
   | 'dragon'
   | 'summoned_skeleton'
+  | 'summoned_bomber'
   | 'building_base'
   | 'building_tower';
 
@@ -67,6 +68,14 @@ export interface SummonConfig {
   unitTypeId: UnitTypeId;
 }
 
+/** 炸弹兵接近目标后的引信与爆炸范围。 */
+export interface DetonateConfig {
+  /** 引信时长（tick），20 tick = 1 秒 */
+  fuse: Fx;
+  /** 爆炸伤害半径（格），圆心距判定 */
+  aoeRadius: Fx;
+}
+
 /**
  * 兵种配置。所有数值都是定点数，扩到 10 个兵种只是往 UNIT_CONFIGS 里加行，
  * 不需要新增任何类或分支逻辑（有技能的兵种除外，需接对应系统）。
@@ -111,6 +120,8 @@ export interface UnitConfig {
   heal?: HealConfig;
   /** 可选自动召唤技能；有此字段的兵种由 heroSkills 系统驱动 */
   summon?: SummonConfig;
+  /** 可选自爆技能；有此字段的兵种由 detonate 系统驱动，不走普攻 */
+  detonate?: DetonateConfig;
 }
 
 /** 冲刺技能浮点草稿（与 JSON / 面板往返一致） */
@@ -146,6 +157,12 @@ export interface SummonConfigDraft {
   unitTypeId: UnitTypeId;
 }
 
+/** 自爆技能浮点草稿 */
+export interface DetonateConfigDraft {
+  fuse: number;
+  aoeRadius: number;
+}
+
 /**
  * 人类可读的浮点草稿。调试面板与 units.json 都用这套，
  * 写入模拟前再 fromFloat，避免在 UI 层直接碰定点。
@@ -176,6 +193,7 @@ export interface UnitConfigDraft {
   inspire?: InspireConfigDraft;
   heal?: HealConfigDraft;
   summon?: SummonConfigDraft;
+  detonate?: DetonateConfigDraft;
 }
 
 /**
@@ -203,6 +221,7 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     inspire: config.inspire ? { ...config.inspire } : undefined,
     heal: config.heal ? { ...config.heal } : undefined,
     summon: config.summon ? { ...config.summon } : undefined,
+    detonate: config.detonate ? { ...config.detonate } : undefined,
   };
 }
 
@@ -234,6 +253,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.inspire = source.inspire ? { ...source.inspire } : undefined;
   target.heal = source.heal ? { ...source.heal } : undefined;
   target.summon = source.summon ? { ...source.summon } : undefined;
+  target.detonate = source.detonate ? { ...source.detonate } : undefined;
 }
 
 /** 把草稿里的攻击方式还原成运行时 AttackKind */
@@ -293,6 +313,14 @@ function summonFromDraft(draft: SummonConfigDraft): SummonConfig {
   };
 }
 
+/** 浮点自爆草稿 → 定点 */
+function detonateFromDraft(draft: DetonateConfigDraft): DetonateConfig {
+  return {
+    fuse: fromFloat(draft.fuse),
+    aoeRadius: fromFloat(draft.aoeRadius),
+  };
+}
+
 /** 单条浮点草稿转运行时定点配置 */
 function configFromDraft(draft: UnitConfigDraft): UnitConfig {
   return {
@@ -317,6 +345,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     inspire: draft.inspire ? inspireFromDraft(draft.inspire) : undefined,
     heal: draft.heal ? healFromDraft(draft.heal) : undefined,
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
+    detonate: draft.detonate ? detonateFromDraft(draft.detonate) : undefined,
   };
 }
 
@@ -423,6 +452,12 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
       unitTypeId: config.summon.unitTypeId,
     };
   }
+  if (config.detonate) {
+    draft.detonate = {
+      fuse: toFloat(config.detonate.fuse),
+      aoeRadius: toFloat(config.detonate.aoeRadius),
+    };
+  }
   return draft;
 }
 
@@ -472,6 +507,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.inspire = draft.inspire ? inspireFromDraft(draft.inspire) : undefined;
     target.heal = draft.heal ? healFromDraft(draft.heal) : undefined;
     target.summon = draft.summon ? summonFromDraft(draft.summon) : undefined;
+    target.detonate = draft.detonate ? detonateFromDraft(draft.detonate) : undefined;
   }
   recomputeMaxUnitRadius();
 }

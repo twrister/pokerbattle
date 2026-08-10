@@ -14,7 +14,12 @@ import {
   RETARGET_INTERVAL,
 } from './config/tuning.js';
 import { type Projectile, createProjectile } from './entity/projectile.js';
-import { type AoePulseEffect, type AoePulseKind, type HealEffect } from './entity/effect.js';
+import {
+  type AoePulseEffect,
+  type AoePulseKind,
+  type ExplosionEffect,
+  type HealEffect,
+} from './entity/effect.js';
 import { type Faction, type Unit, createUnit } from './entity/unit.js';
 import {
   buildingCellRange,
@@ -35,6 +40,7 @@ import { updateCharge } from './systems/cavalry.js';
 import { resolveSeparation } from './systems/separation.js';
 import { updateCombat } from './systems/combat.js';
 import { updateProjectiles } from './systems/projectiles.js';
+import { updateDetonate } from './systems/detonate.js';
 import { tickPresentationFx, updateHeroSkills } from './systems/heroSkills.js';
 import { cleanup } from './systems/cleanup.js';
 
@@ -58,6 +64,7 @@ export class World {
   readonly projectiles: Projectile[] = [];
   readonly healEffects: HealEffect[] = [];
   readonly aoePulseEffects: AoePulseEffect[] = [];
+  readonly explosionEffects: ExplosionEffect[] = [];
   /** 1 格分辨率的建筑占格表，用于放置重叠校验（与 NAV 半格网格独立） */
   private readonly buildingCells: Uint8Array;
   readonly buildingCols: number;
@@ -282,6 +289,20 @@ export class World {
     });
   }
 
+  /** 记录一次炸弹兵爆炸序列帧，供快照层按进度播帧。 */
+  spawnExplosionEffect(x: Fx, y: Fx, radius: Fx): void {
+    // 约 0.5 秒，对齐 8 帧 @16fps 的爆炸素材时长
+    const totalTicks = 10;
+    this.explosionEffects.push({
+      id: this.nextEffectId++,
+      x,
+      y,
+      radius,
+      remainingTicks: totalTicks,
+      totalTicks,
+    });
+  }
+
   /**
    * 推进一个逻辑帧。系统顺序写死在这里，任何调整都会改变模拟结果，
    * 改动前请确认两端会同时更新。
@@ -301,6 +322,8 @@ export class World {
     updateHeroSkills(this);
     updateCombat(this);
     updateProjectiles(this);
+    // 在 cleanup 前引爆，保证死亡当帧仍能结算 AOE 与特效
+    updateDetonate(this);
     cleanup(this);
   }
 
@@ -335,6 +358,7 @@ export class World {
     this.projectiles.length = 0;
     this.healEffects.length = 0;
     this.aoePulseEffects.length = 0;
+    this.explosionEffects.length = 0;
     this.unitsById.clear();
     this.buildingCells.fill(0);
     this.nav.clearBlocked();
@@ -376,6 +400,8 @@ export class World {
       h = mix(h, unit.healCastTargetId);
       h = mix(h, unit.summonCooldown);
       h = mix(h, unit.summonWindupLeft);
+      h = mix(h, unit.detonateWindupLeft);
+      h = mix(h, unit.detonated ? 1 : 0);
       h = mix(h, unit.castFxLeft);
       h = mix(h, unit.aoeHitFxLeft);
     }
@@ -403,6 +429,12 @@ export class World {
       h = mix(h, effect.dirY);
       h = mix(h, effect.remainingTicks);
       h = mix(h, effect.kind === 'charge_fan' ? 1 : 0);
+    }
+    for (const effect of this.explosionEffects) {
+      h = mix(h, effect.id);
+      h = mix(h, effect.x);
+      h = mix(h, effect.y);
+      h = mix(h, effect.remainingTicks);
     }
     return h >>> 0;
   }

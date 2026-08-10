@@ -45,6 +45,8 @@ export class UnitView {
   private readonly isAir: boolean;
   /** 有占地的建筑：无朝向切换、贴图宽铺满占地、底边对齐画面近端格边。 */
   private readonly isBuilding: boolean;
+  /** 炸弹兵：引信期间播闪烁警示，不挂 Teleport 施法特效。 */
+  private readonly isDetonator: boolean;
   /**
    * 建筑贴图相对逻辑中心的底边偏移幅度（= footprint/2）。
    * 实际 Z 符号随镜头近端翻转：蓝方视角 +Z，红方视角 -Z。
@@ -120,6 +122,7 @@ export class UnitView {
     const config = UNIT_CONFIGS[typeId];
     this.isAir = config.movementLayer === 'air';
     this.isBuilding = config.footprint > 0;
+    this.isDetonator = !!config.detonate;
     // 碰撞圈用真实半径；显示半径 = 铁卫基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
     const bodyRadius = BODY_SCALE_REFERENCE * Math.max(0.05, toFloat(config.bodyScale));
@@ -351,7 +354,8 @@ export class UnitView {
     }
 
     this.updateCastFx(casting, timeSec, camera);
-    this.applyHitTint(timeSec);
+    // 炸弹兵引信用 attacking 标记；闪烁盖过普通受击 tint
+    this.applyHitTint(timeSec, this.isDetonator && attacking);
   }
 
   /** 让空中角色缓慢悬浮，同时保持地面圈和阴影不离地，便于判断实际战斗位置。 */
@@ -394,26 +398,36 @@ export class UnitView {
     if (aoe) this.shakeUntil = timeSec + UnitView.HIT_SHAKE_SEC;
   }
 
-  /** 按受击剩余时间把材质色拉向红再复原；强度 1→0 */
-  private applyHitTint(timeSec: number): void {
+  /**
+   * 按受击剩余时间把材质色拉向红再复原；强度 1→0。
+   * 炸弹兵引信期间改播橙红硬闪，提示即将自爆。
+   */
+  private applyHitTint(timeSec: number, detonating = false): void {
     const duration = this.aoeHitFlash ? UnitView.HIT_FLASH_AOE_SEC : UnitView.HIT_FLASH_SEC;
     const raw = timeSec < this.hitUntil ? (this.hitUntil - timeSec) / duration : 0;
     // 范围受击峰值更亮，同波次多目标闪红更容易齐步被看见
-    const t = this.aoeHitFlash ? Math.min(1, raw * 1.15) : raw;
+    let t = this.aoeHitFlash ? Math.min(1, raw * 1.15) : raw;
+    let flashColor = HIT_FLASH_COLOR;
+    if (detonating) {
+      // 约 8Hz 硬闪：亮橙 ↔ 近白，比平滑呼吸更像引信警示
+      const on = Math.sin(timeSec * Math.PI * 16 + this.phase) >= 0;
+      t = on ? 1 : 0.2;
+      flashColor = DETONATE_FLASH_COLOR;
+    }
 
     if (this.spriteMaterials && this.sharedSpriteMaterials) {
       // 共享材质在贴图加载完成后才 visible；克隆体需跟着同步，否则会永远隐形
       this.spriteMaterials.front.visible = this.sharedSpriteMaterials.front.visible;
       this.spriteMaterials.back.visible = this.sharedSpriteMaterials.back.visible;
-      HIT_TINT_COLOR.lerpColors(WHITE_COLOR, HIT_FLASH_COLOR, t);
+      HIT_TINT_COLOR.lerpColors(WHITE_COLOR, flashColor, t);
       this.spriteMaterials.front.color.copy(HIT_TINT_COLOR);
       this.spriteMaterials.back.color.copy(HIT_TINT_COLOR);
       return;
     }
 
     if (this.bodyMaterial) {
-      this.bodyMaterial.color.lerpColors(this.baseBodyColor, HIT_FLASH_COLOR, t);
-      this.bodyMaterial.emissive.lerpColors(this.baseBodyColor, HIT_FLASH_COLOR, t);
+      this.bodyMaterial.color.lerpColors(this.baseBodyColor, flashColor, t);
+      this.bodyMaterial.emissive.lerpColors(this.baseBodyColor, flashColor, t);
     }
   }
 
@@ -566,6 +580,8 @@ const DIRECTION_HYSTERESIS = 0.12;
 const CAMERA_RIGHT = new THREE.Vector3();
 const WHITE_COLOR = new THREE.Color(0xffffff);
 const HIT_FLASH_COLOR = new THREE.Color(0xff3a3a);
+/** 炸弹兵引信警示色：偏橙，区别于普通受击闪红 */
+const DETONATE_FLASH_COLOR = new THREE.Color(0xff6a18);
 /** 受击 tint 插值临时色，避免每帧 new Color */
 const HIT_TINT_COLOR = new THREE.Color();
 /** 飞行单位轻微浮动参数；基准离地高度与 sim 弹道出生点共用 AIR_UNIT_HOVER_HEIGHT。 */

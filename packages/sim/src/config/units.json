@@ -121,7 +121,7 @@
     "attackInterval": 24,
     "attackWindup": 9,
     "range": 5,
-    "moveSpeed": 1,
+    "moveSpeed": 0.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -143,12 +143,16 @@
     "attackInterval": 24,
     "attackWindup": 9,
     "range": 5,
-    "moveSpeed": 1,
+    "moveSpeed": 0.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
     "projectileSpeed": 9,
-    "aoeRadius": 0
+    "aoeRadius": 0,
+    "summon": {
+      "cooldown": 100,
+      "unitTypeId": "summoned_bomber"
+    }
   },
   "dragon": {
     "id": "dragon",
@@ -174,7 +178,7 @@
     "radius": 0.3,
     "bodyScale": 0.6,
     "mass": 1.5,
-    "maxHp": 300,
+    "maxHp": 250,
     "damage": 50,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -185,6 +189,28 @@
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0
+  },
+  "summoned_bomber": {
+    "id": "summoned_bomber",
+    "name": "炸弹兵（召唤物）",
+    "radius": 0.3,
+    "bodyScale": 0.6,
+    "mass": 1.5,
+    "maxHp": 150,
+    "damage": 100,
+    "attackInterval": 20,
+    "attackWindup": 7,
+    "range": 0.3,
+    "moveSpeed": 2,
+    "sightRange": 40,
+    "movementLayer": "ground",
+    "attackKind": "melee",
+    "projectileSpeed": 9,
+    "aoeRadius": 0,
+    "detonate": {
+      "fuse": 10,
+      "aoeRadius": 1.5
+    }
   },
   "building_base": {
     "id": "building_base",

@@ -31,3 +31,16 @@ export interface AoePulseEffect {
   remainingTicks: number;
   readonly totalTicks: number;
 }
+
+/**
+ * 炸弹兵自爆的短寿命序列帧特效，不参与战斗判定。
+ * radius 供渲染按爆炸范围缩放面片。
+ */
+export interface ExplosionEffect {
+  readonly id: number;
+  readonly x: Fx;
+  readonly y: Fx;
+  readonly radius: Fx;
+  remainingTicks: number;
+  readonly totalTicks: number;
+}

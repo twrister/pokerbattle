@@ -19,6 +19,8 @@ export function updateCombat(world: World): void {
     if (unit.dead) continue;
     // TODO: 建筑攻击能力后续在此放开（配 attack/range/damage 后去掉早退）
     if (isBuildingConfig(unit.config)) continue;
+    // 炸弹兵只走自爆系统，不走普攻前摇
+    if (unit.config.detonate) continue;
     // 冲刺中不普攻，冷却仍照常走，避免落地瞬间连砍
     if (unit.state === UnitState.Charge) {
       if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;

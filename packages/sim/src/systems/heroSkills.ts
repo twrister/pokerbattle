@@ -38,6 +38,11 @@ export function tickPresentationFx(world: World): void {
     effect.remainingTicks--;
     if (effect.remainingTicks <= 0) world.aoePulseEffects.splice(i, 1);
   }
+  for (let i = world.explosionEffects.length - 1; i >= 0; i--) {
+    const effect = world.explosionEffects[i]!;
+    effect.remainingTicks--;
+    if (effect.remainingTicks <= 0) world.explosionEffects.splice(i, 1);
+  }
   for (const unit of world.units) {
     if (unit.castFxLeft > 0) unit.castFxLeft--;
     if (unit.aoeHitFxLeft > 0) unit.aoeHitFxLeft--;

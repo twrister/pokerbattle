@@ -20,6 +20,8 @@ export {
   type AttackKind,
   type ChargeConfig,
   type ChargeConfigDraft,
+  type DetonateConfig,
+  type DetonateConfigDraft,
   type HealConfig,
   type HealConfigDraft,
   type InspireConfig,
@@ -123,6 +125,7 @@ export {
 } from './commands.js';
 export {
   type AoePulseEffectSnapshot,
+  type ExplosionEffectSnapshot,
   type HealEffectSnapshot,
   type ProjectileSnapshot,
   type Snapshot,
@@ -130,5 +133,10 @@ export {
   emptySnapshot,
   takeSnapshot,
 } from './snapshot.js';
-export { type AoePulseKind, type AoePulseEffect, type HealEffect } from './entity/effect.js';
+export {
+  type AoePulseKind,
+  type AoePulseEffect,
+  type ExplosionEffect,
+  type HealEffect,
+} from './entity/effect.js';
 export { World } from './world.js';

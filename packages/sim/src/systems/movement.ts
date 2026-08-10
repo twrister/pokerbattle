@@ -17,7 +17,14 @@ export function updateMovement(world: World): void {
     if (unit.dead || unit.state !== UnitState.Seek) continue;
     if (isBuildingConfig(unit.config)) continue;
     // 普攻/技能前摇期间站定，不能边走边抬手（冲刺走 cavalry 系统，不会进 Seek）
-    if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) continue;
+    if (
+      unit.windupLeft > 0
+      || unit.healWindupLeft > 0
+      || unit.summonWindupLeft > 0
+      || unit.detonateWindupLeft > 0
+    ) {
+      continue;
+    }
 
     let remaining: Fx = div(unit.stats.moveSpeed, TICK_RATE_FX);
 
