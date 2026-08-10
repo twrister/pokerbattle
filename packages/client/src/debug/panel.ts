@@ -6,6 +6,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import type { SimLoop } from '../loop.js';
+import { saveRuntimeDefaults } from './runtimeDefaults.js';
 
 /** 可切换的倍速档位 */
 const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
@@ -13,6 +14,10 @@ const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
 const STATS_REFRESH_MS = 150;
 /** 沙盒可出兵的非建筑兵种（建筑走独立建造面板） */
 const MOBILE_UNIT_TYPE_IDS = UNIT_TYPE_IDS.filter((id) => !isBuildingConfig(UNIT_CONFIGS[id]));
+/** 运行控制折叠状态本地记忆键 */
+const COLLAPSE_KEY = 'pb.runtimeControls.collapsed';
+/** 「已保存」提示停留时长 */
+const SAVE_DEFAULTS_FEEDBACK_MS = 1200;
 
 export interface PanelOptions {
   loop: SimLoop;
@@ -42,11 +47,6 @@ export interface PanelOptions {
     initialSeconds: number;
     onChange: (seconds: number) => void;
   };
-  /** 兵种搭配缩略图取景；传入后绑定运行控制滑条。 */
-  formationThumbnailFrame?: {
-    initialUnitDisplayScale: number;
-    onChange: (settings: { unitDisplayScale: number }) => void;
-  };
 }
 
 export interface PanelHandle {
@@ -74,7 +74,12 @@ export function createPanel(options: PanelOptions): PanelHandle {
   let buildingType: UnitTypeId | null = null;
   let speedIndex = 0;
   let lastStatsAt = 0;
+  let collapsed = readCollapsed();
+  let saveDefaultsTimer = 0;
 
+  const panelRoot = required<HTMLElement>('#panel-controls');
+  const toggleButton = required<HTMLButtonElement>('#btn-controls-toggle');
+  const saveDefaultsButton = required<HTMLButtonElement>('#btn-controls-save-defaults');
   const factionGroup = required<HTMLDivElement>('#faction-group');
   const unitGroup = required<HTMLDivElement>('#unit-group');
   const buildingPanel = required<HTMLElement>('#panel-building');
@@ -91,8 +96,6 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const bottomExtraInput = required<HTMLInputElement>('#solo-view-bottom-extra');
   const bottomExtraValue = required<HTMLElement>('#solo-view-bottom-extra-value');
   const drawIntervalInput = required<HTMLInputElement>('#solo-draw-interval');
-  const thumbScaleInput = required<HTMLInputElement>('#formation-thumb-scale');
-  const thumbScaleValue = required<HTMLElement>('#formation-thumb-scale-value');
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -153,6 +156,21 @@ export function createPanel(options: PanelOptions): PanelHandle {
     loop.speed = SPEED_STEPS[speedIndex]!;
     speedButton.textContent = `${loop.speed}x`;
   }
+
+  /** 切换收起/展开，并记住上次状态 */
+  function setCollapsed(next: boolean): void {
+    collapsed = next;
+    panelRoot.classList.toggle('is-collapsed', collapsed);
+    toggleButton.textContent = collapsed ? '展开' : '收起';
+    toggleButton.setAttribute('aria-expanded', String(!collapsed));
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // 隐私模式等写不进 storage 时忽略
+    }
+  }
+
+  const toggleCollapsed = (): void => setCollapsed(!collapsed);
 
   const selectFactionFromButton = (event: Event): void => {
     const button = (event.target as Element).closest<HTMLButtonElement>('button[data-faction]');
@@ -226,11 +244,24 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloDrawInterval?.onChange(seconds);
   };
 
-  /** 同步阵型缩略图放大滑条读数，并立刻重渲按钮图。 */
-  const onFormationThumbFrameInput = (): void => {
-    const unitDisplayScale = Number(thumbScaleInput.value);
-    thumbScaleValue.textContent = unitDisplayScale.toFixed(2);
-    options.formationThumbnailFrame?.onChange({ unitDisplayScale });
+  /** 把当前滑条/数字框写入本地默认，供下次进局与刷新后沿用。 */
+  const onSaveDefaults = (): void => {
+    const cameraAngle = Number(cameraAngleInput.value);
+    const viewBottomExtra = Number(bottomExtraInput.value);
+    const drawIntervalSeconds = Number(drawIntervalInput.value);
+    if (
+      !Number.isFinite(cameraAngle) ||
+      !Number.isFinite(viewBottomExtra) ||
+      !Number.isFinite(drawIntervalSeconds)
+    ) {
+      return;
+    }
+    saveRuntimeDefaults({ cameraAngle, viewBottomExtra, drawIntervalSeconds });
+    saveDefaultsButton.textContent = '已保存';
+    window.clearTimeout(saveDefaultsTimer);
+    saveDefaultsTimer = window.setTimeout(() => {
+      saveDefaultsButton.textContent = '保存为默认';
+    }, SAVE_DEFAULTS_FEEDBACK_MS);
   };
 
   const onBuildingGroupClick = (event: Event): void => {
@@ -246,6 +277,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
     buildingGroup.addEventListener('click', onBuildingGroupClick);
     buildingCancelButton.addEventListener('click', onBuildingCancel);
   }
+  toggleButton.addEventListener('click', toggleCollapsed);
+  setCollapsed(collapsed);
   if (runtimeControlsEnabled) {
     pauseButton.addEventListener('click', togglePause);
     stepButton.addEventListener('click', stepOnce);
@@ -267,11 +300,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
       drawIntervalInput.value = String(options.soloDrawInterval.initialSeconds);
       drawIntervalInput.addEventListener('input', onDrawIntervalInput);
     }
-    if (options.formationThumbnailFrame) {
-      const { initialUnitDisplayScale } = options.formationThumbnailFrame;
-      thumbScaleInput.value = String(initialUnitDisplayScale);
-      thumbScaleValue.textContent = initialUnitDisplayScale.toFixed(2);
-      thumbScaleInput.addEventListener('input', onFormationThumbFrameInput);
+    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawInterval) {
+      saveDefaultsButton.addEventListener('click', onSaveDefaults);
     }
   }
   window.addEventListener('keydown', onKeyDown);
@@ -307,6 +337,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
       }
     },
     dispose() {
+      toggleButton.removeEventListener('click', toggleCollapsed);
       if (spawnControlsEnabled) {
         factionGroup.removeEventListener('click', selectFactionFromButton);
         buildingGroup.removeEventListener('click', onBuildingGroupClick);
@@ -334,14 +365,27 @@ export function createPanel(options: PanelOptions): PanelHandle {
         if (options.soloDrawInterval) {
           drawIntervalInput.removeEventListener('input', onDrawIntervalInput);
         }
-        if (options.formationThumbnailFrame) {
-          thumbScaleInput.removeEventListener('input', onFormationThumbFrameInput);
+        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawInterval) {
+          saveDefaultsButton.removeEventListener('click', onSaveDefaults);
         }
+        window.clearTimeout(saveDefaultsTimer);
+        saveDefaultsButton.textContent = '保存为默认';
       }
       window.removeEventListener('keydown', onKeyDown);
       unitGroup.replaceChildren();
     },
   };
+}
+
+/** 无本地记录时默认收起，避免进战时整屏遮挡战场。 */
+function readCollapsed(): boolean {
+  try {
+    const stored = localStorage.getItem(COLLAPSE_KEY);
+    if (stored === null) return true;
+    return stored === '1';
+  } catch {
+    return true;
+  }
 }
 
 function required<T extends Element>(selector: string): T {

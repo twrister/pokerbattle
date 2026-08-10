@@ -1,5 +1,4 @@
 import {
-  DRAW_INTERVAL_TICKS,
   Faction,
   TICK_RATE,
   UNIT_CONFIGS,
@@ -40,16 +39,15 @@ import {
 } from './input/placement.js';
 import { connectVersusSession } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
+import { createBattleHud } from './ui/battleHud.js';
+import { createBattleResult } from './ui/battleResult.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
-import {
-  disposeFormationThumbnailRenderer,
-  getFormationThumbnailFrameSettings,
-  setFormationThumbnailFrameSettings,
-} from './view/formationThumbnail.js';
+import { loadRuntimeDefaults } from './debug/runtimeDefaults.js';
+import { disposeFormationThumbnailRenderer } from './view/formationThumbnail.js';
 import { createScene, type SceneContext } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
 
@@ -71,6 +69,8 @@ const mainMenu = createMainMenu({
 });
 const deckConfigPage = createDeckConfigPage({ onBack: () => screens.show('menu') });
 const codexPage = createCodexPage({ onBack: () => screens.show('menu') });
+const battleHud = createBattleHud();
+const battleResult = createBattleResult(() => screens.show('menu'));
 
 /**
  * 战斗场景与配置面板跨「大厅 ↔ 单机/沙盒/联机」复用。
@@ -82,12 +82,23 @@ let sharedConfigPanel: ConfigPanelHandle | null = null;
 
 /** 懒创建或切换镜头模式，始终复用同一个 WebGLRenderer。 */
 function ensureBattleScene(mode: BattleMode, viewFaction: Faction = Faction.Blue): SceneContext {
+  const defaults = loadRuntimeDefaults();
   if (!sharedScene) {
-    sharedScene = createScene(container, { mode, viewFaction });
+    sharedScene = createScene(container, {
+      mode,
+      viewFaction,
+      soloCameraAngle: defaults.cameraAngle,
+      soloViewBottomExtra: defaults.viewBottomExtra,
+    });
     sharedBattleView = new BattleView(sharedScene.scene);
-    return sharedScene;
+  } else {
+    sharedScene.setMode(mode, viewFaction);
   }
-  sharedScene.setMode(mode, viewFaction);
+  // 每次进单机都套用已保存默认，保证「保存为默认」后的后续对局生效
+  if (mode === 'solo') {
+    sharedScene.setSoloCameraAngle(defaults.cameraAngle);
+    sharedScene.setSoloViewBottomExtra(defaults.viewBottomExtra);
+  }
   return sharedScene;
 }
 
@@ -109,6 +120,10 @@ function enterBattleSession(mode: BattleMode): () => void {
   hud.classList.toggle('is-solo', isSolo);
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
+  if (isSolo) {
+    battleResult.hide();
+    battleHud.show();
+  }
 
   const sceneContext = ensureBattleScene(mode, Faction.Blue);
   sceneContext.resize();
@@ -260,7 +275,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         deck: loop.match!.decks[Faction.Blue],
         externalDraw: true,
         externalCardConsume: true,
-        getDrawRemainingMs: () => ticksUntilDrawMs(loop.world.tick),
+        getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw() * 1000) / TICK_RATE,
         onRequestSpawn: requestSpawn,
         canDropAt: (point, formation) => canSpawnAt(formation, point),
         onBuildingDragStart,
@@ -279,7 +294,6 @@ function enterBattleSession(mode: BattleMode): () => void {
     handPanel?.syncFromDeck();
   };
 
-  const thumbFrame = getFormationThumbnailFrameSettings();
   const runtimeControlsEnabled = IS_DEV_SERVER || !isSolo;
 
   const bindUnitPlacement = (): void => {
@@ -339,16 +353,9 @@ function enterBattleSession(mode: BattleMode): () => void {
               onChange: (value) => sceneContext.setSoloViewBottomExtra(value),
             },
             soloDrawInterval: {
-              initialSeconds: 3,
+              initialSeconds: loadRuntimeDefaults().drawIntervalSeconds,
               onChange: () => {
-                /* 抽牌间隔已由 DRAW_INTERVAL_TICKS 固定；保留控件以免调试面板缺项 */
-              },
-            },
-            formationThumbnailFrame: {
-              initialUnitDisplayScale: thumbFrame.unitDisplayScale,
-              onChange: (settings) => {
-                setFormationThumbnailFrameSettings(settings);
-                handPanel?.refreshFormations();
+                /* 抽牌间隔已由 MatchState 阶段表固定；保留控件以便保存为默认 */
               },
             },
           }
@@ -371,6 +378,7 @@ function enterBattleSession(mode: BattleMode): () => void {
   let smoothedFps = 60;
   let animationFrameId = 0;
   let lastHandSyncTick = loop.world.tick;
+  let resultShown = false;
 
   const frame = (now: number): void => {
     const deltaMs = Math.min(now - lastFrameAt, 250);
@@ -383,6 +391,13 @@ function enterBattleSession(mode: BattleMode): () => void {
       handPanel.syncFromDeck();
     }
     handPanel?.update(deltaMs);
+    if (isSolo) {
+      battleHud.update(loop.match!);
+      if (loop.match!.result && !resultShown) {
+        resultShown = true;
+        battleResult.show(loop.match!.result, Faction.Blue);
+      }
+    }
     sceneContext.controls?.update();
     battleView.render(loop.prev, loop.curr, loop.alpha, sceneContext.camera);
     sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
@@ -396,6 +411,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   return () => {
     cancelAnimationFrame(animationFrameId);
     hud.classList.add('is-hidden');
+    battleHud.hide();
+    battleResult.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo');
     container.classList.remove('is-solo');
@@ -416,6 +433,7 @@ function enterVersus(): () => void {
   let disposed = false;
   let leave: (() => void) | null = null;
   let cancelled = false;
+  let localFaction: Faction | null = null;
 
   container.classList.add('is-solo', 'is-versus');
   hud.classList.add('is-solo', 'is-versus');
@@ -433,12 +451,16 @@ function enterVersus(): () => void {
       setLobbyStatus('对手已离开');
       screens.show('menu');
     },
+    onMatchEnd: (result) => {
+      if (localFaction !== null) battleResult.show(result, localFaction);
+    },
   })
     .then((session) => {
       if (cancelled) {
         session.close();
         return;
       }
+      localFaction = session.faction;
       leave = runVersusSession(session.loop, session.faction, session.close);
     })
     .catch((error: unknown) => {
@@ -471,6 +493,8 @@ function runVersusSession(
   hud.classList.add('is-solo', 'is-versus');
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
+  battleResult.hide();
+  battleHud.show();
 
   const sceneContext = ensureBattleScene('solo', faction);
   sceneContext.resize();
@@ -583,7 +607,7 @@ function runVersusSession(
     deck: netLoop.match.decks[faction],
     externalDraw: true,
     externalCardConsume: true,
-    getDrawRemainingMs: () => ticksUntilDrawMs(netLoop.world.tick),
+    getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw() * 1000) / TICK_RATE,
     onRequestSpawn: requestSpawn,
     canDropAt: (point, formation) => canSpawnAt(formation, point),
     onBuildingDragStart: (formation) => {
@@ -640,6 +664,7 @@ function runVersusSession(
   let smoothedFps = 60;
   let animationFrameId = 0;
   let lastHandSyncTick = netLoop.world.tick;
+  let resultShown = false;
 
   const frame = (now: number): void => {
     const deltaMs = Math.min(now - lastFrameAt, 250);
@@ -652,6 +677,11 @@ function runVersusSession(
       handPanel.syncFromDeck();
     }
     handPanel.update(deltaMs);
+    battleHud.update(netLoop.match);
+    if (netLoop.match.result && !resultShown) {
+      resultShown = true;
+      battleResult.show(netLoop.match.result, faction);
+    }
     battleView.render(netLoop.prev, netLoop.curr, netLoop.alpha, sceneContext.camera);
     sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
     panel.updateStats(smoothedFps);
@@ -664,6 +694,8 @@ function runVersusSession(
   return () => {
     cancelAnimationFrame(animationFrameId);
     hud.classList.add('is-hidden');
+    battleHud.hide();
+    battleResult.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-versus');
     container.classList.remove('is-solo', 'is-versus');
@@ -721,12 +753,6 @@ function disposeApp(): void {
 window.addEventListener('pagehide', disposeApp, { once: true });
 
 /** 距下次 tick 抽牌的剩余毫秒。 */
-function ticksUntilDrawMs(tick: number): number {
-  const into = tick % DRAW_INTERVAL_TICKS;
-  const remain = into === 0 ? DRAW_INTERVAL_TICKS : DRAW_INTERVAL_TICKS - into;
-  return (remain * 1000) / TICK_RATE;
-}
-
 function setLobbyStatus(text: string): void {
   if (!lobbyStatus) return;
   lobbyStatus.textContent = text;

@@ -107,6 +107,19 @@ export class MatchRoom {
     this.match.step(commands);
     this.broadcast({ type: 'frame', tick, commands });
 
+    if (this.match.result) {
+      this.broadcast({
+        type: 'matchEnd',
+        endTick: this.match.result.endTick,
+        winner: this.match.result.winner,
+        reason: this.match.result.reason,
+      });
+      if (this.timer) clearInterval(this.timer);
+      this.timer = null;
+      this.scheduled.clear();
+      return;
+    }
+
     if (tick % HASH_INTERVAL_TICKS === 0) {
       this.serverHashes.set(tick, this.match.hash());
     }
@@ -140,7 +153,7 @@ export class MatchRoom {
 
   /** 输入排到 max(serverTick+1, T)；非法指令静默丢弃。 */
   private acceptInput(seat: Seat, tick: number, commands: Command[]): void {
-    if (!this.match || !this.started) return;
+    if (!this.match || !this.started || this.match.result) return;
     const targetTick = Math.max(this.serverTick + 1, tick | 0);
     const accepted: Command[] = [];
     for (const command of commands) {

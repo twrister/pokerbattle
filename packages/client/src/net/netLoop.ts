@@ -10,6 +10,7 @@ import {
   takeSnapshot,
   type Command,
   type Faction,
+  type MatchResult,
   type Snapshot,
 } from '@pb/sim';
 
@@ -23,6 +24,7 @@ export interface NetSimLoopOptions {
   send: (raw: string) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
+  onMatchEnd?: (result: MatchResult) => void;
   onReady?: () => void;
 }
 
@@ -44,6 +46,7 @@ export class NetSimLoop {
   private readonly send: (raw: string) => void;
   private readonly onDesync?: (tick: number, serverHash: number) => void;
   private readonly onPeerLeft?: () => void;
+  private readonly onMatchEnd?: (result: MatchResult) => void;
   private started = false;
 
   constructor(options: NetSimLoopOptions) {
@@ -54,6 +57,7 @@ export class NetSimLoop {
     this.send = options.send;
     this.onDesync = options.onDesync;
     this.onPeerLeft = options.onPeerLeft;
+    this.onMatchEnd = options.onMatchEnd;
     this.curr = takeSnapshot(this.match.world);
     this.prev = this.curr;
     options.onReady?.();
@@ -95,6 +99,13 @@ export class NetSimLoop {
       case 'peerLeft':
         this.onPeerLeft?.();
         break;
+      case 'matchEnd':
+        this.onMatchEnd?.({
+          winner: message.winner,
+          reason: message.reason,
+          endTick: message.endTick,
+        });
+        break;
       default:
         break;
     }
@@ -105,7 +116,7 @@ export class NetSimLoop {
    * 目标 tick = 当前已应用 tick + inputDelay（至少为 nextTick）。
    */
   sendInput(commands: readonly Command[]): void {
-    if (!this.started || commands.length === 0) return;
+    if (!this.started || this.match.result || commands.length === 0) return;
     const tick = Math.max(this.nextTick, this.match.world.tick + this.inputDelay);
     this.send(
       encodeMessage({

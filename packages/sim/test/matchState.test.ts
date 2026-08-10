@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Faction } from '../src/entity/unit.js';
-import { MatchState } from '../src/match/matchState.js';
+import {
+  DOUBLE_SPEED_START_TICKS,
+  MatchState,
+  NORMAL_PHASE_TICKS,
+  OVERTIME_END_TICKS,
+} from '../src/match/matchState.js';
 
 describe('MatchState.clear', () => {
   it('清空后保留牌堆实例引用，并重新发初始手牌', () => {
@@ -21,3 +26,78 @@ describe('MatchState.clear', () => {
     expect(redDeck.hand).toHaveLength(3);
   });
 });
+
+describe('MatchState 对局规则', () => {
+  it('按阶段重置下一张牌倒计时', () => {
+    const match = createMatch();
+
+    stepTo(match, DOUBLE_SPEED_START_TICKS);
+    expect(match.phase).toBe('double_speed');
+    expect(match.getTicksUntilDraw()).toBe(60);
+
+    stepTo(match, NORMAL_PHASE_TICKS);
+    expect(match.phase).toBe('overtime');
+    expect(match.getTicksUntilDraw()).toBe(40);
+  });
+
+  it('一方基地被摧毁时立即结束', () => {
+    const match = createMatch();
+    castle(match, Faction.Red).hp = 0;
+
+    match.step();
+
+    expect(match.result).toMatchObject({
+      winner: Faction.Blue,
+      reason: 'base_destroyed',
+      endTick: 1,
+    });
+    const tick = match.world.tick;
+    match.step();
+    expect(match.world.tick).toBe(tick);
+  });
+
+  it('双方基地同帧摧毁时判为平局', () => {
+    const match = createMatch();
+    castle(match, Faction.Blue).hp = 0;
+    castle(match, Faction.Red).hp = 0;
+
+    match.step();
+
+    expect(match.result).toMatchObject({ winner: null, reason: 'simultaneous_destroyed' });
+  });
+
+  it('三分钟基地血量不同则高血量方获胜', () => {
+    const match = createMatch();
+    castle(match, Faction.Red).hp -= 1;
+
+    stepTo(match, NORMAL_PHASE_TICKS);
+
+    expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
+  });
+
+  it('加时赛结束时血量相同则平局', () => {
+    const match = createMatch();
+
+    stepTo(match, OVERTIME_END_TICKS);
+
+    expect(match.result).toMatchObject({ winner: null, reason: 'time_limit' });
+  });
+});
+
+function createMatch(): MatchState {
+  const match = new MatchState(1);
+  match.seedStartingCastles();
+  return match;
+}
+
+function stepTo(match: MatchState, targetTick: number): void {
+  while (match.world.tick < targetTick) match.step();
+}
+
+function castle(match: MatchState, faction: Faction) {
+  const unit = match.world.units.find(
+    (candidate) => candidate.faction === faction && candidate.typeId === 'building_base',
+  );
+  if (!unit) throw new Error('主堡未生成');
+  return unit;
+}

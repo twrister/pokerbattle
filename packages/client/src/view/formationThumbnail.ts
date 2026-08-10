@@ -20,7 +20,7 @@ import { getSpriteMaterials } from './unitSprites.js';
 /** 缩略图像素宽高，比例与按钮 128×98 一致，保证高分屏不糊。 */
 const THUMBNAIL_WIDTH = 256;
 const THUMBNAIL_HEIGHT = Math.round((THUMBNAIL_WIDTH * 98) / 128);
-/** 按钮内兵种相对「刚好装进取景」再放大的倍率（默认值，可被运行控制覆盖）。 */
+/** 按钮内兵种相对「刚好装进取景」再放大的倍率。 */
 export const DEFAULT_UNIT_DISPLAY_SCALE = 2;
 /** 阵型包围盒外扩的世界单位。 */
 export const DEFAULT_FRAME_MARGIN = 2;
@@ -36,7 +36,7 @@ let unitDisplayScale = DEFAULT_UNIT_DISPLAY_SCALE;
 /** 当前包围盒外扩边距。 */
 let frameMargin = DEFAULT_FRAME_MARGIN;
 
-/** 读取阵型缩略图取景参数，供运行控制初始化滑条。 */
+/** 读取阵型缩略图取景参数（供测试或外部调试覆盖）。 */
 export function getFormationThumbnailFrameSettings(): {
   unitDisplayScale: number;
   frameMargin: number;
@@ -44,7 +44,7 @@ export function getFormationThumbnailFrameSettings(): {
   return { unitDisplayScale, frameMargin };
 }
 
-/** 运行控制改取景参数；非法值夹到可调范围。 */
+/** 覆盖取景参数；非法值夹到可调范围。 */
 export function setFormationThumbnailFrameSettings(settings: {
   unitDisplayScale?: number;
   frameMargin?: number;
@@ -71,7 +71,7 @@ let queue: Promise<unknown> = Promise.resolve();
 /** 无 WebGL（如 jsdom）时置位，后续请求直接返回 null 不再重试。 */
 let unavailable = false;
 
-/** 阵型自身放大 × 运行控制相对倍率，得到最终按钮取景放大。 */
+/** 阵型自身放大 × 全局相对倍率，得到最终按钮取景放大。 */
 function effectiveUnitDisplayScale(formation: CardFormation): number {
   return clamp(
     formation.thumbScale * (unitDisplayScale / DEFAULT_UNIT_DISPLAY_SCALE),
@@ -80,7 +80,7 @@ function effectiveUnitDisplayScale(formation: CardFormation): number {
   );
 }
 
-/** 缓存键带上 rows、间距与取景参数，改配置或滑条后按钮能立刻换新图。 */
+/** 缓存键带上 rows、间距与取景参数，改配置后按钮能立刻换新图。 */
 export function formationThumbnailKey(formation: CardFormation): string {
   const rows = formation.rows.map((row) => row.join(',')).join('|');
   const scale = effectiveUnitDisplayScale(formation);
@@ -259,7 +259,7 @@ function frameCamera(
   camera.updateProjectionMatrix();
 }
 
-/** 把运行控制滑条值夹到合法区间。 */
+/** 把数值夹到合法区间。 */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

@@ -1,4 +1,4 @@
-import type { Command, Faction } from '@pb/sim';
+import type { Command, Faction, MatchEndReason } from '@pb/sim';
 
 /** 默认输入延迟（tick），约 200ms @ 20Hz。 */
 export const DEFAULT_INPUT_DELAY = 4;
@@ -68,6 +68,14 @@ export interface PeerLeftMessage {
   type: 'peerLeft';
 }
 
+/** S→C：权威仿真已结算，客户端停止接受本局输入并展示结果。 */
+export interface MatchEndMessage {
+  type: 'matchEnd';
+  endTick: number;
+  winner: Faction | null;
+  reason: MatchEndReason;
+}
+
 /** S→C：心跳回复。 */
 export interface PongMessage {
   type: 'pong';
@@ -80,6 +88,7 @@ export type ServerMessage =
   | FrameMessage
   | DesyncMessage
   | PeerLeftMessage
+  | MatchEndMessage
   | PongMessage;
 
 export type NetMessage = ClientMessage | ServerMessage;

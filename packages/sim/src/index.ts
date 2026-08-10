@@ -102,7 +102,19 @@ export {
   type PlayingCard,
 } from './cards/deck.js';
 export { detectHandCategories, findStrongestHand } from './cards/handCategory.js';
-export { DRAW_INTERVAL_TICKS, MatchState } from './match/matchState.js';
+export {
+  DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
+  DOUBLE_SPEED_PHASE_TICKS,
+  DOUBLE_SPEED_START_TICKS,
+  MatchState,
+  NORMAL_DRAW_INTERVAL_TICKS,
+  NORMAL_PHASE_TICKS,
+  OVERTIME_DRAW_INTERVAL_TICKS,
+  OVERTIME_END_TICKS,
+  type MatchEndReason,
+  type MatchPhase,
+  type MatchResult,
+} from './match/matchState.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';

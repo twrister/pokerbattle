@@ -7,6 +7,7 @@ export {
   type HashMessage,
   type InputMessage,
   type JoinMessage,
+  type MatchEndMessage,
   type NetMessage,
   type PeerLeftMessage,
   type PingMessage,

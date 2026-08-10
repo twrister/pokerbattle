@@ -537,13 +537,53 @@
         top: 16px;
         right: 16px;
         min-width: 188px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 5;
+      }
+
+      #panel-controls .controls-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+      }
+
+      #panel-controls .controls-header .title {
+        margin-bottom: 0;
+      }
+
+      #btn-controls-toggle {
+        padding: 4px 10px;
+        font-size: 12px;
+        flex-shrink: 0;
+        min-width: 3.5em;
+      }
+
+      #panel-controls.is-collapsed {
+        width: auto;
+        height: auto;
+        gap: 0;
+        min-width: 0;
+      }
+
+      #panel-controls.is-collapsed #controls-body {
+        display: none;
+      }
+
+      #controls-body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
 
       /* 单机镜头俯仰角 / 下方留白；沙盒不展示 */
       #solo-camera-angle-row,
       #solo-view-bottom-extra-row {
         display: none;
-        margin-top: 10px;
       }
 
       #hud.is-solo #solo-camera-angle-row,
@@ -574,47 +614,164 @@
         cursor: pointer;
       }
 
-      /* 兵种搭配缩略图取景；仅单机展示 */
-      #formation-thumb-controls {
+      /* 保存为默认：仅单机可调参数时显示 */
+      #controls-defaults-row {
         display: none;
-        margin-top: 10px;
-        gap: 10px;
       }
 
-      #hud.is-solo #formation-thumb-controls {
-        display: grid;
+      #hud.is-solo #controls-defaults-row {
+        display: flex;
       }
 
-      #formation-thumb-controls .thumb-frame-row {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 8px 10px;
-        align-items: center;
-      }
-
-      #formation-thumb-controls label {
-        color: var(--text-dim);
-        white-space: nowrap;
-      }
-
-      #formation-thumb-controls .thumb-frame-value {
-        color: var(--text);
-        font-variant-numeric: tabular-nums;
-      }
-
-      #formation-thumb-controls input[type='range'] {
-        grid-column: 1 / -1;
-        width: 100%;
-        accent-color: var(--accent);
-        cursor: pointer;
+      #btn-controls-save-defaults {
+        margin-left: auto;
       }
 
       #btn-back-menu {
         position: absolute;
-        top: 16px;
-        left: 50%;
+        top: max(calc(12 * var(--hu)), env(safe-area-inset-top));
+        left: max(calc(12 * var(--hu)), env(safe-area-inset-left));
+        z-index: 2;
+        width: auto;
+        max-width: calc(88 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(8 * var(--hu));
         pointer-events: auto;
+        font-size: calc(12 * var(--hu));
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: 0.02em;
+        white-space: normal;
+        text-align: center;
+      }
+
+      /* 单机/联机 HUD 铺满视口，返回键需贴 9:16 操作区左缘，避免宽屏落到黑边外 */
+      #hud.is-solo #btn-back-menu {
+        left: calc(50% - var(--stage-w) / 2 + 12 * var(--hu));
+      }
+
+      #battle-hud {
+        position: absolute;
+        top: max(calc(12 * var(--hu)), env(safe-area-inset-top));
+        left: 50%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: calc(8 * var(--hu));
+        width: min(calc(420 * var(--hu)), calc(100vw - 24px));
         transform: translateX(-50%);
+      }
+
+      .battle-castle {
+        display: grid;
+        gap: calc(3 * var(--hu));
+        width: calc(160 * var(--hu));
+        min-width: 0;
+        padding: calc(6 * var(--hu)) calc(8 * var(--hu));
+        border: 1px solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(12, 19, 29, 0.82);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-castle-blue {
+        justify-self: end;
+      }
+
+      .battle-castle-red {
+        justify-self: start;
+        text-align: right;
+      }
+
+      .battle-castle-label {
+        color: var(--text-dim);
+        font-size: calc(10 * var(--hu));
+      }
+
+      .battle-hp {
+        font-size: calc(13 * var(--hu));
+        font-weight: 700;
+      }
+
+      .battle-hp-track {
+        height: calc(4 * var(--hu));
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .battle-hp-bar {
+        height: 100%;
+        border-radius: inherit;
+        transition: width 0.12s linear;
+      }
+
+      .battle-castle-blue .battle-hp-bar { background: var(--blue); }
+      .battle-castle-red .battle-hp-bar { background: var(--red); }
+
+      .battle-center {
+        display: grid;
+        place-items: center;
+        gap: calc(2 * var(--hu));
+        min-width: calc(72 * var(--hu));
+        color: var(--text-dim);
+        font-size: calc(11 * var(--hu));
+        text-align: center;
+      }
+
+      #battle-timer-label {
+        color: #dbe8f2;
+        font-size: calc(11 * var(--hu));
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+
+      #battle-timer {
+        color: #fff;
+        font-size: calc(22 * var(--hu));
+        font-weight: 750;
+        letter-spacing: 0.06em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #battle-result-dialog {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        display: grid;
+        place-items: center;
+        padding: calc(28 * var(--hu));
+        pointer-events: auto;
+        background: rgba(3, 7, 12, 0.68);
+      }
+
+      .battle-result-panel {
+        display: grid;
+        gap: calc(18 * var(--hu));
+        width: min(100%, calc(360 * var(--hu)));
+        padding: calc(30 * var(--hu));
+        border: 1px solid rgba(185, 207, 225, 0.28);
+        border-radius: calc(16 * var(--hu));
+        background: linear-gradient(160deg, rgba(38, 56, 74, 0.98), rgba(11, 18, 28, 0.99));
+        text-align: center;
+        box-shadow: 0 calc(24 * var(--hu)) calc(60 * var(--hu)) rgba(0, 0, 0, 0.48);
+      }
+
+      #battle-result-title {
+        margin: 0;
+        font-size: calc(38 * var(--hu));
+        letter-spacing: 0.12em;
+      }
+
+      #battle-result-dialog[data-outcome='胜利'] #battle-result-title { color: var(--accent); }
+      #battle-result-dialog[data-outcome='失败'] #battle-result-title { color: var(--red); }
+      #battle-result-dialog[data-outcome='平局'] #battle-result-title { color: #d7e1eb; }
+
+      #battle-result-detail {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: calc(15 * var(--hu));
+        line-height: 1.6;
       }
 
       /* 底部居中：建造在上、出兵在下，用 gap 错开避免互相遮挡 */
@@ -669,9 +826,13 @@
       }
 
       #hud.is-solo #panel-stats,
-      #hud.is-solo #panel-controls,
-      #hud.is-solo #btn-back-menu {
+      #hud.is-solo #panel-controls {
         top: max(16px, env(safe-area-inset-top));
+      }
+
+      /* 返回键占左上角后，调试统计下移，避免叠在返回按钮上 */
+      #hud.is-solo #panel-stats {
+        top: max(calc(52 * var(--hu)), calc(env(safe-area-inset-top) + 40px));
       }
 
       #hud.is-solo #panel-help,
@@ -1360,7 +1521,6 @@
         grid-template-columns: auto 70px;
         gap: 8px;
         align-items: center;
-        margin-top: 10px;
       }
 
       #hud.is-solo #solo-draw-interval-row {
@@ -2117,6 +2277,29 @@
     <div id="app" class="is-hidden"></div>
 
     <div id="hud" class="is-hidden">
+      <section id="battle-hud" class="is-hidden" aria-label="对局信息">
+        <div class="battle-castle battle-castle-blue">
+          <span class="battle-castle-label">蓝方基地</span>
+          <strong id="battle-blue-hp" class="battle-hp">0 / 0</strong>
+          <div class="battle-hp-track"><div id="battle-blue-bar" class="battle-hp-bar"></div></div>
+        </div>
+        <div class="battle-center">
+          <span id="battle-timer-label">剩余时间：</span>
+          <strong id="battle-timer">3:00</strong>
+        </div>
+        <div class="battle-castle battle-castle-red">
+          <span class="battle-castle-label">红方基地</span>
+          <strong id="battle-red-hp" class="battle-hp">0 / 0</strong>
+          <div class="battle-hp-track"><div id="battle-red-bar" class="battle-hp-bar"></div></div>
+        </div>
+      </section>
+      <section id="battle-result-dialog" class="is-hidden" aria-hidden="true" role="dialog" aria-labelledby="battle-result-title">
+        <div class="battle-result-panel">
+          <h2 id="battle-result-title">胜利</h2>
+          <p id="battle-result-detail"></p>
+          <button id="btn-battle-result-return" type="button">返回主界面</button>
+        </div>
+      </section>
       <button id="btn-back-menu" type="button">返回主界面</button>
       <section class="panel" id="panel-stats">
         <div class="title">模拟状态</div>
@@ -2134,57 +2317,50 @@
         </dl>
       </section>
 
-      <section class="panel" id="panel-controls">
-        <div class="title">运行控制</div>
-        <div class="btn-row">
-          <button id="btn-pause" type="button">暂停</button>
-          <button id="btn-step" type="button">单步</button>
-          <button id="btn-speed" type="button">1x</button>
-          <button id="btn-brawl" type="button">开团</button>
-          <button id="btn-random-pk" type="button">随机PK</button>
-          <button id="btn-clear" type="button">清空</button>
+      <section class="panel is-collapsed" id="panel-controls">
+        <div class="controls-header">
+          <div class="title">运行控制</div>
+          <button id="btn-controls-toggle" type="button" aria-expanded="false">展开</button>
         </div>
-        <div id="solo-camera-angle-row">
-          <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">46°</span></label>
-          <input
-            id="solo-camera-angle"
-            type="range"
-            min="15"
-            max="90"
-            step="1"
-            value="46"
-          />
-        </div>
-        <div id="solo-view-bottom-extra-row">
-          <label for="solo-view-bottom-extra">
-            底部留白 <span id="solo-view-bottom-extra-value">8.0</span>
-          </label>
-          <input
-            id="solo-view-bottom-extra"
-            type="range"
-            min="0"
-            max="15"
-            step="0.5"
-            value="8"
-          />
-        </div>
-        <label id="solo-draw-interval-row" for="solo-draw-interval">
-          发牌间隔
-          <input id="solo-draw-interval" type="number" min="0.25" max="60" step="0.25" value="3" />
-        </label>
-        <div id="formation-thumb-controls">
-          <div class="thumb-frame-row">
-            <label for="formation-thumb-scale">
-              阵型放大 <span id="formation-thumb-scale-value" class="thumb-frame-value">2.00</span>
+        <div id="controls-body">
+          <div class="btn-row">
+            <button id="btn-pause" type="button">暂停</button>
+            <button id="btn-step" type="button">单步</button>
+            <button id="btn-speed" type="button">1x</button>
+            <button id="btn-brawl" type="button">开团</button>
+            <button id="btn-random-pk" type="button">随机PK</button>
+            <button id="btn-clear" type="button">清空</button>
+          </div>
+          <div id="solo-camera-angle-row">
+            <label for="solo-camera-angle">视角 <span id="solo-camera-angle-value">46°</span></label>
+            <input
+              id="solo-camera-angle"
+              type="range"
+              min="15"
+              max="90"
+              step="1"
+              value="46"
+            />
+          </div>
+          <div id="solo-view-bottom-extra-row">
+            <label for="solo-view-bottom-extra">
+              底部留白 <span id="solo-view-bottom-extra-value">8.0</span>
             </label>
             <input
-              id="formation-thumb-scale"
+              id="solo-view-bottom-extra"
               type="range"
-              min="1"
-              max="3"
-              step="0.05"
-              value="2"
+              min="0"
+              max="15"
+              step="0.5"
+              value="8"
             />
+          </div>
+          <label id="solo-draw-interval-row" for="solo-draw-interval">
+            发牌间隔
+            <input id="solo-draw-interval" type="number" min="0.25" max="60" step="0.25" value="3" />
+          </label>
+          <div class="btn-row" id="controls-defaults-row">
+            <button id="btn-controls-save-defaults" type="button">保存为默认</button>
           </div>
         </div>
       </section>

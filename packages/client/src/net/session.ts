@@ -1,5 +1,5 @@
 import { DEFAULT_INPUT_DELAY, decodeServerMessage, encodeMessage, type ServerMessage } from '@pb/net';
-import type { Faction } from '@pb/sim';
+import type { Faction, MatchResult } from '@pb/sim';
 import { NetSimLoop } from './netLoop.js';
 
 export interface VersusSession {
@@ -15,6 +15,7 @@ export interface ConnectVersusOptions {
   onStatus?: (text: string) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
+  onMatchEnd?: (result: MatchResult) => void;
 }
 
 /**
@@ -109,6 +110,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
           onPeerLeft: () => {
             options.onPeerLeft?.();
           },
+          onMatchEnd: options.onMatchEnd,
         });
         for (const queued of pending.splice(0)) {
           loop.handleServerMessage(queued);

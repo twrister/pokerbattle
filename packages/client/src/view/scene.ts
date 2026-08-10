@@ -55,14 +55,22 @@ export interface SceneOptions {
   mode?: SceneMode;
   /** 正交镜头所属阵营；红方从 -Z 侧俯视。 */
   viewFaction?: Faction;
+  /** 单机镜头初始俯仰角；缺省用内置默认。 */
+  soloCameraAngle?: number;
+  /** 单机下方留白初始值；缺省用内置默认。 */
+  soloViewBottomExtra?: number;
 }
 
 /** 搭好 3D 场景；沙盒使用可操作的透视镜头，单机使用固定的正交斜视角镜头。 */
 export function createScene(container: HTMLElement, options: SceneOptions = {}): SceneContext {
   let mode = options.mode ?? 'sandbox';
   let viewFaction = options.viewFaction ?? Faction.Blue;
-  let soloCameraAngleDeg = DEFAULT_SOLO_CAMERA_ANGLE_DEG;
-  let soloViewBottomExtra = DEFAULT_SOLO_VIEW_BOTTOM_EXTRA;
+  let soloCameraAngleDeg = clampSoloCameraAngle(
+    options.soloCameraAngle ?? DEFAULT_SOLO_CAMERA_ANGLE_DEG,
+  );
+  let soloViewBottomExtra = clampSoloViewBottomExtra(
+    options.soloViewBottomExtra ?? DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
+  );
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;

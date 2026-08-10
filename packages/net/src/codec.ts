@@ -27,6 +27,7 @@ export function decodeServerMessage(raw: string): ServerMessage | null {
     type === 'frame' ||
     type === 'desync' ||
     type === 'peerLeft' ||
+    type === 'matchEnd' ||
     type === 'pong'
   ) {
     return parsed as ServerMessage;
