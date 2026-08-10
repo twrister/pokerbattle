@@ -5,6 +5,7 @@ export type UnitTypeId =
   | 'melee_grunt'
   | 'melee_guard'
   | 'ranged_archer'
+  | 'ranged_chariot'
   | 'melee_cavalry'
   | 'hero_king'
   | 'hero_queen'
@@ -99,8 +100,13 @@ export interface UnitConfig {
   attackInterval: Fx;
   /** 出手前摇（tick），走完前摇才结算伤害，给动画和「打断」留位置 */
   attackWindup: Fx;
-  /** 射程，按边缘到边缘算，不含双方半径 */
+  /** 最大射程，按边缘到边缘算，不含双方半径 */
   range: Fx;
+  /**
+   * 最小射程（边缘到边缘）。目标贴得比这更近则无法出手；0 表示无近距限制。
+   * 不进 Attributes，不可被 Buff。
+   */
+  minRange: Fx;
   /** 移动速度，单位/秒 */
   moveSpeed: Fx;
   /** 索敌半径。默认给到能覆盖全场，等价于「攻击场上最近的敌人」 */
@@ -179,6 +185,8 @@ export interface UnitConfigDraft {
   attackInterval: number;
   attackWindup: number;
   range: number;
+  /** 最小射程；缺省或非法按 0 */
+  minRange?: number;
   moveSpeed: number;
   sightRange: number;
   movementLayer: MovementLayer;
@@ -245,6 +253,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.attackInterval = source.attackInterval;
   target.attackWindup = source.attackWindup;
   target.range = source.range;
+  target.minRange = source.minRange;
   target.moveSpeed = source.moveSpeed;
   target.sightRange = source.sightRange;
   target.movementLayer = source.movementLayer;
@@ -337,6 +346,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     attackInterval: fromFloat(draft.attackInterval),
     attackWindup: fromFloat(draft.attackWindup),
     range: fromFloat(draft.range),
+    minRange: fromFloat(normalizeMinRange(draft.minRange)),
     moveSpeed: fromFloat(draft.moveSpeed),
     sightRange: fromFloat(draft.sightRange),
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
@@ -348,6 +358,12 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
     detonate: draft.detonate ? detonateFromDraft(draft.detonate) : undefined,
   };
+}
+
+/** 最小射程缺省/非法回落为 0（无近距限制）。 */
+function normalizeMinRange(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value as number) < 0) return 0;
+  return value as number;
 }
 
 /** 占地必须是正整数；缺省/非法回落为 0（普通单位）。 */
@@ -409,6 +425,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     attackInterval: toFloat(config.attackInterval),
     attackWindup: toFloat(config.attackWindup),
     range: toFloat(config.range),
+    minRange: toFloat(config.minRange),
     moveSpeed: toFloat(config.moveSpeed),
     sightRange: toFloat(config.sightRange),
     movementLayer: config.movementLayer,
@@ -498,6 +515,7 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
     target.attackInterval = fromFloat(draft.attackInterval);
     target.attackWindup = fromFloat(draft.attackWindup);
     target.range = fromFloat(draft.range);
+    target.minRange = fromFloat(normalizeMinRange(draft.minRange));
     target.moveSpeed = fromFloat(draft.moveSpeed);
     target.sightRange = fromFloat(draft.sightRange);
     target.movementLayer = draft.movementLayer === 'air' ? 'air' : 'ground';

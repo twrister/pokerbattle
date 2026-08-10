@@ -3,7 +3,12 @@ import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
-import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
+import {
+  canAttackTarget,
+  isInAttackRangeBand,
+  isOutsideMinAttackRange,
+  isWithinAttackReach,
+} from './combatRange.js';
 
 /** 复用邻居缓冲，避免每帧分配 */
 const neighbors: number[] = [];
@@ -46,6 +51,11 @@ export function updateCombat(world: World): void {
     if (unit.state !== UnitState.Attack) continue;
     if (unit.attackCooldown > 0) continue;
 
+    // 贴进最小射程时不起手，避免战车等空转冷却；最大射程仍在结算时校验（保持旧节奏）
+    const windupTarget = world.getUnit(unit.targetId);
+    if (!isAlive(windupTarget) || !canAttackTarget(unit, windupTarget)) continue;
+    if (!isOutsideMinAttackRange(unit, windupTarget)) continue;
+
     unit.attackCooldown = unit.stats.attackInterval;
     unit.windupLeft = unit.stats.attackWindup;
     // 前摇配成 0 的兵种当帧直接出伤害
@@ -70,7 +80,8 @@ function resolveAttack(world: World, unit: Unit): void {
   // 近战够不着飞行单位，前摇打空但不退冷却
   if (!canAttackTarget(unit, target)) return;
 
-  if (!isWithinAttackReach(unit, target, ATTACK_RANGE_TOLERANCE)) return;
+  // 最大射程可带出手容差；最小射程贴身则整击落空
+  if (!isInAttackRangeBand(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
   if (attack.kind === 'melee') {
     target.hp -= unit.stats.damage;

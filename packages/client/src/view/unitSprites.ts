@@ -44,6 +44,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 188 / 229,
     sourceFacing: -1,
   },
+  ranged_chariot: {
+    frontUrl: 'units/chariot-front.png',
+    backUrl: 'units/chariot-back.png',
+    // 战车立绘偏宽，倍率略低于骑士以免视觉上过大
+    heightMul: 4.0,
+    aspect: 899 / 825,
+    sourceFacing: 1,
+  },
   melee_cavalry: {
     frontUrl: 'units/knight-front.png',
     backUrl: 'units/knight-back.png',

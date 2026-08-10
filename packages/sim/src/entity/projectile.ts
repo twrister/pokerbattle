@@ -2,10 +2,16 @@ import type { Fx } from '../math/fixed.js';
 import { type Vec2, vec } from '../math/vec2.js';
 import type { Faction } from './unit.js';
 
+/** 弹道落地反馈：地面环脉冲或炸弹爆炸序列帧 */
+export type ProjectileImpactFx = 'pulse' | 'explosion';
+
+/** 客户端弹道外观：彩色球或炸弹贴图 */
+export type ProjectileVisual = 'orb' | 'bomb';
+
 /**
  * 远程单位发射的追踪弹。
  * MVP 里是「必中」的追踪弹：只要目标还活着就一直飞向它，飞到就结算伤害。
- * 抛物线、溅射、可闪避的直线弹都可以在这个结构上加字段扩展。
+ * 抛物线通过 arcApex 叠加二次高度；溅射由 aoeRadius 驱动。
  */
 export interface Projectile {
   readonly id: number;
@@ -19,7 +25,7 @@ export interface Projectile {
   damage: Fx;
   /** 大于 0 时不造成单体直伤，改为在 impactPos 结算范围伤害。 */
   aoeRadius: Fx;
-  /** 当前渲染离地高度，飞行中在 start/end 之间插值。 */
+  /** 当前渲染离地高度，飞行中在 start/end 之间插值（可叠加抛物线）。 */
   height: number;
   /** 发射点高度（如巨龙头 2.5）。 */
   startHeight: number;
@@ -27,6 +33,15 @@ export interface Projectile {
   endHeight: number;
   /** 发射瞬间到目标的水平距离，用于高度插值进度。 */
   startDist: Fx;
+  /**
+   * 抛物线额外顶点高度（场景单位）。
+   * 0 = 纯线性起终点插值；>0 时在中点再抬高 4·apex·t·(1-t)。
+   */
+  arcApex: number;
+  /** 落点范围伤时的地面反馈种类 */
+  impactFx: ProjectileImpactFx;
+  /** 客户端弹道外观 */
+  visual: ProjectileVisual;
   /** 飞行速度，单位/秒 */
   speed: Fx;
   dead: boolean;
@@ -47,6 +62,9 @@ export function createProjectile(
   startHeight: number,
   endHeight: number,
   startDist: Fx,
+  arcApex: number = 0,
+  impactFx: ProjectileImpactFx = 'pulse',
+  visual: ProjectileVisual = 'orb',
 ): Projectile {
   return {
     id,
@@ -61,6 +79,9 @@ export function createProjectile(
     startHeight,
     endHeight,
     startDist,
+    arcApex,
+    impactFx,
+    visual,
     speed,
     dead: false,
   };

@@ -158,6 +158,8 @@ describe('渲染同步', () => {
   it('巨龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
     expect(SPRITE_DEFS.dragon?.frontUrl).toBe('units/dragon-front.png');
     expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');
+    expect(SPRITE_DEFS.ranged_chariot?.frontUrl).toBe('units/chariot-front.png');
+    expect(SPRITE_DEFS.ranged_chariot?.backUrl).toBe('units/chariot-back.png');
 
     const unitView = new UnitView(Faction.Blue, 'dragon');
     camera.position.set(0, 10, 10);
@@ -184,7 +186,9 @@ describe('渲染同步', () => {
           (nested) => nested instanceof THREE.Mesh && nested.geometry === SPRITE_GEOMETRY,
         ),
     );
-    expect(billboard?.position.y).toBeGreaterThan(AIR_UNIT_HOVER_HEIGHT - 0.05);
+    // 悬浮含随机相位正弦起伏（幅度约 0.08），不能只按基准高度卡下限
+    expect(billboard?.position.y).toBeGreaterThan(AIR_UNIT_HOVER_HEIGHT - 0.1);
+    expect(billboard?.position.y).toBeLessThan(AIR_UNIT_HOVER_HEIGHT + 0.1);
     unitView.dispose();
   });
 });

@@ -10,10 +10,16 @@ import {
 } from './config/units.js';
 import {
   AIR_PROJECTILE_HEIGHT,
+  BOMB_ARC_APEX,
   GROUND_PROJECTILE_HEIGHT,
   RETARGET_INTERVAL,
 } from './config/tuning.js';
-import { type Projectile, createProjectile } from './entity/projectile.js';
+import {
+  type Projectile,
+  type ProjectileImpactFx,
+  type ProjectileVisual,
+  createProjectile,
+} from './entity/projectile.js';
 import {
   type AoePulseEffect,
   type AoePulseKind,
@@ -229,6 +235,11 @@ export class World {
     const dx = target.pos.x - from.pos.x;
     const dy = target.pos.y - from.pos.y;
     const startDist = lengthOf(dx, dy);
+    // 战车炸弹：抛物线 + 落地爆炸序列帧 + 炸弹贴图；其余弹道保持线性彩色球
+    const isBomb = from.config.id === 'ranged_chariot';
+    const arcApex = isBomb ? BOMB_ARC_APEX : 0;
+    const impactFx: ProjectileImpactFx = isBomb ? 'explosion' : 'pulse';
+    const visual: ProjectileVisual = isBomb ? 'bomb' : 'orb';
     const projectile = createProjectile(
       this.nextEntityId++,
       from.faction,
@@ -244,6 +255,9 @@ export class World {
       startHeight,
       endHeight,
       startDist,
+      arcApex,
+      impactFx,
+      visual,
     );
     this.projectiles.push(projectile);
     return projectile;

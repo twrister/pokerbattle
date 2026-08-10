@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Faction, type Snapshot, type UnitSnapshot } from '@pb/sim';
+import { Faction, type ProjectileVisual, type Snapshot, type UnitSnapshot } from '@pb/sim';
 import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
@@ -12,6 +12,39 @@ const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
   [Faction.Red]: new THREE.MeshStandardMaterial({ color: 0xffd0b0, emissive: 0xf2604f, emissiveIntensity: 0.9 }),
 };
 
+/** 炸弹弹体贴图面片：底边不锚地，中心对齐弹道高度点 */
+const BOMB_PROJECTILE_ASPECT = 138 / 215;
+const BOMB_PROJECTILE_HEIGHT = 0.55;
+const BOMB_PROJECTILE_GEOMETRY = new THREE.PlaneGeometry(
+  BOMB_PROJECTILE_HEIGHT * BOMB_PROJECTILE_ASPECT,
+  BOMB_PROJECTILE_HEIGHT,
+);
+let bombProjectileMaterial: THREE.MeshBasicMaterial | null = null;
+
+/** 懒加载共享炸弹材质；测试环境无 DOM 时给占位不可见图 */
+function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
+  if (bombProjectileMaterial) return bombProjectileMaterial;
+  bombProjectileMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    alphaTest: 0.5,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    visible: false,
+  });
+  // Node 测试无 DOM，保持隐藏占位即可
+  if (typeof document === 'undefined') return bombProjectileMaterial;
+  const texture = new THREE.TextureLoader().load('projectiles/bomb.png', (loaded) => {
+    loaded.colorSpace = THREE.SRGBColorSpace;
+    loaded.magFilter = THREE.NearestFilter;
+    if (bombProjectileMaterial) {
+      bombProjectileMaterial.visible = true;
+      bombProjectileMaterial.needsUpdate = true;
+    }
+  });
+  bombProjectileMaterial.map = texture;
+  return bombProjectileMaterial;
+}
+
 /**
  * 把 sim 快照同步到场景对象。
  *
@@ -23,7 +56,8 @@ export class BattleView {
   private readonly activeUnits = new Map<number, UnitView>();
   private readonly unitPool = new Map<string, UnitView[]>();
   private readonly activeProjectiles = new Map<number, THREE.Mesh>();
-  private readonly projectilePool: THREE.Mesh[] = [];
+  private readonly orbProjectilePool: THREE.Mesh[] = [];
+  private readonly bombProjectilePool: THREE.Mesh[] = [];
   private readonly activeHealEffects = new Map<number, HealEffectView>();
   private readonly healEffectPool: HealEffectView[] = [];
   private readonly activeAoePulses = new Map<number, AoePulseEffectView>();
@@ -42,7 +76,7 @@ export class BattleView {
   render(prev: Snapshot, curr: Snapshot, alpha: number, camera: THREE.Camera): void {
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
-    this.renderProjectiles(prev, curr, alpha);
+    this.renderProjectiles(prev, curr, alpha, camera);
     this.renderHealEffects(curr);
     this.renderAoePulses(curr);
     this.renderExplosions(curr, camera);
@@ -164,18 +198,33 @@ export class BattleView {
     }
   }
 
-  private renderProjectiles(prev: Snapshot, curr: Snapshot, alpha: number): void {
+  private renderProjectiles(
+    prev: Snapshot,
+    curr: Snapshot,
+    alpha: number,
+    camera: THREE.Camera,
+  ): void {
     this.seen.clear();
 
     for (const projectile of curr.projectiles) {
       this.seen.add(projectile.id);
+      const visual: ProjectileVisual = projectile.visual ?? 'orb';
       let mesh = this.activeProjectiles.get(projectile.id);
+      // 外观变更时换池重建，避免彩色球与炸弹贴图互相污染
+      if (mesh && mesh.userData.visual !== visual) {
+        this.scene.remove(mesh);
+        this.activeProjectiles.delete(projectile.id);
+        this.releaseProjectileMesh(mesh);
+        mesh = undefined;
+      }
       if (!mesh) {
-        mesh = this.projectilePool.pop() ?? new THREE.Mesh(PROJECTILE_GEOMETRY);
+        mesh = this.obtainProjectileMesh(visual);
         this.activeProjectiles.set(projectile.id, mesh);
         this.scene.add(mesh);
       }
-      mesh.material = PROJECTILE_MATERIALS[projectile.faction]!;
+      if (visual === 'orb') {
+        mesh.material = PROJECTILE_MATERIALS[projectile.faction]!;
+      }
 
       const from = prev.projectiles.find((p) => p.id === projectile.id) ?? projectile;
       mesh.position.set(
@@ -183,14 +232,35 @@ export class BattleView {
         lerp(from.height, projectile.height, alpha),
         toSceneZ(lerp(from.y, projectile.y, alpha)),
       );
+      // 炸弹面片始终朝向相机，避免侧面看穿成一条线
+      if (visual === 'bomb') mesh.quaternion.copy(camera.quaternion);
     }
 
     for (const [id, mesh] of this.activeProjectiles) {
       if (this.seen.has(id)) continue;
       this.scene.remove(mesh);
       this.activeProjectiles.delete(id);
-      this.projectilePool.push(mesh);
+      this.releaseProjectileMesh(mesh);
     }
+  }
+
+  /** 按弹道外观取池化网格；炸弹用贴图面片，其余用阵营色球 */
+  private obtainProjectileMesh(visual: ProjectileVisual): THREE.Mesh {
+    if (visual === 'bomb') {
+      const mesh = this.bombProjectilePool.pop() ?? new THREE.Mesh(BOMB_PROJECTILE_GEOMETRY);
+      mesh.material = getBombProjectileMaterial();
+      mesh.userData.visual = 'bomb';
+      return mesh;
+    }
+    const mesh = this.orbProjectilePool.pop() ?? new THREE.Mesh(PROJECTILE_GEOMETRY);
+    mesh.userData.visual = 'orb';
+    return mesh;
+  }
+
+  /** 按 userData.visual 归还到对应对象池 */
+  private releaseProjectileMesh(mesh: THREE.Mesh): void {
+    if (mesh.userData.visual === 'bomb') this.bombProjectilePool.push(mesh);
+    else this.orbProjectilePool.push(mesh);
   }
 
   private obtainUnitView(unit: UnitSnapshot): UnitView {
@@ -225,7 +295,7 @@ export class BattleView {
     for (const [id, mesh] of this.activeProjectiles) {
       this.scene.remove(mesh);
       this.activeProjectiles.delete(id);
-      this.projectilePool.push(mesh);
+      this.releaseProjectileMesh(mesh);
     }
     for (const [id, view] of this.activeHealEffects) {
       this.scene.remove(view.group);
@@ -259,7 +329,7 @@ export class BattleView {
     this.unitPool.clear();
     for (const [, mesh] of this.activeProjectiles) {
       this.scene.remove(mesh);
-      this.projectilePool.push(mesh);
+      this.releaseProjectileMesh(mesh);
     }
     this.activeProjectiles.clear();
     for (const [id, view] of this.activeHealEffects) {

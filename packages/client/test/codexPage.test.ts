@@ -19,7 +19,7 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(11);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(12);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toContain('20%');

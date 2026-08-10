@@ -14,6 +14,7 @@ export {
 export {
   AIR_PROJECTILE_HEIGHT,
   AIR_UNIT_HOVER_HEIGHT,
+  BOMB_ARC_APEX,
   GROUND_PROJECTILE_HEIGHT,
   REPATH_INTERVAL,
   RETARGET_INTERVAL,
@@ -121,7 +122,11 @@ export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';
 
 export { Faction, NO_TARGET, type Unit, UnitState, isAlive, opposingFaction } from './entity/unit.js';
-export { type Projectile } from './entity/projectile.js';
+export {
+  type Projectile,
+  type ProjectileImpactFx,
+  type ProjectileVisual,
+} from './entity/projectile.js';
 
 export { NavGrid } from './nav/grid.js';
 export { PathFinder } from './nav/astar.js';

@@ -33,7 +33,7 @@ export function canAttackTarget(attacker: Unit, target: Unit): boolean {
 }
 
 /**
- * 攻击者是否够得着目标。
+ * 攻击者是否够得着目标（未超出最大射程）。
  * 单位：圆心距 vs range + 双方半径；
  * 建筑：圆心到占地表面距 vs range + 自身半径（与方形挤出一致）。
  * reachBonus 用于退出迟滞 / 出手容差。
@@ -46,6 +46,29 @@ export function isWithinAttackReach(attacker: Unit, target: Unit, reachBonus: Fx
   const reach =
     attacker.stats.range + attacker.config.radius + target.config.radius + reachBonus;
   return distSq(attacker.pos.x, attacker.pos.y, target.pos.x, target.pos.y) <= mul(reach, reach);
+}
+
+/**
+ * 目标是否仍在最小射程之外（边缘距 ≥ minRange）。
+ * minRange=0 时恒为 true；口径与最大射程一致（单位圆 / 建筑占地表面）。
+ */
+export function isOutsideMinAttackRange(attacker: Unit, target: Unit): boolean {
+  const minRange = attacker.config.minRange;
+  if (minRange <= 0) return true;
+  if (isBuildingConfig(target.config)) {
+    const minReach = minRange + attacker.config.radius;
+    return distSqToBuildingFootprint(attacker.pos.x, attacker.pos.y, target) >= mul(minReach, minReach);
+  }
+  const minReach = minRange + attacker.config.radius + target.config.radius;
+  return distSq(attacker.pos.x, attacker.pos.y, target.pos.x, target.pos.y) >= mul(minReach, minReach);
+}
+
+/**
+ * 是否落在可攻击射程带内：未超出最大射程，且未贴进最小射程。
+ * reachBonus 只放大最大射程一侧（与 Attack 退出迟滞一致）。
+ */
+export function isInAttackRangeBand(attacker: Unit, target: Unit, reachBonus: Fx = 0): boolean {
+  return isWithinAttackReach(attacker, target, reachBonus) && isOutsideMinAttackRange(attacker, target);
 }
 
 /** ≈ 1/√2；对角槽把 expand 压到 expand/√2，使角外表面距回到 expand（不超出射程） */

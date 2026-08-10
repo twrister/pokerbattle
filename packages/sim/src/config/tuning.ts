@@ -67,6 +67,8 @@ export const GROUND_PROJECTILE_HEIGHT = 0.9;
  * 让火球从巨龙头吐出而不是脚底。
  */
 export const AIR_PROJECTILE_HEIGHT = 2.5;
+/** 战车炸弹抛物线额外顶点高度（叠在起终点线性插值之上）。 */
+export const BOMB_ARC_APEX = 2;
 
 /** A* 单次搜索的节点上限，防病态地形把一帧算爆 */
 export const ASTAR_NODE_BUDGET = 3000;

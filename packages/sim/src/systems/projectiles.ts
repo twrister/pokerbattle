@@ -45,6 +45,7 @@ export function updateProjectiles(world: World): void {
           projectile.aoeRadius,
           projectile.damage,
           projectile.faction,
+          projectile.impactFx,
         );
       } else if (target) {
         target.hp -= projectile.damage;
@@ -60,7 +61,10 @@ export function updateProjectiles(world: World): void {
   }
 }
 
-/** 用发射时总距与当前剩余距换算进度，把渲染高度从起点插到落点。 */
+/**
+ * 用发射时总距与当前剩余距换算进度，把渲染高度从起点插到落点。
+ * arcApex>0 时再叠加 4·apex·t·(1-t)，形成中点最高的抛物线。
+ */
 function updateProjectileHeight(projectile: Projectile, remaining: Fx): void {
   const startDist = toFloat(projectile.startDist);
   if (startDist <= 0) {
@@ -69,12 +73,13 @@ function updateProjectileHeight(projectile: Projectile, remaining: Fx): void {
   }
   const left = Math.max(0, toFloat(remaining));
   const t = Math.min(1, Math.max(0, 1 - left / startDist));
-  projectile.height =
-    projectile.startHeight + (projectile.endHeight - projectile.startHeight) * t;
+  const base = projectile.startHeight + (projectile.endHeight - projectile.startHeight) * t;
+  const arc = projectile.arcApex > 0 ? 4 * projectile.arcApex * t * (1 - t) : 0;
+  projectile.height = base + arc;
 }
 
 /**
- * 在弹着点按单位中心结算敌方范围伤害，并生成与近战范围一致的地面反馈。
+ * 在弹着点按单位中心结算敌方范围伤害，并按弹道配置播放地面反馈。
  * 不额外处理主目标，因此主目标只会作为范围内单位受伤一次。
  */
 function resolveProjectileAoe(
@@ -84,6 +89,7 @@ function resolveProjectileAoe(
   radius: Fx,
   damage: Fx,
   faction: Faction,
+  impactFx: Projectile['impactFx'],
 ): void {
   world.unitGrid.clear();
   for (let i = 0; i < world.units.length; i++) {
@@ -103,5 +109,9 @@ function resolveProjectileAoe(
     unit.hp -= damage;
     unit.aoeHitFxLeft = 2;
   }
-  world.spawnAoePulse('melee_ring', x, y, radius);
+  if (impactFx === 'explosion') {
+    world.spawnExplosionEffect(x, y, radius);
+  } else {
+    world.spawnAoePulse('melee_ring', x, y, radius);
+  }
 }

@@ -4,7 +4,11 @@ import { isBuildingConfig } from '../config/units.js';
 import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
-import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
+import {
+  canAttackTarget,
+  isOutsideMinAttackRange,
+  isWithinAttackReach,
+} from './combatRange.js';
 import { NO_ENGAGE_SLOT } from './engagement.js';
 
 const desiredFacing = vec();
@@ -72,16 +76,20 @@ export function updateAi(world: World): void {
     const gapSq = distSq(unit.pos.x, unit.pos.y, target.pos.x, target.pos.y);
     const inEnter = isWithinAttackReach(unit, target);
     const inExit = isWithinAttackReach(unit, target, ATTACK_EXIT_HYSTERESIS);
+    const beyondMin = isOutsideMinAttackRange(unit, target);
+    normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
 
-    if (unit.state === UnitState.Attack ? inExit : inEnter) {
+    if ((unit.state === UnitState.Attack ? inExit : inEnter) && !beyondMin) {
+      // 已进入最大射程但贴进最小射程：站定不攻，等目标拉开（不主动后撤）
+      unit.state = UnitState.Idle;
+      clearPath(unit);
+    } else if (unit.state === UnitState.Attack ? inExit : inEnter) {
       unit.state = UnitState.Attack;
       clearPath(unit);
-      normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
     } else if (tryStartCharge(unit, target, gapSq)) {
       copy(desiredFacing, unit.chargeDir);
     } else {
       unit.state = UnitState.Seek;
-      normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
     }
 
     if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {

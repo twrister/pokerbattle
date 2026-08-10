@@ -46,7 +46,9 @@ describe('法师召唤', () => {
   it('每隔五秒再次施放且前摇期间不进行普攻', () => {
     const world = new World(1);
     const mage = world.spawnUnit(Faction.Blue, 'hero_mage', fromFloat(8), fromFloat(8));
-    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(8));
+    // 放远处诱饵：验证召唤前摇不普攻，且避免近战互砍把骷髅提前清掉
+    const bait = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(18), fromFloat(8));
+    bait.stats.damage = 0;
 
     world.step();
     expect(world.projectiles).toHaveLength(0);
