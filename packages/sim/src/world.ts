@@ -101,7 +101,7 @@ export class World {
       clampToArena(x, ARENA_WIDTH, config.radius),
       clampToArena(y, ARENA_HEIGHT, config.radius),
     );
-    // 按 id 打散首次索敌时机；锁定后目标死亡才再索敌，不再周期重选
+    // 按 id 打散首次索敌时机；锁定后不周期重选（换火见 targeting）
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);

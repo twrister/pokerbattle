@@ -4,9 +4,11 @@ import { isBuildingConfig } from '../config/units.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
+import { isWithinAttackReach } from './combatRange.js';
 
 /**
- * 选敌：锁定最近敌人后，目标存活期间不再换敌；只有目标死亡/消失才重新索敌。
+ * 选敌：锁定最近敌人后，交战中（已够得着）粘性不换火；目标死亡/消失才完整重索。
+ * 追击中（够不着当前目标）若有已进入攻击射程的其它敌军，则打断粘性改火，避免路过近敌挨打不还手。
  *
  * 有治疗技能的单位在无敌军时，会改锁最近受伤友军以便寻路过治疗半径；
  * 友军目标不粘性挡敌——每帧仍优先扫描敌军，保证敌方入场后立刻切回进攻。
@@ -27,8 +29,12 @@ export function updateTargeting(world: World): void {
     }
 
     const current = world.getUnit(unit.targetId);
-    // 只对敌军粘性锁定；友军治疗目标随时可被新敌军打断
-    if (isAlive(current) && current.faction !== unit.faction) continue;
+    // 敌军粘性：已能出手则咬住；够不着时允许被射程内威胁打断
+    if (isAlive(current) && current.faction !== unit.faction) {
+      if (isWithinAttackReach(unit, current)) continue;
+      if (!hasInReachEnemyThreat(world, unit, current)) continue;
+      // fall through：下面统一 findNearestEnemy + 重分槽位
+    }
 
     const enemyId = findNearestEnemy(world, unit);
     if (enemyId !== NO_TARGET) {
@@ -58,6 +64,24 @@ export function updateTargeting(world: World): void {
     unit.targetId = NO_TARGET;
     unit.engageSlot = NO_ENGAGE_SLOT;
   }
+}
+
+/**
+ * 追击中是否存在「已进入攻击射程」的其它敌军。
+ * 过滤规则与 findNearestEnemy 一致，额外排除当前目标。
+ */
+function hasInReachEnemyThreat(world: World, unit: Unit, current: Unit): boolean {
+  const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
+  const meleeOnly = unit.config.attack.kind === 'melee' || unit.config.attack.kind === 'melee_aoe';
+
+  for (const other of world.units) {
+    if (other.dead || other.faction === unit.faction || other.id === current.id) continue;
+    if (meleeOnly && other.config.movementLayer === 'air') continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (d > sightSq) continue;
+    if (isWithinAttackReach(unit, other)) return true;
+  }
+  return false;
 }
 
 /**

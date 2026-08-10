@@ -48,7 +48,7 @@ export interface Unit {
    * 锁定目标时一次性决定，存活期间不变，避免围攻时来回换边。
    */
   engageSlot: number;
-  /** 出生错峰：> 0 时暂不索敌；锁定目标后不再周期重置 */
+  /** 出生错峰：> 0 时暂不索敌；锁定后不周期重置（换火由 targeting 射程打断/目标死亡驱动） */
   retargetIn: number;
 
   /** 攻击冷却剩余（tick，定点），每 tick 减 ONE */

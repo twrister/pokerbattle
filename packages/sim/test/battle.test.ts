@@ -22,24 +22,52 @@ describe('战斗行为', () => {
     expect(unit.pos.y).toBe(startY);
   });
 
-  it('锁定目标后不会因更近敌人而换敌，目标死亡后才重新索敌', () => {
+  it('追击中近敌进入攻击射程时应改火', () => {
     const world = new World(1);
     const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10));
     const far = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
-    // 先让攻击者锁住远处目标
+    // 先锁远处目标并进入 Seek（圆心距 6 > 近战可达约 1.3）
+    run(world, 10);
+    expect(attacker.targetId).toBe(far.id);
+    expect(attacker.state).toBe(UnitState.Seek);
+
+    // 身旁刷已进入攻击射程的敌人（圆心距 1 ≤ 1.3），应打断粘性改火
+    const near = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(11));
+    run(world, 5);
+    expect(attacker.targetId).toBe(near.id);
+  });
+
+  it('交战中已够得着当前目标时不因更近敌人换火', () => {
+    const world = new World(1);
+    // 贴脸开打：圆心距 0.8，近战可达约 1.3，留出挤开余量
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const engaged = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10.8));
+    run(world, 15);
+    expect(attacker.targetId).toBe(engaged.id);
+    expect(attacker.state).toBe(UnitState.Attack);
+
+    // 更近敌人出现；只推进 1 tick 让索敌跑完，避免长时间推挤把原目标挤出射程
+    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10.3));
+    run(world, 1);
+    expect(attacker.targetId).toBe(engaged.id);
+  });
+
+  it('当前目标死亡后重新索敌', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const far = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
     run(world, 10);
     expect(attacker.targetId).toBe(far.id);
 
-    // 再在身旁刷一个更近的敌人，存活期间仍应咬住原目标
-    const near = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(11));
-    run(world, 20);
+    // 远处刷第二个敌人（圆心距 3，未进攻击射程），追击中不够着则仍粘远敌
+    const other = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(13));
+    run(world, 5);
     expect(attacker.targetId).toBe(far.id);
 
-    // 原目标死亡后才转火近处敌人
     far.hp = 0;
     far.dead = true;
     run(world, 5);
-    expect(attacker.targetId).toBe(near.id);
+    expect(attacker.targetId).toBe(other.id);
   });
 
   it('近战兵会寻路接近远处的敌人并最终进入攻击状态', () => {
