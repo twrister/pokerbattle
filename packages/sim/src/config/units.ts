@@ -396,7 +396,7 @@ export function isBuildingConfig(config: UnitConfig): boolean {
   return config.footprint > 0;
 }
 
-/** 有攻击参数的建筑才参与索敌/出手；主堡等仍跳过 */
+/** 有攻击参数的建筑才参与索敌/出手；无伤害或无射程的建筑仍跳过 */
 export function canBuildingAttack(config: UnitConfig): boolean {
   return isBuildingConfig(config) && config.damage > 0 && config.range > 0;
 }

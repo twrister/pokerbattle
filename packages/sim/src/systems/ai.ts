@@ -105,7 +105,7 @@ export function updateAi(world: World): void {
 
 /**
  * 建筑行为：站桩，只在 Idle / Attack 间切换，永不 Seek / Charge。
- * 无攻击能力的建筑（主堡）固定 Idle。
+ * 无攻击能力的建筑固定 Idle；基地/防御塔等可攻击建筑走索敌出手。
  */
 function updateBuildingAi(world: World, unit: Unit): void {
   if (!canBuildingAttack(unit.config)) {

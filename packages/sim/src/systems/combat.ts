@@ -22,7 +22,7 @@ const neighbors: number[] = [];
 export function updateCombat(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
-    // 无攻击能力的建筑（如主堡）跳过；防御塔等走下方普攻节奏
+    // 无攻击能力的建筑跳过；基地/防御塔等走下方普攻节奏
     if (isBuildingConfig(unit.config) && !canBuildingAttack(unit.config)) continue;
     // 炸弹兵只走自爆系统，不走普攻前摇
     if (unit.config.detonate) continue;

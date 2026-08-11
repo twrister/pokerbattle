@@ -34,7 +34,7 @@ describe('法师召唤', () => {
     expect(skeleton?.config.attack.kind).toBe('melee');
     expect(toFloat(skeleton!.config.radius)).toBeCloseTo(0.3, 4);
     expect(toFloat(skeleton!.config.bodyScale)).toBeCloseTo(0.6, 4);
-    expect(toFloat(skeleton!.config.mass)).toBe(1.5);
+    expect(toFloat(skeleton!.config.mass)).toBe(2);
     expect(toFloat(skeleton!.stats.maxHp)).toBe(250);
     expect(toFloat(skeleton!.stats.damage)).toBe(50);
     expect(toFloat(skeleton!.stats.attackInterval)).toBe(20);

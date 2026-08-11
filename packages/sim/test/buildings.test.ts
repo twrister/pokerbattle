@@ -157,13 +157,14 @@ describe('建筑系统', () => {
     expect(enemy.hp).toBeLessThan(hp0);
   });
 
-  it('主堡即使旁有敌军也不攻击', () => {
+  it('基地在射程内以投射物攻击敌军（同 1 级箭塔）', () => {
     const world = new World(1);
+    // 基地占地 4，中心 (9,16)；敌军放在射程内正西
     const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(16))!;
     const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(6.5), fromFloat(16));
     const hp0 = enemy.hp;
     for (let i = 0; i < 80; i++) world.step();
-    expect(base.state).toBe(UnitState.Idle);
-    expect(enemy.hp).toBe(hp0);
+    expect(base.state).toBe(UnitState.Attack);
+    expect(enemy.hp).toBeLessThan(hp0);
   });
 });

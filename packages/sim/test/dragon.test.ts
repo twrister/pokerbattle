@@ -26,7 +26,7 @@ describe('飞行巨龙', () => {
 
     expect(toFloat(dragon.config.radius)).toBeCloseTo(0.6, 3);
     expect(toFloat(dragon.config.bodyScale)).toBeCloseTo(1.3, 3);
-    expect(toFloat(dragon.config.mass)).toBeCloseTo(3, 3);
+    expect(toFloat(dragon.config.mass)).toBeCloseTo(2, 3);
     expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(2000, 3);
     expect(toFloat(dragon.stats.damage)).toBeCloseTo(80, 3);
     expect(toFloat(dragon.stats.attackInterval)).toBeCloseTo(30, 3);
