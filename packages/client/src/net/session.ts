@@ -1,4 +1,11 @@
-import { DEFAULT_INPUT_DELAY, decodeServerMessage, encodeMessage, type ServerMessage } from '@pb/net';
+import {
+  DEFAULT_INPUT_DELAY,
+  RECONNECT_TIMEOUT_MS,
+  decodeServerMessage,
+  encodeMessage,
+  type JoinMode,
+  type ServerMessage,
+} from '@pb/net';
 import type { Faction, MatchResult } from '@pb/sim';
 import { NetSimLoop } from './netLoop.js';
 
@@ -6,41 +13,68 @@ export interface VersusSession {
   loop: NetSimLoop;
   faction: Faction;
   seat: number;
+  roomId: string;
   close: () => void;
 }
 
 export interface ConnectVersusOptions {
   name?: string;
+  /** 加入模式；默认 quick。 */
+  mode?: JoinMode;
+  /** 自定义房间号；mode=room 时必填。 */
   roomId?: string;
   onStatus?: (text: string) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
+  onPeerDisconnected?: () => void;
+  onPeerReconnected?: () => void;
   onMatchEnd?: (result: MatchResult) => void;
+  /** 本端意外断线并进入自动重连时回调。 */
+  onReconnecting?: (remainingMs: number) => void;
+  /** 重连成功后回调。 */
+  onReconnected?: () => void;
+  /** 重连窗口耗尽或服务端拒绝恢复。 */
+  onReconnectFailed?: (reason: string) => void;
 }
 
 /**
  * 连接同源 /ws（经 vite 代理到权威服），完成入座后返回 NetSimLoop。
- * 两人到齐前 Promise 挂起；收到带 seed 的 welcome 与 start 后 resolve。
+ * 对局中意外断线会在重连窗口内自动恢复并补帧；主动 close 不重连。
  */
 export function connectVersusSession(options: ConnectVersusOptions = {}): Promise<VersusSession> {
   const status = options.onStatus ?? (() => {});
-  const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  const mode: JoinMode = options.mode ?? 'quick';
+  const joinRoomId = options.roomId ?? '';
+  const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
 
   return new Promise((resolve, reject) => {
-    status('正在连接联机服务…');
-    const ws = new WebSocket(wsUrl);
     let settled = false;
+    let intentionalClose = false;
     let loop: NetSimLoop | null = null;
     let faction: Faction | null = null;
     let seat = 0;
+    let roomId = '';
+    let reconnectToken = '';
+    let activeWs: WebSocket | null = null;
+    let reconnectDeadline = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
     /** welcome 建好 loop 前可能先到的下行，建好后立刻回放。 */
     const pending: ServerMessage[] = [];
+
+    const clearReconnectTimer = (): void => {
+      if (!reconnectTimer) return;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    };
 
     const fail = (error: Error): void => {
       if (settled) return;
       settled = true;
+      clearReconnectTimer();
+      intentionalClose = true;
       try {
-        ws.close();
+        activeWs?.close();
       } catch {
         /* ignore */
       }
@@ -50,14 +84,18 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
     const finish = (active: NetSimLoop, side: Faction): void => {
       if (settled) return;
       settled = true;
-      status('对局开始');
+      status(`对局开始（房间 ${roomId}）`);
       resolve({
         loop: active,
         faction: side,
         seat,
+        roomId,
         close: () => {
+          intentionalClose = true;
+          clearReconnectTimer();
+          active.setInputPaused(false);
           try {
-            ws.close();
+            activeWs?.close();
           } catch {
             /* ignore */
           }
@@ -65,69 +103,168 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
       });
     };
 
-    ws.addEventListener('open', () => {
-      status('已连接，等待对手加入…');
-      ws.send(
-        encodeMessage({
-          type: 'join',
-          roomId: options.roomId ?? 'default',
-          name: options.name ?? `player-${Math.floor(Math.random() * 1000)}`,
-        }),
-      );
-    });
+    const attachSocket = (ws: WebSocket, kind: 'join' | 'rejoin'): void => {
+      activeWs = ws;
 
-    ws.addEventListener('error', () => {
-      fail(new Error('无法连接联机服务，请确认已运行 pnpm dev:online'));
-    });
-
-    ws.addEventListener('close', () => {
-      if (!settled) fail(new Error('连接已断开'));
-    });
-
-    ws.addEventListener('message', (event) => {
-      const raw = String(event.data);
-      const message = decodeServerMessage(raw);
-      if (!message) return;
-
-      if (message.type === 'welcome') {
-        if (message.seed === 0) {
-          seat = message.seat;
-          faction = message.faction;
-          status(`已入座（${message.faction === 0 ? '蓝方' : '红方'}），等待对手…`);
+      ws.addEventListener('open', () => {
+        if (kind === 'join') {
+          status(mode === 'quick' ? '已连接，正在匹配对手…' : `已连接，正在加入房间 ${joinRoomId}…`);
+          ws.send(
+            encodeMessage({
+              type: 'join',
+              mode,
+              roomId: joinRoomId,
+              name: playerName,
+            }),
+          );
           return;
         }
-        seat = message.seat;
-        faction = message.faction;
-        status('对手已就绪，正在开局…');
-        loop = new NetSimLoop({
-          seed: message.seed,
-          faction: message.faction,
-          inputDelay: message.inputDelay || DEFAULT_INPUT_DELAY,
-          send: (text) => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(text);
-          },
-          onDesync: options.onDesync,
-          onPeerLeft: () => {
-            options.onPeerLeft?.();
-          },
-          onMatchEnd: options.onMatchEnd,
-        });
-        for (const queued of pending.splice(0)) {
-          loop.handleServerMessage(queued);
-          // faction 可能为 0（蓝方），不能用真假值判断
-          if (queued.type === 'start' && faction !== null) finish(loop, faction);
+
+        const lastTick = loop?.lastConfirmedTick ?? 0;
+        status('正在恢复对局连接…');
+        ws.send(
+          encodeMessage({
+            type: 'rejoin',
+            roomId,
+            token: reconnectToken,
+            lastTick,
+          }),
+        );
+      });
+
+      ws.addEventListener('error', () => {
+        if (kind === 'join' && !settled) {
+          fail(new Error('无法连接联机服务，请确认已运行 pnpm dev:online 或 pnpm official:online'));
+          return;
         }
+        // 重连阶段的 error 会伴随 close，统一在 close 里重试
+      });
+
+      ws.addEventListener('close', () => {
+        if (activeWs === ws) activeWs = null;
+        if (intentionalClose) return;
+
+        // 尚未开局就断开：直接失败
+        if (!loop || !settled) {
+          if (!settled) fail(new Error('连接已断开'));
+          return;
+        }
+
+        beginReconnect();
+      });
+
+      ws.addEventListener('message', (event) => {
+        const raw = String(event.data);
+        const message = decodeServerMessage(raw);
+        if (!message) return;
+
+        if (message.type === 'error') {
+          if (kind === 'rejoin') {
+            intentionalClose = true;
+            clearReconnectTimer();
+            loop?.setInputPaused(false);
+            options.onReconnectFailed?.(message.message);
+            return;
+          }
+          fail(new Error(message.message));
+          return;
+        }
+
+        if (message.type === 'welcome') {
+          roomId = message.roomId || roomId;
+          reconnectToken = message.reconnectToken || reconnectToken;
+          seat = message.seat;
+          faction = message.faction;
+
+          if (message.seed === 0) {
+            status(`已入座房间 ${roomId}（${message.faction === 0 ? '蓝方' : '红方'}），等待对手…`);
+            return;
+          }
+
+          // 重连：复用已有 NetSimLoop，只换发送通道并消化补帧
+          if (loop) {
+            clearReconnectTimer();
+            reconnectAttempt = 0;
+            loop.setSend((text) => {
+              if (ws.readyState === WebSocket.OPEN) ws.send(text);
+            });
+            loop.setInputPaused(false);
+            status(`已恢复房间 ${roomId}`);
+            options.onReconnected?.();
+            return;
+          }
+
+          status('对手已就绪，正在开局…');
+          loop = new NetSimLoop({
+            seed: message.seed,
+            faction: message.faction,
+            inputDelay: message.inputDelay || DEFAULT_INPUT_DELAY,
+            send: (text) => {
+              if (ws.readyState === WebSocket.OPEN) ws.send(text);
+            },
+            onDesync: options.onDesync,
+            onPeerLeft: () => options.onPeerLeft?.(),
+            onPeerDisconnected: () => options.onPeerDisconnected?.(),
+            onPeerReconnected: () => options.onPeerReconnected?.(),
+            onMatchEnd: options.onMatchEnd,
+          });
+          for (const queued of pending.splice(0)) {
+            loop.handleServerMessage(queued);
+            if (queued.type === 'start' && faction !== null) finish(loop, faction);
+          }
+          return;
+        }
+
+        if (!loop) {
+          pending.push(message);
+          return;
+        }
+
+        loop.handleServerMessage(message);
+        if (message.type === 'start' && faction !== null) finish(loop, faction);
+      });
+    };
+
+    /** 在重连窗口内指数退避重建 WebSocket。 */
+    const beginReconnect = (): void => {
+      if (intentionalClose || !loop || !reconnectToken || !roomId) return;
+      loop.setInputPaused(true);
+      if (!reconnectDeadline) {
+        reconnectDeadline = Date.now() + RECONNECT_TIMEOUT_MS;
+      }
+      const remaining = reconnectDeadline - Date.now();
+      if (remaining <= 0) {
+        intentionalClose = true;
+        clearReconnectTimer();
+        loop.setInputPaused(false);
+        options.onReconnectFailed?.('重连超时，对局已结束');
         return;
       }
 
-      if (!loop) {
-        pending.push(message);
-        return;
-      }
+      options.onReconnecting?.(remaining);
+      status(`连接中断，正在重连…（剩余 ${Math.ceil(remaining / 1000)}s）`);
 
-      loop.handleServerMessage(message);
-      // Faction.Blue === 0，用 != null 避免蓝方永远不 resolve
-      if (message.type === 'start' && faction !== null) finish(loop, faction);
-    });
+      const delay = Math.min(2000, 400 * 2 ** reconnectAttempt);
+      reconnectAttempt += 1;
+      clearReconnectTimer();
+      reconnectTimer = setTimeout(() => {
+        if (intentionalClose) return;
+        if (Date.now() >= reconnectDeadline) {
+          intentionalClose = true;
+          loop?.setInputPaused(false);
+          options.onReconnectFailed?.('重连超时，对局已结束');
+          return;
+        }
+        attachSocket(new WebSocket(buildWsUrl()), 'rejoin');
+      }, delay);
+    };
+
+    status('正在连接联机服务…');
+    attachSocket(new WebSocket(buildWsUrl()), 'join');
   });
+}
+
+/** 开发服与正式预览均走同源 /ws（由 Vite 代理到权威服）。 */
+function buildWsUrl(): string {
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 }

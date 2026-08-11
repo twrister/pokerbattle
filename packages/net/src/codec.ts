@@ -10,7 +10,13 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
   const parsed = parseJson(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const type = (parsed as { type?: unknown }).type;
-  if (type === 'join' || type === 'input' || type === 'hash' || type === 'ping') {
+  if (
+    type === 'join' ||
+    type === 'rejoin' ||
+    type === 'input' ||
+    type === 'hash' ||
+    type === 'ping'
+  ) {
     return parsed as ClientMessage;
   }
   return null;
@@ -26,9 +32,12 @@ export function decodeServerMessage(raw: string): ServerMessage | null {
     type === 'start' ||
     type === 'frame' ||
     type === 'desync' ||
+    type === 'peerDisconnected' ||
+    type === 'peerReconnected' ||
     type === 'peerLeft' ||
     type === 'matchEnd' ||
-    type === 'pong'
+    type === 'pong' ||
+    type === 'error'
   ) {
     return parsed as ServerMessage;
   }

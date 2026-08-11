@@ -55,7 +55,8 @@ import { createBattleResult } from './ui/battleResult.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
-import { createMainMenu } from './ui/mainMenu.js';
+import { createMainMenu, type VersusJoinRequest } from './ui/mainMenu.js';
+import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import {
@@ -80,13 +81,18 @@ const playerProfile = createPlayerProfileService();
 let screens: ScreenController;
 /** 大厅选择只影响下一场单机，避免在 UI 路由中扩散难度状态。 */
 let selectedSoloDifficulty: SoloDifficulty = 'easy';
+/** 进入 versus 前暂存入房参数，因 ScreenController 不携带 payload。 */
+let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
 const mainMenu = createMainMenu({
   onStartSandbox: () => screens.show('sandbox'),
   onStartSolo: (difficulty) => {
     selectedSoloDifficulty = difficulty;
     screens.show('solo');
   },
-  onStartVersus: () => screens.show('versus'),
+  onStartVersus: (request) => {
+    pendingVersusJoin = request;
+    screens.show('versus');
+  },
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
   getProfile: () => playerProfile.getProfile(),
@@ -510,6 +516,8 @@ function enterVersus(): () => void {
   let battleRecorded = false;
   /** 对手离开不记本方失败。 */
   let peerLeft = false;
+  const joinRequest = pendingVersusJoin;
+  const reconnectBanner = createReconnectBanner(hud);
 
   /** 权威结算写入档案；重复调用会被会话标记挡住。 */
   const recordVersusResult = (result: MatchResult, faction: Faction): void => {
@@ -538,10 +546,16 @@ function enterVersus(): () => void {
   hud.classList.add('is-solo', 'is-versus');
   // 匹配期仍留在大厅层提示状态；对局开始后再由 runVersusSession 揭开战场
   mainMenu.show();
-  setLobbyStatus('正在匹配联机对手…');
+  setLobbyStatus(
+    joinRequest.mode === 'room'
+      ? `正在加入房间 ${joinRequest.roomId}…`
+      : '正在匹配联机对手…',
+  );
 
   void connectVersusSession({
     name: playerProfile.getProfile().displayName,
+    mode: joinRequest.mode,
+    roomId: joinRequest.roomId,
     onStatus: setLobbyStatus,
     onDesync: (tick, serverHash) => {
       console.error(`[desync] tick=${tick} serverHash=${serverHash}`);
@@ -549,7 +563,25 @@ function enterVersus(): () => void {
     },
     onPeerLeft: () => {
       peerLeft = true;
+      reconnectBanner.hide();
       setLobbyStatus('对手已离开');
+      screens.show('menu');
+    },
+    onPeerDisconnected: () => {
+      reconnectBanner.showPeerDisconnected();
+    },
+    onPeerReconnected: () => {
+      reconnectBanner.showPeerReconnected();
+    },
+    onReconnecting: (remainingMs) => {
+      reconnectBanner.showReconnecting(remainingMs);
+    },
+    onReconnected: () => {
+      reconnectBanner.showRestored();
+    },
+    onReconnectFailed: (reason) => {
+      reconnectBanner.showFailed(reason);
+      setLobbyStatus(reason);
       screens.show('menu');
     },
     onMatchEnd: (result) => {
@@ -582,6 +614,7 @@ function enterVersus(): () => void {
     disposed = true;
     leave?.();
     leave = null;
+    reconnectBanner.dispose();
     // 匹配阶段返回大厅时也清掉联机标记，避免残留样式
     hud.classList.remove('is-versus');
     container.classList.remove('is-versus');

@@ -1,0 +1,176 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Faction } from '@pb/sim';
+import { encodeMessage } from '@pb/net';
+import { connectVersusSession } from '../src/net/session.js';
+
+type Listener = (event?: { data?: string }) => void;
+
+class MockWebSocket {
+  static OPEN = 1;
+  static CONNECTING = 0;
+  static CLOSING = 2;
+  static CLOSED = 3;
+  static instances: MockWebSocket[] = [];
+
+  readyState = MockWebSocket.CONNECTING;
+  readonly sent: string[] = [];
+  private readonly listeners = new Map<string, Set<Listener>>();
+
+  constructor(public url: string) {
+    MockWebSocket.instances.push(this);
+    queueMicrotask(() => {
+      this.readyState = MockWebSocket.OPEN;
+      this.emit('open');
+    });
+  }
+
+  addEventListener(type: string, listener: Listener): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener);
+    this.listeners.set(type, set);
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  close(): void {
+    if (this.readyState === MockWebSocket.CLOSED) return;
+    this.readyState = MockWebSocket.CLOSED;
+    this.emit('close');
+  }
+
+  emit(type: string, event: { data?: string } = {}): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
+
+  pushServer(message: unknown): void {
+    this.emit('message', { data: encodeMessage(message as never) });
+  }
+}
+
+describe('connectVersusSession', () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket);
+    vi.stubGlobal('location', {
+      protocol: 'http:',
+      host: 'localhost:8081',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('快速匹配入房并在 start 后 resolve', async () => {
+    const promise = connectVersusSession({ mode: 'quick', name: 'Tester' });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({ type: 'join', mode: 'quick' });
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 123,
+      inputDelay: 4,
+      roomId: 'q-1',
+      reconnectToken: 'tok-a',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+
+    const session = await promise;
+    expect(session.roomId).toBe('q-1');
+    expect(session.faction).toBe(Faction.Blue);
+    session.close();
+  });
+
+  it('主动 close 后断线不会触发重连', async () => {
+    const onReconnecting = vi.fn();
+    const promise = connectVersusSession({
+      mode: 'room',
+      roomId: 'room-1',
+      name: 'Tester',
+      onReconnecting,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 1,
+      faction: Faction.Red,
+      seed: 7,
+      inputDelay: 4,
+      roomId: 'room-1',
+      reconnectToken: 'tok-b',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    const session = await promise;
+
+    session.close();
+    expect(onReconnecting).not.toHaveBeenCalled();
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it('意外断线会自动 rejoin 并恢复输入', async () => {
+    vi.useFakeTimers();
+    const onReconnecting = vi.fn();
+    const onReconnected = vi.fn();
+    const promise = connectVersusSession({
+      mode: 'quick',
+      name: 'Tester',
+      onReconnecting,
+      onReconnected,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 42,
+      inputDelay: 4,
+      roomId: 'q-9',
+      reconnectToken: 'tok-c',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    const session = await promise;
+    session.loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
+    expect(session.loop.lastConfirmedTick).toBe(1);
+
+    // 模拟非主动断开
+    ws.readyState = MockWebSocket.CLOSED;
+    ws.emit('close');
+    expect(onReconnecting).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(MockWebSocket.instances.length).toBeGreaterThan(1);
+    const rejoinWs = MockWebSocket.instances.at(-1)!;
+    await Promise.resolve();
+    expect(JSON.parse(rejoinWs.sent[0]!)).toMatchObject({
+      type: 'rejoin',
+      roomId: 'q-9',
+      token: 'tok-c',
+      lastTick: 1,
+    });
+
+    rejoinWs.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 42,
+      inputDelay: 4,
+      roomId: 'q-9',
+      reconnectToken: 'tok-c',
+    });
+    rejoinWs.pushServer({ type: 'frame', tick: 2, commands: [] });
+    expect(onReconnected).toHaveBeenCalled();
+    expect(session.loop.lastConfirmedTick).toBe(2);
+    session.close();
+  });
+});

@@ -24,6 +24,8 @@ export interface NetSimLoopOptions {
   send: (raw: string) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
+  onPeerDisconnected?: () => void;
+  onPeerReconnected?: () => void;
   onMatchEnd?: (result: MatchResult) => void;
   onReady?: () => void;
 }
@@ -43,11 +45,15 @@ export class NetSimLoop {
   private readonly frames = new Map<number, Command[]>();
   private nextTick = 1;
   private lastStepAt = performance.now();
-  private readonly send: (raw: string) => void;
+  private send: (raw: string) => void;
   private readonly onDesync?: (tick: number, serverHash: number) => void;
   private readonly onPeerLeft?: () => void;
+  private readonly onPeerDisconnected?: () => void;
+  private readonly onPeerReconnected?: () => void;
   private readonly onMatchEnd?: (result: MatchResult) => void;
   private started = false;
+  /** 重连窗口内禁止本地出牌，避免发到已失效的 socket。 */
+  private inputPaused = false;
 
   constructor(options: NetSimLoopOptions) {
     this.match = new MatchState(options.seed);
@@ -57,10 +63,27 @@ export class NetSimLoop {
     this.send = options.send;
     this.onDesync = options.onDesync;
     this.onPeerLeft = options.onPeerLeft;
+    this.onPeerDisconnected = options.onPeerDisconnected;
+    this.onPeerReconnected = options.onPeerReconnected;
     this.onMatchEnd = options.onMatchEnd;
     this.curr = takeSnapshot(this.match.world);
     this.prev = this.curr;
     options.onReady?.();
+  }
+
+  /** 本地已应用的最后权威 tick，重连时作为补帧起点。 */
+  get lastConfirmedTick(): number {
+    return this.match.world.tick;
+  }
+
+  /** 重连成功后切换到新的 WebSocket 发送函数。 */
+  setSend(send: (raw: string) => void): void {
+    this.send = send;
+  }
+
+  /** 暂停或恢复本地输入上报。 */
+  setInputPaused(paused: boolean): void {
+    this.inputPaused = paused;
   }
 
   get world() {
@@ -90,11 +113,19 @@ export class NetSimLoop {
         this.nextTick = message.startTick;
         break;
       case 'frame':
+        // 补帧可能重复到达：已应用过的 tick 直接忽略，避免二次 step
+        if (message.tick < this.nextTick) break;
         this.frames.set(message.tick, message.commands);
         this.drainFrames();
         break;
       case 'desync':
         this.onDesync?.(message.tick, message.serverHash);
+        break;
+      case 'peerDisconnected':
+        this.onPeerDisconnected?.();
+        break;
+      case 'peerReconnected':
+        this.onPeerReconnected?.();
         break;
       case 'peerLeft':
         this.onPeerLeft?.();
@@ -116,7 +147,7 @@ export class NetSimLoop {
    * 目标 tick = 当前已应用 tick + inputDelay（至少为 nextTick）。
    */
   sendInput(commands: readonly Command[]): void {
-    if (!this.started || this.match.result || commands.length === 0) return;
+    if (!this.started || this.inputPaused || this.match.result || commands.length === 0) return;
     const tick = Math.max(this.nextTick, this.match.world.tick + this.inputDelay);
     this.send(
       encodeMessage({

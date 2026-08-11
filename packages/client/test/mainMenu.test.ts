@@ -37,6 +37,12 @@ describe('大厅玩家档案展示', () => {
         <button id="btn-solo-easy"></button>
         <button id="btn-solo-hard"></button>
         <button id="btn-online-quick"></button>
+        <button id="btn-online-room"></button>
+        <div id="online-room-panel" class="is-hidden">
+          <input id="online-room-input" />
+          <div id="online-room-error"></div>
+          <button id="btn-online-room-join"></button>
+        </div>
         <div id="lobby-status"></div>
         <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
           <button data-mode-close></button>
@@ -132,5 +138,33 @@ describe('大厅玩家档案展示', () => {
 
     expect(onStartSolo).toHaveBeenNthCalledWith(1, 'easy');
     expect(onStartSolo).toHaveBeenNthCalledWith(2, 'hard');
+  });
+
+  it('快速匹配与自定义房间分别传递入房参数', () => {
+    const onStartVersus = vi.fn();
+    createMainMenu({
+      onStartSandbox: vi.fn(),
+      onStartSolo: vi.fn(),
+      onStartVersus,
+      onOpenDeckConfig: vi.fn(),
+      onOpenCodex: vi.fn(),
+      getProfile: () => buildProfile(),
+      onRename: vi.fn(),
+    });
+
+    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
+    expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    const input = document.querySelector<HTMLInputElement>('#online-room-input')!;
+    input.value = 'bad room';
+    document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
+    expect(document.querySelector('#online-room-error')?.classList.contains('is-visible')).toBe(true);
+    expect(onStartVersus).toHaveBeenCalledTimes(1);
+
+    input.value = 'room-01';
+    document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
+    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: 'room-01' });
   });
 });

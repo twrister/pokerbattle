@@ -129,21 +129,30 @@ function validateUnitLevels(value: object): string | undefined {
   return undefined;
 }
 
+/** 开发服与正式预览共用：把同源 /ws 转到权威服，前端无需写死双端口。 */
+const wsProxy = {
+  '/ws': { target: 'ws://localhost:8090', ws: true },
+} as const;
+
 export default defineConfig({
   plugins: [unitConfigWritePlugin(), cardFormationWritePlugin()],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
-  // /ws 代理到权威服务器，前端统一连同源路径，避免跨域与双端口硬编码
   server: {
     host: true,
     port: 8081,
     open: true,
-    proxy: {
-      '/ws': { target: 'ws://localhost:8090', ws: true },
-    },
+    proxy: { ...wsProxy },
   },
   // 与 sim 一样直接吃 TS 源码，改协议可热更新
   optimizeDeps: { exclude: ['@pb/sim', '@pb/net'] },
-  // 正式服：预览 build 产物，隐藏单位参数 / 单机运行控制 / 卡组编辑入口
-  preview: { host: true, port: 8080, strictPort: true },
+  // 正式服：预览 build 产物；监听全部网卡并代理 /ws，供局域网经 IP 访问
+  preview: {
+    host: '0.0.0.0',
+    port: 8080,
+    strictPort: true,
+    // 允许机器名访问；纯 IP 默认已放行
+    allowedHosts: true,
+    proxy: { ...wsProxy },
+  },
   build: { target: 'es2022' },
 });

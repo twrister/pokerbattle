@@ -1,10 +1,17 @@
+import { normalizeRoomId, type JoinMode } from '@pb/net';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
+
+/** 大厅发起联机时的入房参数。 */
+export interface VersusJoinRequest {
+  mode: JoinMode;
+  roomId?: string;
+}
 
 export interface MainMenuOptions {
   onStartSandbox: () => void;
   onStartSolo: (difficulty: SoloDifficulty) => void;
-  onStartVersus: () => void;
+  onStartVersus: (request: VersusJoinRequest) => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
   /** 读取当前设备档案，供大厅展示。 */
@@ -32,6 +39,11 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const soloEasyButton = required<HTMLButtonElement>('#btn-solo-easy', root);
   const soloHardButton = required<HTMLButtonElement>('#btn-solo-hard', root);
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
+  const onlineRoomButton = required<HTMLButtonElement>('#btn-online-room', root);
+  const onlineRoomPanel = required<HTMLElement>('#online-room-panel', root);
+  const onlineRoomInput = required<HTMLInputElement>('#online-room-input', root);
+  const onlineRoomError = required<HTMLElement>('#online-room-error', root);
+  const onlineRoomJoinButton = required<HTMLButtonElement>('#btn-online-room-join', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
@@ -57,6 +69,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
     hideDialog(onlineDialog);
+    hideRoomPanel();
   };
 
   /** 关闭改名弹层并清空错误提示。 */
@@ -64,6 +77,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     hideDialog(renameDialog);
     renameError.textContent = '';
     renameError.classList.remove('is-visible');
+  };
+
+  /** 收起自定义房间输入区。 */
+  const hideRoomPanel = (): void => {
+    onlineRoomPanel.classList.add('is-hidden');
+    onlineRoomError.textContent = '';
+    onlineRoomError.classList.remove('is-visible');
   };
 
   /** 把档案写到大厅玩家卡片。 */
@@ -85,12 +105,14 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const openSoloDialog = (): void => {
     closeRenameDialog();
     hideDialog(onlineDialog);
+    hideRoomPanel();
     showDialog(soloDialog);
   };
 
   const openOnlineDialog = (): void => {
     closeRenameDialog();
     hideDialog(soloDialog);
+    hideRoomPanel();
     showDialog(onlineDialog);
   };
 
@@ -115,8 +137,35 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const startSoloHard = (): void => startSolo('hard');
   const startOnlineQuick = (): void => {
     closeModeDialogs();
-    options.onStartVersus();
+    options.onStartVersus({ mode: 'quick' });
   };
+
+  /** 展开房号输入；再次点击可收起。 */
+  const toggleRoomPanel = (): void => {
+    const opening = onlineRoomPanel.classList.contains('is-hidden');
+    if (!opening) {
+      hideRoomPanel();
+      return;
+    }
+    onlineRoomError.textContent = '';
+    onlineRoomError.classList.remove('is-visible');
+    onlineRoomPanel.classList.remove('is-hidden');
+    onlineRoomInput.focus();
+    onlineRoomInput.select();
+  };
+
+  /** 校验房号后发起自定义房间加入。 */
+  const startOnlineRoom = (): void => {
+    const roomId = normalizeRoomId(onlineRoomInput.value);
+    if (!roomId) {
+      onlineRoomError.textContent = '房间号仅支持 1–24 位字母、数字、下划线或短横线';
+      onlineRoomError.classList.add('is-visible');
+      return;
+    }
+    closeModeDialogs();
+    options.onStartVersus({ mode: 'room', roomId });
+  };
+
   const openDeckConfig = (): void => options.onOpenDeckConfig();
   const openCodex = (): void => options.onOpenCodex();
 
@@ -140,6 +189,14 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   soloEasyButton.addEventListener('click', startSoloEasy);
   soloHardButton.addEventListener('click', startSoloHard);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
+  onlineRoomButton.addEventListener('click', toggleRoomPanel);
+  onlineRoomJoinButton.addEventListener('click', startOnlineRoom);
+  onlineRoomInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      startOnlineRoom();
+    }
+  });
   profileButton.addEventListener('click', openRenameDialog);
   renameForm.addEventListener('submit', submitRename);
   for (const button of placeholderButtons) {
@@ -179,6 +236,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       soloEasyButton.removeEventListener('click', startSoloEasy);
       soloHardButton.removeEventListener('click', startSoloHard);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
+      onlineRoomButton.removeEventListener('click', toggleRoomPanel);
+      onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
       profileButton.removeEventListener('click', openRenameDialog);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {

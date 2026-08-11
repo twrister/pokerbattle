@@ -498,6 +498,107 @@
         color: rgba(232, 245, 251, 0.66);
       }
 
+      .online-room-panel {
+        display: grid;
+        gap: calc(10 * var(--hu));
+        margin-top: calc(4 * var(--hu));
+        padding: calc(12 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.22);
+        border-radius: calc(12 * var(--hu));
+        background: rgba(8, 18, 28, 0.55);
+      }
+
+      .online-room-panel.is-hidden {
+        display: none;
+      }
+
+      .online-room-label {
+        color: #c5d7e6;
+        font-size: calc(13 * var(--hu));
+        font-weight: 600;
+      }
+
+      #online-room-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(169, 198, 220, 0.28);
+        border-radius: calc(10 * var(--hu));
+        background: rgba(8, 14, 22, 0.88);
+        color: #f2f5f7;
+        font: inherit;
+        font-size: calc(16 * var(--hu));
+        letter-spacing: 0.04em;
+      }
+
+      #online-room-input:focus {
+        outline: 1px solid rgba(153, 207, 237, 0.55);
+        outline-offset: 1px;
+      }
+
+      #online-room-error {
+        min-height: 1.2em;
+        color: transparent;
+        font-size: calc(12 * var(--hu));
+      }
+
+      #online-room-error.is-visible {
+        color: #ef8b8b;
+      }
+
+      #btn-online-room-join {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 700;
+        border: 1px solid rgba(153, 207, 237, 0.5);
+        background: linear-gradient(135deg, #3d718f, #294c68);
+        color: #f7fbfd;
+      }
+
+      .reconnect-banner {
+        position: fixed;
+        top: max(calc(18 * var(--hu)), env(safe-area-inset-top));
+        left: 50%;
+        z-index: 40;
+        transform: translateX(-50%);
+        max-width: min(92vw, calc(320 * var(--hu)));
+        padding: calc(10 * var(--hu)) calc(14 * var(--hu));
+        border-radius: calc(999 * var(--hu));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(12, 20, 30, 0.88);
+        color: #f4f7fa;
+        font-size: calc(13 * var(--hu));
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-align: center;
+        pointer-events: none;
+        box-shadow: 0 calc(10 * var(--hu)) calc(28 * var(--hu)) rgba(0, 0, 0, 0.35);
+      }
+
+      .reconnect-banner.is-hidden {
+        display: none;
+      }
+
+      .reconnect-banner[data-tone='warn'] {
+        border-color: rgba(240, 196, 104, 0.55);
+        background: rgba(54, 40, 12, 0.9);
+        color: #ffe7b0;
+      }
+
+      .reconnect-banner[data-tone='ok'] {
+        border-color: rgba(120, 214, 156, 0.55);
+        background: rgba(16, 48, 34, 0.9);
+        color: #d8ffe8;
+      }
+
+      .reconnect-banner[data-tone='error'] {
+        border-color: rgba(239, 139, 139, 0.55);
+        background: rgba(56, 22, 22, 0.92);
+        color: #ffd0d0;
+      }
+
       .mode-option-soon {
         border: 1px solid rgba(139, 165, 184, 0.2);
         background: rgba(255, 255, 255, 0.035);
@@ -2541,12 +2642,26 @@
             <div class="mode-dialog-options">
               <button id="btn-online-quick" class="mode-option mode-option-ready" type="button">
                 快速匹配
-                <small>现有联机</small>
+                <small>自动分配房间</small>
               </button>
-              <button class="mode-option mode-option-soon" type="button" data-placeholder="房间">
+              <button id="btn-online-room" class="mode-option mode-option-ready" type="button">
                 房间
-                <small>筹备中</small>
+                <small>输入房号创建或加入</small>
               </button>
+            </div>
+            <div id="online-room-panel" class="online-room-panel is-hidden">
+              <label class="online-room-label" for="online-room-input">房间号</label>
+              <input
+                id="online-room-input"
+                type="text"
+                maxlength="24"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="例如 room-01"
+                aria-label="联机房间号"
+              />
+              <div id="online-room-error" role="alert"></div>
+              <button id="btn-online-room-join" type="button">创建 / 加入</button>
             </div>
           </div>
         </div>

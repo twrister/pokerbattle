@@ -10,6 +10,7 @@
     "build": "pnpm --filter @pb/client build",
     "preview": "pnpm --filter @pb/client preview",
     "official": "pnpm build && pnpm preview",
+    "official:online": "pnpm build && concurrently -k -n preview,server -c cyan,magenta \"pnpm --filter @pb/client preview\" \"pnpm --filter @pb/server start\"",
     "test": "pnpm -r test",
     "check": "pnpm -r check"
   },
