@@ -124,6 +124,28 @@ describe('建筑系统', () => {
     }
   });
 
+  it('左侧偏南接近建筑时攻击站位不翻到建筑右侧', () => {
+    // 复现：主槽偏南时 id%3 邻位曾把左侧弓手摊到东南槽，绕到建筑右方才开火
+    const world = new World(1);
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(29))!;
+    // 再占一个 id，使弓手 id%3===0（邻位 offset=-1），与线上复现一致
+    world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(4), fromFloat(4));
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(14.3));
+    expect(archer.id % 3).toBe(0);
+
+    for (let i = 0; i < 20; i++) world.step();
+    expect(archer.targetId).toBe(base.id);
+    expect(archer.engageSlot).toBeGreaterThanOrEqual(0);
+    // 槽位方向不得指向建筑右侧（+X）
+    const slot = archer.engageSlot;
+    // 3=+X-Y, 2=+X, 1=+X+Y 均为右侧半区
+    expect([1, 2, 3].includes(slot), `slot ${slot} should stay left/south`).toBe(false);
+
+    for (let i = 0; i < 500; i++) world.step();
+    expect(archer.state).toBe(UnitState.Attack);
+    expect(toFloat(archer.pos.x)).toBeLessThanOrEqual(toFloat(base.pos.x));
+  });
+
   it('防御塔在射程内以投射物攻击敌军', () => {
     const world = new World(1);
     // 塔占地 2，中心 (8,10)；敌军放在射程内正北

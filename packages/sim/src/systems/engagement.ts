@@ -31,8 +31,20 @@ const SLOT_DIRS: ReadonlyArray<Readonly<Vec2>> = [
 export const NO_ENGAGE_SLOT = -1;
 
 /**
+ * 邻位槽是否相对来向翻到了左右对侧（例如西南来却分到东南槽）。
+ * 正南/正北槽 dir.x=0，不算翻侧。
+ */
+function crossesApproachSide(slot: number, dx: Fx): boolean {
+  if (dx === 0) return false;
+  const sx = SLOT_DIRS[slot]!.x;
+  if (sx === 0) return false;
+  return (dx < 0 && sx > 0) || (dx > 0 && sx < 0);
+}
+
+/**
  * 按攻击者相对目标的来向选最近的八方向槽位，
  * 再用 id 在邻位做确定性偏移，让同侧围攻自然散开。
+ * 邻位若翻到来向对侧则改走反向邻位（仍对侧则退回主槽），避免左侧单位去右侧站位。
  */
 export function assignEngageSlot(attacker: Unit, target: Unit): number {
   const dx = attacker.pos.x - target.pos.x;
@@ -51,7 +63,12 @@ export function assignEngageSlot(attacker: Unit, target: Unit): number {
 
   // id % 3 → {-1, 0, +1}，把同来向的若干单位摊到相邻槽
   const offset = (attacker.id % 3) - 1;
-  return (best + offset + ENGAGEMENT_SLOT_COUNT) % ENGAGEMENT_SLOT_COUNT;
+  let slot = (best + offset + ENGAGEMENT_SLOT_COUNT) % ENGAGEMENT_SLOT_COUNT;
+  if (crossesApproachSide(slot, dx)) {
+    const alt = (best - offset + ENGAGEMENT_SLOT_COUNT) % ENGAGEMENT_SLOT_COUNT;
+    slot = crossesApproachSide(alt, dx) ? best : alt;
+  }
+  return slot;
 }
 
 /**
