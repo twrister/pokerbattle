@@ -1,4 +1,4 @@
-import { decodeClientMessage } from '@pb/net';
+import { decodeClientMessage, encodeMessage } from '@pb/net';
 import os from 'node:os';
 import { WebSocketServer } from 'ws';
 import { RoomManager, sendRoomError } from './roomManager.js';
@@ -14,10 +14,19 @@ const wss = new WebSocketServer({ host: HOST, port: PORT });
 wss.on('connection', (ws) => {
   let handshaked = false;
   ws.on('message', (data) => {
-    if (handshaked) return;
     const text = typeof data === 'string' ? data : data.toString();
     const message = decodeClientMessage(text);
     if (!message) return;
+
+    // 列表查询不占用握手，便于同一连接先拉列表再 join
+    if (message.type === 'listRooms') {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(encodeMessage({ type: 'roomList', rooms: rooms.listJoinable() }));
+      }
+      return;
+    }
+
+    if (handshaked) return;
 
     if (message.type === 'join') {
       handshaked = true;

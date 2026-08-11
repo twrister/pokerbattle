@@ -4,6 +4,7 @@ import {
   decodeServerMessage,
   encodeMessage,
   type JoinMode,
+  type RoomListEntry,
   type ServerMessage,
 } from '@pb/net';
 import type { Faction, MatchResult } from '@pb/sim';
@@ -14,6 +15,7 @@ export interface VersusSession {
   faction: Faction;
   seat: number;
   roomId: string;
+  roomName: string;
   close: () => void;
 }
 
@@ -21,8 +23,10 @@ export interface ConnectVersusOptions {
   name?: string;
   /** 加入模式；默认 quick。 */
   mode?: JoinMode;
-  /** 自定义房间号；mode=room 时必填。 */
+  /** 已有房间号；mode=room 时必填。 */
   roomId?: string;
+  /** 创建房间时的显示名；mode=create 时可选。 */
+  roomName?: string;
   onStatus?: (text: string) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
@@ -45,6 +49,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
   const status = options.onStatus ?? (() => {});
   const mode: JoinMode = options.mode ?? 'quick';
   const joinRoomId = options.roomId ?? '';
+  const joinRoomName = options.roomName ?? '';
   const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
 
   return new Promise((resolve, reject) => {
@@ -54,6 +59,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
     let faction: Faction | null = null;
     let seat = 0;
     let roomId = '';
+    let roomName = '';
     let reconnectToken = '';
     let activeWs: WebSocket | null = null;
     let reconnectDeadline = 0;
@@ -84,12 +90,13 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
     const finish = (active: NetSimLoop, side: Faction): void => {
       if (settled) return;
       settled = true;
-      status(`对局开始（房间 ${roomId}）`);
+      status(`对局开始（房间 ${roomId}${roomName ? ` · ${roomName}` : ''}）`);
       resolve({
         loop: active,
         faction: side,
         seat,
         roomId,
+        roomName,
         close: () => {
           intentionalClose = true;
           clearReconnectTimer();
@@ -108,13 +115,20 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
 
       ws.addEventListener('open', () => {
         if (kind === 'join') {
-          status(mode === 'quick' ? '已连接，正在匹配对手…' : `已连接，正在加入房间 ${joinRoomId}…`);
+          if (mode === 'quick') {
+            status('已连接，正在匹配对手…');
+          } else if (mode === 'create') {
+            status('已连接，正在创建房间…');
+          } else {
+            status(`已连接，正在加入房间 ${joinRoomId}…`);
+          }
           ws.send(
             encodeMessage({
               type: 'join',
               mode,
               roomId: joinRoomId,
               name: playerName,
+              ...(mode === 'create' && joinRoomName ? { roomName: joinRoomName } : {}),
             }),
           );
           return;
@@ -172,12 +186,14 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
 
         if (message.type === 'welcome') {
           roomId = message.roomId || roomId;
+          roomName = message.roomName || roomName;
           reconnectToken = message.reconnectToken || reconnectToken;
           seat = message.seat;
           faction = message.faction;
 
           if (message.seed === 0) {
-            status(`已入座房间 ${roomId}（${message.faction === 0 ? '蓝方' : '红方'}），等待对手…`);
+            const label = roomName ? `${roomId} · ${roomName}` : roomId;
+            status(`已入座房间 ${label}（${message.faction === 0 ? '蓝方' : '红方'}），等待对手…`);
             return;
           }
 
@@ -261,6 +277,53 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
 
     status('正在连接联机服务…');
     attachSocket(new WebSocket(buildWsUrl()), 'join');
+  });
+}
+
+/**
+ * 轻量拉取可加入房间列表：连上后发 listRooms，收到 roomList 即关闭。
+ */
+export function fetchRoomList(): Promise<RoomListEntry[]> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ws = new WebSocket(buildWsUrl());
+
+    const finish = (rooms: RoomListEntry[]): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(rooms);
+    };
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+      reject(error);
+    };
+
+    ws.addEventListener('open', () => {
+      ws.send(encodeMessage({ type: 'listRooms' }));
+    });
+    ws.addEventListener('error', () => {
+      fail(new Error('无法连接联机服务'));
+    });
+    ws.addEventListener('close', () => {
+      if (!settled) fail(new Error('连接已断开'));
+    });
+    ws.addEventListener('message', (event) => {
+      const message = decodeServerMessage(String(event.data));
+      if (!message || message.type !== 'roomList') return;
+      finish(message.rooms ?? []);
+    });
   });
 }
 

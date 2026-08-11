@@ -169,7 +169,9 @@ function enterBattleSession(mode: BattleMode): () => void {
   battleView.reset();
 
   // 单机走 MatchState，与联机共用出牌/抽牌规则，避免双路径漂移
-  const loop = new SimLoop(20260806, { withMatch: isSolo });
+  // 每局随机 seed（对齐服务端 room.ts），避免开局手牌永远相同
+  const battleSeed = isSolo ? createBattleSeed() : 20260806;
+  const loop = new SimLoop(battleSeed, { withMatch: isSolo });
   if (isSolo) {
     const runtimeDefaults = loadRuntimeDefaults();
     applySoloDrawIntervals(loop.match!, runtimeDefaults);
@@ -178,7 +180,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     loop.curr = takeSnapshot(loop.world);
     loop.prev = loop.curr;
   }
-  const soloBot = isSolo ? new SoloBotController(selectedSoloDifficulty, 20260806) : null;
+  const soloBot = isSolo ? new SoloBotController(selectedSoloDifficulty, battleSeed) : null;
   const removeSoloBot = soloBot
     ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
     : () => {};
@@ -547,15 +549,18 @@ function enterVersus(): () => void {
   // 匹配期仍留在大厅层提示状态；对局开始后再由 runVersusSession 揭开战场
   mainMenu.show();
   setLobbyStatus(
-    joinRequest.mode === 'room'
-      ? `正在加入房间 ${joinRequest.roomId}…`
-      : '正在匹配联机对手…',
+    joinRequest.mode === 'create'
+      ? '正在创建房间…'
+      : joinRequest.mode === 'room'
+        ? `正在加入房间 ${joinRequest.roomId}…`
+        : '正在匹配联机对手…',
   );
 
   void connectVersusSession({
     name: playerProfile.getProfile().displayName,
     mode: joinRequest.mode,
     roomId: joinRequest.roomId,
+    roomName: joinRequest.roomName,
     onStatus: setLobbyStatus,
     onDesync: (tick, serverHash) => {
       console.error(`[desync] tick=${tick} serverHash=${serverHash}`);
@@ -994,6 +999,13 @@ function spawnRandomPk(target: SimLoop, clear: () => void): void {
   const redType = pickRandomUnitType();
   target.enqueue(spawnCommand(Faction.Blue, blueType, fromFloat(x), fromFloat(6)));
   target.enqueue(spawnCommand(Faction.Red, redType, fromFloat(x), fromFloat(ARENA_H - 6)));
+}
+
+/** 生成非 0 对局种子，写法与服务端 room 一致，保证每局手牌可变化。 */
+function createBattleSeed(): number {
+  let seed = (Date.now() ^ (Math.random() * 0x7fffffff)) | 0;
+  if (seed === 0) seed = 0x9e3779b9;
+  return seed;
 }
 
 /** 把运行控制里的秒数换算成 tick，写回单机 MatchState。 */

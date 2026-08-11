@@ -1,12 +1,14 @@
 import {
   encodeMessage,
   normalizeRoomId,
+  normalizeRoomName,
   type ErrorMessage,
   type JoinMessage,
   type RejoinMessage,
   type RoomErrorCode,
+  type RoomListEntry,
 } from '@pb/net';
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { MatchRoom } from './room.js';
 
@@ -29,11 +31,14 @@ export class RoomManager {
 
   /** 处理首条 join：按模式选房或建房，失败时回可展示错误。 */
   join(ws: WebSocket, message: JoinMessage): RoomActionResult {
-    const mode = message.mode === 'quick' ? 'quick' : 'room';
+    const mode = message.mode === 'quick' ? 'quick' : message.mode === 'create' ? 'create' : 'room';
     const name = (message.name || 'player').trim() || 'player';
 
     if (mode === 'quick') {
       return this.joinQuick(ws, name);
+    }
+    if (mode === 'create') {
+      return this.createCustom(ws, name, message.roomName);
     }
     return this.joinCustom(ws, message.roomId ?? '', name);
   }
@@ -55,6 +60,16 @@ export class RoomManager {
     return { ok: true, room };
   }
 
+  /** 列出当前可加入的等待中房间。 */
+  listJoinable(): RoomListEntry[] {
+    const result: RoomListEntry[] = [];
+    for (const room of this.rooms.values()) {
+      if (!room.canJoin) continue;
+      result.push(room.toListEntry());
+    }
+    return result;
+  }
+
   /** 进程退出时释放全部房间定时器。 */
   dispose(): void {
     for (const room of [...this.rooms.values()]) {
@@ -71,7 +86,11 @@ export class RoomManager {
         return { ok: true, room };
       }
     }
-    const room = this.createRoom(this.nextQuickRoomId());
+    const roomId = this.nextNumericRoomId();
+    if (!roomId) {
+      return fail('room_full', '房间号已满，请稍后再试');
+    }
+    const room = this.createRoom(roomId, defaultRoomName(name));
     if (!room.handleJoin(ws, name)) {
       room.dispose();
       return fail('room_full', '暂时无法加入匹配');
@@ -79,17 +98,33 @@ export class RoomManager {
     return { ok: true, room };
   }
 
-  /** 自定义房号：不存在则创建，已开局/满员返回明确错误。 */
+  /** 创建自定义房间：服务端分配三位房号。 */
+  private createCustom(ws: WebSocket, name: string, rawRoomName?: string): RoomActionResult {
+    const roomId = this.nextNumericRoomId();
+    if (!roomId) {
+      return fail('room_full', '房间号已满，请稍后再试');
+    }
+    const roomName = normalizeRoomName(rawRoomName ?? '') ?? defaultRoomName(name);
+    const room = this.createRoom(roomId, roomName);
+    if (!room.handleJoin(ws, name)) {
+      room.dispose();
+      return fail('room_full', '暂时无法创建房间');
+    }
+    return { ok: true, room };
+  }
+
+  /** 加入已有自定义房间；不存在则报错，不再隐式建房。 */
   private joinCustom(ws: WebSocket, rawRoomId: string, name: string): RoomActionResult {
     const roomId = normalizeRoomId(rawRoomId);
     if (!roomId) {
-      return fail('invalid_room', '房间号仅支持 1–24 位字母、数字、下划线或短横线');
+      return fail('invalid_room', '房间号须为 3 位数字');
     }
 
-    let room = this.rooms.get(roomId);
+    const room = this.rooms.get(roomId);
     if (!room) {
-      room = this.createRoom(roomId);
-    } else if (!room.canJoin) {
+      return fail('invalid_room', '房间不存在');
+    }
+    if (!room.canJoin) {
       if (!room.isEmpty) {
         return fail('already_started', '该房间已在对局中或已满');
       }
@@ -103,9 +138,10 @@ export class RoomManager {
   }
 
   /** 创建房间并登记；dispose 时从注册表移除，防止泄漏。 */
-  private createRoom(roomId: string): MatchRoom {
+  private createRoom(roomId: string, roomName: string): MatchRoom {
     const room = new MatchRoom({
       roomId,
+      roomName,
       onDispose: (id) => {
         const current = this.rooms.get(id);
         if (current === room) this.rooms.delete(id);
@@ -115,13 +151,18 @@ export class RoomManager {
     return room;
   }
 
-  /** 生成不易碰撞的快速匹配房号。 */
-  private nextQuickRoomId(): string {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const id = `q-${randomBytes(4).toString('hex')}`;
+  /** 生成空闲的三位数字房号；耗尽返回 null。 */
+  private nextNumericRoomId(): string | null {
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const id = String(randomInt(0, 1000)).padStart(3, '0');
       if (!this.rooms.has(id)) return id;
     }
-    return `q-${Date.now().toString(36)}`;
+    // 随机碰撞过多时线性扫一遍剩余号段
+    for (let n = 0; n < 1000; n += 1) {
+      const id = String(n).padStart(3, '0');
+      if (!this.rooms.has(id)) return id;
+    }
+    return null;
   }
 }
 
@@ -131,6 +172,11 @@ function fail(code: RoomErrorCode, message: string): RoomActionResult {
     ok: false,
     error: { type: 'error', code, message },
   };
+}
+
+/** 默认房间名：玩家名 + 「的房间」。 */
+function defaultRoomName(playerName: string): string {
+  return normalizeRoomName(`${playerName}的房间`) ?? '玩家的房间';
 }
 
 /** 向客户端发送错误消息；连接可能随即关闭。 */

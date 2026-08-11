@@ -1,11 +1,13 @@
-import { normalizeRoomId, type JoinMode } from '@pb/net';
+import { normalizeRoomId, normalizeRoomName, type JoinMode, type RoomListEntry } from '@pb/net';
 import type { PlayerProfile } from '../account/types.js';
+import { fetchRoomList } from '../net/session.js';
 import type { SoloDifficulty } from '@pb/sim';
 
 /** 大厅发起联机时的入房参数。 */
 export interface VersusJoinRequest {
   mode: JoinMode;
   roomId?: string;
+  roomName?: string;
 }
 
 export interface MainMenuOptions {
@@ -41,9 +43,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
   const onlineRoomButton = required<HTMLButtonElement>('#btn-online-room', root);
   const onlineRoomPanel = required<HTMLElement>('#online-room-panel', root);
+  const onlineRoomNameInput = required<HTMLInputElement>('#online-room-name-input', root);
   const onlineRoomInput = required<HTMLInputElement>('#online-room-input', root);
   const onlineRoomError = required<HTMLElement>('#online-room-error', root);
+  const onlineRoomCreateButton = required<HTMLButtonElement>('#btn-online-room-create', root);
   const onlineRoomJoinButton = required<HTMLButtonElement>('#btn-online-room-join', root);
+  const onlineRoomRefreshButton = required<HTMLButtonElement>('#btn-online-room-refresh', root);
+  const onlineRoomList = required<HTMLElement>('#online-room-list', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
@@ -65,6 +71,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     root.querySelectorAll<HTMLButtonElement>('[data-rename-close]'),
   );
 
+  let roomListRequestId = 0;
+
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
@@ -84,6 +92,24 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     onlineRoomPanel.classList.add('is-hidden');
     onlineRoomError.textContent = '';
     onlineRoomError.classList.remove('is-visible');
+  };
+
+  /** 展示房间面板错误文案。 */
+  const showRoomError = (message: string): void => {
+    onlineRoomError.textContent = message;
+    onlineRoomError.classList.add('is-visible');
+  };
+
+  /** 清空房间面板错误。 */
+  const clearRoomError = (): void => {
+    onlineRoomError.textContent = '';
+    onlineRoomError.classList.remove('is-visible');
+  };
+
+  /** 默认房间名：当前展示名 + 「的房间」。 */
+  const defaultRoomName = (): string => {
+    const displayName = options.getProfile().displayName.trim() || '玩家';
+    return `${displayName}的房间`;
   };
 
   /** 把档案写到大厅玩家卡片。 */
@@ -140,26 +166,99 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     options.onStartVersus({ mode: 'quick' });
   };
 
-  /** 展开房号输入；再次点击可收起。 */
+  /** 渲染可加入房间列表。 */
+  const renderRoomList = (rooms: RoomListEntry[]): void => {
+    onlineRoomList.replaceChildren();
+    if (rooms.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'online-room-list-empty';
+      empty.textContent = '暂无可加入房间';
+      onlineRoomList.append(empty);
+      return;
+    }
+
+    for (const room of rooms) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'online-room-list-item';
+      button.setAttribute('role', 'listitem');
+      button.dataset.roomId = room.roomId;
+
+      const id = document.createElement('span');
+      id.className = 'online-room-list-id';
+      id.textContent = room.roomId;
+
+      const name = document.createElement('span');
+      name.className = 'online-room-list-name';
+      name.textContent = room.roomName;
+
+      const count = document.createElement('span');
+      count.className = 'online-room-list-count';
+      count.textContent = `${room.playerCount}/${room.maxPlayers}`;
+
+      button.append(id, name, count);
+      button.addEventListener('click', () => {
+        closeModeDialogs();
+        options.onStartVersus({ mode: 'room', roomId: room.roomId });
+      });
+      onlineRoomList.append(button);
+    }
+  };
+
+  /** 拉取并刷新可加入房间列表。 */
+  const refreshRoomList = (): void => {
+    const requestId = ++roomListRequestId;
+    onlineRoomList.replaceChildren();
+    const loading = document.createElement('div');
+    loading.className = 'online-room-list-empty';
+    loading.textContent = '加载中…';
+    onlineRoomList.append(loading);
+
+    void fetchRoomList()
+      .then((rooms) => {
+        if (requestId !== roomListRequestId) return;
+        renderRoomList(rooms);
+      })
+      .catch((error: unknown) => {
+        if (requestId !== roomListRequestId) return;
+        onlineRoomList.replaceChildren();
+        const failed = document.createElement('div');
+        failed.className = 'online-room-list-empty';
+        failed.textContent = error instanceof Error ? error.message : '加载房间列表失败';
+        onlineRoomList.append(failed);
+      });
+  };
+
+  /** 展开房号面板；再次点击可收起。 */
   const toggleRoomPanel = (): void => {
     const opening = onlineRoomPanel.classList.contains('is-hidden');
     if (!opening) {
       hideRoomPanel();
       return;
     }
-    onlineRoomError.textContent = '';
-    onlineRoomError.classList.remove('is-visible');
+    clearRoomError();
+    if (!onlineRoomNameInput.value.trim()) {
+      onlineRoomNameInput.value = defaultRoomName();
+    }
     onlineRoomPanel.classList.remove('is-hidden');
-    onlineRoomInput.focus();
-    onlineRoomInput.select();
+    onlineRoomNameInput.focus();
+    onlineRoomNameInput.select();
+    refreshRoomList();
   };
 
-  /** 校验房号后发起自定义房间加入。 */
+  /** 用当前房间名创建房间。 */
+  const startOnlineCreate = (): void => {
+    clearRoomError();
+    const roomName = normalizeRoomName(onlineRoomNameInput.value) ?? defaultRoomName();
+    closeModeDialogs();
+    options.onStartVersus({ mode: 'create', roomName });
+  };
+
+  /** 校验三位房号后加入已有房间。 */
   const startOnlineRoom = (): void => {
     const roomId = normalizeRoomId(onlineRoomInput.value);
     if (!roomId) {
-      onlineRoomError.textContent = '房间号仅支持 1–24 位字母、数字、下划线或短横线';
-      onlineRoomError.classList.add('is-visible');
+      showRoomError('房间号须为 3 位数字');
       return;
     }
     closeModeDialogs();
@@ -190,11 +289,19 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   soloHardButton.addEventListener('click', startSoloHard);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
   onlineRoomButton.addEventListener('click', toggleRoomPanel);
+  onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
   onlineRoomJoinButton.addEventListener('click', startOnlineRoom);
+  onlineRoomRefreshButton.addEventListener('click', refreshRoomList);
   onlineRoomInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       startOnlineRoom();
+    }
+  });
+  onlineRoomNameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      startOnlineCreate();
     }
   });
   profileButton.addEventListener('click', openRenameDialog);
@@ -237,7 +344,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       soloHardButton.removeEventListener('click', startSoloHard);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
       onlineRoomButton.removeEventListener('click', toggleRoomPanel);
+      onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);
       onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
+      onlineRoomRefreshButton.removeEventListener('click', refreshRoomList);
       profileButton.removeEventListener('click', openRenameDialog);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {

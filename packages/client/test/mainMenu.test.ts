@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerProfile } from '../src/account/types.js';
 import { createMainMenu } from '../src/ui/mainMenu.js';
 
+vi.mock('../src/net/session.js', () => ({
+  fetchRoomList: vi.fn(async () => [
+    { roomId: '042', roomName: '可加入房', playerCount: 1, maxPlayers: 2 },
+  ]),
+}));
+
 function buildProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
   return {
     schemaVersion: 1,
@@ -39,9 +45,13 @@ describe('大厅玩家档案展示', () => {
         <button id="btn-online-quick"></button>
         <button id="btn-online-room"></button>
         <div id="online-room-panel" class="is-hidden">
+          <input id="online-room-name-input" />
           <input id="online-room-input" />
           <div id="online-room-error"></div>
+          <button id="btn-online-room-create"></button>
           <button id="btn-online-room-join"></button>
+          <button id="btn-online-room-refresh"></button>
+          <div id="online-room-list"></div>
         </div>
         <div id="lobby-status"></div>
         <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
@@ -140,7 +150,7 @@ describe('大厅玩家档案展示', () => {
     expect(onStartSolo).toHaveBeenNthCalledWith(2, 'hard');
   });
 
-  it('快速匹配与自定义房间分别传递入房参数', () => {
+  it('快速匹配、创建与加入分别传递入房参数', async () => {
     const onStartVersus = vi.fn();
     createMainMenu({
       onStartSandbox: vi.fn(),
@@ -157,14 +167,31 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    const nameInput = document.querySelector<HTMLInputElement>('#online-room-name-input')!;
+    expect(nameInput.value).toBe('测试玩家的房间');
+
     const input = document.querySelector<HTMLInputElement>('#online-room-input')!;
-    input.value = 'bad room';
+    input.value = 'bad';
     document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
     expect(document.querySelector('#online-room-error')?.classList.contains('is-visible')).toBe(true);
     expect(onStartVersus).toHaveBeenCalledTimes(1);
 
-    input.value = 'room-01';
+    nameInput.value = '自定义房';
+    document.querySelector<HTMLButtonElement>('#btn-online-room-create')!.click();
+    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'create', roomName: '自定义房' });
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    input.value = '042';
     document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
-    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: 'room-01' });
+    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.online-room-list-item')).not.toBeNull();
+    });
+    document.querySelector<HTMLButtonElement>('.online-room-list-item')!.click();
+    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
   });
 });

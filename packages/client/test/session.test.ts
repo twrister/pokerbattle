@@ -79,14 +79,46 @@ describe('connectVersusSession', () => {
       faction: Faction.Blue,
       seed: 123,
       inputDelay: 4,
-      roomId: 'q-1',
+      roomId: '101',
+      roomName: 'Tester的房间',
       reconnectToken: 'tok-a',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
 
     const session = await promise;
-    expect(session.roomId).toBe('q-1');
+    expect(session.roomId).toBe('101');
+    expect(session.roomName).toBe('Tester的房间');
     expect(session.faction).toBe(Faction.Blue);
+    session.close();
+  });
+
+  it('创建房间会带上 roomName', async () => {
+    const promise = connectVersusSession({
+      mode: 'create',
+      roomName: '自定义房',
+      name: 'Tester',
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({
+      type: 'join',
+      mode: 'create',
+      roomName: '自定义房',
+    });
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 1,
+      inputDelay: 4,
+      roomId: '088',
+      roomName: '自定义房',
+      reconnectToken: 'tok-create',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    const session = await promise;
+    expect(session.roomId).toBe('088');
     session.close();
   });
 
@@ -94,7 +126,7 @@ describe('connectVersusSession', () => {
     const onReconnecting = vi.fn();
     const promise = connectVersusSession({
       mode: 'room',
-      roomId: 'room-1',
+      roomId: '042',
       name: 'Tester',
       onReconnecting,
     });
@@ -106,7 +138,8 @@ describe('connectVersusSession', () => {
       faction: Faction.Red,
       seed: 7,
       inputDelay: 4,
-      roomId: 'room-1',
+      roomId: '042',
+      roomName: '对局房',
       reconnectToken: 'tok-b',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
@@ -135,7 +168,8 @@ describe('connectVersusSession', () => {
       faction: Faction.Blue,
       seed: 42,
       inputDelay: 4,
-      roomId: 'q-9',
+      roomId: '009',
+      roomName: '匹配房',
       reconnectToken: 'tok-c',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
@@ -154,7 +188,7 @@ describe('connectVersusSession', () => {
     await Promise.resolve();
     expect(JSON.parse(rejoinWs.sent[0]!)).toMatchObject({
       type: 'rejoin',
-      roomId: 'q-9',
+      roomId: '009',
       token: 'tok-c',
       lastTick: 1,
     });
@@ -165,7 +199,8 @@ describe('connectVersusSession', () => {
       faction: Faction.Blue,
       seed: 42,
       inputDelay: 4,
-      roomId: 'q-9',
+      roomId: '009',
+      roomName: '匹配房',
       reconnectToken: 'tok-c',
     });
     rejoinWs.pushServer({ type: 'frame', tick: 2, commands: [] });

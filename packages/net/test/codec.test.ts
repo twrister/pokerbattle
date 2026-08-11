@@ -5,6 +5,7 @@ import {
   decodeServerMessage,
   encodeMessage,
   normalizeRoomId,
+  normalizeRoomName,
 } from '../src/index.js';
 
 describe('协议编解码', () => {
@@ -24,29 +25,34 @@ describe('协议编解码', () => {
     });
   });
 
-  it('可编解码 join / rejoin / error / welcome 扩展字段', () => {
+  it('可编解码 join / rejoin / listRooms / error / welcome 扩展字段', () => {
     const join = encodeMessage({
       type: 'join',
-      mode: 'room',
-      roomId: 'room-01',
+      mode: 'create',
+      roomId: '',
       name: 'Alice',
+      roomName: 'Alice的房间',
     });
     expect(decodeClientMessage(join)).toEqual({
       type: 'join',
-      mode: 'room',
-      roomId: 'room-01',
+      mode: 'create',
+      roomId: '',
       name: 'Alice',
+      roomName: 'Alice的房间',
     });
+
+    const listRooms = encodeMessage({ type: 'listRooms' });
+    expect(decodeClientMessage(listRooms)).toEqual({ type: 'listRooms' });
 
     const rejoin = encodeMessage({
       type: 'rejoin',
-      roomId: 'room-01',
+      roomId: '042',
       token: 'abc',
       lastTick: 12,
     });
     expect(decodeClientMessage(rejoin)).toEqual({
       type: 'rejoin',
-      roomId: 'room-01',
+      roomId: '042',
       token: 'abc',
       lastTick: 12,
     });
@@ -57,13 +63,24 @@ describe('协议编解码', () => {
       faction: Faction.Blue,
       seed: 99,
       inputDelay: 4,
-      roomId: 'room-01',
+      roomId: '042',
+      roomName: 'Alice的房间',
       reconnectToken: 'tok',
     });
     expect(decodeServerMessage(welcome)).toMatchObject({
       type: 'welcome',
-      roomId: 'room-01',
+      roomId: '042',
+      roomName: 'Alice的房间',
       reconnectToken: 'tok',
+    });
+
+    const roomList = encodeMessage({
+      type: 'roomList',
+      rooms: [{ roomId: '042', roomName: 'Alice的房间', playerCount: 1, maxPlayers: 2 }],
+    });
+    expect(decodeServerMessage(roomList)).toEqual({
+      type: 'roomList',
+      rooms: [{ roomId: '042', roomName: 'Alice的房间', playerCount: 1, maxPlayers: 2 }],
     });
 
     const error = encodeMessage({
@@ -78,9 +95,17 @@ describe('协议编解码', () => {
     });
   });
 
-  it('规范化房号并拒绝非法字符', () => {
-    expect(normalizeRoomId('  Room_01  ')).toBe('Room_01');
-    expect(normalizeRoomId('bad room')).toBeNull();
+  it('规范化三位房号并拒绝非法值', () => {
+    expect(normalizeRoomId('  042  ')).toBe('042');
+    expect(normalizeRoomId('999')).toBe('999');
+    expect(normalizeRoomId('42')).toBeNull();
+    expect(normalizeRoomId('room-01')).toBeNull();
     expect(normalizeRoomId('')).toBeNull();
+  });
+
+  it('规范化房间名并裁剪超长', () => {
+    expect(normalizeRoomName('  测试房间  ')).toBe('测试房间');
+    expect(normalizeRoomName('')).toBeNull();
+    expect(normalizeRoomName('a'.repeat(30))).toHaveLength(24);
   });
 });

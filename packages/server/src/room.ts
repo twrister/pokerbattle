@@ -4,6 +4,7 @@ import {
   RECONNECT_TIMEOUT_MS,
   encodeMessage,
   type ClientMessage,
+  type RoomListEntry,
   type ServerMessage,
 } from '@pb/net';
 import { MatchState, TICK_RATE, type Command, type Faction } from '@pb/sim';
@@ -14,6 +15,7 @@ import { factionForSeat, validateSeatCommand } from './validate.js';
 const STEP_MS = 1000 / TICK_RATE;
 /** 断线补帧至少覆盖重连窗口，略留余量避免边界丢帧。 */
 const MAX_FRAME_HISTORY = Math.ceil((RECONNECT_TIMEOUT_MS / 1000) * TICK_RATE) + TICK_RATE;
+const MAX_PLAYERS = 2;
 
 interface Seat {
   ws: WebSocket | null;
@@ -31,6 +33,7 @@ interface Seat {
 
 export interface MatchRoomOptions {
   roomId: string;
+  roomName: string;
   /** 房间变空或对局因超时结束并清场后回调，供管理器回收。 */
   onDispose?: (roomId: string) => void;
 }
@@ -41,6 +44,7 @@ export interface MatchRoomOptions {
  */
 export class MatchRoom {
   readonly roomId: string;
+  readonly roomName: string;
   private readonly onDispose?: (roomId: string) => void;
   private readonly seats: Array<Seat | null> = [null, null];
   private match: MatchState | null = null;
@@ -58,6 +62,7 @@ export class MatchRoom {
 
   constructor(options: MatchRoomOptions) {
     this.roomId = options.roomId;
+    this.roomName = options.roomName;
     this.onDispose = options.onDispose;
   }
 
@@ -69,6 +74,21 @@ export class MatchRoom {
   /** 无人在座（含离线席）时视为空房。 */
   get isEmpty(): boolean {
     return this.seats.every((seat) => seat === null);
+  }
+
+  /** 已占用席位数（含断线保留席）。 */
+  get playerCount(): number {
+    return this.seats.filter((seat) => seat !== null).length;
+  }
+
+  /** 供大厅列表展示的摘要。 */
+  toListEntry(): RoomListEntry {
+    return {
+      roomId: this.roomId,
+      roomName: this.roomName,
+      playerCount: this.playerCount,
+      maxPlayers: MAX_PLAYERS,
+    };
   }
 
   /** 处理新连接的 join；成功返回 true，满员/已开局返回 false。 */
@@ -365,6 +385,7 @@ export class MatchRoom {
       seed,
       inputDelay: DEFAULT_INPUT_DELAY,
       roomId: this.roomId,
+      roomName: this.roomName,
       reconnectToken: seat.reconnectToken,
     });
   }

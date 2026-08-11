@@ -184,4 +184,20 @@ describe('牌型兵种阵型配置', () => {
       );
     }
   });
+
+  it('单张大小王分别映射为法师与大法师，且不能走对子绕过王炸', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
+      getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id);
+
+    expect(formationFor(['single'], ['joker-black'], 'single_rank')?.units).toEqual([
+      { typeId: 'hero_mage', level: 1, count: 1 },
+    ]);
+    expect(formationFor(['single'], ['joker-red'], 'single_rank')?.units).toEqual([
+      { typeId: 'hero_archmage', level: 1, count: 1 },
+    ]);
+    // 数字牌方案对王牌不适用；王炸对子也不应展开为 rank 兵种。
+    expect(formationFor(['single'], ['joker-black'], 'single_grunt')).toBeUndefined();
+    expect(formationFor(['pair'], ['joker-black', 'joker-red'], 'pair_rank')).toBeUndefined();
+  });
 });

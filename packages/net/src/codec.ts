@@ -13,6 +13,7 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
   if (
     type === 'join' ||
     type === 'rejoin' ||
+    type === 'listRooms' ||
     type === 'input' ||
     type === 'hash' ||
     type === 'ping'
@@ -29,6 +30,7 @@ export function decodeServerMessage(raw: string): ServerMessage | null {
   const type = (parsed as { type?: unknown }).type;
   if (
     type === 'welcome' ||
+    type === 'roomList' ||
     type === 'start' ||
     type === 'frame' ||
     type === 'desync' ||

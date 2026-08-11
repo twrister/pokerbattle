@@ -115,7 +115,8 @@ export function resolveHandUnits(
   }
 
   // 王炸只走独立的 rocket 规则，不能借由同时命中的「对子」绕过映射。
-  if (cards.some((card) => card.joker)) return null;
+  // 单张大小王仍走 rank 兵种（小王→法师，大王→大法师）。
+  if (cards.some((card) => card.joker) && category !== 'single') return null;
   const numeric = isNumberRank(top);
   if (numeric && choice !== 'melee' && choice !== 'ranged') return null;
   if (!numeric && choice !== 'rank') return null;

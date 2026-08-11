@@ -6,8 +6,10 @@ export const DEFAULT_INPUT_DELAY = 4;
 export const HASH_INTERVAL_TICKS = 20;
 /** 对局中断线后保留席位的毫秒数；超时才判对手离开。 */
 export const RECONNECT_TIMEOUT_MS = 30_000;
-/** 自定义房号允许的字符与长度，前后端共用同一校验。 */
-export const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,24}$/;
+/** 房号为三位数字，前后端共用同一校验。 */
+export const ROOM_ID_PATTERN = /^\d{3}$/;
+/** 房间名最大长度（字符）。 */
+export const ROOM_NAME_MAX_LENGTH = 24;
 
 /** 规范化并校验房号；非法时返回 null。 */
 export function normalizeRoomId(raw: string): string | null {
@@ -16,16 +18,33 @@ export function normalizeRoomId(raw: string): string | null {
   return id;
 }
 
-/** 加入方式：快速匹配由服务端分房；自定义房间按房号创建或加入。 */
-export type JoinMode = 'quick' | 'room';
+/** 规范化房间名；空串返回 null，超长则裁剪。 */
+export function normalizeRoomName(raw: string): string | null {
+  const name = raw.trim();
+  if (!name) return null;
+  return name.slice(0, ROOM_NAME_MAX_LENGTH);
+}
+
+/** 加入方式：快速匹配 / 加入已有房 / 创建新房。 */
+export type JoinMode = 'quick' | 'room' | 'create';
+
+/** 可加入房间的列表摘要。 */
+export interface RoomListEntry {
+  roomId: string;
+  roomName: string;
+  playerCount: number;
+  maxPlayers: number;
+}
 
 /** C→S：加入房间。 */
 export interface JoinMessage {
   type: 'join';
-  /** quick 时可为空；room 模式必须是合法房号。 */
+  /** quick/create 时可为空；room 模式必须是合法房号。 */
   roomId: string;
   name: string;
   mode?: JoinMode;
+  /** create 时可带；空则由服务端按玩家名生成默认房间名。 */
+  roomName?: string;
 }
 
 /** C→S：凭令牌恢复已断开的席位，并声明本地已确认的最后 tick。 */
@@ -34,6 +53,11 @@ export interface RejoinMessage {
   roomId: string;
   token: string;
   lastTick: number;
+}
+
+/** C→S：查询当前可加入房间列表（不占用 join 握手）。 */
+export interface ListRoomsMessage {
+  type: 'listRooms';
 }
 
 /** C→S：上报某一逻辑 tick 的输入（通常为当前可见 tick + inputDelay）。 */
@@ -59,6 +83,7 @@ export interface PingMessage {
 export type ClientMessage =
   | JoinMessage
   | RejoinMessage
+  | ListRoomsMessage
   | InputMessage
   | HashMessage
   | PingMessage;
@@ -78,7 +103,14 @@ export interface WelcomeMessage {
   seed: number;
   inputDelay: number;
   roomId: string;
+  roomName: string;
   reconnectToken: string;
+}
+
+/** S→C：可加入房间列表。 */
+export interface RoomListMessage {
+  type: 'roomList';
+  rooms: RoomListEntry[];
 }
 
 /** S→C：对局开始，告知首个逻辑 tick。 */
@@ -139,6 +171,7 @@ export interface ErrorMessage {
 
 export type ServerMessage =
   | WelcomeMessage
+  | RoomListMessage
   | StartMessage
   | FrameMessage
   | DesyncMessage

@@ -57,24 +57,76 @@ describe('RoomManager 多房间', () => {
     vi.useRealTimers();
   });
 
-  it('同房两人开局，第三人被拒绝', () => {
+  it('创建房间得三位房号，同房两人开局，第三人被拒绝', () => {
     const manager = new RoomManager();
     const a = new FakeWebSocket();
     const b = new FakeWebSocket();
     const c = new FakeWebSocket();
 
-    expect(manager.join(a as never, { type: 'join', mode: 'room', roomId: 'alpha', name: 'A' }).ok).toBe(
-      true,
-    );
-    expect(manager.join(b as never, { type: 'join', mode: 'room', roomId: 'alpha', name: 'B' }).ok).toBe(
-      true,
-    );
-    const third = manager.join(c as never, { type: 'join', mode: 'room', roomId: 'alpha', name: 'C' });
+    const created = manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: '测试房间',
+    });
+    expect(created.ok).toBe(true);
+    const roomId = welcomeRoom(a);
+    expect(roomId).toMatch(/^\d{3}$/);
+    expect(latestWelcome(a).roomName).toBe('测试房间');
+
+    expect(manager.join(b as never, { type: 'join', mode: 'room', roomId, name: 'B' }).ok).toBe(true);
+    const third = manager.join(c as never, { type: 'join', mode: 'room', roomId, name: 'C' });
     expect(third.ok).toBe(false);
     expect(third.error?.code).toBe('already_started');
 
     expect(a.messages().some((m) => m.type === 'start')).toBe(true);
     expect(b.messages().some((m) => m.type === 'start')).toBe(true);
+    manager.dispose();
+  });
+
+  it('加入不存在的房间会失败，不会隐式建房', () => {
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const result = manager.join(a as never, { type: 'join', mode: 'room', roomId: '042', name: 'A' });
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('invalid_room');
+    expect(manager.size).toBe(0);
+    manager.dispose();
+  });
+
+  it('列表只包含可加入的等待中房间', () => {
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    const c = new FakeWebSocket();
+
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: '等待房',
+    });
+    const waitingId = welcomeRoom(a);
+    manager.join(b as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'B',
+      roomName: '满员房',
+    });
+    const fullId = welcomeRoom(b);
+    manager.join(c as never, { type: 'join', mode: 'room', roomId: fullId, name: 'C' });
+
+    const list = manager.listJoinable();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      roomId: waitingId,
+      roomName: '等待房',
+      playerCount: 1,
+      maxPlayers: 2,
+    });
     manager.dispose();
   });
 
@@ -94,6 +146,7 @@ describe('RoomManager 多房间', () => {
     const roomB = welcomeRoom(b);
     const roomC = welcomeRoom(c);
     const roomD = welcomeRoom(d);
+    expect(roomA).toMatch(/^\d{3}$/);
     expect(roomA).toBe(roomB);
     expect(roomC).toBe(roomD);
     expect(roomA).not.toBe(roomC);
@@ -104,7 +157,13 @@ describe('RoomManager 多房间', () => {
   it('等待者离开后空房会被回收', () => {
     const manager = new RoomManager();
     const a = new FakeWebSocket();
-    manager.join(a as never, { type: 'join', mode: 'room', roomId: 'lonely', name: 'A' });
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: 'lonely',
+    });
     expect(manager.size).toBe(1);
     a.close();
     expect(manager.size).toBe(0);
@@ -119,10 +178,24 @@ describe('RoomManager 多房间', () => {
     const b1 = new FakeWebSocket();
     const b2 = new FakeWebSocket();
 
-    manager.join(a1 as never, { type: 'join', mode: 'room', roomId: 'A', name: 'A1' });
-    manager.join(a2 as never, { type: 'join', mode: 'room', roomId: 'A', name: 'A2' });
-    manager.join(b1 as never, { type: 'join', mode: 'room', roomId: 'B', name: 'B1' });
-    manager.join(b2 as never, { type: 'join', mode: 'room', roomId: 'B', name: 'B2' });
+    manager.join(a1 as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A1',
+      roomName: 'A房',
+    });
+    const roomA = welcomeRoom(a1);
+    manager.join(a2 as never, { type: 'join', mode: 'room', roomId: roomA, name: 'A2' });
+    manager.join(b1 as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'B1',
+      roomName: 'B房',
+    });
+    const roomB = welcomeRoom(b1);
+    manager.join(b2 as never, { type: 'join', mode: 'room', roomId: roomB, name: 'B2' });
 
     const before = countFrames(b1);
     a1.close();
@@ -140,7 +213,7 @@ describe('MatchRoom 断线重连', () => {
 
   it('断线期间继续 tick，重连后按 lastTick 补帧', () => {
     vi.useFakeTimers();
-    const room = new MatchRoom({ roomId: 'resume' });
+    const room = new MatchRoom({ roomId: '001', roomName: '重连房' });
     const a = new FakeWebSocket();
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
@@ -170,7 +243,7 @@ describe('MatchRoom 断线重连', () => {
 
   it('错误令牌无法重连，超时后 peerLeft', () => {
     vi.useFakeTimers();
-    const room = new MatchRoom({ roomId: 'timeout' });
+    const room = new MatchRoom({ roomId: '002', roomName: '超时房' });
     const a = new FakeWebSocket();
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
