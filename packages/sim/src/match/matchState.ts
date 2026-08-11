@@ -8,6 +8,7 @@ import {
 import {
   findFormationById,
   getFormationBuildingTypeId,
+  isGiantBombFormation,
   isBuildingOnlyFormation,
   resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
@@ -290,6 +291,10 @@ export class MatchState {
 
     const anchorX = toFloat(cmd.x);
     const anchorY = toFloat(cmd.y);
+
+    if (isGiantBombFormation(formation)) {
+      return anchorX >= 0 && anchorX <= toFloat(ARENA_WIDTH) && anchorY >= 0 && anchorY <= toFloat(ARENA_HEIGHT);
+    }
 
     if (isBuildingOnlyFormation(formation)) {
       const typeId = getFormationBuildingTypeId(formation);

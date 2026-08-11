@@ -2,6 +2,7 @@ import { type Command, CommandKind } from '../commands.js';
 import {
   findFormationById,
   getFormationBuildingTypeId,
+  isGiantBombFormation,
   isBuildingOnlyFormation,
   resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
@@ -41,6 +42,10 @@ function applyPlayFormation(
     const typeId = getFormationBuildingTypeId(formation);
     if (!typeId) return;
     world.spawnBuilding(command.faction, typeId, command.x, command.y);
+    return;
+  }
+  if (isGiantBombFormation(formation)) {
+    world.spawnGiantBomb(command.faction, command.x, command.y);
     return;
   }
 

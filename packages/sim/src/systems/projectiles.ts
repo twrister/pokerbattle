@@ -1,9 +1,11 @@
 import { type Fx, div, mul, toFloat } from '../math/fixed.js';
 import { distSq, lengthOf } from '../math/vec2.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
+import { isBuildingConfig } from '../config/units.js';
 import { isAlive, type Faction } from '../entity/unit.js';
 import type { Projectile } from '../entity/projectile.js';
 import type { World } from '../world.js';
+import { distSqToBuildingFootprint } from './combatRange.js';
 
 /** 复用范围弹查询结果，避免爆炸时创建临时数组。 */
 const neighbors: number[] = [];
@@ -18,8 +20,17 @@ export function updateProjectiles(world: World): void {
   for (const projectile of world.projectiles) {
     if (projectile.dead) continue;
 
+    if (projectile.landed) {
+      projectile.fuseTicks -= 1;
+      if (projectile.fuseTicks <= 0) {
+        resolveGiantBomb(world, projectile);
+        projectile.dead = true;
+      }
+      continue;
+    }
+
     const target = world.getUnit(projectile.targetId);
-    if (isAlive(target)) {
+    if (!projectile.giantBomb && isAlive(target)) {
       projectile.impactPos.x = target.pos.x;
       projectile.impactPos.y = target.pos.y;
       projectile.targetRadius = target.config.radius;
@@ -37,6 +48,11 @@ export function updateProjectiles(world: World): void {
     // 这一帧能飞进目标的碰撞圈就算命中，避免高速弹穿过目标
     if (gap <= step + projectile.targetRadius) {
       projectile.height = projectile.endHeight;
+      if (projectile.giantBomb) {
+        projectile.landed = true;
+        projectile.fuseTicks = 20;
+        continue;
+      }
       if (projectile.aoeRadius > 0) {
         resolveProjectileAoe(
           world,
@@ -59,6 +75,26 @@ export function updateProjectiles(world: World): void {
     // 按剩余水平距离插值高度：打地面时从出生高度落到 0
     updateProjectileHeight(projectile, gap - step);
   }
+}
+
+/** 巨型炸弹在落地引信结束后，对半径内所有单位和建筑造成无差别伤害。 */
+function resolveGiantBomb(world: World, projectile: Projectile): void {
+  const radiusSq = mul(projectile.aoeRadius, projectile.aoeRadius);
+  for (const unit of world.units) {
+    if (!isAlive(unit)) continue;
+    const inside = isBuildingConfig(unit.config)
+      ? distSqToBuildingFootprint(projectile.impactPos.x, projectile.impactPos.y, unit) <= radiusSq
+      : distSq(projectile.impactPos.x, projectile.impactPos.y, unit.pos.x, unit.pos.y) <= radiusSq;
+    if (!inside) continue;
+    unit.hp -= projectile.damage;
+    unit.aoeHitFxLeft = 2;
+  }
+  world.spawnExplosionEffect(
+    projectile.impactPos.x,
+    projectile.impactPos.y,
+    projectile.aoeRadius,
+    'giant_bomb',
+  );
 }
 
 /**

@@ -6,6 +6,7 @@ export type UnitTypeId =
   | 'melee_guard'
   | 'ranged_archer'
   | 'ranged_chariot'
+  | 'giant_bomb'
   | 'melee_cavalry'
   | 'hero_king'
   | 'hero_queen'

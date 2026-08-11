@@ -41,6 +41,8 @@ export interface ExplosionEffect {
   readonly x: Fx;
   readonly y: Fx;
   readonly radius: Fx;
+  /** 普通爆炸或巨型炸弹的专属爆炸序列帧。 */
+  readonly kind: 'normal' | 'giant_bomb';
   remainingTicks: number;
   readonly totalTicks: number;
 }

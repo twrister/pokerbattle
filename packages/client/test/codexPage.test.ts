@@ -19,7 +19,7 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(13);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(14);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toContain('20%');
@@ -44,10 +44,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(3);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(4);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['战车', '巨龙', '防御塔']);
+    ).toEqual(['战车', '巨型炸弹', '巨龙', '防御塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
 
     categoryNamed('召唤物')?.click();

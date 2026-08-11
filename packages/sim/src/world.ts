@@ -27,7 +27,7 @@ import {
   type ExplosionEffect,
   type HealEffect,
 } from './entity/effect.js';
-import { type Faction, type Unit, createUnit } from './entity/unit.js';
+import { Faction, type Unit, createUnit } from './entity/unit.js';
 import {
   buildingCellRange,
   isBuildingRectInsideArena,
@@ -270,6 +270,45 @@ export class World {
     return projectile;
   }
 
+  /**
+   * 从己方主堡向指定落点投放巨型炸弹。
+   * 主堡不存在时使用己方场边中央，保证沙盒与测试环境也能确定性运行。
+   */
+  spawnGiantBomb(faction: Faction, targetX: Fx, targetY: Fx): Projectile {
+    const config = getUnitConfig('giant_bomb');
+    const base = this.units.find(
+      (unit) => unit.faction === faction && unit.typeId === 'building_base' && !unit.dead,
+    );
+    const startX = base?.pos.x ?? ARENA_WIDTH / 2;
+    const startY = base?.pos.y ?? (faction === Faction.Blue ? 0 : ARENA_HEIGHT);
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const speed = config.attack.kind === 'projectile_aoe' ? config.attack.speed : fromFloat(12);
+    const radius = config.attack.kind === 'projectile_aoe' ? config.attack.aoeRadius : fromFloat(8);
+    const projectile = createProjectile(
+      this.nextEntityId++,
+      faction,
+      startX,
+      startY,
+      -1,
+      targetX,
+      targetY,
+      0,
+      config.damage,
+      speed,
+      radius,
+      GROUND_PROJECTILE_HEIGHT,
+      0,
+      lengthOf(dx, dy),
+      BOMB_ARC_APEX * 2,
+      'explosion',
+      'bomb',
+      true,
+    );
+    this.projectiles.push(projectile);
+    return projectile;
+  }
+
   /** 记录一次单体受疗反馈，供快照层在目标脚底播放短暂特效。 */
   spawnHealEffect(x: Fx, y: Fx, radius: Fx): void {
     const totalTicks = 12;
@@ -310,8 +349,13 @@ export class World {
     });
   }
 
-  /** 记录一次炸弹兵爆炸序列帧，供快照层按进度播帧。 */
-  spawnExplosionEffect(x: Fx, y: Fx, radius: Fx): void {
+  /** 记录一次爆炸序列帧，供快照层按进度播放对应类型素材。 */
+  spawnExplosionEffect(
+    x: Fx,
+    y: Fx,
+    radius: Fx,
+    kind: ExplosionEffect['kind'] = 'normal',
+  ): void {
     // 约 0.5 秒，对齐 8 帧 @16fps 的爆炸素材时长
     const totalTicks = 10;
     this.explosionEffects.push({
@@ -319,6 +363,7 @@ export class World {
       x,
       y,
       radius,
+      kind,
       remainingTicks: totalTicks,
       totalTicks,
     });
@@ -434,7 +479,11 @@ export class World {
       h = mix(h, projectile.impactPos.x);
       h = mix(h, projectile.impactPos.y);
       h = mix(h, projectile.targetRadius);
+      h = mix(h, projectile.damage);
       h = mix(h, projectile.aoeRadius);
+      h = mix(h, projectile.fuseTicks);
+      h = mix(h, projectile.landed ? 1 : 0);
+      h = mix(h, projectile.giantBomb ? 1 : 0);
     }
     for (const effect of this.healEffects) {
       h = mix(h, effect.id);
@@ -455,6 +504,7 @@ export class World {
       h = mix(h, effect.id);
       h = mix(h, effect.x);
       h = mix(h, effect.y);
+      h = mix(h, effect.kind === 'giant_bomb' ? 1 : 0);
       h = mix(h, effect.remainingTicks);
     }
     return h >>> 0;

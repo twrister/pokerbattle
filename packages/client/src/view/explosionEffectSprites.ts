@@ -11,6 +11,19 @@ export const EXPLOSION_FRAME_URLS = [
   'effects/explode1/7.png',
   'effects/explode1/8.png',
 ] as const;
+/** 巨型炸弹专用的爆炸2 序列帧。 */
+export const GIANT_BOMB_EXPLOSION_FRAME_URLS = [
+  'effects/giant-explode2/1.png',
+  'effects/giant-explode2/2.png',
+  'effects/giant-explode2/3.png',
+  'effects/giant-explode2/4.png',
+  'effects/giant-explode2/5.png',
+  'effects/giant-explode2/6.png',
+  'effects/giant-explode2/7.png',
+  'effects/giant-explode2/8.png',
+] as const;
+
+export type ExplosionSpriteKind = 'normal' | 'giant_bomb';
 
 export const EXPLOSION_FRAME_COUNT = EXPLOSION_FRAME_URLS.length;
 /** 单帧像素尺寸，用于面片宽高比 */
@@ -34,7 +47,7 @@ export function getExplosionGeometry(): THREE.PlaneGeometry {
 /**
  * 为单次爆炸视图创建材质；Node 测试无 DOM 时返回不可见材质。
  */
-export function createExplosionMaterial(): THREE.MeshBasicMaterial {
+export function createExplosionMaterial(kind: ExplosionSpriteKind = 'normal'): THREE.MeshBasicMaterial {
   const material = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
@@ -50,10 +63,11 @@ export function createExplosionMaterial(): THREE.MeshBasicMaterial {
   if (typeof document === 'undefined') return material;
 
   // 预热全部帧，首帧就绪后立刻可见
-  for (const url of EXPLOSION_FRAME_URLS) {
+  const frameUrls = getExplosionFrameUrls(kind);
+  for (const url of frameUrls) {
     bindExplosionTexture(url, () => {});
   }
-  bindExplosionTexture(EXPLOSION_FRAME_URLS[0]!, (shared) => {
+  bindExplosionTexture(frameUrls[0]!, (shared) => {
     const texture = shared.clone();
     texture.needsUpdate = true;
     material.map = texture;
@@ -68,13 +82,14 @@ export function createExplosionMaterial(): THREE.MeshBasicMaterial {
 export function applyExplosionFrame(
   material: THREE.MeshBasicMaterial,
   progress: number,
+  kind: ExplosionSpriteKind = 'normal',
 ): void {
   if (typeof document === 'undefined') return;
   const frame = Math.min(
-    EXPLOSION_FRAME_COUNT - 1,
-    Math.max(0, Math.floor(progress * EXPLOSION_FRAME_COUNT)),
+    getExplosionFrameUrls(kind).length - 1,
+    Math.max(0, Math.floor(progress * getExplosionFrameUrls(kind).length)),
   );
-  const url = EXPLOSION_FRAME_URLS[frame]!;
+  const url = getExplosionFrameUrls(kind)[frame]!;
   bindExplosionTexture(url, (shared) => {
     const prev = material.map;
     if (prev && prev.image === shared.image) return;
@@ -85,6 +100,11 @@ export function applyExplosionFrame(
     material.needsUpdate = true;
     prev?.dispose();
   });
+}
+
+/** 返回指定爆炸效果应加载的序列帧路径。 */
+function getExplosionFrameUrls(kind: ExplosionSpriteKind): readonly string[] {
+  return kind === 'giant_bomb' ? GIANT_BOMB_EXPLOSION_FRAME_URLS : EXPLOSION_FRAME_URLS;
 }
 
 /** 加载共享母贴图；就绪后回调。 */

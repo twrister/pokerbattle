@@ -15,8 +15,9 @@ export class ExplosionEffectView {
   readonly group = new THREE.Group();
 
   private readonly mesh: THREE.Mesh;
-  private readonly material: THREE.MeshBasicMaterial;
+  private material: THREE.MeshBasicMaterial;
   private lastFrame = -1;
+  private kind: ExplosionEffectSnapshot['kind'] = 'normal';
 
   constructor() {
     this.material = createExplosionMaterial();
@@ -28,6 +29,13 @@ export class ExplosionEffectView {
 
   /** 根据快照进度切帧；面片立在落点、中心贴地，并始终面向相机。 */
   update(effect: ExplosionEffectSnapshot, camera: THREE.Camera): void {
+    if (effect.kind !== this.kind) {
+      this.kind = effect.kind;
+      this.mesh.material = createExplosionMaterial(effect.kind);
+      this.material.dispose();
+      this.material = this.mesh.material as THREE.MeshBasicMaterial;
+      this.lastFrame = -1;
+    }
     const progress = Math.max(0, Math.min(1, effect.progress));
     // group.y=0：几何中心锚在地面，爆炸核心落在地面高度
     this.group.position.set(toSceneX(effect.x), 0, toSceneZ(effect.y));
@@ -40,7 +48,7 @@ export class ExplosionEffectView {
     const frame = Math.min(7, Math.max(0, Math.floor(progress * 8)));
     if (frame !== this.lastFrame) {
       this.lastFrame = frame;
-      applyExplosionFrame(this.material, progress);
+      applyExplosionFrame(this.material, progress, effect.kind);
     }
 
     // 末段略淡出，避免硬切消失

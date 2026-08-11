@@ -82,6 +82,7 @@ export {
   getFormationBuildingTypeId,
   getFormationsFor,
   isBuildingOnlyFormation,
+  isGiantBombFormation,
   resolveFormationSpawns,
   resolveFormationSpawnsFx,
   validateBuildingOnlyRows,

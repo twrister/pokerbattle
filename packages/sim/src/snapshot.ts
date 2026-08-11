@@ -46,6 +46,10 @@ export interface ProjectileSnapshot {
   height: number;
   /** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
   visual: 'orb' | 'bomb' | 'arrow';
+  /** 巨型炸弹已落地引信中，客户端显示闪烁。 */
+  landed: boolean;
+  /** 巨型炸弹使用更大的弹体比例。 */
+  giantBomb: boolean;
 }
 
 /** 女王单体治疗落在受疗单位上的反馈效果。 */
@@ -76,6 +80,7 @@ export interface ExplosionEffectSnapshot {
   x: number;
   y: number;
   radius: number;
+  kind: 'normal' | 'giant_bomb';
   progress: number;
 }
 
@@ -130,6 +135,8 @@ export function takeSnapshot(world: World): Snapshot {
       y: toFloat(p.pos.y),
       height: p.height,
       visual: p.visual,
+      landed: p.landed,
+      giantBomb: p.giantBomb,
     });
   }
 
@@ -165,6 +172,7 @@ export function takeSnapshot(world: World): Snapshot {
       x: toFloat(effect.x),
       y: toFloat(effect.y),
       radius: toFloat(effect.radius),
+      kind: effect.kind,
       progress: 1 - effect.remainingTicks / effect.totalTicks,
     });
   }

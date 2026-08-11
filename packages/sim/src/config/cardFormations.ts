@@ -276,6 +276,9 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
       // 建筑只能单独成阵：恰好 1 个槽位且该槽是建筑，不可与兵种混编
       const buildingError = validateBuildingOnlyRows(formation.rows, id);
       if (buildingError) return buildingError;
+      if (formation.rows.flat().includes('giant_bomb') && !isGiantBombFormation(formation)) {
+        return `阵型「${id}」巨型炸弹只能单独配置`;
+      }
       if (formation.colSpacing !== undefined && (!Number.isFinite(formation.colSpacing) || formation.colSpacing <= 0)) {
         return `阵型「${id}」横向间距必须大于 0`;
       }
@@ -321,6 +324,14 @@ export function getFormationBuildingTypeId(
 ): UnitTypeId | null {
   if (!isBuildingOnlyFormation(formation)) return null;
   return formation.rows.flat()[0]!;
+}
+
+/** 巨型炸弹只能单独释放，不生成常规单位。 */
+export function isGiantBombFormation(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): boolean {
+  const slots = formation.rows.flat();
+  return slots.length === 1 && slots[0] === 'giant_bomb';
 }
 
 /** 校验通过后原地更新运行时阵型，使已引用 CARD_FORMATIONS 的 UI 即刻读到新数据。 */

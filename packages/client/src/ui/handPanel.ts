@@ -2,6 +2,7 @@ import {
   detectHandCategories,
   findStrongestHand,
   getFormationsFor,
+  isGiantBombFormation,
   isBuildingOnlyFormation,
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
@@ -74,6 +75,12 @@ export interface HandPanelOptions {
   onBuildingDragMove?: (clientX: number, clientY: number) => void;
   /** 结束建筑拖拽（松手或取消）：卸下白色格预览。 */
   onBuildingDragEnd?: () => void;
+  /** 开始拖拽巨型炸弹：显示全图范围落点预览。 */
+  onAoeDragStart?: (formation: CardFormation) => void;
+  /** 拖拽巨型炸弹时同步范围落点预览。 */
+  onAoeDragMove?: (clientX: number, clientY: number) => void;
+  /** 结束巨型炸弹拖拽：移除范围落点预览。 */
+  onAoeDragEnd?: () => void;
   /** 非建筑阵型持续拖拽 0.5 秒后：显示场地可放置区域。 */
   onPlaceableHighlightStart?: (formation: CardFormation) => void;
   /** 非建筑阵型拖拽结束或取消：隐藏场地可放置区域。 */
@@ -148,6 +155,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let suppressClick = false;
   /** 当前拖拽是否为单建筑阵型（决定是否走绿格预览）。 */
   let draggingBuilding = false;
+  let draggingAoe = false;
   /**
    * 拖拽/落点等操作提示；有值时优先于选牌提示。
    * 发牌与 syncSelection 只走 refreshStatus，不会冲掉这里的文案。
@@ -339,12 +347,16 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     dragPointerId = event.pointerId;
     dragButtonRect = button.getBoundingClientRect();
     draggingBuilding = isBuildingOnlyFormation(formation);
+    draggingAoe = isGiantBombFormation(formation);
     formationsElement.setPointerCapture(event.pointerId);
     drawArrow(event.clientX, event.clientY);
     if (draggingBuilding) {
       options.onBuildingDragStart?.(formation);
       options.onBuildingDragMove?.(event.clientX, event.clientY);
       setActionStatus(STATUS_BUILDING_DRAG);
+    } else if (draggingAoe) {
+      options.onAoeDragStart?.(formation);
+      options.onAoeDragMove?.(event.clientX, event.clientY);
     } else {
       options.onPlaceableHighlightStart?.(formation);
     }
@@ -354,6 +366,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (event.pointerId !== dragPointerId) return;
     drawArrow(event.clientX, event.clientY);
     if (draggingBuilding) options.onBuildingDragMove?.(event.clientX, event.clientY);
+    else if (draggingAoe) options.onAoeDragMove?.(event.clientX, event.clientY);
   };
 
   /**
@@ -365,6 +378,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
     const buttonRect = dragButtonRect;
     const wasBuilding = draggingBuilding;
+    const wasAoe = draggingAoe;
     const clientX = event.clientX;
     const clientY = event.clientY;
     suppressClick = true;
@@ -375,11 +389,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
 
     if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
       // 建筑禁止点击/按钮内自动放置，必须拖到绿格上松手
-      if (wasBuilding) setActionStatus(null);
+      if (wasBuilding || wasAoe) setActionStatus(null);
       else requestPlay(formation, null);
     } else if (isOverBattlefield(clientX, clientY)) {
       requestPlay(formation, { clientX, clientY });
-    } else if (wasBuilding) {
+    } else if (wasBuilding || wasAoe) {
       setActionStatus(null);
     }
     endFormationDrag(event.pointerId);
@@ -406,7 +420,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (!button || button.disabled) return;
     const formation = formations.find((entry) => entry.id === button.dataset.formationId) ?? null;
     if (!formation) return;
-    if (isBuildingOnlyFormation(formation)) {
+    if (isBuildingOnlyFormation(formation) || isGiantBombFormation(formation)) {
       setActionStatus(STATUS_BUILDING_DRAG);
       return;
     }
@@ -430,12 +444,15 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       formationsElement.releasePointerCapture(pointerId);
     }
     const wasBuilding = draggingBuilding;
+    const wasAoe = draggingAoe;
     dragFormationId = null;
     dragPointerId = null;
     dragButtonRect = null;
     draggingBuilding = false;
+    draggingAoe = false;
     hideArrow();
     if (wasBuilding) options.onBuildingDragEnd?.();
+    else if (wasAoe) options.onAoeDragEnd?.();
     else options.onPlaceableHighlightEnd?.();
   }
 
@@ -463,7 +480,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (!formation || !dragButtonRect) return false;
     if (isInsideRect(dragButtonRect, clientX, clientY)) {
       // 建筑没有自动落点，停留在按钮上视为非法
-      if (isBuildingOnlyFormation(formation)) return false;
+      if (isBuildingOnlyFormation(formation) || isGiantBombFormation(formation)) return false;
       return options.canDropAt?.(null, formation) !== false;
     }
     if (!isOverBattlefield(clientX, clientY)) return false;
@@ -760,6 +777,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       if (draggingBuilding) {
         draggingBuilding = false;
         options.onBuildingDragEnd?.();
+      } else if (draggingAoe) {
+        draggingAoe = false;
+        options.onAoeDragEnd?.();
       } else if (dragPointerId !== null) {
         options.onPlaceableHighlightEnd?.();
       }

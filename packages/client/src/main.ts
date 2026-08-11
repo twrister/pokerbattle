@@ -13,6 +13,7 @@ import {
   isBuildingConfig,
   isBuildingInsideHalfCourt,
   isBuildingOnlyFormation,
+  isGiantBombFormation,
   isFormationInsideHalfCourt,
   playFormationCommand,
   resolveFormationSpawns,
@@ -44,6 +45,7 @@ import {
   isFormationInsideBlueHalf,
   screenToSim,
 } from './input/placement.js';
+import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
 import { connectVersusSession } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { createBattleHud } from './ui/battleHud.js';
@@ -168,6 +170,7 @@ function enterBattleSession(mode: BattleMode): () => void {
   let disableBuildingPlacementFn = (): void => {};
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
+  let aoePreview: AoePlacementHandle | null = null;
 
   const stopSoloBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
@@ -180,6 +183,12 @@ function enterBattleSession(mode: BattleMode): () => void {
     if (!placeableHighlight) return;
     placeableHighlight.dispose();
     placeableHighlight = null;
+  };
+
+  /** 清除巨型炸弹拖拽时的半径提示。 */
+  const stopAoePreview = (): void => {
+    aoePreview?.dispose();
+    aoePreview = null;
   };
 
   /** 显示蓝方半场的基础部署区，具体阵型边界仍由落点校验处理。 */
@@ -213,6 +222,17 @@ function enterBattleSession(mode: BattleMode): () => void {
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
+    if (isGiantBombFormation(formation)) {
+      if (!point) return false;
+      const anchor = screenToSim(
+        sceneContext.renderer.domElement,
+        sceneContext.camera,
+        sceneContext.groundPlane,
+        point.clientX,
+        point.clientY,
+      );
+      return Boolean(anchor && anchor.x >= 0 && anchor.x <= ARENA_W && anchor.y >= 0 && anchor.y <= ARENA_H);
+    }
     if (isBuildingOnlyFormation(formation)) {
       if (!point) return false;
       const typeId = getFormationBuildingTypeId(formation)!;
@@ -308,6 +328,18 @@ function enterBattleSession(mode: BattleMode): () => void {
           soloBuildingPreview?.syncPointer(clientX, clientY);
         },
         onBuildingDragEnd: stopSoloBuildingPreview,
+        onAoeDragStart: () => {
+          stopAoePreview();
+          aoePreview = enableAoePlacement({
+            domElement: sceneContext.renderer.domElement,
+            camera: sceneContext.camera,
+            groundPlane: sceneContext.groundPlane,
+            scene: sceneContext.scene,
+            radius: 8,
+          });
+        },
+        onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
+        onAoeDragEnd: stopAoePreview,
         onPlaceableHighlightStart: startPlaceableHighlight,
         onPlaceableHighlightEnd: stopPlaceableHighlight,
       })
@@ -446,6 +478,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     disableBuildingPlacementFn();
     stopSoloBuildingPreview();
     stopPlaceableHighlight();
+    stopAoePreview();
     handPanel?.dispose();
     panel.dispose();
     configPanel?.setOnApplied(() => {});
@@ -569,6 +602,7 @@ function runVersusSession(
 
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
+  let aoePreview: AoePlacementHandle | null = null;
   const stopBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
     soloBuildingPreview.dispose();
@@ -582,6 +616,12 @@ function runVersusSession(
     placeableHighlight = null;
   };
 
+  /** 清除巨型炸弹拖拽时的半径提示。 */
+  const stopAoePreview = (): void => {
+    aoePreview?.dispose();
+    aoePreview = null;
+  };
+
   /** 显示本地阵营半场的基础部署区，具体阵型边界仍由落点校验处理。 */
   const startPlaceableHighlight = (): void => {
     stopPlaceableHighlight();
@@ -592,6 +632,17 @@ function runVersusSession(
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
+    if (isGiantBombFormation(formation)) {
+      if (!point) return false;
+      const anchor = screenToSim(
+        sceneContext.renderer.domElement,
+        sceneContext.camera,
+        sceneContext.groundPlane,
+        point.clientX,
+        point.clientY,
+      );
+      return Boolean(anchor && anchor.x >= 0 && anchor.x <= ARENA_W && anchor.y >= 0 && anchor.y <= ARENA_H);
+    }
     if (isBuildingOnlyFormation(formation)) {
       if (!point) return false;
       const typeId = getFormationBuildingTypeId(formation)!;
@@ -696,6 +747,18 @@ function runVersusSession(
     },
     onBuildingDragMove: (clientX, clientY) => soloBuildingPreview?.syncPointer(clientX, clientY),
     onBuildingDragEnd: stopBuildingPreview,
+    onAoeDragStart: () => {
+      stopAoePreview();
+      aoePreview = enableAoePlacement({
+        domElement: sceneContext.renderer.domElement,
+        camera: sceneContext.camera,
+        groundPlane: sceneContext.groundPlane,
+        scene: sceneContext.scene,
+        radius: 8,
+      });
+    },
+    onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
+    onAoeDragEnd: stopAoePreview,
     onPlaceableHighlightStart: startPlaceableHighlight,
     onPlaceableHighlightEnd: stopPlaceableHighlight,
   });
@@ -774,6 +837,7 @@ function runVersusSession(
     backButton.removeEventListener('click', returnToMenu);
     stopBuildingPreview();
     stopPlaceableHighlight();
+    stopAoePreview();
     handPanel.dispose();
     panel.dispose();
     battleView.reset();

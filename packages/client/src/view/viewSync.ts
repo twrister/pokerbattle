@@ -43,7 +43,9 @@ function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
     color: 0xffffff,
     alphaTest: 0.5,
     side: THREE.DoubleSide,
+    // 落地闪烁时面片下半会穿地，关掉深度测试避免被地面截掉
     depthWrite: false,
+    depthTest: false,
     visible: false,
   });
   // Node 测试无 DOM，保持隐藏占位即可
@@ -306,6 +308,12 @@ export class BattleView {
       if (visual === 'orb') {
         mesh.material = PROJECTILE_MATERIALS[projectile.faction]!;
       }
+      const size = projectile.giantBomb ? 3 : 1;
+      mesh.scale.setScalar(size);
+      mesh.visible = !projectile.landed || Math.floor(performance.now() / 100) % 2 === 0;
+      // 落地闪烁时抬到面片半高，避免中心锚地导致下半截埋进地面
+      const groundLift =
+        projectile.landed && visual === 'bomb' ? (BOMB_PROJECTILE_HEIGHT * size) / 2 : 0;
 
       const from = prev.projectiles.find((p) => p.id === projectile.id) ?? projectile;
       const fromX = toSceneX(from.x);
@@ -316,11 +324,14 @@ export class BattleView {
       const toZ = toSceneZ(projectile.y);
       mesh.position.set(
         lerp(fromX, toX, alpha),
-        lerp(fromH, toH, alpha),
+        lerp(fromH, toH, alpha) + groundLift,
         lerp(fromZ, toZ, alpha),
       );
       // 炸弹面片始终朝向相机；箭矢尖对齐飞行方向并尽量面向镜头
-      if (visual === 'bomb') mesh.quaternion.copy(camera.quaternion);
+      if (visual === 'bomb') {
+        mesh.quaternion.copy(camera.quaternion);
+        mesh.renderOrder = 7;
+      }
       else if (visual === 'arrow') {
         orientArrowMesh(mesh, fromX, fromH, fromZ, toX, toH, toZ, camera);
       }

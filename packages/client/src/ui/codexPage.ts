@@ -40,8 +40,8 @@ const CATEGORY_NAMES: Record<CodexFilter, string> = {
   summoned: '召唤物',
 };
 
-/** 特殊兵种：战车、巨龙、防御塔。 */
-const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'dragon', 'building_tower']);
+/** 特殊兵种：战车、巨型炸弹、巨龙、防御塔。 */
+const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'giant_bomb', 'dragon', 'building_tower']);
 
 /**
  * 图鉴展示顺序：单兵种按策划指定排列，其后是特殊兵种与召唤物。
@@ -57,6 +57,7 @@ const CODEX_DISPLAY_ORDER: readonly UnitTypeId[] = [
   'hero_mage',
   'hero_archmage',
   'ranged_chariot',
+  'giant_bomb',
   'dragon',
   'building_tower',
   'summoned_skeleton',

@@ -9,7 +9,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "single_archer",
@@ -20,18 +21,20 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "single_custom_3",
-      "name": "防御塔",
+      "name": "炸弹",
       "rows": [
         [
-          "building_tower"
+          "giant_bomb"
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 1.8
     }
   ],
   "pair": [
@@ -45,7 +48,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "pair_archers",
@@ -57,7 +61,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "pair_custom_3",
@@ -68,7 +73,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "straight3": [
@@ -85,7 +91,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "straight3_custom_2",
@@ -96,7 +103,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "triple": [
@@ -111,7 +119,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "triple_cavalry",
@@ -122,7 +131,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "triple_custom_3",
@@ -133,7 +143,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "two_pair": [
@@ -151,7 +162,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     },
     {
       "id": "two_pair_custom_2",
@@ -162,7 +174,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "straight5": [
@@ -179,7 +192,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "flush": [
@@ -196,7 +210,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "full_house": [
@@ -213,7 +228,8 @@
         ]
       ],
       "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "rocket": [
@@ -227,10 +243,23 @@
         ]
       ],
       "colSpacing": 2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "bomb": [
+    {
+      "id": "bomb_giant_bomb",
+      "name": "巨型炸弹",
+      "rows": [
+        [
+          "giant_bomb"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
     {
       "id": "bomb_cavalry",
       "name": "双皇家骑士",
@@ -241,7 +270,8 @@
         ]
       ],
       "colSpacing": 2,
-      "rowSpacing": 1.4
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "straight_flush": [
@@ -258,7 +288,8 @@
         ]
       ],
       "colSpacing": 2,
-      "rowSpacing": 2
+      "rowSpacing": 2,
+      "thumbScale": 2
     }
   ]
 }
