@@ -39,7 +39,7 @@ describe('牌型识别 detectHandCategories', () => {
     ).toEqual(['straight3']);
   });
 
-  it('四张相同命中 bomb，不算三带一', () => {
+  it('四张相同命中 bomb', () => {
     expect(
       detectHandCategories([
         card('8-spades'),
@@ -50,7 +50,7 @@ describe('牌型识别 detectHandCategories', () => {
     ).toEqual(['bomb']);
   });
 
-  it('三带一命中 triple_with_one', () => {
+  it('三带一不再识别为合法牌型', () => {
     expect(
       detectHandCategories([
         card('6-spades'),
@@ -58,10 +58,21 @@ describe('牌型识别 detectHandCategories', () => {
         card('6-clubs'),
         card('K-diamonds'),
       ]),
-    ).toEqual(['triple_with_one']);
+    ).toEqual([]);
   });
 
-  it('双对命中 two_pair', () => {
+  it('相邻两对命中连对 two_pair', () => {
+    expect(
+      detectHandCategories([
+        card('4-spades'),
+        card('4-hearts'),
+        card('5-clubs'),
+        card('5-diamonds'),
+      ]),
+    ).toEqual(['two_pair']);
+  });
+
+  it('不相邻的两对不算连对', () => {
     expect(
       detectHandCategories([
         card('4-spades'),
@@ -69,10 +80,10 @@ describe('牌型识别 detectHandCategories', () => {
         card('J-clubs'),
         card('J-diamonds'),
       ]),
-    ).toEqual(['two_pair']);
+    ).toEqual([]);
   });
 
-  it('四顺命中 straight4', () => {
+  it('四顺不再识别为合法牌型', () => {
     expect(
       detectHandCategories([
         card('7-spades'),
@@ -80,7 +91,7 @@ describe('牌型识别 detectHandCategories', () => {
         card('9-clubs'),
         card('10-diamonds'),
       ]),
-    ).toEqual(['straight4']);
+    ).toEqual([]);
   });
 
   it('葫芦命中 full_house', () => {
@@ -129,7 +140,7 @@ describe('牌型识别 detectHandCategories', () => {
     ).toEqual(['straight5']);
   });
 
-  it('Q-K-A-2 不是顺子', () => {
+  it('Q-K-A-2 不是合法四张牌型', () => {
     expect(
       detectHandCategories([
         card('Q-spades'),

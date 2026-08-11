@@ -63,6 +63,7 @@ export {
   FORMATION_THUMB_SCALE,
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
+  HAND_CATEGORY_STRENGTH_ORDER,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
   createCardFormation,

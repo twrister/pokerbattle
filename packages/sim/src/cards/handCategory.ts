@@ -1,4 +1,4 @@
-import { HAND_CATEGORY_ORDER, type HandCategory } from '../config/cardFormations.js';
+import { HAND_CATEGORY_STRENGTH_ORDER, type HandCategory } from '../config/cardFormations.js';
 import { compareCardsByStrength, type CardRank, type PlayingCard } from './deck.js';
 
 /**
@@ -21,7 +21,10 @@ const STRAIGHT_VALUE: Readonly<Record<CardRank, number>> = {
   K: 13,
 };
 
-const CATEGORY_RANK = new Map(HAND_CATEGORY_ORDER.map((category, index) => [category, index]));
+/** 强度序号：越小越强，与 HAND_CATEGORY_STRENGTH_ORDER 一致。 */
+const CATEGORY_RANK = new Map(
+  HAND_CATEGORY_STRENGTH_ORDER.map((category, index) => [category, index]),
+);
 
 /** 识别一组选中牌命中的全部牌型，按强度降序；不合法组合返回空数组。 */
 export function detectHandCategories(cards: readonly PlayingCard[]): HandCategory[] {
@@ -135,14 +138,14 @@ function detectThree(cards: readonly PlayingCard[]): HandCategory[] {
   return [];
 }
 
-/** 四张：炸弹 / 四顺 / 三带一 / 双对。 */
+/** 四张：炸弹 / 连对（相邻点数的两对）。 */
 function detectFour(cards: readonly PlayingCard[]): HandCategory[] {
   if (hasJoker(cards)) return [];
   const groups = rankCounts(cards);
   if (groups.length === 1 && groups[0] === 4) return ['bomb'];
-  if (groups.length === 2 && groups[0] === 3 && groups[1] === 1) return ['triple_with_one'];
-  if (groups.length === 2 && groups[0] === 2 && groups[1] === 2) return ['two_pair'];
-  if (isStraight(cards)) return ['straight4'];
+  if (groups.length === 2 && groups[0] === 2 && groups[1] === 2 && isConsecutivePairRanks(cards)) {
+    return ['two_pair'];
+  }
   return [];
 }
 
@@ -191,6 +194,17 @@ function isStraight(cards: readonly PlayingCard[]): boolean {
   const lowValues = cards.map((card) =>
     card.rank === 'A' ? 1 : STRAIGHT_VALUE[card.rank as CardRank],
   );
+  return isConsecutiveUnique(lowValues);
+}
+
+/** 两对点数是否相邻（如 3-3-4-4）；A 同顺子规则可作 1 或 14。 */
+function isConsecutivePairRanks(cards: readonly PlayingCard[]): boolean {
+  const ranks = [...new Set(cards.map((card) => card.rank))];
+  if (ranks.length !== 2) return false;
+  const highValues = ranks.map((rank) => STRAIGHT_VALUE[rank as CardRank]);
+  if (isConsecutiveUnique(highValues)) return true;
+  if (!ranks.includes('A')) return false;
+  const lowValues = ranks.map((rank) => (rank === 'A' ? 1 : STRAIGHT_VALUE[rank as CardRank]));
   return isConsecutiveUnique(lowValues);
 }
 

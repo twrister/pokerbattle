@@ -11,24 +11,35 @@ export type HandCategory =
   | 'triple'
   | 'straight3'
   | 'bomb'
-  | 'straight4'
-  | 'triple_with_one'
   | 'two_pair'
   | 'full_house'
   | 'straight5'
   | 'flush'
   | 'straight_flush';
 
-/** 牌型强度降序：同花顺最强，单张最弱；选项列表按此顺序排。 */
+/** 卡组页选项顺序：单张在上，同花顺在下。 */
 export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [
+  'single',
+  'pair',
+  'straight3',
+  'triple',
+  'two_pair',
+  'straight5',
+  'flush',
+  'full_house',
+  'rocket',
+  'bomb',
+  'straight_flush',
+] as const;
+
+/** 牌型强度降序：同花顺最强，单张最弱；出牌比对与阵型并集按此顺序。 */
+export const HAND_CATEGORY_STRENGTH_ORDER: readonly HandCategory[] = [
   'straight_flush',
   'bomb',
   'rocket',
   'full_house',
   'flush',
   'straight5',
-  'straight4',
-  'triple_with_one',
   'two_pair',
   'triple',
   'straight3',
@@ -44,9 +55,7 @@ export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
   triple: '三张',
   straight3: '三顺',
   bomb: '炸弹',
-  straight4: '四顺',
-  triple_with_one: '三带一',
-  two_pair: '双对',
+  two_pair: '连对',
   full_house: '葫芦',
   straight5: '五顺',
   flush: '同花',
@@ -353,7 +362,7 @@ export function getFormationsFor(categories: readonly HandCategory[]): CardForma
   const wanted = new Set(categories);
   const seen = new Set<string>();
   const result: CardFormation[] = [];
-  for (const category of HAND_CATEGORY_ORDER) {
+  for (const category of HAND_CATEGORY_STRENGTH_ORDER) {
     if (!wanted.has(category)) continue;
     for (const formation of CARD_FORMATIONS[category]) {
       if (seen.has(formation.id)) continue;

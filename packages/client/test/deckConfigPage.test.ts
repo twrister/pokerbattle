@@ -42,7 +42,7 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack });
 
     page.show();
-    expect(document.querySelectorAll('.deck-category')).toHaveLength(13);
+    expect(document.querySelectorAll('.deck-category')).toHaveLength(11);
     expect(preview.resize).toHaveBeenCalledOnce();
     expect(preview.render).toHaveBeenCalled();
 

@@ -1,141 +1,82 @@
 {
-  "straight_flush": [
+  "single": [
     {
-      "id": "straight_flush_royal",
-      "name": "王室冲锋",
+      "id": "single_grunt",
+      "name": "单民兵",
       "rows": [
         [
-          "melee_cavalry"
-        ],
-        [
-          "hero_king",
-          "hero_queen"
-        ]
-      ],
-      "colSpacing": 2,
-      "rowSpacing": 2
-    }
-  ],
-  "bomb": [
-    {
-      "id": "bomb_cavalry",
-      "name": "双皇家骑士",
-      "rows": [
-        [
-          "melee_cavalry",
-          "melee_cavalry"
-        ]
-      ],
-      "colSpacing": 2,
-      "rowSpacing": 1.4
-    }
-  ],
-  "rocket": [
-    {
-      "id": "rocket_royal",
-      "name": "王室降临",
-      "rows": [
-        [
-          "hero_king",
-          "hero_queen"
-        ]
-      ],
-      "colSpacing": 2,
-      "rowSpacing": 1.4
-    }
-  ],
-  "full_house": [
-    {
-      "id": "full_house_king",
-      "name": "国王护卫",
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_grunt"
-        ],
-        [
-          "hero_king"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4
-    }
-  ],
-  "flush": [
-    {
-      "id": "flush_archers",
-      "name": "五弓手",
-      "rows": [
-        [
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4
-    }
-  ],
-  "straight5": [
-    {
-      "id": "straight5_wave",
-      "name": "五民兵",
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt",
           "melee_grunt"
         ]
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
-    }
-  ],
-  "straight4": [
+    },
     {
-      "id": "straight4_line",
-      "name": "四民兵",
+      "id": "single_archer",
+      "name": "单弓手",
       "rows": [
-        [
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4
-    }
-  ],
-  "triple_with_one": [
-    {
-      "id": "triple_one_support",
-      "name": "民兵带弓",
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt"
-        ],
         [
           "ranged_archer"
         ]
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
+    },
+    {
+      "id": "single_custom_3",
+      "name": "防御塔",
+      "rows": [
+        [
+          "building_tower"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
     }
   ],
-  "two_pair": [
+  "pair": [
     {
-      "id": "two_pair_split",
-      "name": "民兵弓手各二",
+      "id": "pair_grunts",
+      "name": "双民兵",
       "rows": [
         [
           "melee_grunt",
+          "melee_grunt"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "pair_archers",
+      "name": "双弓手",
+      "rows": [
+        [
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    },
+    {
+      "id": "pair_custom_3",
+      "name": "城堡",
+      "rows": [
+        [
+          "building_base"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4
+    }
+  ],
+  "straight3": [
+    {
+      "id": "straight3_mix",
+      "name": "民兵弓手",
+      "rows": [
+        [
           "melee_grunt"
         ],
         [
@@ -147,7 +88,7 @@
       "rowSpacing": 1.4
     },
     {
-      "id": "two_pair_custom_2",
+      "id": "straight3_custom_2",
       "name": "防塔御",
       "rows": [
         [
@@ -195,12 +136,13 @@
       "rowSpacing": 1.4
     }
   ],
-  "straight3": [
+  "two_pair": [
     {
-      "id": "straight3_mix",
-      "name": "民兵弓手",
+      "id": "two_pair_split",
+      "name": "民兵弓手各二",
       "rows": [
         [
+          "melee_grunt",
           "melee_grunt"
         ],
         [
@@ -212,7 +154,7 @@
       "rowSpacing": 1.4
     },
     {
-      "id": "straight3_custom_2",
+      "id": "two_pair_custom_2",
       "name": "防塔御",
       "rows": [
         [
@@ -223,76 +165,100 @@
       "rowSpacing": 1.4
     }
   ],
-  "pair": [
+  "straight5": [
     {
-      "id": "pair_grunts",
-      "name": "双民兵",
+      "id": "straight5_wave",
+      "name": "五民兵",
       "rows": [
         [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt",
           "melee_grunt",
           "melee_grunt"
         ]
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
-    },
+    }
+  ],
+  "flush": [
     {
-      "id": "pair_archers",
-      "name": "双弓手",
+      "id": "flush_archers",
+      "name": "五弓手",
       "rows": [
         [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
           "ranged_archer",
           "ranged_archer"
         ]
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
-    },
+    }
+  ],
+  "full_house": [
     {
-      "id": "pair_custom_3",
-      "name": "城堡",
+      "id": "full_house_king",
+      "name": "国王护卫",
       "rows": [
         [
-          "building_base"
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "hero_king"
         ]
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4
     }
   ],
-  "single": [
+  "rocket": [
     {
-      "id": "single_grunt",
-      "name": "单民兵",
+      "id": "rocket_royal",
+      "name": "王室降临",
       "rows": [
         [
-          "melee_grunt"
+          "hero_king",
+          "hero_queen"
         ]
       ],
-      "colSpacing": 1.2,
+      "colSpacing": 2,
       "rowSpacing": 1.4
-    },
+    }
+  ],
+  "bomb": [
     {
-      "id": "single_archer",
-      "name": "单弓手",
+      "id": "bomb_cavalry",
+      "name": "双皇家骑士",
       "rows": [
         [
-          "ranged_archer"
+          "melee_cavalry",
+          "melee_cavalry"
         ]
       ],
-      "colSpacing": 1.2,
+      "colSpacing": 2,
       "rowSpacing": 1.4
-    },
+    }
+  ],
+  "straight_flush": [
     {
-      "id": "single_custom_3",
-      "name": "防御塔",
+      "id": "straight_flush_royal",
+      "name": "王室冲锋",
       "rows": [
         [
-          "building_tower"
+          "melee_cavalry"
+        ],
+        [
+          "hero_king",
+          "hero_queen"
         ]
       ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4
+      "colSpacing": 2,
+      "rowSpacing": 2
     }
   ]
 }
