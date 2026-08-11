@@ -123,4 +123,25 @@ describe('建筑系统', () => {
       expect(base.hp, `approach (${x},${y}) should deal damage`).toBeLessThan(hp0);
     }
   });
+
+  it('防御塔在射程内以投射物攻击敌军', () => {
+    const world = new World(1);
+    // 塔占地 2，中心 (8,10)；敌军放在射程内正北
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(14));
+    const hp0 = enemy.hp;
+    for (let i = 0; i < 80; i++) world.step();
+    expect(tower.state).toBe(UnitState.Attack);
+    expect(enemy.hp).toBeLessThan(hp0);
+  });
+
+  it('主堡即使旁有敌军也不攻击', () => {
+    const world = new World(1);
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(16))!;
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(6.5), fromFloat(16));
+    const hp0 = enemy.hp;
+    for (let i = 0; i < 80; i++) world.step();
+    expect(base.state).toBe(UnitState.Idle);
+    expect(enemy.hp).toBe(hp0);
+  });
 });

@@ -390,9 +390,14 @@ function normalizeFootprint(value: number | undefined): number {
   return Math.floor(value as number);
 }
 
-/** 有占地即为建筑：不移动、不索敌，碰撞按方形处理 */
+/** 有占地即为建筑：不移动、碰撞按方形处理；是否索敌/出手见 canBuildingAttack */
 export function isBuildingConfig(config: UnitConfig): boolean {
   return config.footprint > 0;
+}
+
+/** 有攻击参数的建筑才参与索敌/出手；主堡等仍跳过 */
+export function canBuildingAttack(config: UnitConfig): boolean {
+  return isBuildingConfig(config) && config.damage > 0 && config.range > 0;
 }
 
 /** 校验并返回按数字升序排列的等级，等级必须为正整数。 */

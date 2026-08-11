@@ -40,8 +40,8 @@ const CATEGORY_NAMES: Record<CodexFilter, string> = {
   summoned: '召唤物',
 };
 
-/** 特殊兵种：战车、巨龙。 */
-const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'dragon']);
+/** 特殊兵种：战车、巨龙、防御塔。 */
+const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'dragon', 'building_tower']);
 
 /**
  * 图鉴展示顺序：单兵种按策划指定排列，其后是特殊兵种与召唤物。
@@ -58,6 +58,7 @@ const CODEX_DISPLAY_ORDER: readonly UnitTypeId[] = [
   'hero_archmage',
   'ranged_chariot',
   'dragon',
+  'building_tower',
   'summoned_skeleton',
   'summoned_bomber',
 ];
@@ -71,7 +72,7 @@ const STAT_NAMES: Record<StatKey, string> = {
 };
 
 /**
- * 按图鉴页签归类：召唤物看前缀，战车/巨龙归特殊，其余可移动单位归单兵种。
+ * 按图鉴页签归类：召唤物看前缀，战车/巨龙/防御塔归特殊，其余可移动单位归单兵种。
  */
 function getCategory(typeId: UnitTypeId): CodexCategory {
   if (typeId.startsWith('summoned_')) return 'summoned';
@@ -85,9 +86,12 @@ function getDisplayOrder(typeId: UnitTypeId): number {
   return index === -1 ? CODEX_DISPLAY_ORDER.length : index;
 }
 
-/** 将模拟层配置转为图鉴可展示条目，并排除不可移动的建筑。 */
+/** 将模拟层配置转为图鉴条目；建筑默认排除，特殊兵种中的防御塔例外。 */
 function getCodexUnits(): CodexUnit[] {
-  return UNIT_TYPE_IDS.filter((typeId) => !isBuildingConfig(UNIT_CONFIGS[typeId]))
+  return UNIT_TYPE_IDS.filter((typeId) => {
+    if (SPECIAL_TYPE_IDS.has(typeId)) return true;
+    return !isBuildingConfig(UNIT_CONFIGS[typeId]);
+  })
     .map((typeId) => ({
       typeId,
       name: UNIT_CONFIGS[typeId].name,

@@ -15,11 +15,11 @@ describe('兵种图鉴页', () => {
     `;
   });
 
-  it('只展示可移动单位，并按分类切换档案', () => {
+  it('展示可移动单位与特殊建筑，并按分类切换档案', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(12);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(13);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toContain('20%');
@@ -44,7 +44,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(2);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(3);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
+    ).toEqual(['战车', '巨龙', '防御塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
 
     categoryNamed('召唤物')?.click();

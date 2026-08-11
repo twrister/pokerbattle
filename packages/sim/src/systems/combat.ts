@@ -1,5 +1,5 @@
-import { ONE, mul } from '../math/fixed.js';
-import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
+import { ONE } from '../math/fixed.js';
+import { MAX_UNIT_RADIUS, canBuildingAttack, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -22,8 +22,8 @@ const neighbors: number[] = [];
 export function updateCombat(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
-    // TODO: 建筑攻击能力后续在此放开（配 attack/range/damage 后去掉早退）
-    if (isBuildingConfig(unit.config)) continue;
+    // 无攻击能力的建筑（如主堡）跳过；防御塔等走下方普攻节奏
+    if (isBuildingConfig(unit.config) && !canBuildingAttack(unit.config)) continue;
     // 炸弹兵只走自爆系统，不走普攻前摇
     if (unit.config.detonate) continue;
     // 冲刺中不普攻，冷却仍照常走，避免落地瞬间连砍

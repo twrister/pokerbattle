@@ -44,8 +44,8 @@ export interface ProjectileSnapshot {
   y: number;
   /** 离地高度，供渲染把弹道抬到发射点（如巨龙头） */
   height: number;
-  /** 客户端弹道外观：彩色球或炸弹贴图 */
-  visual: 'orb' | 'bomb';
+  /** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
+  visual: 'orb' | 'bomb' | 'arrow';
 }
 
 /** 女王单体治疗落在受疗单位上的反馈效果。 */

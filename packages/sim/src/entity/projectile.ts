@@ -5,8 +5,8 @@ import type { Faction } from './unit.js';
 /** 弹道落地反馈：地面环脉冲或炸弹爆炸序列帧 */
 export type ProjectileImpactFx = 'pulse' | 'explosion';
 
-/** 客户端弹道外观：彩色球或炸弹贴图 */
-export type ProjectileVisual = 'orb' | 'bomb';
+/** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
+export type ProjectileVisual = 'orb' | 'bomb' | 'arrow';
 
 /**
  * 远程单位发射的追踪弹。

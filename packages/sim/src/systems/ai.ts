@@ -1,6 +1,6 @@
 import { mul } from '../math/fixed.js';
 import { copy, distSq, normalize, turnToward, vec } from '../math/vec2.js';
-import { isBuildingConfig } from '../config/units.js';
+import { canBuildingAttack, isBuildingConfig } from '../config/units.js';
 import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -31,7 +31,7 @@ export function updateAi(world: World): void {
   for (const unit of world.units) {
     if (unit.dead) continue;
     if (isBuildingConfig(unit.config)) {
-      unit.state = UnitState.Idle;
+      updateBuildingAi(world, unit);
       continue;
     }
 
@@ -100,6 +100,40 @@ export function updateAi(world: World): void {
     ) {
       turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);
     }
+  }
+}
+
+/**
+ * 建筑行为：站桩，只在 Idle / Attack 间切换，永不 Seek / Charge。
+ * 无攻击能力的建筑（主堡）固定 Idle。
+ */
+function updateBuildingAi(world: World, unit: Unit): void {
+  if (!canBuildingAttack(unit.config)) {
+    unit.state = UnitState.Idle;
+    return;
+  }
+
+  const target = world.getUnit(unit.targetId);
+  if (!isAlive(target) || target.faction === unit.faction) {
+    unit.targetId = NO_TARGET;
+    unit.engageSlot = NO_ENGAGE_SLOT;
+    unit.state = UnitState.Idle;
+    return;
+  }
+
+  const inEnter = isWithinAttackReach(unit, target);
+  const inExit = isWithinAttackReach(unit, target, ATTACK_EXIT_HYSTERESIS);
+  const beyondMin = isOutsideMinAttackRange(unit, target);
+  normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
+
+  if ((unit.state === UnitState.Attack ? inExit : inEnter) && beyondMin) {
+    unit.state = UnitState.Attack;
+  } else {
+    unit.state = UnitState.Idle;
+  }
+
+  if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {
+    turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);
   }
 }
 

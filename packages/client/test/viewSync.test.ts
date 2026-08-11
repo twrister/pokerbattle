@@ -105,6 +105,23 @@ describe('渲染同步', () => {
     expect(reused[0]).toBe(created[0]);
   });
 
+  it('弓箭手弹道使用箭矢面片而非彩色球', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    world.spawnProjectile(archer, target, archer.stats.damage, fromFloat(9));
+    const snap = takeSnapshot(world);
+    expect(snap.projectiles[0]!.visual).toBe('arrow');
+
+    view.render(snap, snap, 1, camera);
+    const mesh = scene.children.find((child) => child instanceof THREE.Mesh) as THREE.Mesh;
+    expect(mesh).toBeDefined();
+    expect(mesh.userData.visual).toBe('arrow');
+    expect(mesh.geometry).toBeInstanceOf(THREE.PlaneGeometry);
+  });
+
   it('治疗事件会创建单体受疗效果，并在事件结束后回收', () => {
     const scene = new THREE.Scene();
     const view = new BattleView(scene);

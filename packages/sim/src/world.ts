@@ -13,6 +13,7 @@ import {
   BOMB_ARC_APEX,
   GROUND_PROJECTILE_HEIGHT,
   RETARGET_INTERVAL,
+  TOWER_PROJECTILE_HEIGHT,
 } from './config/tuning.js';
 import {
   type Projectile,
@@ -229,18 +230,23 @@ export class World {
   }
 
   spawnProjectile(from: Unit, target: Unit, damage: Fx, speed: Fx, aoeRadius: Fx = 0): Projectile {
-    // 空中单位从头部吐弹；打地面时落点高度为 0，打空中则保持同高
+    // 空中单位从头部吐弹；防御塔从塔顶射出；其余地面单位用默认高度
     const startHeight =
-      from.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : GROUND_PROJECTILE_HEIGHT;
+      from.config.movementLayer === 'air'
+        ? AIR_PROJECTILE_HEIGHT
+        : from.config.id === 'building_tower'
+          ? TOWER_PROJECTILE_HEIGHT
+          : GROUND_PROJECTILE_HEIGHT;
     const endHeight = target.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : 0;
     const dx = target.pos.x - from.pos.x;
     const dy = target.pos.y - from.pos.y;
     const startDist = lengthOf(dx, dy);
-    // 战车炸弹：抛物线 + 落地爆炸序列帧 + 炸弹贴图；其余弹道保持线性彩色球
+    // 战车炸弹：抛物线 + 落地爆炸；弓箭手/防御塔用箭矢贴图；其余保持线性彩色球
     const isBomb = from.config.id === 'ranged_chariot';
+    const isArrow = from.config.id === 'ranged_archer' || from.config.id === 'building_tower';
     const arcApex = isBomb ? BOMB_ARC_APEX : 0;
     const impactFx: ProjectileImpactFx = isBomb ? 'explosion' : 'pulse';
-    const visual: ProjectileVisual = isBomb ? 'bomb' : 'orb';
+    const visual: ProjectileVisual = isBomb ? 'bomb' : isArrow ? 'arrow' : 'orb';
     const projectile = createProjectile(
       this.nextEntityId++,
       from.faction,

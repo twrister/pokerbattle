@@ -21,6 +21,21 @@ const BOMB_PROJECTILE_GEOMETRY = new THREE.PlaneGeometry(
 );
 let bombProjectileMaterial: THREE.MeshBasicMaterial | null = null;
 
+/** 箭矢贴图：原图竖直朝上（局部 +Y 为箭头尖），飞行时对齐弹道方向 */
+const ARROW_PROJECTILE_ASPECT = 35 / 120;
+const ARROW_PROJECTILE_LENGTH = 0.72;
+const ARROW_PROJECTILE_GEOMETRY = new THREE.PlaneGeometry(
+  ARROW_PROJECTILE_LENGTH * ARROW_PROJECTILE_ASPECT,
+  ARROW_PROJECTILE_LENGTH,
+);
+let arrowProjectileMaterial: THREE.MeshBasicMaterial | null = null;
+
+const _arrowDir = new THREE.Vector3();
+const _arrowToCam = new THREE.Vector3();
+const _arrowSide = new THREE.Vector3();
+const _arrowNormal = new THREE.Vector3();
+const _arrowBasis = new THREE.Matrix4();
+
 /** 懒加载共享炸弹材质；测试环境无 DOM 时给占位不可见图 */
 function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
   if (bombProjectileMaterial) return bombProjectileMaterial;
@@ -45,6 +60,70 @@ function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
   return bombProjectileMaterial;
 }
 
+/** 懒加载共享箭矢材质；测试环境无 DOM 时给占位不可见图 */
+function getArrowProjectileMaterial(): THREE.MeshBasicMaterial {
+  if (arrowProjectileMaterial) return arrowProjectileMaterial;
+  arrowProjectileMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    alphaTest: 0.5,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    visible: false,
+  });
+  if (typeof document === 'undefined') return arrowProjectileMaterial;
+  const texture = new THREE.TextureLoader().load('projectiles/arrow.png', (loaded) => {
+    loaded.colorSpace = THREE.SRGBColorSpace;
+    loaded.magFilter = THREE.NearestFilter;
+    if (arrowProjectileMaterial) {
+      arrowProjectileMaterial.visible = true;
+      arrowProjectileMaterial.needsUpdate = true;
+    }
+  });
+  arrowProjectileMaterial.map = texture;
+  return arrowProjectileMaterial;
+}
+
+/**
+ * 箭头尖对齐飞行方向，面片尽量朝向相机，避免俯视/斜视时变成一条线。
+ * 坐标均为场景空间 (x, height, z)。
+ */
+function orientArrowMesh(
+  mesh: THREE.Mesh,
+  fromX: number,
+  fromH: number,
+  fromZ: number,
+  toX: number,
+  toH: number,
+  toZ: number,
+  camera: THREE.Camera,
+): void {
+  _arrowDir.set(toX - fromX, toH - fromH, toZ - fromZ);
+  if (_arrowDir.lengthSq() < 1e-8) {
+    // 首帧前后快照重合时复用上次朝向，避免箭尖乱转
+    const last = mesh.userData.lastArrowDir as THREE.Vector3 | undefined;
+    if (last && last.lengthSq() > 1e-8) _arrowDir.copy(last);
+    else {
+      mesh.quaternion.copy(camera.quaternion);
+      return;
+    }
+  }
+  _arrowDir.normalize();
+  const cached = mesh.userData.lastArrowDir as THREE.Vector3 | undefined;
+  if (cached) cached.copy(_arrowDir);
+  else mesh.userData.lastArrowDir = _arrowDir.clone();
+  _arrowToCam.subVectors(camera.position, mesh.position);
+  _arrowSide.crossVectors(_arrowDir, _arrowToCam);
+  if (_arrowSide.lengthSq() < 1e-8) {
+    _arrowSide.set(1, 0, 0).cross(_arrowDir);
+    if (_arrowSide.lengthSq() < 1e-8) _arrowSide.set(0, 0, 1).cross(_arrowDir);
+  }
+  _arrowSide.normalize();
+  _arrowNormal.crossVectors(_arrowSide, _arrowDir).normalize();
+  // PlaneGeometry：局部 +Y 为图上箭头尖，+Z 为法线
+  _arrowBasis.makeBasis(_arrowSide, _arrowDir, _arrowNormal);
+  mesh.quaternion.setFromRotationMatrix(_arrowBasis);
+}
+
 /**
  * 把 sim 快照同步到场景对象。
  *
@@ -58,6 +137,7 @@ export class BattleView {
   private readonly activeProjectiles = new Map<number, THREE.Mesh>();
   private readonly orbProjectilePool: THREE.Mesh[] = [];
   private readonly bombProjectilePool: THREE.Mesh[] = [];
+  private readonly arrowProjectilePool: THREE.Mesh[] = [];
   private readonly activeHealEffects = new Map<number, HealEffectView>();
   private readonly healEffectPool: HealEffectView[] = [];
   private readonly activeAoePulses = new Map<number, AoePulseEffectView>();
@@ -211,7 +291,7 @@ export class BattleView {
       this.seen.add(projectile.id);
       const visual: ProjectileVisual = projectile.visual ?? 'orb';
       let mesh = this.activeProjectiles.get(projectile.id);
-      // 外观变更时换池重建，避免彩色球与炸弹贴图互相污染
+      // 外观变更时换池重建，避免彩色球 / 炸弹 / 箭矢互相污染
       if (mesh && mesh.userData.visual !== visual) {
         this.scene.remove(mesh);
         this.activeProjectiles.delete(projectile.id);
@@ -228,13 +308,22 @@ export class BattleView {
       }
 
       const from = prev.projectiles.find((p) => p.id === projectile.id) ?? projectile;
+      const fromX = toSceneX(from.x);
+      const fromH = from.height;
+      const fromZ = toSceneZ(from.y);
+      const toX = toSceneX(projectile.x);
+      const toH = projectile.height;
+      const toZ = toSceneZ(projectile.y);
       mesh.position.set(
-        toSceneX(lerp(from.x, projectile.x, alpha)),
-        lerp(from.height, projectile.height, alpha),
-        toSceneZ(lerp(from.y, projectile.y, alpha)),
+        lerp(fromX, toX, alpha),
+        lerp(fromH, toH, alpha),
+        lerp(fromZ, toZ, alpha),
       );
-      // 炸弹面片始终朝向相机，避免侧面看穿成一条线
+      // 炸弹面片始终朝向相机；箭矢尖对齐飞行方向并尽量面向镜头
       if (visual === 'bomb') mesh.quaternion.copy(camera.quaternion);
+      else if (visual === 'arrow') {
+        orientArrowMesh(mesh, fromX, fromH, fromZ, toX, toH, toZ, camera);
+      }
     }
 
     for (const [id, mesh] of this.activeProjectiles) {
@@ -245,12 +334,18 @@ export class BattleView {
     }
   }
 
-  /** 按弹道外观取池化网格；炸弹用贴图面片，其余用阵营色球 */
+  /** 按弹道外观取池化网格；炸弹/箭矢用贴图面片，其余用阵营色球 */
   private obtainProjectileMesh(visual: ProjectileVisual): THREE.Mesh {
     if (visual === 'bomb') {
       const mesh = this.bombProjectilePool.pop() ?? new THREE.Mesh(BOMB_PROJECTILE_GEOMETRY);
       mesh.material = getBombProjectileMaterial();
       mesh.userData.visual = 'bomb';
+      return mesh;
+    }
+    if (visual === 'arrow') {
+      const mesh = this.arrowProjectilePool.pop() ?? new THREE.Mesh(ARROW_PROJECTILE_GEOMETRY);
+      mesh.material = getArrowProjectileMaterial();
+      mesh.userData.visual = 'arrow';
       return mesh;
     }
     const mesh = this.orbProjectilePool.pop() ?? new THREE.Mesh(PROJECTILE_GEOMETRY);
@@ -261,7 +356,10 @@ export class BattleView {
   /** 按 userData.visual 归还到对应对象池 */
   private releaseProjectileMesh(mesh: THREE.Mesh): void {
     if (mesh.userData.visual === 'bomb') this.bombProjectilePool.push(mesh);
-    else this.orbProjectilePool.push(mesh);
+    else if (mesh.userData.visual === 'arrow') {
+      mesh.userData.lastArrowDir = undefined;
+      this.arrowProjectilePool.push(mesh);
+    } else this.orbProjectilePool.push(mesh);
   }
 
   private obtainUnitView(unit: UnitSnapshot): UnitView {

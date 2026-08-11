@@ -124,4 +124,15 @@ describe('战车', () => {
     expect(snap.projectiles).toHaveLength(1);
     expect(snap.projectiles[0]!.visual).toBe('bomb');
   });
+
+  it('弓箭手弹道使用 arrow visual', () => {
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    world.spawnProjectile(archer, target, archer.stats.damage, fromFloat(9));
+
+    const snap = takeSnapshot(world);
+    expect(snap.projectiles).toHaveLength(1);
+    expect(snap.projectiles[0]!.visual).toBe('arrow');
+  });
 });

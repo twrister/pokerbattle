@@ -62,6 +62,8 @@ export const ATTACK_RANGE_TOLERANCE: Fx = fromFloat(0.35);
 export const AIR_UNIT_HOVER_HEIGHT = 1.4;
 /** 地面远程弹道默认离地高度。 */
 export const GROUND_PROJECTILE_HEIGHT = 0.9;
+/** 防御塔箭矢出生高度：接近塔顶弓手位置，避免从塔底射出。 */
+export const TOWER_PROJECTILE_HEIGHT = 2.0;
 /**
  * 空中单位弹道出生高度：约等于悬浮高度 + 巨龙头相对脚底的位置，
  * 让火球从巨龙头吐出而不是脚底。
