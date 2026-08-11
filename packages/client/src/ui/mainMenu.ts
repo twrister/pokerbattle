@@ -1,8 +1,9 @@
 import type { PlayerProfile } from '../account/types.js';
+import type { SoloDifficulty } from '@pb/sim';
 
 export interface MainMenuOptions {
   onStartSandbox: () => void;
-  onStartSolo: () => void;
+  onStartSolo: (difficulty: SoloDifficulty) => void;
   onStartVersus: () => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
@@ -29,6 +30,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
   const soloEasyButton = required<HTMLButtonElement>('#btn-solo-easy', root);
+  const soloHardButton = required<HTMLButtonElement>('#btn-solo-hard', root);
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
@@ -104,11 +106,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const startSandbox = (): void => options.onStartSandbox();
-  // 简单人机 / 快速匹配：关弹层后走原有进房回调
-  const startSoloEasy = (): void => {
+  /** 关弹层后把选择的难度交给战斗编排层。 */
+  const startSolo = (difficulty: SoloDifficulty): void => {
     closeModeDialogs();
-    options.onStartSolo();
+    options.onStartSolo(difficulty);
   };
+  const startSoloEasy = (): void => startSolo('easy');
+  const startSoloHard = (): void => startSolo('hard');
   const startOnlineQuick = (): void => {
     closeModeDialogs();
     options.onStartVersus();
@@ -134,6 +138,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
   soloEasyButton.addEventListener('click', startSoloEasy);
+  soloHardButton.addEventListener('click', startSoloHard);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
   profileButton.addEventListener('click', openRenameDialog);
   renameForm.addEventListener('submit', submitRename);
@@ -172,6 +177,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
       soloEasyButton.removeEventListener('click', startSoloEasy);
+      soloHardButton.removeEventListener('click', startSoloHard);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
       profileButton.removeEventListener('click', openRenameDialog);
       renameForm.removeEventListener('submit', submitRename);

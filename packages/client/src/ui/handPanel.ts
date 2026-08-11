@@ -581,7 +581,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
   }
 
-  /** 重建最多十张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
+  /** 重建最多九张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
     const previousRects = captureCardRects();
     const fragment = document.createDocumentFragment();

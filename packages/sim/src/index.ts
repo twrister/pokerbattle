@@ -147,6 +147,7 @@ export {
   type MatchPhase,
   type MatchResult,
 } from './match/matchState.js';
+export { SoloBotController, type SoloDifficulty } from './match/soloBot.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';

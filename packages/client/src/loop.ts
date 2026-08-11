@@ -16,6 +16,9 @@ export interface SimLoopOptions {
   withMatch?: boolean;
 }
 
+/** 在每个逻辑帧消费指令前生成自动操作，适用于本地人机等非网络控制方。 */
+export type CommandSource = (match: MatchState | null) => Command | null;
+
 /**
  * 固定步长驱动器。
  *
@@ -33,6 +36,7 @@ export class SimLoop {
 
   private accumulator = 0;
   private readonly pending: Command[] = [];
+  private readonly commandSources: CommandSource[] = [];
 
   constructor(seed = 1, options: SimLoopOptions = {}) {
     if (options.withMatch) {
@@ -49,6 +53,15 @@ export class SimLoop {
   /** 指令先入队，等到下一个逻辑帧统一执行——联网后这里换成「等服务器确认的帧」 */
   enqueue(command: Command): void {
     this.pending.push(command);
+  }
+
+  /** 注册逻辑帧命令来源；返回注销函数，确保离开对局后不残留自动操作。 */
+  addCommandSource(source: CommandSource): () => void {
+    this.commandSources.push(source);
+    return () => {
+      const index = this.commandSources.indexOf(source);
+      if (index >= 0) this.commandSources.splice(index, 1);
+    };
   }
 
   advance(deltaMs: number): void {
@@ -68,6 +81,10 @@ export class SimLoop {
   }
 
   stepOnce(): void {
+    for (const source of this.commandSources) {
+      const command = source(this.match);
+      if (command) this.pending.push(command);
+    }
     if (this.match) this.match.step(this.pending);
     else this.world.step(this.pending);
     this.pending.length = 0;

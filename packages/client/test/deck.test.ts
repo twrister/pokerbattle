@@ -19,7 +19,7 @@ describe('单机扑克牌堆', () => {
     expect(cardImageUrl(cards.find((card) => card.id === 'A-spades')!)).toBe('/cards/A_1.png');
   });
 
-  it('抽牌离开有限牌堆且不能突破十张手牌上限', () => {
+  it('抽牌离开有限牌堆且不能突破九张手牌上限', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const drawn = deck.drawMany(20);
 

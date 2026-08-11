@@ -1,7 +1,7 @@
 import { Rng } from '../math/rng.js';
 
 export const INITIAL_HAND_SIZE = 3;
-export const MAX_HAND_SIZE = 10;
+export const MAX_HAND_SIZE = 9;
 /** 新牌权重（整数）；与 RETURNED 比约为 4:1，对应旧版 1 : 0.25。 */
 export const FRESH_CARD_WEIGHT = 4;
 /** 打出回收后的权重，降低立刻重抽概率。 */

@@ -79,13 +79,12 @@ describe('单机手牌交互', () => {
       '9-clubs',
       '10-diamonds',
       'J-spades',
-      'Q-hearts',
     ]);
     const fullPanel = createHandPanel({ deck: fullDeck });
     const fullHint = document.querySelector<HTMLElement>('#hand-full-hint')!;
     expect(pile.classList.contains('is-full')).toBe(true);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
-    expect(fullHint.textContent).toBe('手牌已满10张');
+    expect(fullHint.textContent).toBe('手牌已满9张');
     expect(fullHint.classList.contains('is-visible')).toBe(true);
 
     fullDeck.play([fullDeck.hand[0]!.id]);

@@ -1205,7 +1205,7 @@
       }
 
       /*
-       * 手牌独立于调试面板锚在单机画面底部，重叠排布确保十张牌仍能完整操作。
+       * 手牌独立于调试面板锚在单机画面底部，重叠排布确保九张牌仍能完整操作。
        * 尺寸使用 :root 的 --hu（舞台宽 / 720），与大厅同一套 720×1280 设计单位。
        */
       #solo-hand {
@@ -2519,9 +2519,9 @@
                 简单人机
                 <small>现有单机</small>
               </button>
-              <button class="mode-option mode-option-soon" type="button" data-placeholder="困难人机">
+              <button id="btn-solo-hard" class="mode-option mode-option-ready" type="button">
                 困难人机
-                <small>筹备中</small>
+                <small>预判手牌，主动攻守</small>
               </button>
               <button class="mode-option mode-option-soon" type="button" data-placeholder="关卡挑战">
                 关卡挑战

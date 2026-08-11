@@ -35,6 +35,7 @@ describe('大厅玩家档案展示', () => {
         <button id="btn-deck"></button>
         <button id="btn-codex"></button>
         <button id="btn-solo-easy"></button>
+        <button id="btn-solo-hard"></button>
         <button id="btn-online-quick"></button>
         <div id="lobby-status"></div>
         <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
@@ -112,5 +113,24 @@ describe('大厅玩家档案展示', () => {
     menu.refreshProfile();
     expect(document.querySelector('#player-name')?.textContent).toBe('外部刷新');
     expect(document.querySelector('#player-level')?.textContent).toBe('等级 09');
+  });
+
+  it('简单与困难人机分别传递对应难度', () => {
+    const onStartSolo = vi.fn();
+    createMainMenu({
+      onStartSandbox: vi.fn(),
+      onStartSolo,
+      onStartVersus: vi.fn(),
+      onOpenDeckConfig: vi.fn(),
+      onOpenCodex: vi.fn(),
+      getProfile: () => buildProfile(),
+      onRename: vi.fn(),
+    });
+
+    document.querySelector<HTMLButtonElement>('#btn-solo-easy')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-solo-hard')!.click();
+
+    expect(onStartSolo).toHaveBeenNthCalledWith(1, 'easy');
+    expect(onStartSolo).toHaveBeenNthCalledWith(2, 'hard');
   });
 });

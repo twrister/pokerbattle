@@ -1,11 +1,13 @@
 import {
   Faction,
+  SoloBotController,
   TICK_RATE,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   type CardFormation,
   type MatchResult,
   type MatchState,
+  type SoloDifficulty,
   type UnitTypeId,
   fromFloat,
   getFormationBuildingTypeId,
@@ -76,9 +78,14 @@ document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
 const playerProfile = createPlayerProfileService();
 
 let screens: ScreenController;
+/** 大厅选择只影响下一场单机，避免在 UI 路由中扩散难度状态。 */
+let selectedSoloDifficulty: SoloDifficulty = 'easy';
 const mainMenu = createMainMenu({
   onStartSandbox: () => screens.show('sandbox'),
-  onStartSolo: () => screens.show('solo'),
+  onStartSolo: (difficulty) => {
+    selectedSoloDifficulty = difficulty;
+    screens.show('solo');
+  },
   onStartVersus: () => screens.show('versus'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
@@ -165,6 +172,10 @@ function enterBattleSession(mode: BattleMode): () => void {
     loop.curr = takeSnapshot(loop.world);
     loop.prev = loop.curr;
   }
+  const soloBot = isSolo ? new SoloBotController(selectedSoloDifficulty, 20260806) : null;
+  const removeSoloBot = soloBot
+    ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
+    : () => {};
 
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
@@ -480,6 +491,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     stopPlaceableHighlight();
     stopAoePreview();
     handPanel?.dispose();
+    removeSoloBot();
     panel.dispose();
     configPanel?.setOnApplied(() => {});
     battleView.reset();
