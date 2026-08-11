@@ -4,6 +4,7 @@ import {
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   type CardFormation,
+  type MatchResult,
   type MatchState,
   type UnitTypeId,
   fromFloat,
@@ -19,6 +20,11 @@ import {
   spawnCommand,
   takeSnapshot,
 } from '@pb/sim';
+import {
+  battleInputFromMatchResult,
+  createPlayerProfileService,
+  shouldRecordVersusAbandon,
+} from './account/index.js';
 import { SimLoop } from './loop.js';
 import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
@@ -63,6 +69,9 @@ const lobbyStatus = document.querySelector<HTMLElement>('#lobby-status');
 // 供 CSS 区分开发服 / 正式服可见功能
 document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
 
+/** 设备档案：启动时静默建档，后续结算/改名都走同一实例。 */
+const playerProfile = createPlayerProfileService();
+
 let screens: ScreenController;
 const mainMenu = createMainMenu({
   onStartSandbox: () => screens.show('sandbox'),
@@ -70,6 +79,10 @@ const mainMenu = createMainMenu({
   onStartVersus: () => screens.show('versus'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
+  getProfile: () => playerProfile.getProfile(),
+  onRename: (displayName) => {
+    playerProfile.setDisplayName(displayName);
+  },
 });
 const deckConfigPage = createDeckConfigPage({ onBack: () => screens.show('menu') });
 const codexPage = createCodexPage({ onBack: () => screens.show('menu') });
@@ -400,6 +413,8 @@ function enterBattleSession(mode: BattleMode): () => void {
       battleHud.update(loop.match!);
       if (loop.match!.result && !resultShown) {
         resultShown = true;
+        // 单机仅在权威结算时记一笔；中途返回不写档案
+        recordLocalBattle(loop.match!.result, Faction.Blue, 'solo');
         battleResult.show(loop.match!.result, Faction.Blue);
       }
     }
@@ -439,6 +454,35 @@ function enterVersus(): () => void {
   let leave: (() => void) | null = null;
   let cancelled = false;
   let localFaction: Faction | null = null;
+  /** 对局已真正开始后才可能记 abandoned；匹配期退出不计。 */
+  let matchStarted = false;
+  /** 会话内只记一笔：权威结算优先，主动退出次之。 */
+  let battleRecorded = false;
+  /** 对手离开不记本方失败。 */
+  let peerLeft = false;
+
+  /** 权威结算写入档案；重复调用会被会话标记挡住。 */
+  const recordVersusResult = (result: MatchResult, faction: Faction): void => {
+    if (battleRecorded) return;
+    battleRecorded = true;
+    recordLocalBattle(result, faction, 'versus');
+  };
+
+  /** 本机中途退出：记一次 abandoned 失败。 */
+  const recordVersusAbandonedIfNeeded = (): void => {
+    if (!shouldRecordVersusAbandon({ matchStarted, battleRecorded, peerLeft })) return;
+    battleRecorded = true;
+    try {
+      playerProfile.recordBattle({
+        mode: 'versus',
+        outcome: 'loss',
+        reason: 'abandoned',
+      });
+      mainMenu.refreshProfile();
+    } catch (error) {
+      console.error('[account] 联机中途退出记录失败', error);
+    }
+  };
 
   container.classList.add('is-solo', 'is-versus');
   hud.classList.add('is-solo', 'is-versus');
@@ -447,17 +491,21 @@ function enterVersus(): () => void {
   setLobbyStatus('正在匹配联机对手…');
 
   void connectVersusSession({
+    name: playerProfile.getProfile().displayName,
     onStatus: setLobbyStatus,
     onDesync: (tick, serverHash) => {
       console.error(`[desync] tick=${tick} serverHash=${serverHash}`);
       setLobbyStatus(`不同步：tick ${tick}`);
     },
     onPeerLeft: () => {
+      peerLeft = true;
       setLobbyStatus('对手已离开');
       screens.show('menu');
     },
     onMatchEnd: (result) => {
-      if (localFaction !== null) battleResult.show(result, localFaction);
+      if (localFaction === null) return;
+      recordVersusResult(result, localFaction);
+      battleResult.show(result, localFaction);
     },
   })
     .then((session) => {
@@ -466,7 +514,11 @@ function enterVersus(): () => void {
         return;
       }
       localFaction = session.faction;
-      leave = runVersusSession(session.loop, session.faction, session.close);
+      matchStarted = true;
+      leave = runVersusSession(session.loop, session.faction, session.close, {
+        onOfficialResult: (result) => recordVersusResult(result, session.faction),
+        onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
+      });
     })
     .catch((error: unknown) => {
       if (cancelled) return;
@@ -492,6 +544,10 @@ function runVersusSession(
   netLoop: import('./net/netLoop.js').NetSimLoop,
   faction: Faction,
   closeSocket: () => void,
+  accountHooks: {
+    onOfficialResult: (result: MatchResult) => void;
+    onLeaveWithoutResult: () => void;
+  },
 ): () => void {
   mainMenu.hide();
   container.classList.add('is-solo', 'is-versus');
@@ -686,6 +742,8 @@ function runVersusSession(
     battleHud.update(netLoop.match);
     if (netLoop.match.result && !resultShown) {
       resultShown = true;
+      // 与 onMatchEnd 共用会话防重；谁先到都只记一次
+      accountHooks.onOfficialResult(netLoop.match.result);
       battleResult.show(netLoop.match.result, faction);
     }
     battleView.render(netLoop.prev, netLoop.curr, netLoop.alpha, sceneContext.camera);
@@ -699,6 +757,9 @@ function runVersusSession(
 
   return () => {
     cancelAnimationFrame(animationFrameId);
+    // 离开时兜底：已有权威结果则补记，否则按本机中途退出处理
+    if (netLoop.match.result) accountHooks.onOfficialResult(netLoop.match.result);
+    else accountHooks.onLeaveWithoutResult();
     hud.classList.add('is-hidden');
     battleHud.hide();
     battleResult.hide();
@@ -763,6 +824,20 @@ function setLobbyStatus(text: string): void {
   if (!lobbyStatus) return;
   lobbyStatus.textContent = text;
   lobbyStatus.classList.add('is-visible');
+}
+
+/** 把权威结算写入设备档案，并刷新大厅展示。 */
+function recordLocalBattle(
+  result: MatchResult,
+  playerFaction: Faction,
+  mode: 'solo' | 'versus',
+): void {
+  try {
+    playerProfile.recordBattle(battleInputFromMatchResult(result, playerFaction, mode));
+    mainMenu.refreshProfile();
+  } catch (error) {
+    console.error('[account] 对战记录写入失败', error);
+  }
 }
 
 function spawnBrawl(target: SimLoop): void {

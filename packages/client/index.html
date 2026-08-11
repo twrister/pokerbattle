@@ -164,6 +164,83 @@
         letter-spacing: 0.08em;
       }
 
+      /* 点击玩家卡片可轻量改名，避免强制登录流程 */
+      #btn-player-profile {
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        border-radius: calc(12 * var(--hu));
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      #btn-player-profile:hover,
+      #btn-player-profile:active {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: transparent;
+        transform: none;
+      }
+
+      .rename-form {
+        display: grid;
+        gap: calc(12 * var(--hu));
+      }
+
+      #rename-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(169, 198, 220, 0.28);
+        border-radius: calc(10 * var(--hu));
+        background: rgba(8, 14, 22, 0.88);
+        color: #f2f5f7;
+        font: inherit;
+        font-size: calc(16 * var(--hu));
+      }
+
+      #rename-input:focus {
+        outline: 1px solid rgba(153, 207, 237, 0.55);
+        outline-offset: 1px;
+      }
+
+      #rename-error {
+        min-height: 1.2em;
+        color: transparent;
+        font-size: calc(12 * var(--hu));
+      }
+
+      #rename-error.is-visible {
+        color: #ef8b8b;
+      }
+
+      .rename-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      #btn-rename-cancel,
+      #btn-rename-confirm {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
+      }
+
+      #btn-rename-cancel {
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+        color: #c5d4e0;
+      }
+
+      #btn-rename-confirm {
+        border: 1px solid rgba(153, 207, 237, 0.5);
+        background: linear-gradient(135deg, #3d718f, #294c68);
+        color: #f7fbfd;
+      }
+
       .lobby-hero {
         display: flex;
         flex: 1;
@@ -2178,13 +2255,13 @@
     <main id="main-menu" aria-hidden="false">
       <div class="lobby-shell">
         <header class="lobby-topbar">
-          <div class="player-card">
-            <div class="player-avatar" aria-hidden="true">PB</div>
+          <button id="btn-player-profile" class="player-card" type="button" aria-label="查看并修改玩家名称">
+            <div id="player-avatar" class="player-avatar" aria-hidden="true">PB</div>
             <div class="player-copy">
-              <div class="player-name">指挥官</div>
-              <div class="player-level">等级 01</div>
+              <div id="player-name" class="player-name">玩家</div>
+              <div id="player-level" class="player-level">等级 01</div>
             </div>
-          </div>
+          </button>
         </header>
 
         <section class="lobby-hero">
@@ -2267,6 +2344,32 @@
                 <small>筹备中</small>
               </button>
             </div>
+          </div>
+        </div>
+
+        <div id="rename-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="rename-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭改名" data-rename-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="rename-title" class="mode-dialog-title">玩家名称</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-rename-close>×</button>
+            </header>
+            <form id="rename-form" class="rename-form">
+              <input
+                id="rename-input"
+                name="displayName"
+                type="text"
+                maxlength="16"
+                autocomplete="nickname"
+                spellcheck="false"
+                aria-label="指挥官名称"
+              />
+              <div id="rename-error" role="alert"></div>
+              <div class="rename-actions">
+                <button id="btn-rename-cancel" type="button" data-rename-close>取消</button>
+                <button id="btn-rename-confirm" type="submit">保存</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
