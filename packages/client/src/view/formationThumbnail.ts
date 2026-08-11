@@ -28,8 +28,8 @@ export const DEFAULT_FRAME_MARGIN = 2;
 const MAX_TEXTURE_WAIT_FRAMES = 180;
 /** 取景时按最高立绘估算的顶部空间（世界单位）。 */
 const FRAME_HEIGHT = 4.5;
-/** 阵型地面中心在按钮画面中的竖直锚点：自下而上 1/3，上方留给立绘。 */
-const FRAME_ANCHOR_Y_FROM_BOTTOM = 1 / 3;
+/** 阵型地面中心在按钮画面中的竖直锚点：自下而上 1/4，上方留给立绘。 */
+const FRAME_ANCHOR_Y_FROM_BOTTOM = 1 / 4;
 
 /** 当前取景放大倍率；写入缓存键，改参后旧图自动失效。 */
 let unitDisplayScale = DEFAULT_UNIT_DISPLAY_SCALE;
@@ -188,7 +188,7 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
 }
 
 /**
- * 按阵型包围盒配正交视锥：水平钉阵型地面中心，竖直锚在按钮自下而上 1/3。
+ * 按阵型包围盒配正交视锥：水平钉阵型地面中心，竖直锚在按钮自下而上 1/4。
  * 放大以该锚点为中心裁切，优先保证脚底落点稳定，上方留给立绘。
  */
 function frameCamera(
@@ -246,7 +246,7 @@ function frameCamera(
   const above = Math.max(top - cy, 0.5);
   const halfWNeeded = Math.max(cx - left, right - cx, 0.5);
   const aspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
-  // 竖直按「下 1/3 / 上 2/3」装下内容，再套按钮宽高比。
+  // 竖直按「下 1/4 / 上 3/4」装下内容，再套按钮宽高比。
   const neededH = Math.max(
     below / FRAME_ANCHOR_Y_FROM_BOTTOM,
     above / (1 - FRAME_ANCHOR_Y_FROM_BOTTOM),

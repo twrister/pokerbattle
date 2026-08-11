@@ -711,7 +711,8 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
 }
 
 function hpColor(faction: Faction): number {
-  return faction === Faction.Blue ? 0x63d68a : 0xf0d264;
+  // 红方用橘红，和 HUD --red 区分开，避免跟金黄资源条混淆
+  return faction === Faction.Blue ? 0x63d68a : 0xff6b35;
 }
 
 /** 等级徽章纹理缓存；测试环境无 DOM 时回退为纯色方块。 */
