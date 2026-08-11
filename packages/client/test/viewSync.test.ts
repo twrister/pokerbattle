@@ -143,14 +143,14 @@ describe('渲染同步', () => {
     blueCam.position.set(0, 10, 10);
     blueCam.lookAt(0, 0, 0);
     blueCam.updateMatrixWorld();
-    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, blueCam);
+    unitView.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, blueCam);
     expect(findBillboard()?.position.z).toBeCloseTo(half, 5);
 
     const redCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
     redCam.position.set(0, 10, -10);
     redCam.lookAt(0, 0, 0);
     redCam.updateMatrixWorld();
-    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, redCam);
+    unitView.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, redCam);
     expect(findBillboard()?.position.z).toBeCloseTo(-half, 5);
     unitView.dispose();
   });
@@ -169,6 +169,7 @@ describe('渲染同步', () => {
       0,
       1,
       0,
+      1,
       1,
       UnitState.Idle,
       false,

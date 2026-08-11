@@ -58,6 +58,43 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
   });
 
+  it('民兵与弓手可切换等级，属性条随等级变化', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const levelButtons = (): HTMLButtonElement[] =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-level'));
+    const hpFillWidth = (): string =>
+      document.querySelector('.codex-stat-bar span')?.getAttribute('style') ?? '';
+
+    expect(levelButtons().map((button) => button.textContent)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+    ]);
+    expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
+    const levelOneHp = hpFillWidth();
+
+    levelButtons()[8]?.click();
+    expect(levelButtons()[8]?.classList.contains('is-active')).toBe(true);
+    expect(hpFillWidth()).not.toBe(levelOneHp);
+
+    const archer = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+      (button) => button.textContent?.includes('弓手'),
+    );
+    archer?.click();
+    expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
+    expect(levelButtons()).toHaveLength(9);
+
+    page.dispose();
+  });
+
   it('返回按钮会通知页面控制器并正确隐藏页面', () => {
     const onBack = vi.fn();
     const page = createCodexPage({ onBack });

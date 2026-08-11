@@ -116,6 +116,7 @@ export class BattleView {
         lerp(from.facingX, unit.facingX, alpha),
         toSceneFacingZ(lerp(from.facingY, unit.facingY, alpha)),
         lerp(from.hpRatio, unit.hpRatio, alpha),
+        unit.level,
         unit.state,
         unit.attacking,
         unit.charging,

@@ -13,6 +13,8 @@ import type { World } from './world.js';
 export interface UnitSnapshot {
   id: number;
   typeId: UnitTypeId;
+  /** 单位出生等级，供战场与调试视图展示。 */
+  level: number;
   faction: Faction;
   state: UnitState;
   x: number;
@@ -93,6 +95,7 @@ export function takeSnapshot(world: World): Snapshot {
     units.push({
       id: unit.id,
       typeId: unit.typeId,
+      level: unit.level,
       faction: unit.faction,
       state: unit.state,
       x: toFloat(unit.pos.x),

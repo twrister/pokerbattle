@@ -85,6 +85,7 @@ export function createFormationPreview(container: HTMLElement): FormationPreview
         0,
         1,
         1,
+        1,
         UnitState.Idle,
         false,
         false,
@@ -135,7 +136,7 @@ export function createFormationPreview(container: HTMLElement): FormationPreview
         const view = new UnitView(Faction.Blue, point.typeId);
         const x = point.x;
         const z = -point.y;
-        view.update(x, z, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
+        view.update(x, z, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
         units.push({ view, typeId: point.typeId, x, z });
         scene.add(view.group);
       }

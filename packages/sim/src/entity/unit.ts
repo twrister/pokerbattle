@@ -33,6 +33,8 @@ export const NO_TARGET = 0;
 export interface Unit {
   readonly id: number;
   readonly typeId: UnitTypeId;
+  /** 出生时确定的兵种等级，战斗过程不变。 */
+  readonly level: number;
   readonly config: UnitConfig;
   readonly faction: Faction;
 
@@ -119,12 +121,20 @@ export interface Unit {
   dead: boolean;
 }
 
-export function createUnit(id: number, typeId: UnitTypeId, faction: Faction, x: Fx, y: Fx): Unit {
-  const config = getUnitConfig(typeId);
+export function createUnit(
+  id: number,
+  typeId: UnitTypeId,
+  faction: Faction,
+  x: Fx,
+  y: Fx,
+  level = 1,
+): Unit {
+  const config = getUnitConfig(typeId, level);
   const base = attributesFromConfig(config);
   return {
     id,
     typeId,
+    level: config.level,
     config,
     faction,
     pos: vec(x, y),

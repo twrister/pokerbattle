@@ -2,6 +2,8 @@ import {
   TICK_RATE,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  getUnitConfig,
+  getUnitLevels,
   isBuildingConfig,
   toFloat,
   type UnitConfig,
@@ -14,8 +16,9 @@ type CodexFilter = 'all' | CodexCategory;
 
 interface CodexUnit {
   category: CodexCategory;
-  config: UnitConfig;
   typeId: UnitTypeId;
+  /** 兵种名称取 1 级配置，等级切换不改变显示名。 */
+  name: string;
 }
 
 type StatKey = 'hp' | 'damage' | 'attackSpeed' | 'range' | 'moveSpeed';
@@ -87,7 +90,7 @@ function getCodexUnits(): CodexUnit[] {
   return UNIT_TYPE_IDS.filter((typeId) => !isBuildingConfig(UNIT_CONFIGS[typeId]))
     .map((typeId) => ({
       typeId,
-      config: UNIT_CONFIGS[typeId],
+      name: UNIT_CONFIGS[typeId].name,
       category: getCategory(typeId),
     }))
     .sort((a, b) => getDisplayOrder(a.typeId) - getDisplayOrder(b.typeId));
@@ -101,22 +104,25 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   const unitList = required<HTMLElement>('#codex-unit-list', root);
   const detail = required<HTMLElement>('#codex-detail', root);
   const units = getCodexUnits();
+  // 进度条上限覆盖所有等级，避免高等级单位撑破相对比较。
   const statMaxima = getStatMaxima(units);
   let category: CodexFilter = 'all';
   let selectedTypeId = units[0]?.typeId;
+  let selectedLevel = 1;
 
   const back = (): void => options.onBack();
   backButton.addEventListener('click', back);
 
-  /** 根据当前分类和选中兵种重新渲染整页内容。 */
+  /** 根据当前分类、选中兵种与等级重新渲染整页内容。 */
   function render(): void {
     const visibleUnits = units.filter((unit) => category === 'all' || unit.category === category);
     if (!visibleUnits.some((unit) => unit.typeId === selectedTypeId)) {
       selectedTypeId = visibleUnits[0]?.typeId;
     }
+    selectedLevel = resolveSelectedLevel(selectedTypeId, selectedLevel);
     renderCategories();
     renderUnits(visibleUnits);
-    renderDetail(units.find((unit) => unit.typeId === selectedTypeId), statMaxima);
+    renderDetail(units.find((unit) => unit.typeId === selectedTypeId), selectedLevel, statMaxima);
   }
 
   /** 渲染全部与分类页签，并同步当前筛选的无障碍选中状态。 */
@@ -149,7 +155,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
         const selected = unit.typeId === selectedTypeId;
         button.classList.toggle('is-active', selected);
         button.setAttribute('aria-pressed', String(selected));
-        button.setAttribute('aria-label', `查看${displayName(unit.config.name)}档案`);
+        button.setAttribute('aria-label', `查看${displayName(unit.name)}档案`);
         const sprite = SPRITE_DEFS[unit.typeId];
         if (sprite) {
           const image = document.createElement('img');
@@ -160,10 +166,12 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
         }
         const name = document.createElement('span');
         name.className = 'codex-unit-name';
-        name.textContent = displayName(unit.config.name);
+        name.textContent = displayName(unit.name);
         button.appendChild(name);
         button.addEventListener('click', () => {
           selectedTypeId = unit.typeId;
+          // 换兵种时回到该兵种最低等级，避免沿用上一个兵种的高等级。
+          selectedLevel = getUnitLevels(unit.typeId)[0] ?? 1;
           render();
         });
         return button;
@@ -171,12 +179,18 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     );
   }
 
-  /** 渲染选中兵种的属性进度、攻击方式与技能说明。 */
-  function renderDetail(unit: CodexUnit | undefined, maxima: Record<StatKey, number>): void {
+  /** 渲染选中兵种在指定等级下的属性进度、攻击方式与技能说明。 */
+  function renderDetail(
+    unit: CodexUnit | undefined,
+    level: number,
+    maxima: Record<StatKey, number>,
+  ): void {
     detail.replaceChildren();
     if (!unit) return;
 
-    const { config, typeId } = unit;
+    const { typeId } = unit;
+    const config = getUnitConfig(typeId, level);
+    const levels = getUnitLevels(typeId);
     const sprite = SPRITE_DEFS[typeId];
     const header = document.createElement('header');
     header.className = 'codex-detail-header';
@@ -192,13 +206,33 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     categoryLabel.className = 'codex-detail-category';
     categoryLabel.textContent = CATEGORY_NAMES[unit.category];
     const heading = document.createElement('h2');
-    heading.textContent = displayName(config.name);
+    heading.textContent = displayName(unit.name);
     title.append(categoryLabel, heading);
     header.appendChild(title);
 
     const summary = document.createElement('p');
     summary.className = 'codex-detail-summary';
     summary.textContent = getSummary(config);
+
+    // 多等级兵种提供切换；单等级也显示当前等级，方便与战场徽章对照。
+    const levelRow = document.createElement('div');
+    levelRow.className = 'codex-levels';
+    levelRow.setAttribute('role', 'group');
+    levelRow.setAttribute('aria-label', '兵种等级');
+    for (const unitLevel of levels) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'codex-level';
+      button.textContent = String(unitLevel);
+      button.classList.toggle('is-active', unitLevel === level);
+      button.setAttribute('aria-pressed', String(unitLevel === level));
+      button.setAttribute('aria-label', `查看${unitLevel}级参数`);
+      button.addEventListener('click', () => {
+        selectedLevel = unitLevel;
+        render();
+      });
+      levelRow.appendChild(button);
+    }
 
     const stats = document.createElement('dl');
     stats.className = 'codex-stats';
@@ -230,7 +264,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     const skillDescription = document.createElement('p');
     skillDescription.textContent = skill.description;
     skillBlock.append(skillLabel, skillTitle, skillDescription);
-    detail.append(header, summary, stats, skillBlock);
+    detail.append(header, summary, levelRow, stats, skillBlock);
   }
 
   render();
@@ -255,6 +289,14 @@ function displayName(name: string): string {
   return name.replace(/（.*?）/g, '');
 }
 
+/** 将记忆等级钳到当前兵种可用等级；缺省取最低一级。 */
+function resolveSelectedLevel(typeId: UnitTypeId | undefined, level: number): number {
+  if (!typeId) return 1;
+  const levels = getUnitLevels(typeId);
+  if (levels.includes(level)) return level;
+  return levels[0] ?? 1;
+}
+
 /** 提供适合详情标题下方的简短战斗定位。 */
 function getSummary(config: UnitConfig): string {
   const range = toFloat(config.range);
@@ -275,7 +317,7 @@ function getStats(config: UnitConfig): Array<[StatKey, number]> {
   ];
 }
 
-/** 从所有可展示兵种取每项属性的最大值，保证进度条横向可比较。 */
+/** 从所有可展示兵种的全部等级取每项属性最大值，保证进度条横向可比较。 */
 function getStatMaxima(units: readonly CodexUnit[]): Record<StatKey, number> {
   const maxima: Record<StatKey, number> = {
     hp: 0,
@@ -285,8 +327,10 @@ function getStatMaxima(units: readonly CodexUnit[]): Record<StatKey, number> {
     moveSpeed: 0,
   };
   for (const unit of units) {
-    for (const [key, value] of getStats(unit.config)) {
-      maxima[key] = Math.max(maxima[key], value);
+    for (const level of getUnitLevels(unit.typeId)) {
+      for (const [key, value] of getStats(getUnitConfig(unit.typeId, level))) {
+        maxima[key] = Math.max(maxima[key], value);
+      }
     }
   }
   return maxima;

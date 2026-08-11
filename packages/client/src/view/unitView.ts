@@ -39,6 +39,9 @@ export class UnitView {
 
   private readonly hpAnchor = new THREE.Group();
   private readonly hpFill: THREE.Mesh;
+  /** 血条左侧等级徽章；贴图按等级共享，避免每个单位创建 Canvas。 */
+  private readonly levelBadge: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private displayedLevel = 1;
   private readonly barWidth: number;
   private readonly hpBaseY: number;
   /** 空中单位只抬高角色与血条，碰撞圈和阴影仍留在地面标示落点。 */
@@ -282,10 +285,16 @@ export class UnitView {
     );
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
+    this.levelBadge = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.4, 0.4),
+      createLevelBadgeMaterial(1),
+    );
+    this.levelBadge.position.set(-(this.barWidth + 0.2) / 2, 0, HP_FILL_Z + 0.01);
+    this.levelBadge.renderOrder = 4;
     this.hpBaseY = topY + (this.isBuilding ? 0.45 : 0.35);
     // 血条跟建筑贴图一起落到近端格边上方；符号在 update 里与贴图同步
     this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetMag);
-    this.hpAnchor.add(hpBack, this.hpFill);
+    this.hpAnchor.add(hpBack, this.hpFill, this.levelBadge);
 
     this.group.add(this.inspireAura, this.hpAnchor);
   }
@@ -304,6 +313,7 @@ export class UnitView {
     facingX: number,
     facingZ: number,
     hpRatio: number,
+    level: number,
     state: UnitState,
     attacking: boolean,
     charging: boolean,
@@ -345,6 +355,7 @@ export class UnitView {
     this.updateFlightHeight(timeSec);
 
     const ratio = Math.max(0, Math.min(1, hpRatio));
+    this.setLevel(level);
     this.hpFill.scale.x = Math.max(ratio, 0.0001);
     // 缩放是绕中心的，往左挪回去血条才是从右往左掉
     this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
@@ -358,6 +369,16 @@ export class UnitView {
     this.updateCastFx(casting, timeSec, camera);
     // 炸弹兵引信用 attacking 标记；闪烁盖过普通受击 tint
     this.applyHitTint(timeSec, this.isDetonator && attacking);
+  }
+
+  /** 同步单位等级；对象池复用时每帧写入，避免沿用上一名单位的徽章。 */
+  setLevel(level: number): void {
+    const normalized = Math.max(1, Math.floor(level));
+    if (normalized === this.displayedLevel) return;
+    this.displayedLevel = normalized;
+    const material = this.levelBadge.material;
+    material.map = getLevelBadgeTexture(normalized);
+    material.needsUpdate = true;
   }
 
   /** 让空中角色缓慢悬浮，同时保持地面圈和阴影不离地，便于判断实际战斗位置。 */
@@ -527,6 +548,7 @@ export class UnitView {
     this.wasCasting = false;
     this.castAnimStartedAt = 0;
     this.lastHpRatio = 1;
+    this.setLevel(1);
     this.inspireAura.visible = false;
     if (this.castFx) this.castFx.visible = false;
     this.applyHitTint(0);
@@ -572,6 +594,48 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
 
 function hpColor(faction: Faction): number {
   return faction === Faction.Blue ? 0x63d68a : 0xf0d264;
+}
+
+/** 等级徽章纹理缓存；测试环境无 DOM 时回退为纯色方块。 */
+const LEVEL_BADGE_TEXTURES = new Map<number, THREE.CanvasTexture>();
+
+function createLevelBadgeMaterial(level: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    map: getLevelBadgeTexture(level),
+    color: 0xffffff,
+    transparent: true,
+    depthWrite: false,
+  });
+}
+
+/** 为一个等级生成共享数字纹理，避免密集阵型产生大量 CanvasTexture。 */
+function getLevelBadgeTexture(level: number): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const cached = LEVEL_BADGE_TEXTURES.get(level);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.fillStyle = '#1c2738';
+  context.beginPath();
+  context.roundRect(2, 2, 60, 60, 12);
+  context.fill();
+  context.lineWidth = 5;
+  context.strokeStyle = '#f5d26b';
+  context.stroke();
+  context.fillStyle = '#ffffff';
+  context.font = 'bold 50px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(String(level), 32, 34);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.LinearFilter;
+  LEVEL_BADGE_TEXTURES.set(level, texture);
+  return texture;
 }
 
 /** 前景相对底条朝相机方向的偏移，拉开深度差减轻远距 Z-fighting */

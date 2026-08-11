@@ -34,6 +34,11 @@ function unitConfigWritePlugin(): Plugin {
               sendJson(res, 400, { error: 'body must be a JSON object' });
               return;
             }
+            const validationError = validateUnitLevels(parsed);
+            if (validationError) {
+              sendJson(res, 400, { error: validationError });
+              return;
+            }
             const text = `${JSON.stringify(parsed, null, 2)}\n`;
             fs.writeFileSync(unitsJsonPath, text, 'utf8');
             sendJson(res, 200, { ok: true });
@@ -100,6 +105,28 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
+}
+
+/** 在写盘前阻止空等级、负等级等配置错误，避免开发期误写坏 units.json。 */
+function validateUnitLevels(value: object): string | undefined {
+  for (const [typeId, draft] of Object.entries(value)) {
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+      return `${typeId} must be a config object`;
+    }
+    const levels = (draft as { levels?: unknown }).levels;
+    if (levels === undefined) continue;
+    if (!levels || typeof levels !== 'object' || Array.isArray(levels)) {
+      return `${typeId}.levels must be an object`;
+    }
+    const keys = Object.keys(levels);
+    if (
+      keys.length === 0
+      || keys.some((key) => !Number.isInteger(Number(key)) || Number(key) < 1)
+    ) {
+      return `${typeId}.levels must contain positive integer keys`;
+    }
+  }
+  return undefined;
 }
 
 export default defineConfig({

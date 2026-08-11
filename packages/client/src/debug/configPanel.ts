@@ -6,6 +6,8 @@ import {
   dumpUnitConfigDrafts,
   resetUnitConfigsToDefault,
   type UnitConfigDraft,
+  type UnitLevelConfigDraft,
+  type UnitTypeConfigDraft,
   type UnitTypeId,
 } from '@pb/sim';
 
@@ -62,6 +64,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   let collapsed = readCollapsed();
   let saveSeq = 0;
   let onApplied = options.onApplied;
+  const selectedLevels = new Map<UnitTypeId, number>();
 
   /** 切换收起/展开，并记住上次状态 */
   function setCollapsed(next: boolean): void {
@@ -118,7 +121,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     }
   }
 
-  function makeUnitSection(typeId: UnitTypeId, draft: UnitConfigDraft): HTMLElement {
+  function makeUnitSection(typeId: UnitTypeId, draft: UnitTypeConfigDraft): HTMLElement {
     const section = document.createElement('section');
     section.className = 'config-unit';
     section.dataset.unit = typeId;
@@ -130,27 +133,85 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     section.appendChild(heading);
 
     section.appendChild(makeTextRow(typeId, 'name', '名称', draft.name));
+    const level = selectedLevels.get(typeId) ?? 1;
+    const levelDraft = getLevelDraft(draft, level);
+    section.appendChild(makeLevelRow(typeId, draft, level));
 
     for (const field of NUMERIC_FIELDS) {
-      const value = draft[field.key];
+      const value = levelDraft[field.key as keyof UnitLevelConfigDraft];
       if (typeof value !== 'number') continue;
       // 弹速只在远程时显示，近战隐藏避免误导
       if (
         field.key === 'projectileSpeed' &&
-        draft.attackKind !== 'projectile' &&
-        draft.attackKind !== 'projectile_aoe'
+        levelDraft.attackKind !== 'projectile' &&
+        levelDraft.attackKind !== 'projectile_aoe'
       ) {
         continue;
       }
-      if (field.key === 'aoeRadius' && draft.attackKind !== 'projectile_aoe') continue;
+      if (field.key === 'aoeRadius' && levelDraft.attackKind !== 'projectile_aoe') continue;
       section.appendChild(
-        makeNumberRow(typeId, field.key, field.label, value, field.step, field.hint),
+        makeNumberRow(typeId, level, field.key, field.label, value, field.step, field.hint),
       );
     }
 
-    section.appendChild(makeAttackKindRow(typeId, draft.attackKind));
-    section.appendChild(makeMovementLayerRow(typeId, draft.movementLayer));
+    section.appendChild(makeAttackKindRow(typeId, level, levelDraft.attackKind));
+    section.appendChild(makeMovementLayerRow(typeId, level, levelDraft.movementLayer));
     return section;
+  }
+
+  /** 选择、复制新增或删除当前等级，切换前先收集未保存表单值。 */
+  function makeLevelRow(
+    typeId: UnitTypeId,
+    draft: UnitTypeConfigDraft,
+    selectedLevel: number,
+  ): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'config-row config-levels';
+    const label = document.createElement('span');
+    label.className = 'config-label';
+    label.textContent = '等级';
+    row.appendChild(label);
+    const controls = document.createElement('div');
+    for (const level of Object.keys(draft.levels ?? { 1: getLevelDraft(draft, 1) }).map(Number).sort((a, b) => a - b)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = String(level);
+      button.classList.toggle('is-active', level === selectedLevel);
+      button.addEventListener('click', () => {
+        readAllFormsIntoDrafts();
+        selectedLevels.set(typeId, level);
+        renderForm();
+      });
+      controls.appendChild(button);
+    }
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.textContent = '+';
+    add.title = '复制当前等级新增一级';
+    add.addEventListener('click', () => {
+      readAllFormsIntoDrafts();
+      const levels = draft.levels ?? (draft.levels = { 1: getLevelDraft(draft, 1) });
+      const nextLevel = Math.max(...Object.keys(levels).map(Number)) + 1;
+      levels[String(nextLevel)] = { ...getLevelDraft(draft, selectedLevel) };
+      selectedLevels.set(typeId, nextLevel);
+      renderForm();
+    });
+    controls.appendChild(add);
+    if (Object.keys(draft.levels ?? {}).length > 1) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '−';
+      remove.title = '删除当前等级';
+      remove.addEventListener('click', () => {
+        readAllFormsIntoDrafts();
+        delete draft.levels![String(selectedLevel)];
+        selectedLevels.set(typeId, Math.min(...Object.keys(draft.levels!).map(Number)));
+        renderForm();
+      });
+      controls.appendChild(remove);
+    }
+    row.appendChild(controls);
+    return row;
   }
 
   function makeTextRow(
@@ -180,6 +241,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
 
   function makeNumberRow(
     typeId: UnitTypeId,
+    level: number,
     key: string,
     label: string,
     value: number,
@@ -196,6 +258,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     input.type = 'number';
     input.step = step;
     input.dataset.unit = typeId;
+    input.dataset.level = String(level);
     input.dataset.field = key;
     input.value = formatNumber(value);
     row.appendChild(input);
@@ -204,6 +267,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
 
   function makeAttackKindRow(
     typeId: UnitTypeId,
+    level: number,
     kind: UnitConfigDraft['attackKind'],
   ): HTMLLabelElement {
     const row = document.createElement('label');
@@ -211,6 +275,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     row.innerHTML = `<span class="config-label">攻击方式</span>`;
     const select = document.createElement('select');
     select.dataset.unit = typeId;
+    select.dataset.level = String(level);
     select.dataset.field = 'attackKind';
     for (const [value, text] of [
       ['melee', '近战'],
@@ -236,6 +301,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
   /** 创建移动碰撞层选择器，让飞行属性经调试面板保存时保持可见、可编辑。 */
   function makeMovementLayerRow(
     typeId: UnitTypeId,
+    level: number,
     layer: UnitConfigDraft['movementLayer'],
   ): HTMLLabelElement {
     const row = document.createElement('label');
@@ -243,6 +309,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     row.innerHTML = `<span class="config-label">移动层</span>`;
     const select = document.createElement('select');
     select.dataset.unit = typeId;
+    select.dataset.level = String(level);
     select.dataset.field = 'movementLayer';
     for (const [value, text] of [
       ['ground', '地面'],
@@ -271,7 +338,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
         continue;
       }
       if (field === 'attackKind') {
-        draft.attackKind =
+        getLevelDraft(draft, Number(el.dataset.level) || 1).attackKind =
           el.value === 'projectile_aoe'
             ? 'projectile_aoe'
             : el.value === 'projectile'
@@ -282,12 +349,13 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
         continue;
       }
       if (field === 'movementLayer') {
-        draft.movementLayer = el.value === 'air' ? 'air' : 'ground';
+        getLevelDraft(draft, Number(el.dataset.level) || 1).movementLayer =
+          el.value === 'air' ? 'air' : 'ground';
         continue;
       }
       const num = Number(el.value);
       if (!Number.isFinite(num)) continue;
-      assignNumericField(draft, field, num);
+      assignNumericField(getLevelDraft(draft, Number(el.dataset.level) || 1), field, num);
     }
   }
 
@@ -326,7 +394,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
 
 /** POST 到 Vite 开发中间件写盘；preview/build 下接口不存在 */
 async function persistDraftsToFile(
-  drafts: Record<UnitTypeId, UnitConfigDraft>,
+  drafts: Record<UnitTypeId, UnitTypeConfigDraft>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const res = await fetch('/__pb/unit-configs', {
@@ -373,7 +441,7 @@ function formatNumber(value: number): string {
 
 /** 只接受数值字段，避免把 name/attackKind/技能块误写成 number */
 function assignNumericField(
-  draft: UnitConfigDraft,
+  draft: UnitLevelConfigDraft,
   field: keyof UnitConfigDraft,
   value: number,
 ): void {
@@ -386,6 +454,7 @@ function assignNumericField(
     case 'attackInterval':
     case 'attackWindup':
     case 'range':
+    case 'minRange':
     case 'moveSpeed':
     case 'sightRange':
     case 'projectileSpeed':
@@ -395,6 +464,20 @@ function assignNumericField(
     default:
       break;
   }
+}
+
+/** 取得当前等级参数；旧配置首次编辑时自动迁移成完整的一级配置。 */
+function getLevelDraft(draft: UnitTypeConfigDraft, level: number): UnitLevelConfigDraft {
+  if (!draft.levels) {
+    const { id: _id, name: _name, levels: _levels, ...levelOne } = draft;
+    draft.levels = { 1: levelOne };
+  }
+  const current = draft.levels[String(level)];
+  if (current) return current;
+  const fallback = draft.levels['1'];
+  if (!fallback) throw new Error('兵种至少需要保留一个等级');
+  draft.levels[String(level)] = { ...fallback };
+  return draft.levels[String(level)]!;
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

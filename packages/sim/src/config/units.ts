@@ -85,6 +85,8 @@ export interface DetonateConfig {
 export interface UnitConfig {
   id: UnitTypeId;
   name: string;
+  /** 该配置对应的兵种等级。 */
+  level: number;
   /** 碰撞半径（推挤 / 射程 / 场地夹紧），与显示体型无关 */
   radius: Fx;
   /**
@@ -205,6 +207,14 @@ export interface UnitConfigDraft {
   detonate?: DetonateConfigDraft;
 }
 
+/** 单个等级可编辑的参数；兵种标识与名称由外层兵种配置统一管理。 */
+export type UnitLevelConfigDraft = Omit<UnitConfigDraft, 'id' | 'name'>;
+
+/** 兵种多等级草稿。未配置 levels 的旧数据会自动视为仅有 1 级。 */
+export interface UnitTypeConfigDraft extends UnitConfigDraft {
+  levels?: Record<string, UnitLevelConfigDraft>;
+}
+
 /**
  * 体型=1 时的显示半径（场景单位），取民兵出厂碰撞半径作基准。
  * 渲染：显示半径 = BODY_SCALE_REFERENCE × bodyScale，与各兵种 radius 无关。
@@ -234,10 +244,16 @@ function cloneConfig(config: UnitConfig): UnitConfig {
   };
 }
 
-function cloneConfigs(source: Record<UnitTypeId, UnitConfig>): Record<UnitTypeId, UnitConfig> {
-  const out = {} as Record<UnitTypeId, UnitConfig>;
+/** 深拷贝整张等级配置表，避免调试面板编辑污染默认快照。 */
+function cloneLevelConfigs(
+  source: Record<UnitTypeId, Record<number, UnitConfig>>,
+): Record<UnitTypeId, Record<number, UnitConfig>> {
+  const out = {} as Record<UnitTypeId, Record<number, UnitConfig>>;
   for (const id of Object.keys(source) as UnitTypeId[]) {
-    out[id] = cloneConfig(source[id]);
+    out[id] = {};
+    for (const [level, config] of Object.entries(source[id])) {
+      out[id][Number(level)] = cloneConfig(config);
+    }
   }
   return out;
 }
@@ -245,6 +261,7 @@ function cloneConfigs(source: Record<UnitTypeId, UnitConfig>): Record<UnitTypeId
 /** 把源配置逐字段写回目标对象，保持 UNIT_CONFIGS 条目引用稳定（已上场单位仍挂着它） */
 function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.name = source.name;
+  target.level = source.level;
   target.radius = source.radius;
   target.bodyScale = source.bodyScale;
   target.mass = source.mass;
@@ -332,10 +349,11 @@ function detonateFromDraft(draft: DetonateConfigDraft): DetonateConfig {
 }
 
 /** 单条浮点草稿转运行时定点配置 */
-function configFromDraft(draft: UnitConfigDraft): UnitConfig {
+function configFromDraft(draft: UnitConfigDraft, level = 1): UnitConfig {
   return {
     id: draft.id,
     name: draft.name,
+    level,
     radius: fromFloat(draft.radius),
     bodyScale: fromFloat(
       Number.isFinite(draft.bodyScale) && draft.bodyScale > 0 ? draft.bodyScale : 1,
@@ -377,20 +395,56 @@ export function isBuildingConfig(config: UnitConfig): boolean {
   return config.footprint > 0;
 }
 
-/** 从 units.json 加载并转成定点配置表 */
-function loadConfigsFromJson(): Record<UnitTypeId, UnitConfig> {
-  const drafts = rawUnitConfigs as Record<UnitTypeId, UnitConfigDraft>;
-  const out = {} as Record<UnitTypeId, UnitConfig>;
-  for (const id of Object.keys(drafts) as UnitTypeId[]) {
-    out[id] = configFromDraft({ ...drafts[id], id });
+/** 校验并返回按数字升序排列的等级，等级必须为正整数。 */
+function sortedLevels(levels: Record<string, UnitLevelConfigDraft>): number[] {
+  const result = Object.keys(levels).map(Number);
+  if (
+    result.length === 0
+    || result.some((level) => !Number.isInteger(level) || level < 1)
+    || new Set(result).size !== result.length
+  ) {
+    throw new Error('兵种等级必须为不重复的正整数，且至少配置一级');
+  }
+  return result.sort((a, b) => a - b);
+}
+
+/** 从一条旧配置构造可编辑的一级参数，用于兼容尚未迁移 levels 的兵种。 */
+function levelDraftFromTypeDraft(draft: UnitTypeConfigDraft): UnitLevelConfigDraft {
+  const { id: _id, name: _name, levels: _levels, ...levelDraft } = draft;
+  return levelDraft;
+}
+
+/** 解析一个兵种的所有等级，缺省 levels 时保留旧配置的 1 级行为。 */
+function configsFromTypeDraft(draft: UnitTypeConfigDraft, id: UnitTypeId): Record<number, UnitConfig> {
+  const levels = draft.levels ?? { 1: levelDraftFromTypeDraft(draft) };
+  const out: Record<number, UnitConfig> = {};
+  for (const level of sortedLevels(levels)) {
+    out[level] = configFromDraft({ ...draft, ...levels[String(level)], id }, level);
   }
   return out;
 }
 
-export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = loadConfigsFromJson();
+/** 从 units.json 加载全部兵种等级并转成定点配置表。 */
+function loadLevelConfigsFromJson(): Record<UnitTypeId, Record<number, UnitConfig>> {
+  const drafts = rawUnitConfigs as Record<UnitTypeId, UnitTypeConfigDraft>;
+  const out = {} as Record<UnitTypeId, Record<number, UnitConfig>>;
+  for (const id of Object.keys(drafts) as UnitTypeId[]) {
+    out[id] = configsFromTypeDraft({ ...drafts[id], id }, id);
+  }
+  return out;
+}
+
+/** 按兵种与等级索引的完整配置表。 */
+export const UNIT_LEVEL_CONFIGS = loadLevelConfigsFromJson();
+/** 保留一级表兼容既有读取点；新代码应通过 getUnitConfig 指定等级。 */
+export const UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = Object.fromEntries(
+  Object.entries(UNIT_LEVEL_CONFIGS).map(([id, levels]) => [id, levels[1]!]),
+) as Record<UnitTypeId, UnitConfig>;
 
 /** 模块加载时冻结的出厂默认值，供「重置」对照；保存写回 JSON 后可再 capture */
-const DEFAULT_UNIT_CONFIGS: Record<UnitTypeId, UnitConfig> = cloneConfigs(UNIT_CONFIGS);
+let DEFAULT_UNIT_LEVEL_CONFIGS: Record<UnitTypeId, Record<number, UnitConfig>> = cloneLevelConfigs(
+  UNIT_LEVEL_CONFIGS,
+);
 
 export const UNIT_TYPE_IDS = Object.keys(UNIT_CONFIGS) as UnitTypeId[];
 
@@ -408,11 +462,17 @@ export function recomputeMaxUnitRadius(): void {
 
 recomputeMaxUnitRadius();
 
-export function getUnitConfig(typeId: UnitTypeId): UnitConfig {
-  return UNIT_CONFIGS[typeId];
+/** 查询指定等级配置；未传等级或等级不存在时回退到 1 级，保证旧调用兼容。 */
+export function getUnitConfig(typeId: UnitTypeId, level = 1): UnitConfig {
+  return UNIT_LEVEL_CONFIGS[typeId][level] ?? UNIT_LEVEL_CONFIGS[typeId][1]!;
 }
 
-/** 把定点配置导出成浮点草稿，供面板展示 / 写回 JSON */
+/** 取得一个兵种的所有已配置等级，供编辑器和图鉴等界面显示。 */
+export function getUnitLevels(typeId: UnitTypeId): number[] {
+  return Object.keys(UNIT_LEVEL_CONFIGS[typeId]).map(Number).sort((a, b) => a - b);
+}
+
+/** 把定点配置导出成浮点草稿，供面板展示 / 写回 JSON。 */
 export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
   const draft: UnitConfigDraft = {
     id: config.id,
@@ -479,54 +539,57 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
   return draft;
 }
 
-/** 导出全部兵种的浮点草稿 */
-export function dumpUnitConfigDrafts(): Record<UnitTypeId, UnitConfigDraft> {
-  const out = {} as Record<UnitTypeId, UnitConfigDraft>;
+/** 将单个等级配置转换为不含兵种元数据的表单值。 */
+function toLevelConfigDraft(config: UnitConfig): UnitLevelConfigDraft {
+  const { id: _id, name: _name, ...levelDraft } = toUnitConfigDraft(config);
+  return levelDraft;
+}
+
+/** 导出全部兵种的多等级浮点草稿。 */
+export function dumpUnitConfigDrafts(): Record<UnitTypeId, UnitTypeConfigDraft> {
+  return dumpLevelConfigDrafts(UNIT_LEVEL_CONFIGS);
+}
+
+/** 导出指定配置表的多等级草稿。 */
+function dumpLevelConfigDrafts(
+  source: Record<UnitTypeId, Record<number, UnitConfig>>,
+): Record<UnitTypeId, UnitTypeConfigDraft> {
+  const out = {} as Record<UnitTypeId, UnitTypeConfigDraft>;
   for (const id of UNIT_TYPE_IDS) {
-    out[id] = toUnitConfigDraft(UNIT_CONFIGS[id]);
+    const levelOne = source[id][1]!;
+    out[id] = {
+      ...toUnitConfigDraft(levelOne),
+      levels: Object.fromEntries(
+        Object.entries(source[id]).map(([level, config]) => [level, toLevelConfigDraft(config)]),
+      ),
+    };
   }
   return out;
 }
 
 /** 导出厂默认浮点草稿（重置面板表单用） */
-export function dumpDefaultUnitConfigDrafts(): Record<UnitTypeId, UnitConfigDraft> {
-  const out = {} as Record<UnitTypeId, UnitConfigDraft>;
-  for (const id of UNIT_TYPE_IDS) {
-    out[id] = toUnitConfigDraft(DEFAULT_UNIT_CONFIGS[id]);
-  }
-  return out;
+export function dumpDefaultUnitConfigDrafts(): Record<UnitTypeId, UnitTypeConfigDraft> {
+  return dumpLevelConfigDrafts(DEFAULT_UNIT_LEVEL_CONFIGS);
 }
 
-/** 用浮点草稿覆盖运行时配置表，并刷新 MAX_UNIT_RADIUS；技能块有则覆盖、无则清空 */
-export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft>): void {
+/** 用多等级草稿覆盖运行时配置表，并刷新最大半径。 */
+export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitTypeConfigDraft>): void {
   for (const id of UNIT_TYPE_IDS) {
     const draft = drafts[id];
     if (!draft) continue;
-    const target = UNIT_CONFIGS[id];
-    target.name = draft.name;
-    target.radius = fromFloat(draft.radius);
-    // 缺省或非法体型回落为民兵基准 1，避免 NaN 把精灵缩成看不见
-    target.bodyScale = fromFloat(
-      Number.isFinite(draft.bodyScale) && draft.bodyScale > 0 ? draft.bodyScale : 1,
-    );
-    target.mass = fromFloat(draft.mass);
-    target.maxHp = fromFloat(draft.maxHp);
-    target.damage = fromFloat(draft.damage);
-    target.attackInterval = fromFloat(draft.attackInterval);
-    target.attackWindup = fromFloat(draft.attackWindup);
-    target.range = fromFloat(draft.range);
-    target.minRange = fromFloat(normalizeMinRange(draft.minRange));
-    target.moveSpeed = fromFloat(draft.moveSpeed);
-    target.sightRange = fromFloat(draft.sightRange);
-    target.movementLayer = draft.movementLayer === 'air' ? 'air' : 'ground';
-    target.footprint = normalizeFootprint(draft.footprint);
-    target.attack = attackFromDraft(draft);
-    // 与文件一致：缺省技能键表示该兵种无此技能
-    target.charge = draft.charge ? chargeFromDraft(draft.charge) : undefined;
-    target.inspire = draft.inspire ? inspireFromDraft(draft.inspire) : undefined;
-    target.heal = draft.heal ? healFromDraft(draft.heal) : undefined;
-    target.summon = draft.summon ? summonFromDraft(draft.summon) : undefined;
-    target.detonate = draft.detonate ? detonateFromDraft(draft.detonate) : undefined;
+    const nextLevels = configsFromTypeDraft(draft, id);
+    const targetLevels = UNIT_LEVEL_CONFIGS[id];
+    for (const level of Object.keys(targetLevels).map(Number)) {
+      if (!(level in nextLevels)) delete targetLevels[level];
+    }
+    for (const [level, source] of Object.entries(nextLevels)) {
+      const numericLevel = Number(level);
+      const target = targetLevels[numericLevel];
+      if (target) copyConfigInto(target, source);
+      else targetLevels[numericLevel] = source;
+    }
+    // 一级引用被旧代码和已上场单位持有，始终原地更新而非替换。
+    copyConfigInto(UNIT_CONFIGS[id], targetLevels[1]!);
   }
   recomputeMaxUnitRadius();
 }
@@ -534,14 +597,22 @@ export function applyUnitConfigDrafts(drafts: Record<UnitTypeId, UnitConfigDraft
 /** 把全部兵种恢复到出厂默认值（以最近一次 capture / 模块加载时的快照为准） */
 export function resetUnitConfigsToDefault(): void {
   for (const id of UNIT_TYPE_IDS) {
-    copyConfigInto(UNIT_CONFIGS[id], DEFAULT_UNIT_CONFIGS[id]);
+    const targetLevels = UNIT_LEVEL_CONFIGS[id];
+    const defaultLevels = DEFAULT_UNIT_LEVEL_CONFIGS[id];
+    for (const level of Object.keys(targetLevels).map(Number)) {
+      if (!(level in defaultLevels)) delete targetLevels[level];
+    }
+    for (const [level, config] of Object.entries(defaultLevels)) {
+      const numericLevel = Number(level);
+      if (targetLevels[numericLevel]) copyConfigInto(targetLevels[numericLevel], config);
+      else targetLevels[numericLevel] = cloneConfig(config);
+    }
+    copyConfigInto(UNIT_CONFIGS[id], targetLevels[1]!);
   }
   recomputeMaxUnitRadius();
 }
 
 /** 把当前运行时配置记为新的出厂快照（保存写回 units.json 成功后调用） */
 export function captureUnitConfigsAsDefault(): void {
-  for (const id of UNIT_TYPE_IDS) {
-    copyConfigInto(DEFAULT_UNIT_CONFIGS[id], UNIT_CONFIGS[id]);
-  }
+  DEFAULT_UNIT_LEVEL_CONFIGS = cloneLevelConfigs(UNIT_LEVEL_CONFIGS);
 }

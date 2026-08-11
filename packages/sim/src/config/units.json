@@ -16,7 +16,18 @@
     "movementLayer": "ground",
     "attackKind": "melee",
     "projectileSpeed": 9,
-    "aoeRadius": 0
+    "aoeRadius": 0,
+    "levels": {
+      "1": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 400, "damage": 95, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "2": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 440, "damage": 105, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "3": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 484, "damage": 116, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "4": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 532, "damage": 128, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "5": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 585, "damage": 141, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "6": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 644, "damage": 155, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "7": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 708, "damage": 171, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "8": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 779, "damage": 188, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 },
+      "9": { "radius": 0.5, "bodyScale": 1, "mass": 3, "maxHp": 857, "damage": 207, "attackInterval": 20, "attackWindup": 7, "range": 0.3, "minRange": 0, "moveSpeed": 1.7, "sightRange": 40, "movementLayer": "ground", "attackKind": "melee", "projectileSpeed": 9, "aoeRadius": 0 }
+    }
   },
   "melee_guard": {
     "id": "melee_guard",
@@ -54,7 +65,18 @@
     "movementLayer": "ground",
     "attackKind": "projectile",
     "projectileSpeed": 9,
-    "aoeRadius": 0
+    "aoeRadius": 0,
+    "levels": {
+      "1": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 240, "damage": 65, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "2": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 264, "damage": 72, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "3": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 290, "damage": 79, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "4": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 319, "damage": 87, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "5": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 351, "damage": 96, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "6": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 386, "damage": 106, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "7": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 425, "damage": 117, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "8": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 468, "damage": 129, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 },
+      "9": { "radius": 0.4, "bodyScale": 0.9, "mass": 1.4, "maxHp": 515, "damage": 142, "attackInterval": 24, "attackWindup": 9, "range": 4, "minRange": 0, "moveSpeed": 1.4, "sightRange": 40, "movementLayer": "ground", "attackKind": "projectile", "projectileSpeed": 9, "aoeRadius": 0 }
+    }
   },
   "ranged_chariot": {
     "id": "ranged_chariot",
