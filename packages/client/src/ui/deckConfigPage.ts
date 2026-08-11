@@ -29,6 +29,8 @@ type PreviewMode = '3d' | 'button';
 
 export interface DeckConfigPageOptions {
   onBack: () => void;
+  /** 开发服：打开牌型概率工具。 */
+  onOpenHandOdds?: () => void;
 }
 
 export interface DeckConfigPageHandle {
@@ -49,6 +51,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   const tabButton = required<HTMLButtonElement>('#deck-preview-tab-button', root);
   const backButton = required<HTMLButtonElement>('#btn-deck-back', root);
   const addFormationButton = required<HTMLButtonElement>('#btn-deck-add-formation', root);
+  const handOddsButton = required<HTMLButtonElement>('#btn-deck-hand-odds', root);
   const saveButton = required<HTMLButtonElement>('#btn-deck-save', root);
   const resetButton = required<HTMLButtonElement>('#btn-deck-reset', root);
 
@@ -62,10 +65,12 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   let saveSeq = 0;
 
   const back = (): void => options.onBack();
+  const openHandOdds = (): void => options.onOpenHandOdds?.();
   backButton.addEventListener('click', back);
-  // 新增/编辑/重置/保存仅开发服开放；正式服只保留浏览与预览
+  // 新增/编辑/重置/保存/概率工具仅开发服开放；正式服只保留浏览与预览
   if (IS_DEV_SERVER) {
     addFormationButton.addEventListener('click', addFormation);
+    handOddsButton.addEventListener('click', openHandOdds);
     saveButton.addEventListener('click', save);
     resetButton.addEventListener('click', reset);
   }
@@ -393,6 +398,9 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     dispose() {
       buttonThumbGeneration += 1;
       backButton.removeEventListener('click', back);
+      if (IS_DEV_SERVER) {
+        handOddsButton.removeEventListener('click', openHandOdds);
+      }
       preview?.dispose();
       preview = null;
       buttonPreviewRoot.replaceChildren();

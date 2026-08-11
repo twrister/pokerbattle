@@ -109,7 +109,21 @@ export {
   type CardSuit,
   type PlayingCard,
 } from './cards/deck.js';
-export { detectHandCategories, findStrongestHand } from './cards/handCategory.js';
+export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
+export {
+  HAND_ODDS_DEFAULT_TRIALS,
+  HAND_ODDS_MAX_SIZE,
+  HAND_ODDS_MIN_SIZE,
+  createHitCounters,
+  estimateHandCategoryOdds,
+  estimateHandCategoryOddsSweep,
+  isValidHandOddsSize,
+  runHandCategoryOddsChunk,
+  toProbabilities,
+  type HandCategoryOddsOptions,
+  type HandCategoryOddsResult,
+  type HandCategoryOddsSweepResult,
+} from './cards/handCategoryOdds.js';
 export {
   DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
   DOUBLE_SPEED_PHASE_TICKS,

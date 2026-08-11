@@ -82,6 +82,26 @@ export function findStrongestHand(cards: readonly PlayingCard[]): PlayingCard[] 
   return bestCards;
 }
 
+/**
+ * 枚举手牌全部 1～5 张组合，汇总「至少出现过一次」的牌型。
+ * 同花顺会同时计入同花/五顺，与 detectHandCategories 一致；供概率统计使用。
+ */
+export function listPresentCategories(cards: readonly PlayingCard[]): HandCategory[] {
+  if (cards.length === 0) return [];
+
+  const present = new Set<HandCategory>();
+  const maxSize = Math.min(5, cards.length);
+  for (let size = 1; size <= maxSize; size += 1) {
+    forEachCombination(cards, size, (combo) => {
+      for (const category of detectHandCategories(combo)) {
+        present.add(category);
+      }
+    });
+  }
+
+  return HAND_CATEGORY_STRENGTH_ORDER.filter((category) => present.has(category));
+}
+
 /** 按牌力降序逐张比较两组牌；先出现更强牌的一侧更强。 */
 function compareCombosByStrength(left: readonly PlayingCard[], right: readonly PlayingCard[]): number {
   const a = [...left].sort(compareCardsByStrength);

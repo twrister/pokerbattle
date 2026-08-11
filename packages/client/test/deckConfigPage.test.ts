@@ -22,6 +22,7 @@ describe('卡组阵型配置页', () => {
     document.body.innerHTML = `
       <main id="deck-config" class="is-hidden">
         <button id="btn-deck-back"></button>
+        <button id="btn-deck-hand-odds"></button>
         <button id="btn-deck-add-formation"></button>
         <button id="btn-deck-save"></button>
         <button id="btn-deck-reset"></button>

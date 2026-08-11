@@ -50,6 +50,7 @@ import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
+import { createHandOddsPage } from './ui/handOddsPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createScreenController, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
@@ -84,7 +85,11 @@ const mainMenu = createMainMenu({
     playerProfile.setDisplayName(displayName);
   },
 });
-const deckConfigPage = createDeckConfigPage({ onBack: () => screens.show('menu') });
+const deckConfigPage = createDeckConfigPage({
+  onBack: () => screens.show('menu'),
+  onOpenHandOdds: () => screens.show('hand-odds'),
+});
+const handOddsPage = createHandOddsPage({ onBack: () => screens.show('deck-config') });
 const codexPage = createCodexPage({ onBack: () => screens.show('menu') });
 const battleHud = createBattleHud();
 const battleResult = createBattleResult(() => screens.show('menu'));
@@ -793,6 +798,10 @@ screens = createScreenController({
     deckConfigPage.show();
     return () => deckConfigPage.hide();
   },
+  'hand-odds': () => {
+    handOddsPage.show();
+    return () => handOddsPage.hide();
+  },
   codex: () => {
     codexPage.show();
     return () => codexPage.hide();
@@ -814,6 +823,7 @@ function disposeApp(): void {
   disposeFormationThumbnailRenderer();
   mainMenu.dispose();
   deckConfigPage.dispose();
+  handOddsPage.dispose();
   codexPage.dispose();
 }
 
