@@ -80,11 +80,13 @@ function effectiveUnitDisplayScale(formation: CardFormation): number {
   );
 }
 
-/** 缓存键带上 rows、间距与取景参数，改配置后按钮能立刻换新图。 */
+/** 缓存键带上 slots（含等级）、间距与取景参数，同兵种不同等级不会串图。 */
 export function formationThumbnailKey(formation: CardFormation): string {
-  const rows = formation.rows.map((row) => row.join(',')).join('|');
+  const slots = formation.slots
+    .map((slot) => `${slot.typeId}:${slot.level}@${slot.row},${slot.col}`)
+    .join('|');
   const scale = effectiveUnitDisplayScale(formation);
-  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${rows}#s${scale.toFixed(2)}#m${frameMargin.toFixed(2)}`;
+  return `${formation.id}#${formation.colSpacing}#${formation.rowSpacing}#${slots}#s${scale.toFixed(2)}#m${frameMargin.toFixed(2)}`;
 }
 
 /** 取阵型缩略图 dataURL；同一阵型只渲染一次，无 WebGL 环境返回 null。 */
@@ -152,13 +154,18 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
   if (points.length === 0) return null;
 
   // 与战场一致：sim 的 +y 朝向敌方，在场景里是 -z，镜头留在 +z 侧俯视。
-  const placed = points.map((point) => ({ typeId: point.typeId, x: point.x, z: -point.y }));
+  const placed = points.map((point) => ({
+    typeId: point.typeId,
+    level: point.level,
+    x: point.x,
+    z: -point.y,
+  }));
   frameCamera(active.camera, placed, effectiveUnitDisplayScale(formation));
 
   const views: UnitView[] = [];
   for (const unit of placed) {
     const view = new UnitView(Faction.Blue, unit.typeId);
-    view.update(unit.x, unit.z, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, active.camera);
+    view.update(unit.x, unit.z, 0, 1, 1, unit.level, UnitState.Idle, false, false, false, false, 0, active.camera);
     active.scene.add(view.group);
     views.push(view);
   }
@@ -168,7 +175,7 @@ async function renderThumbnail(formation: CardFormation): Promise<string | null>
     for (const [index, view] of views.entries()) {
       const unit = placed[index]!;
       // 贴图 onLoad 只改共享模板材质，必须再跑一次 update 把 visible 同步到克隆材质。
-      view.update(unit.x, unit.z, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, active.camera);
+      view.update(unit.x, unit.z, 0, 1, 1, unit.level, UnitState.Idle, false, false, false, false, 0, active.camera);
     }
     active.renderer.render(active.scene, active.camera);
     return active.renderer.domElement.toDataURL('image/png');

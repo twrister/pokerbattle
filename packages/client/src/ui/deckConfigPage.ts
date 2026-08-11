@@ -9,8 +9,10 @@ import {
   createCardFormation,
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
+  getPreviewCardsForFormation,
   isBuildingConfig,
   isBuildingOnlyFormation,
+  resolveCardFormation,
   type CardFormation,
   type CardFormationDrafts,
   type FormationDraft,
@@ -39,7 +41,7 @@ export interface DeckConfigPageHandle {
   dispose(): void;
 }
 
-/** 卡组阵型编辑页：草稿只在保存时应用，编辑过程始终可撤销。 */
+/** 卡组规则预览页：牌面、数量与等级由 sim 统一推导，页面只浏览可选方案。 */
 export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfigPageHandle {
   const root = required<HTMLElement>('#deck-config');
   const categoryList = required<HTMLElement>('#deck-category-list', root);
@@ -96,6 +98,14 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     if (is3d) preview?.resize();
   }
 
+  /**
+   * 用样例牌面走规则引擎展开预览，避免 JSON 占位 rows 数量与真实出牌不一致
+   *（例如三顺弓手占位曾只写 1 个，实际应出 3 个）。
+   */
+  function previewFormationFromDraft(draft: FormationDraft): CardFormation | null {
+    return previewFormationFromDraftFor(category, draft);
+  }
+
   /** 按当前页签更新预览；草稿不完整时先清空，避免把无效数据送入渲染层。 */
   function refreshPreview(): void {
     if (previewMode === 'button') {
@@ -109,11 +119,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       preview?.render(null);
       return;
     }
-    try {
-      preview.render(createCardFormation(category, draft));
-    } catch {
-      preview.render(null);
-    }
+    preview.render(previewFormationFromDraft(draft));
   }
 
   /** 复用兵种搭配按钮的缩略图逻辑，所见即所得。 */
@@ -123,12 +129,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     const draft = selected();
     if (!draft) return;
 
-    let formation: CardFormation;
-    try {
-      formation = createCardFormation(category, draft);
-    } catch {
-      return;
-    }
+    const formation = previewFormationFromDraft(draft);
+    if (!formation) return;
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -187,16 +189,26 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     );
   }
 
-  /** 用小型行列网格表达 rows，row=0 固定标为前排，降低配置语义歧义。 */
+  /**
+   * 编辑方案元数据：名称、间距、按钮缩略图放大。
+   * 兵种站位由出牌规则引擎推导，这里只展示说明，不再手工改 rows。
+   */
   function renderEditor(): void {
     editor.replaceChildren();
     const draft = selected();
     if (!draft) {
-      editor.textContent = '该牌型暂无阵型，点击“新增阵型”开始配置。';
+      editor.textContent = '该牌型暂无可选方案。';
       return;
     }
 
     const buildingOnly = isBuildingOnlyFormation(draft);
+    const rule = document.createElement('section');
+    rule.className = 'deck-rows';
+    rule.innerHTML = `
+      <div class="deck-section-title">规则说明</div>
+      <p>兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。</p>
+    `;
+    editor.appendChild(rule);
 
     editor.append(
       textInput('阵型名称', draft.name, (value) => {
@@ -230,30 +242,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       }),
     );
 
-    const rows = document.createElement('section');
-    rows.className = 'deck-rows';
-    const rowHeading = document.createElement('div');
-    rowHeading.className = 'deck-section-title';
-    rowHeading.textContent = buildingOnly
-      ? '建筑站位（单建筑阵型：只能放一个建筑）'
-      : '兵种站位（最上方为前排；建筑不可与兵种混编）';
-    rows.appendChild(rowHeading);
-    draft.rows.forEach((row, rowIndex) => rows.appendChild(makeRow(draft, row, rowIndex)));
-
-    if (!buildingOnly) {
-      const addRowButton = document.createElement('button');
-      addRowButton.type = 'button';
-      addRowButton.className = 'deck-mini-button';
-      addRowButton.textContent = '新增后排';
-      addRowButton.addEventListener('click', () => {
-        draft.rows.push([DEFAULT_MOBILE_TYPE_ID]);
-        renderEditor();
-        refreshPreview();
-      });
-      rows.appendChild(addRowButton);
-    }
-    editor.appendChild(rows);
-
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'deck-danger-button';
@@ -264,71 +252,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       renderAll();
     });
     editor.appendChild(remove);
-  }
-
-  function makeRow(draft: FormationDraft, row: UnitTypeId[], rowIndex: number): HTMLElement {
-    const buildingOnly = isBuildingOnlyFormation(draft);
-    const line = document.createElement('div');
-    line.className = 'deck-row';
-    const label = document.createElement('span');
-    label.className = 'deck-row-label';
-    label.textContent = buildingOnly ? '建筑' : rowIndex === 0 ? '前排' : `后排 ${rowIndex}`;
-    line.appendChild(label);
-    for (const [colIndex, typeId] of row.entries()) {
-      const select = document.createElement('select');
-      select.setAttribute('aria-label', `${label.textContent}第 ${colIndex + 1} 个单位`);
-      for (const id of UNIT_TYPE_IDS) {
-        const option = document.createElement('option');
-        option.value = id;
-        const footprint = UNIT_CONFIGS[id].footprint;
-        option.textContent = footprint > 0
-          ? `${UNIT_CONFIGS[id].name}（${footprint}×${footprint}）`
-          : UNIT_CONFIGS[id].name;
-        option.selected = id === typeId;
-        select.appendChild(option);
-      }
-      select.addEventListener('change', () => {
-        const next = select.value as UnitTypeId;
-        // 选建筑时强制塌缩为单建筑阵型，避免与兵种混编
-        if (isBuildingConfig(UNIT_CONFIGS[next])) {
-          draft.rows = [[next]];
-        } else if (buildingOnly) {
-          draft.rows = [[next]];
-        } else {
-          row[colIndex] = next;
-        }
-        renderEditor();
-        refreshPreview();
-      });
-      line.appendChild(select);
-    }
-    if (!buildingOnly) {
-      const add = actionButton('+', '增加兵种', () => {
-        row.push(DEFAULT_MOBILE_TYPE_ID);
-        renderEditor();
-        refreshPreview();
-      });
-      line.appendChild(add);
-      if (row.length > 1) {
-        line.appendChild(
-          actionButton('−', '移除最后一个兵种', () => {
-            row.pop();
-            renderEditor();
-            refreshPreview();
-          }),
-        );
-      }
-      if (draft.rows.length > 1) {
-        line.appendChild(
-          actionButton('删排', '删除该排', () => {
-            draft.rows.splice(rowIndex, 1);
-            renderEditor();
-            refreshPreview();
-          }),
-        );
-      }
-    }
-    return line;
   }
 
   function addFormation(): void {
@@ -345,9 +268,34 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     renderAll();
   }
 
+  /** 保存前用规则展开结果回填 rows，避免占位数量（如三顺弓手写成 1 个）被写回配置。 */
+  function syncDraftRowsFromRules(): void {
+    for (const cat of HAND_CATEGORY_ORDER) {
+      for (const draft of drafts[cat]) {
+        const resolved = previewFormationFromDraftFor(cat, draft);
+        if (resolved) draft.rows = resolved.rows.map((row) => [...row]);
+      }
+    }
+  }
+
+  /** 与 previewFormationFromDraft 相同，但允许指定牌型（保存时遍历全部牌型）。 */
+  function previewFormationFromDraftFor(
+    handCategory: HandCategory,
+    draft: FormationDraft,
+  ): CardFormation | null {
+    try {
+      const template = createCardFormation(handCategory, draft);
+      const cards = getPreviewCardsForFormation(handCategory, draft.id);
+      return resolveCardFormation(template, cards) ?? template;
+    } catch {
+      return null;
+    }
+  }
+
   /** 应用完成后再请求开发服务器写盘，写盘失败不会误报为已保存。 */
   function save(): void {
     try {
+      syncDraftRowsFromRules();
       applyCardFormationDrafts(drafts);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error), true);
@@ -467,16 +415,6 @@ function formatRowUnits(row: readonly UnitTypeId[]): string {
       return `${name}x${counts.get(typeId)}`;
     })
     .join(' · ');
-}
-
-function actionButton(text: string, title: string, onClick: () => void): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'deck-icon-button';
-  button.textContent = text;
-  button.title = title;
-  button.addEventListener('click', onClick);
-  return button;
 }
 
 function setStatus(rootText: string, isError: boolean): void {

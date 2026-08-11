@@ -218,8 +218,7 @@ describe('单机手牌交互', () => {
       'data:image/png;base64,thumb',
     );
     const label = option.getAttribute('aria-label') ?? '';
-    expect(label).toContain('前：');
-    expect(label).toContain('后：');
+    expect(label).toContain('4级民兵x3');
 
     panel.dispose();
   });
@@ -506,7 +505,7 @@ describe('单机手牌交互', () => {
     const onBuildingDragStart = vi.fn();
     const onBuildingDragEnd = vi.fn();
     const panel = createHandPanel({
-      deck: deckWithCards(['3-spades']),
+    deck: deckWithCards(['3-spades', '4-hearts', '5-clubs', '6-diamonds', '7-spades']),
       onRequestSpawn,
       onBuildingDragStart,
       onBuildingDragEnd,
@@ -514,7 +513,7 @@ describe('单机手牌交互', () => {
     selectAllCards();
 
     const option = document.querySelector<HTMLButtonElement>(
-      '.formation-option[data-formation-id="single_custom_3"]',
+      '.formation-option[data-formation-id="straight5_tower"]',
     )!;
     expect(option).toBeTruthy();
     option.getBoundingClientRect = () => buttonRect();
@@ -535,7 +534,7 @@ describe('单机手牌交互', () => {
     formations.dispatchEvent(pointerEvent('pointerup', 50, 122, 502));
     expect(onRequestSpawn).not.toHaveBeenCalled();
     expect(onBuildingDragEnd).toHaveBeenCalledOnce();
-    expect(panel.deck.hand).toHaveLength(1);
+    expect(panel.deck.hand).toHaveLength(5);
 
     // 拖到战场松手才真正请求落点
     dropOn(document.querySelector('#battle-canvas')!, option, 51, 200, 300);

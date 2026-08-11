@@ -83,6 +83,14 @@ export function createPokerCards(): PlayingCard[] {
   return cards;
 }
 
+/** 按稳定 id 查询标准牌面，供出牌指令从 cardIds 还原等级映射。 */
+export function getPokerCardById(cardId: string): PlayingCard | undefined {
+  return STANDARD_DECK_BY_ID.get(cardId);
+}
+
+/** 标准牌堆的只读索引，避免每次展开出牌指令都重新创建 54 张牌。 */
+const STANDARD_DECK_BY_ID = new Map(createPokerCards().map((card) => [card.id, card]));
+
 /** 按牌力从大到小排序，同点数以黑桃、红桃、梅花、方片稳定排列。 */
 export function compareCardsByStrength(left: PlayingCard, right: PlayingCard): number {
   const strengthDiff = getCardStrength(right) - getCardStrength(left);

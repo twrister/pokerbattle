@@ -4,8 +4,11 @@ import {
   getFormationBuildingTypeId,
   isGiantBombFormation,
   isBuildingOnlyFormation,
+  resolveCardFormation,
   resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
+import { getPokerCardById } from '../cards/deck.js';
+import type { PlayingCard } from '../cards/deck.js';
 import { isBuildingConfig, getUnitConfig } from '../config/units.js';
 import type { World } from '../world.js';
 
@@ -35,23 +38,27 @@ function applyPlayFormation(
   world: World,
   command: Extract<Command, { kind: typeof CommandKind.PlayFormation }>,
 ): void {
-  const formation = findFormationById(command.formationId);
+  const template = findFormationById(command.formationId);
+  if (!template) return;
+  const cards = command.cardIds.map(getPokerCardById);
+  if (cards.some((card) => !card)) return;
+  const formation = resolveCardFormation(template, cards as PlayingCard[]);
   if (!formation) return;
 
   if (isBuildingOnlyFormation(formation)) {
     const typeId = getFormationBuildingTypeId(formation);
     if (!typeId) return;
-    world.spawnBuilding(command.faction, typeId, command.x, command.y);
+    world.spawnBuilding(command.faction, typeId, command.x, command.y, formation.slots[0]!.level);
     return;
   }
   if (isGiantBombFormation(formation)) {
-    world.spawnGiantBomb(command.faction, command.x, command.y);
+    world.spawnGiantBomb(command.faction, command.x, command.y, formation.slots[0]!.level);
     return;
   }
 
   const points = resolveFormationSpawnsFx(formation, command.faction, command.x, command.y);
   for (const point of points) {
     if (isBuildingConfig(getUnitConfig(point.typeId))) continue;
-    world.spawnUnit(command.faction, point.typeId, point.x, point.y);
+    world.spawnUnit(command.faction, point.typeId, point.x, point.y, point.level);
   }
 }

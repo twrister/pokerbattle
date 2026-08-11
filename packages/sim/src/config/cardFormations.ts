@@ -1,6 +1,8 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
+import type { PlayingCard } from '../cards/deck.js';
 import { Faction } from '../entity/unit.js';
 import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
+import { layoutMappedUnits, resolveHandUnits, type MappedFormationUnit } from './cardMapping.js';
 import rawCardFormations from './cardFormations.json';
 
 /** 发牌限制可识别的全部牌型 id。 */
@@ -72,6 +74,7 @@ export const FORMATION_THUMB_SCALE = 2;
 /** 搭配中的单个兵种条目（由 rows 汇总，供 UI 统计）。 */
 export interface FormationUnitEntry {
   typeId: UnitTypeId;
+  level: number;
   count: number;
 }
 
@@ -81,6 +84,7 @@ export interface FormationUnitEntry {
  */
 export interface FormationSlot {
   typeId: UnitTypeId;
+  level: number;
   row: number;
   col: number;
 }
@@ -106,6 +110,7 @@ export interface CardFormation {
 /** 解析后的世界坐标出生点（浮点格坐标，出兵前再 fromFloat）。 */
 export interface FormationSpawnPoint {
   typeId: UnitTypeId;
+  level: number;
   x: number;
   y: number;
   row: number;
@@ -131,7 +136,7 @@ function slotsFromRows(rows: readonly (readonly UnitTypeId[])[]): FormationSlot[
   const slots: FormationSlot[] = [];
   rows.forEach((row, rowIndex) => {
     row.forEach((typeId, colIndex) => {
-      slots.push({ typeId, row: rowIndex, col: colIndex });
+      slots.push({ typeId, level: 1, row: rowIndex, col: colIndex });
     });
   });
   return slots;
@@ -139,13 +144,14 @@ function slotsFromRows(rows: readonly (readonly UnitTypeId[])[]): FormationSlot[
 
 /** 按出现顺序汇总各兵种数量。 */
 function unitsFromSlots(slots: readonly FormationSlot[]): FormationUnitEntry[] {
-  const counts = new Map<UnitTypeId, number>();
-  const order: UnitTypeId[] = [];
+  const counts = new Map<string, number>();
+  const order: FormationUnitEntry[] = [];
   for (const slot of slots) {
-    if (!counts.has(slot.typeId)) order.push(slot.typeId);
-    counts.set(slot.typeId, (counts.get(slot.typeId) ?? 0) + 1);
+    const key = `${slot.typeId}:${slot.level}`;
+    if (!counts.has(key)) order.push({ typeId: slot.typeId, level: slot.level, count: 0 });
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return order.map((typeId) => ({ typeId, count: counts.get(typeId)! }));
+  return order.map((entry) => ({ ...entry, count: counts.get(`${entry.typeId}:${entry.level}`)! }));
 }
 
 /** 解析阵型按钮放大倍率；非法或未配置时回落默认。 */
@@ -204,6 +210,32 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
         : FORMATION_ROW_SPACING,
     thumbScale: resolveThumbScale(draft.thumbScale),
   };
+}
+
+/**
+ * 将静态方案模板按实际牌面展开为可出兵阵型。
+ * 近战自动编入前排，远程自动编入后排；不适用的方案返回 null。
+ */
+export function resolveCardFormation(
+  formation: CardFormation,
+  cards: readonly PlayingCard[],
+): CardFormation | null {
+  const units = resolveHandUnits(formation.category, formation.id, cards);
+  if (!units) return null;
+  const mappedRows = layoutMappedUnits(units);
+  return formationFromMappedRows(formation, mappedRows);
+}
+
+/** 将包含等级的规则结果转换为阵型运行时结构。 */
+function formationFromMappedRows(
+  source: CardFormation,
+  mappedRows: readonly (readonly MappedFormationUnit[])[],
+): CardFormation {
+  const rows = mappedRows.map((row) => row.map((unit) => unit.typeId));
+  const slots = mappedRows.flatMap((row, rowIndex) =>
+    row.map((unit, col) => ({ typeId: unit.typeId, level: unit.level, row: rowIndex, col })),
+  );
+  return { ...source, rows, slots, units: unitsFromSlots(slots) };
 }
 
 /** 从 JSON 初始化的运行时阵型；顶层对象与各牌型数组在应用草稿时保持引用稳定。 */
@@ -368,17 +400,23 @@ export function findFormationById(formationId: string): CardFormation | undefine
  * 按牌型强度顺序取命中牌型的搭配并集，并以 id 去重。
  * 同一搭配不会因多重牌型命中而重复出现。
  */
-export function getFormationsFor(categories: readonly HandCategory[]): CardFormation[] {
+export function getFormationsFor(
+  categories: readonly HandCategory[],
+  cards?: readonly PlayingCard[],
+): CardFormation[] {
   if (categories.length === 0) return [];
-  const wanted = new Set(categories);
+  // 实际出牌只允许使用命中牌型中最强的一种，避免同花顺同时展示五顺/同花方案。
+  const wanted = new Set(cards ? categories.slice(0, 1) : categories);
   const seen = new Set<string>();
   const result: CardFormation[] = [];
   for (const category of HAND_CATEGORY_STRENGTH_ORDER) {
     if (!wanted.has(category)) continue;
     for (const formation of CARD_FORMATIONS[category]) {
       if (seen.has(formation.id)) continue;
+      const resolved = cards ? resolveCardFormation(formation, cards) : formation;
+      if (!resolved) continue;
       seen.add(formation.id);
-      result.push(formation);
+      result.push(resolved);
     }
   }
   return result;
@@ -409,6 +447,7 @@ export function resolveFormationSpawns(
     const localForward = forwardCenter - slot.row * rowSpacing;
     return {
       typeId: slot.typeId,
+      level: slot.level,
       x: anchorX + facingRight * localRight,
       y: anchorY + facingForward * localForward,
       row: slot.row,
@@ -423,10 +462,11 @@ export function resolveFormationSpawnsFx(
   faction: Faction,
   anchorX: Fx,
   anchorY: Fx,
-): Array<{ typeId: UnitTypeId; x: Fx; y: Fx; row: number; col: number }> {
+): Array<{ typeId: UnitTypeId; level: number; x: Fx; y: Fx; row: number; col: number }> {
   return resolveFormationSpawns(formation, faction, toFloat(anchorX), toFloat(anchorY)).map(
     (point) => ({
       typeId: point.typeId,
+      level: point.level,
       x: fromFloat(point.x),
       y: fromFloat(point.y),
       row: point.row,

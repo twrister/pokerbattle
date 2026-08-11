@@ -644,9 +644,18 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   function renderFormations(force: boolean): void {
     const selectedCards = deck.hand.filter((card) => selected.has(card.id));
     const categories = detectHandCategories(selectedCards);
-    formations = getFormationsFor(categories);
+    formations = getFormationsFor(categories, selectedCards);
     const visible = formations.length > 0 && !playing;
-    const renderKey = visible ? formations.map((formation) => formation.id).join('\0') : '';
+    const renderKey = visible
+      ? formations
+          .map((formation) =>
+            [
+              formation.id,
+              formation.slots.map((slot) => `${slot.typeId}:${slot.level}:${slot.row}:${slot.col}`).join(','),
+            ].join('#'),
+          )
+          .join('\0')
+      : '';
     // 列表未变时保留按钮节点，否则每 tick/每次 syncSelection 都会打断 :hover。
     if (!force && renderKey === lastFormationRenderKey) {
       formationsElement.classList.toggle('is-visible', visible);
@@ -823,28 +832,29 @@ function isOverBattlefield(clientX: number, clientY: number): boolean {
 function formatFormationUnits(formation: CardFormation): string {
   if (formation.rows.length === 0) return '';
   if (formation.rows.length === 1) {
-    return formatRowUnits(formation.rows[0]!);
+    return formatRowUnits(formation, 0);
   }
   return formation.rows
-    .map((row, index) => {
+    .map((_row, index) => {
       const label = index === 0 ? '前' : index === formation.rows.length - 1 ? '后' : `排${index + 1}`;
-      return `${label}：${formatRowUnits(row)}`;
+      return `${label}：${formatRowUnits(formation, index)}`;
     })
     .join(' / ');
 }
 
 /** 单排兵种短标签，如「民兵x2 · 弓手x1」。 */
-function formatRowUnits(row: readonly UnitTypeId[]): string {
-  const counts = new Map<UnitTypeId, number>();
-  const order: UnitTypeId[] = [];
-  for (const typeId of row) {
-    if (!counts.has(typeId)) order.push(typeId);
-    counts.set(typeId, (counts.get(typeId) ?? 0) + 1);
+function formatRowUnits(formation: CardFormation, rowIndex: number): string {
+  const counts = new Map<string, number>();
+  const order: Array<{ typeId: UnitTypeId; level: number }> = [];
+  for (const slot of formation.slots.filter((entry) => entry.row === rowIndex)) {
+    const key = `${slot.typeId}:${slot.level}`;
+    if (!counts.has(key)) order.push({ typeId: slot.typeId, level: slot.level });
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return order
-    .map((typeId) => {
+    .map(({ typeId, level }) => {
       const name = UNIT_CONFIGS[typeId]?.name.replace(/（.*?）/, '') ?? typeId;
-      return `${name}x${counts.get(typeId)}`;
+      return `${level}级${name}x${counts.get(`${typeId}:${level}`)}`;
     })
     .join(' · ');
 }

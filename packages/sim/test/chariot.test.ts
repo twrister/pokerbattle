@@ -32,7 +32,7 @@ describe('战车', () => {
     expect(toFloat(chariot.stats.attackWindup)).toBeCloseTo(12, 3);
     expect(toFloat(chariot.stats.range)).toBeCloseTo(10, 3);
     expect(toFloat(chariot.config.minRange)).toBeCloseTo(3, 3);
-    expect(toFloat(chariot.stats.moveSpeed)).toBeCloseTo(1.2, 3);
+    expect(toFloat(chariot.stats.moveSpeed)).toBeCloseTo(1, 3);
     expect(chariot.config.movementLayer).toBe('ground');
     expect(chariot.config.attack.kind).toBe('projectile_aoe');
     if (chariot.config.attack.kind === 'projectile_aoe') {

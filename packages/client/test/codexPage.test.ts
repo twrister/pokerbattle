@@ -22,7 +22,7 @@ describe('兵种图鉴页', () => {
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(14);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
-    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toContain('20%');
+    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 16\.5289/);
     expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
 
     /** 页签每次渲染会重建，点击前需重新查询。 */
@@ -80,6 +80,9 @@ describe('兵种图鉴页', () => {
       '7',
       '8',
       '9',
+      '10',
+      '11',
+      '12',
     ]);
     expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
     const levelOneHp = hpFillWidth();
@@ -93,7 +96,7 @@ describe('兵种图鉴页', () => {
     );
     archer?.click();
     expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
-    expect(levelButtons()).toHaveLength(9);
+    expect(levelButtons()).toHaveLength(12);
 
     page.dispose();
   });

@@ -10,6 +10,7 @@ import {
   getFormationBuildingTypeId,
   isGiantBombFormation,
   isBuildingOnlyFormation,
+  resolveCardFormation,
   resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
@@ -275,8 +276,8 @@ export class MatchState {
 
   /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠。 */
   private validatePlayFormation(cmd: PlayFormationCommand): boolean {
-    const formation = findFormationById(cmd.formationId);
-    if (!formation) return false;
+    const template = findFormationById(cmd.formationId);
+    if (!template) return false;
 
     const deck = this.decks[cmd.faction];
     const uniqueIds = [...new Set(cmd.cardIds)];
@@ -287,7 +288,9 @@ export class MatchState {
 
     const cards = uniqueIds.map((id) => deck.hand.find((card) => card.id === id)!);
     const categories = detectHandCategories(cards);
-    if (!categories.includes(formation.category)) return false;
+    if (!categories.includes(template.category)) return false;
+    const formation = resolveCardFormation(template, cards);
+    if (!formation) return false;
 
     const anchorX = toFloat(cmd.x);
     const anchorY = toFloat(cmd.y);
@@ -306,6 +309,7 @@ export class MatchState {
 
     const points = resolveFormationSpawnsFx(formation, cmd.faction, cmd.x, cmd.y).map((point) => ({
       typeId: point.typeId,
+      level: point.level,
       x: toFloat(point.x),
       y: toFloat(point.y),
       row: point.row,

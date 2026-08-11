@@ -274,8 +274,8 @@ export class World {
    * 从己方主堡向指定落点投放巨型炸弹。
    * 主堡不存在时使用己方场边中央，保证沙盒与测试环境也能确定性运行。
    */
-  spawnGiantBomb(faction: Faction, targetX: Fx, targetY: Fx): Projectile {
-    const config = getUnitConfig('giant_bomb');
+  spawnGiantBomb(faction: Faction, targetX: Fx, targetY: Fx, level = 1): Projectile {
+    const config = getUnitConfig('giant_bomb', level);
     const base = this.units.find(
       (unit) => unit.faction === faction && unit.typeId === 'building_base' && !unit.dead,
     );

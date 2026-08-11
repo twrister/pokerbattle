@@ -7,11 +7,11 @@ import { updateProjectiles } from '../src/systems/projectiles.js';
 import { World } from '../src/world.js';
 
 describe('巨型炸弹', () => {
-  it('作为炸弹牌型选项单独配置，且保留皇家骑士阵型', () => {
+  it('作为炸弹牌型的唯一单独配置', () => {
     const giantBomb = findFormationById('bomb_giant_bomb');
     expect(giantBomb).toBeDefined();
     expect(isGiantBombFormation(giantBomb!)).toBe(true);
-    expect(findFormationById('bomb_cavalry')).toBeDefined();
+    expect(findFormationById('bomb_cavalry')).toBeUndefined();
   });
 
   it('从己方主堡抛出，落地闪烁一秒后无差别伤害半径内单位与建筑', () => {

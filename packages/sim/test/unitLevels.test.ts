@@ -11,16 +11,23 @@ import {
 } from '../src/index.js';
 
 describe('兵种等级配置', () => {
-  it('民兵与弓手都提供 1 到 9 级，生命和伤害逐级增长', () => {
+  it('民兵与弓手都提供 1 到 12 级，生命和伤害逐级增长', () => {
     for (const typeId of ['melee_grunt', 'ranged_archer'] as const) {
-      expect(getUnitLevels(typeId)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-      for (let level = 2; level <= 9; level++) {
+      expect(getUnitLevels(typeId)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      for (let level = 2; level <= 12; level++) {
         const previous = getUnitConfig(typeId, level - 1);
         const current = getUnitConfig(typeId, level);
         expect(toFloat(current.maxHp)).toBeGreaterThan(toFloat(previous.maxHp));
         expect(toFloat(current.damage)).toBeGreaterThan(toFloat(previous.damage));
       }
     }
+  });
+
+  it('12 级民兵战力贴近 1 级卫士', () => {
+    const militia12 = getUnitConfig('melee_grunt', 12);
+    const guard1 = getUnitConfig('melee_guard', 1);
+    expect(toFloat(militia12.maxHp)).toBe(toFloat(guard1.maxHp));
+    expect(Math.abs(toFloat(militia12.damage) - toFloat(guard1.damage))).toBeLessThanOrEqual(1);
   });
 
   it('未指定或不存在等级时回退到 1 级', () => {

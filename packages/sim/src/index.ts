@@ -71,6 +71,7 @@ export {
   dumpDefaultCardFormationDrafts,
   findFormationById,
   resetCardFormationsToDefault,
+  resolveCardFormation,
   validateCardFormationDrafts,
   type CardFormation,
   type CardFormationDrafts,
@@ -105,12 +106,19 @@ export {
   RETURNED_CARD_WEIGHT,
   compareCardsByStrength,
   createPokerCards,
+  getPokerCardById,
   getCardStrength,
   type CardRank,
   type CardSuit,
   type PlayingCard,
 } from './cards/deck.js';
 export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
+export {
+  getPreviewCardsForFormation,
+  layoutMappedUnits,
+  resolveHandUnits,
+  type MappedFormationUnit,
+} from './config/cardMapping.js';
 export {
   HAND_ODDS_DEFAULT_TRIALS,
   HAND_ODDS_MAX_SIZE,
