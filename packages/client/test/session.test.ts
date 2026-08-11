@@ -58,7 +58,7 @@ describe('connectVersusSession', () => {
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket);
     vi.stubGlobal('location', {
       protocol: 'http:',
-      host: 'localhost:8081',
+      host: 'localhost:9081',
     });
   });
 

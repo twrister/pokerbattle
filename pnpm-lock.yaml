@@ -56,6 +56,21 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(jsdom@30.0.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.11))
 
+  packages/ops:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.11
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(jsdom@30.0.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.11))
+
   packages/server:
     dependencies:
       '@pb/net':

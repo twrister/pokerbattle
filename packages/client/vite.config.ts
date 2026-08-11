@@ -131,7 +131,7 @@ function validateUnitLevels(value: object): string | undefined {
 
 /** 开发服与正式预览共用：把同源 /ws 转到权威服，前端无需写死双端口。 */
 const wsProxy = {
-  '/ws': { target: 'ws://localhost:8090', ws: true },
+  '/ws': { target: 'ws://localhost:9090', ws: true },
 } as const;
 
 export default defineConfig({
@@ -139,7 +139,7 @@ export default defineConfig({
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {
     host: true,
-    port: 8081,
+    port: 9081,
     open: true,
     proxy: { ...wsProxy },
   },
@@ -148,7 +148,7 @@ export default defineConfig({
   // 正式服：预览 build 产物；监听全部网卡并代理 /ws，供局域网经 IP 访问
   preview: {
     host: '0.0.0.0',
-    port: 8080,
+    port: 9080,
     strictPort: true,
     // 允许机器名访问；纯 IP 默认已放行
     allowedHosts: true,

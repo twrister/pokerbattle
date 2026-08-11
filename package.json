@@ -7,6 +7,8 @@
     "dev": "pnpm --filter @pb/client dev",
     "dev:server": "pnpm --filter @pb/server dev",
     "dev:online": "concurrently -k -n client,server -c cyan,magenta \"pnpm --filter @pb/client dev\" \"pnpm --filter @pb/server dev\"",
+    "dev:ops": "pnpm --filter @pb/ops dev",
+    "ops": "pnpm --filter @pb/ops start",
     "build": "pnpm --filter @pb/client build",
     "preview": "pnpm --filter @pb/client preview",
     "official": "pnpm build && pnpm preview",

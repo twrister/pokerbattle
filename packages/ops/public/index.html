@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PokerBattle 运维站</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div>
+          <h1>PokerBattle 运维站</h1>
+          <p class="subtitle">监测游戏服与房间活跃状态 · 独立端口 9091</p>
+        </div>
+        <div class="trust-banner" title="当前未启用登录鉴权">
+          仅限受信局域网使用 · 无鉴权
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>快速入口</h2>
+          <span class="hint">开发服 :9081 · 正式服 :9080</span>
+        </div>
+        <div id="service-entries" class="service-grid">
+          <div class="empty">加载服务入口…</div>
+        </div>
+      </section>
+
+      <section class="panel controls">
+        <div class="status-row">
+          <div>
+            <div class="label">游戏服务器 · :9090</div>
+            <div id="process-state" class="state-pill state-stopped">stopped</div>
+          </div>
+          <div class="meta">
+            <div>PID：<span id="process-pid">—</span></div>
+            <div>启动：<span id="process-started">—</span></div>
+            <div>运行：<span id="process-uptime">—</span></div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="btn-start" type="button">启动</button>
+          <button id="btn-stop" type="button" class="danger">停止</button>
+          <button id="btn-restart" type="button" class="secondary">重启</button>
+        </div>
+        <div id="message" class="message" hidden></div>
+      </section>
+
+      <section class="metrics">
+        <article class="metric">
+          <div class="label">WS 连接</div>
+          <div id="metric-connections" class="value">—</div>
+        </article>
+        <article class="metric">
+          <div class="label">房间总数</div>
+          <div id="metric-rooms" class="value">—</div>
+        </article>
+        <article class="metric">
+          <div class="label">对局中</div>
+          <div id="metric-playing" class="value">—</div>
+        </article>
+        <article class="metric">
+          <div class="label">在线玩家</div>
+          <div id="metric-online" class="value">—</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>房间状态</h2>
+          <span id="refresh-hint" class="hint">自动刷新中…</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>房号</th>
+                <th>房间名</th>
+                <th>阶段</th>
+                <th>Tick</th>
+                <th>人数</th>
+                <th>在线</th>
+                <th>玩家</th>
+                <th>最近活跃</th>
+              </tr>
+            </thead>
+            <tbody id="room-tbody">
+              <tr>
+                <td colspan="8" class="empty">暂无房间数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="footer">
+        运维进程 uptime：<span id="ops-uptime">—</span>
+        · 游戏服状态接口：<span id="game-reachable">—</span>
+      </footer>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ import {
 import { MatchState, TICK_RATE, type Command, type Faction } from '@pb/sim';
 import { randomBytes } from 'node:crypto';
 import type { RawData, WebSocket } from 'ws';
+import type { OpsRoomPhase, OpsRoomSnapshot } from './opsTypes.js';
 import { factionForSeat, validateSeatCommand } from './validate.js';
 
 const STEP_MS = 1000 / TICK_RATE;
@@ -54,6 +55,10 @@ export class MatchRoom {
   private ended = false;
   private disposed = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** 房间创建时刻，供运维页展示存活时长。 */
+  private readonly createdAt = Date.now();
+  /** 最近一次席位/消息活跃时间，用于判断僵尸房。 */
+  private lastActiveAt = Date.now();
   /** tick → 已接受的指令列表（按入座顺序追加，保证确定性）。 */
   private readonly scheduled = new Map<number, Command[]>();
   private readonly serverHashes = new Map<number, number>();
@@ -91,6 +96,33 @@ export class MatchRoom {
     };
   }
 
+  /**
+   * 导出运维快照：包含阶段、tick、席位连接状态与活跃时间。
+   * 故意不包含 reconnectToken，避免经 HTTP 状态接口泄漏。
+   */
+  toOpsSnapshot(): OpsRoomSnapshot {
+    const seats = this.seats
+      .filter((seat): seat is Seat => seat !== null)
+      .map((seat) => ({
+        seat: seat.seat,
+        name: seat.name,
+        faction: seat.faction,
+        connected: seat.connected,
+      }));
+    return {
+      roomId: this.roomId,
+      roomName: this.roomName,
+      phase: this.opsPhase(),
+      serverTick: this.serverTick,
+      playerCount: this.playerCount,
+      connectedCount: seats.filter((seat) => seat.connected).length,
+      maxPlayers: MAX_PLAYERS,
+      seats,
+      createdAt: this.createdAt,
+      lastActiveAt: this.lastActiveAt,
+    };
+  }
+
   /** 处理新连接的 join；成功返回 true，满员/已开局返回 false。 */
   handleJoin(ws: WebSocket, name: string): boolean {
     if (this.disposed || this.started) return false;
@@ -110,6 +142,7 @@ export class MatchRoom {
       messageHandler: null,
     };
     this.seats[seatIndex] = seat;
+    this.touchActive();
     this.bindSocket(seat);
 
     if (this.seats[0] && this.seats[1] && !this.started) {
@@ -132,6 +165,7 @@ export class MatchRoom {
     this.clearDisconnectTimer(seat);
     seat.ws = ws;
     seat.connected = true;
+    this.touchActive();
     this.bindSocket(seat);
 
     this.sendWelcome(seat, this.seed);
@@ -224,6 +258,15 @@ export class MatchRoom {
       return;
     }
 
+    // 仅把合法协议消息记为活跃，避免乱包刷活跃时间
+    if (
+      message.type === 'ping' ||
+      message.type === 'input' ||
+      message.type === 'hash'
+    ) {
+      this.touchActive();
+    }
+
     switch (message.type) {
       case 'ping':
         this.send(seat.ws, { type: 'pong', t: message.t });
@@ -279,6 +322,7 @@ export class MatchRoom {
     this.unbindSocket(seat);
     seat.ws = null;
     seat.connected = false;
+    this.touchActive();
 
     // 未开局或已结算：无需重连，腾出座位并在空房时回收
     if (!this.started || this.ended) {
@@ -405,6 +449,18 @@ export class MatchRoom {
   private send(ws: WebSocket | null, message: ServerMessage): void {
     if (!ws || ws.readyState !== ws.OPEN) return;
     ws.send(encodeMessage(message));
+  }
+
+  /** 将私有状态映射为运维阶段枚举。 */
+  private opsPhase(): OpsRoomPhase {
+    if (this.ended) return 'ended';
+    if (this.started) return 'playing';
+    return 'waiting';
+  }
+
+  /** 刷新最近活跃时间，供运维站判断房间是否仍有人交互。 */
+  private touchActive(): void {
+    this.lastActiveAt = Date.now();
   }
 }
 

@@ -1,0 +1,247 @@
+const POLL_MS = 2000;
+
+const els = {
+  processState: document.getElementById('process-state'),
+  processPid: document.getElementById('process-pid'),
+  processStarted: document.getElementById('process-started'),
+  processUptime: document.getElementById('process-uptime'),
+  message: document.getElementById('message'),
+  metricConnections: document.getElementById('metric-connections'),
+  metricRooms: document.getElementById('metric-rooms'),
+  metricPlaying: document.getElementById('metric-playing'),
+  metricOnline: document.getElementById('metric-online'),
+  roomTbody: document.getElementById('room-tbody'),
+  refreshHint: document.getElementById('refresh-hint'),
+  opsUptime: document.getElementById('ops-uptime'),
+  gameReachable: document.getElementById('game-reachable'),
+  serviceEntries: document.getElementById('service-entries'),
+  btnStart: document.getElementById('btn-start'),
+  btnStop: document.getElementById('btn-stop'),
+  btnRestart: document.getElementById('btn-restart'),
+};
+
+let busy = false;
+let busyServiceId = null;
+let pollTimer = null;
+let latestServices = [];
+
+/** 拉取聚合状态并刷新 UI。 */
+async function refreshStatus() {
+  try {
+    const response = await fetch('/api/status', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    renderStatus(data);
+    els.refreshHint.textContent = `上次刷新 ${formatTime(Date.now())}`;
+  } catch (error) {
+    els.refreshHint.textContent = '刷新失败';
+    showMessage(error instanceof Error ? error.message : '状态刷新失败', false);
+  }
+}
+
+/** 将 /api/status 结果渲染到仪表盘。 */
+function renderStatus(data) {
+  const process = data.process ?? {};
+  const state = process.state ?? 'stopped';
+  els.processState.textContent = state;
+  els.processState.className = `state-pill state-${state}`;
+  els.processPid.textContent = process.pid ?? '—';
+  els.processStarted.textContent = process.startedAt ? formatTime(process.startedAt) : '—';
+  els.processUptime.textContent = formatDuration(process.uptimeMs);
+
+  const summary = data.game?.summary;
+  els.metricConnections.textContent = data.gameReachable ? String(data.game?.connectionCount ?? 0) : '—';
+  els.metricRooms.textContent = data.gameReachable ? String(summary?.roomCount ?? 0) : '—';
+  els.metricPlaying.textContent = data.gameReachable ? String(summary?.playingRooms ?? 0) : '—';
+  els.metricOnline.textContent = data.gameReachable ? String(summary?.connectedPlayers ?? 0) : '—';
+
+  els.opsUptime.textContent = formatDuration(data.ops?.uptimeMs);
+  els.gameReachable.textContent = data.gameReachable ? '可达' : '不可达';
+
+  if (data.message) {
+    showMessage(data.message, data.gameReachable && state === 'running');
+  } else if (!busy) {
+    hideMessage();
+  }
+
+  latestServices = Array.isArray(data.services) ? data.services : [];
+  renderServices(latestServices);
+  renderRooms(data.game?.rooms ?? []);
+  updateButtons(state);
+}
+
+/** 渲染开发服/正式服快速入口卡片。 */
+function renderServices(services) {
+  if (!services.length) {
+    els.serviceEntries.innerHTML = '<div class="empty">暂无服务入口</div>';
+    return;
+  }
+
+  const host = location.hostname || '127.0.0.1';
+  els.serviceEntries.innerHTML = services
+    .map((service) => {
+      const state = service.process?.state ?? 'stopped';
+      const url = `http://${host}:${service.port}${service.path || '/'}`;
+      const canOpen = Boolean(service.reachable);
+      const busyThis = busy && busyServiceId === service.id;
+      const transitioning = state === 'starting' || state === 'stopping' || busyThis;
+      const startDisabled = transitioning || state === 'running' || service.process?.externalConflict;
+      const stopDisabled = transitioning || (state === 'stopped' && !service.process?.pid);
+      return `<article class="service-card" data-id="${escapeHtml(service.id)}">
+        <div class="title-row">
+          <h3>${escapeHtml(service.label)} · :${service.port}</h3>
+          <div class="state-pill state-${escapeHtml(state)}">${escapeHtml(state)}</div>
+        </div>
+        <p class="desc">${escapeHtml(service.description || '')}</p>
+        <div class="url">${escapeHtml(url)}</div>
+        <div class="reach ${service.reachable ? 'ok' : ''}">${service.reachable ? '端口可达' : '端口未监听'}</div>
+        <div class="button-row">
+          <a class="open-link ${canOpen ? '' : 'disabled'}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">打开</a>
+          <button type="button" data-action="start" data-id="${escapeHtml(service.id)}" ${startDisabled ? 'disabled' : ''}>启动</button>
+          <button type="button" class="danger" data-action="stop" data-id="${escapeHtml(service.id)}" ${stopDisabled ? 'disabled' : ''}>停止</button>
+        </div>
+      </article>`;
+    })
+    .join('');
+}
+
+/** 按阶段渲染房间表；无数据时展示占位行。 */
+function renderRooms(rooms) {
+  if (!Array.isArray(rooms) || rooms.length === 0) {
+    els.roomTbody.innerHTML = '<tr><td colspan="8" class="empty">暂无房间数据</td></tr>';
+    return;
+  }
+
+  const ordered = [...rooms].sort((a, b) => phaseRank(a.phase) - phaseRank(b.phase) || a.roomId.localeCompare(b.roomId));
+  els.roomTbody.innerHTML = ordered
+    .map((room) => {
+      const players = (room.seats ?? [])
+        .map(
+          (seat) =>
+            `<div class="seat ${seat.connected ? 'online' : ''}">#${seat.seat} ${escapeHtml(seat.name)} (${escapeHtml(seat.faction)}) ${seat.connected ? '在线' : '离线'}</div>`,
+        )
+        .join('');
+      return `<tr>
+        <td>${escapeHtml(room.roomId)}</td>
+        <td>${escapeHtml(room.roomName)}</td>
+        <td><span class="phase phase-${escapeHtml(room.phase)}">${phaseLabel(room.phase)}</span></td>
+        <td>${room.serverTick ?? 0}</td>
+        <td>${room.playerCount ?? 0}/${room.maxPlayers ?? 2}</td>
+        <td>${room.connectedCount ?? 0}</td>
+        <td><div class="seat-list">${players || '—'}</div></td>
+        <td>${formatRelative(room.lastActiveAt)}</td>
+      </tr>`;
+    })
+    .join('');
+}
+
+function updateButtons(state) {
+  const disabled = busy || state === 'starting' || state === 'stopping';
+  els.btnStart.disabled = disabled || state === 'running';
+  els.btnStop.disabled = disabled || state === 'stopped';
+  els.btnRestart.disabled = disabled || state === 'stopped';
+}
+
+/** 调用启停接口，期间禁用按钮避免重复点击。 */
+async function invokeControl(path, serviceId = null) {
+  busy = true;
+  busyServiceId = serviceId;
+  updateButtons('starting');
+  renderServices(latestServices);
+  showMessage('操作执行中…', true);
+  try {
+    const response = await fetch(path, { method: 'POST' });
+    const result = await response.json().catch(() => ({}));
+    const text = result.message || (response.ok ? '操作成功' : `操作失败（HTTP ${response.status}）`);
+    showMessage(text, response.ok);
+    await refreshStatus();
+  } catch (error) {
+    showMessage(error instanceof Error ? error.message : '操作失败', false);
+  } finally {
+    busy = false;
+    busyServiceId = null;
+    await refreshStatus();
+  }
+}
+
+function showMessage(text, info) {
+  els.message.hidden = false;
+  els.message.textContent = text;
+  els.message.classList.toggle('info', Boolean(info));
+}
+
+function hideMessage() {
+  els.message.hidden = true;
+  els.message.textContent = '';
+  els.message.classList.remove('info');
+}
+
+function phaseLabel(phase) {
+  if (phase === 'playing') return '对局中';
+  if (phase === 'ended') return '已结束';
+  return '等待中';
+}
+
+function phaseRank(phase) {
+  if (phase === 'playing') return 0;
+  if (phase === 'waiting') return 1;
+  return 2;
+}
+
+function formatDuration(ms) {
+  if (ms == null || Number.isNaN(ms)) return '—';
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatTime(ms) {
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return '—';
+  }
+}
+
+function formatRelative(ms) {
+  if (!ms) return '—';
+  const delta = Date.now() - ms;
+  if (delta < 5_000) return '刚刚';
+  if (delta < 60_000) return `${Math.floor(delta / 1000)} 秒前`;
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)} 分钟前`;
+  return formatTime(ms);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+els.btnStart.addEventListener('click', () => invokeControl('/api/server/start'));
+els.btnStop.addEventListener('click', () => invokeControl('/api/server/stop'));
+els.btnRestart.addEventListener('click', () => invokeControl('/api/server/restart'));
+
+els.serviceEntries.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const action = target.getAttribute('data-action');
+  const id = target.getAttribute('data-id');
+  if (!action || !id) return;
+  void invokeControl(`/api/services/${id}/${action}`, id);
+});
+
+await refreshStatus();
+pollTimer = setInterval(() => {
+  if (!busy) void refreshStatus();
+}, POLL_MS);
+
+window.addEventListener('beforeunload', () => {
+  if (pollTimer) clearInterval(pollTimer);
+});

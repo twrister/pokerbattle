@@ -10,6 +10,7 @@ import {
 } from '@pb/net';
 import { randomInt } from 'node:crypto';
 import type { WebSocket } from 'ws';
+import type { OpsRoomSnapshot, OpsRoomSummary } from './opsTypes.js';
 import { MatchRoom } from './room.js';
 
 export interface RoomActionResult {
@@ -68,6 +69,36 @@ export class RoomManager {
       result.push(room.toListEntry());
     }
     return result;
+  }
+
+  /** 列出全部存活房间快照（含对局中），供运维站监控。 */
+  listOpsSnapshots(): OpsRoomSnapshot[] {
+    return [...this.rooms.values()].map((room) => room.toOpsSnapshot());
+  }
+
+  /** 聚合房间阶段与在线席位，减少运维前端重复计算。 */
+  summarizeOps(): OpsRoomSummary {
+    const rooms = this.listOpsSnapshots();
+    let waitingRooms = 0;
+    let playingRooms = 0;
+    let endedRooms = 0;
+    let seatedPlayers = 0;
+    let connectedPlayers = 0;
+    for (const room of rooms) {
+      if (room.phase === 'waiting') waitingRooms += 1;
+      else if (room.phase === 'playing') playingRooms += 1;
+      else endedRooms += 1;
+      seatedPlayers += room.playerCount;
+      connectedPlayers += room.connectedCount;
+    }
+    return {
+      roomCount: rooms.length,
+      waitingRooms,
+      playingRooms,
+      endedRooms,
+      seatedPlayers,
+      connectedPlayers,
+    };
   }
 
   /** 进程退出时释放全部房间定时器。 */

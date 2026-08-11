@@ -170,6 +170,59 @@ describe('RoomManager 多房间', () => {
     manager.dispose();
   });
 
+  it('运维快照覆盖等待与对局中房间，且不含重连令牌', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-11T10:00:00.000Z'));
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    const c = new FakeWebSocket();
+
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'Waiter',
+      roomName: '等待房',
+    });
+    const waitingId = welcomeRoom(a);
+
+    manager.join(b as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'Blue',
+      roomName: '对局房',
+    });
+    const playingId = welcomeRoom(b);
+    manager.join(c as never, { type: 'join', mode: 'room', roomId: playingId, name: 'Red' });
+
+    const snapshots = manager.listOpsSnapshots();
+    expect(snapshots).toHaveLength(2);
+    const waiting = snapshots.find((room) => room.roomId === waitingId);
+    const playing = snapshots.find((room) => room.roomId === playingId);
+    expect(waiting?.phase).toBe('waiting');
+    expect(waiting?.playerCount).toBe(1);
+    expect(waiting?.connectedCount).toBe(1);
+    expect(playing?.phase).toBe('playing');
+    expect(playing?.playerCount).toBe(2);
+    expect(playing?.seats.map((seat) => seat.name).sort()).toEqual(['Blue', 'Red']);
+
+    const summary = manager.summarizeOps();
+    expect(summary).toMatchObject({
+      roomCount: 2,
+      waitingRooms: 1,
+      playingRooms: 1,
+      endedRooms: 0,
+      seatedPlayers: 3,
+      connectedPlayers: 3,
+    });
+
+    // 序列化快照后也不应泄露 reconnectToken
+    expect(JSON.stringify(snapshots)).not.toContain('reconnectToken');
+    manager.dispose();
+  });
+
   it('A 房断线不影响 B 房继续推进', () => {
     vi.useFakeTimers();
     const manager = new RoomManager();
@@ -227,11 +280,20 @@ describe('MatchRoom 断线重连', () => {
     a.close();
     expect(b.messages().some((m) => m.type === 'peerDisconnected')).toBe(true);
 
+    const afterDisconnect = room.toOpsSnapshot();
+    expect(afterDisconnect.connectedCount).toBe(1);
+    expect(afterDisconnect.seats.find((seat) => seat.name === 'A')?.connected).toBe(false);
+
     vi.advanceTimersByTime(300); // 断线期间继续推进
     const lastTick = framesBeforeDrop; // 断开前大约已确认到该 tick
     const resumed = new FakeWebSocket();
     expect(room.handleRejoin(resumed as never, token, lastTick)).toBe(true);
     expect(b.messages().some((m) => m.type === 'peerReconnected')).toBe(true);
+
+    const afterRejoin = room.toOpsSnapshot();
+    expect(afterRejoin.connectedCount).toBe(2);
+    expect(afterRejoin.phase).toBe('playing');
+    expect(JSON.stringify(afterRejoin)).not.toContain(token);
 
     const replayed = resumed
       .messages()
