@@ -14,7 +14,7 @@ describe('巨型炸弹', () => {
     expect(findFormationById('bomb_cavalry')).toBeUndefined();
   });
 
-  it('从己方主堡抛出，落地闪烁一秒后无差别伤害半径内单位与建筑', () => {
+  it('从己方主堡抛出，落地后按 attackInterval 闪烁再无差别伤害半径内单位与建筑', () => {
     const world = new World(1);
     const blueBase = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
     const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(15));
@@ -28,6 +28,8 @@ describe('巨型炸弹', () => {
     expect(projectile.pos).toEqual(blueBase.pos);
     expect(projectile.visual).toBe('bomb');
     expect(projectile.fuseBombKind).toBe('giant_bomb');
+    // giant_bomb 配置 attackInterval=15
+    expect(projectile.fuseTicks).toBe(15);
 
     for (let i = 0; i < 100 && !projectile.landed; i += 1) updateProjectiles(world);
     expect(projectile.landed).toBe(true);
@@ -36,7 +38,7 @@ describe('巨型炸弹', () => {
       fuseBombKind: 'giant_bomb',
     });
 
-    for (let i = 0; i < 19; i += 1) updateProjectiles(world);
+    for (let i = 0; i < 14; i += 1) updateProjectiles(world);
     expect(ally.hp).toBe(hp.get(ally.id));
     updateProjectiles(world);
 

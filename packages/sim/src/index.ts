@@ -118,22 +118,30 @@ export {
 } from './cards/deck.js';
 export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
 export {
+  TRIPLE_SMALL_BOMB_DAMAGE_BASE,
+  TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH,
   cardMatchesRankKey,
   cardMatchesSingleKey,
   cardsMatchStraight3Segment,
+  cardsMatchTwoPairSegment,
+  computeTripleSmallBombDamage,
   getPreviewCardsForFormation,
   layoutMappedUnits,
   parseRankFormationKey,
   parseSingleFormationKey,
   parseStraight3SegmentKey,
+  parseTwoPairSegmentKey,
   resolveHandUnits,
   resolveRankConfiguredMappedRows,
   resolveSingleMappedRows,
   resolveStraight3MappedRows,
+  resolveTripleSmallBombMappedRows,
+  resolveTwoPairMappedRows,
   type MappedFormationUnit,
   type RankFormationKey,
   type SingleFormationKey,
   type Straight3SegmentKey,
+  type TwoPairSegmentKey,
 } from './config/cardMapping.js';
 export {
   HAND_ODDS_DEFAULT_TRIALS,

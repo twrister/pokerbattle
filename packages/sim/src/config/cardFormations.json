@@ -147,7 +147,7 @@
       "name": "对子 Q",
       "rows": [
         [
-          "melee_guard"
+          "melee_grunt"
         ],
         [
           "hero_queen",
@@ -167,7 +167,7 @@
           "hero_king"
         ],
         [
-          "hero_queen"
+          "ranged_archer"
         ]
       ],
       "colSpacing": 2,
@@ -183,7 +183,7 @@
           "melee_cavalry"
         ],
         [
-          "hero_queen"
+          "ranged_archer"
         ]
       ],
       "colSpacing": 2,
@@ -307,11 +307,12 @@
         ],
         [
           "melee_grunt",
+          "melee_grunt",
           "melee_grunt"
         ]
       ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
+      "colSpacing": 1.5,
+      "rowSpacing": 1.5,
       "thumbScale": 2
     },
     {
@@ -325,21 +326,96 @@
         ],
         [
           "ranged_archer",
+          "ranged_archer",
           "ranged_archer"
         ]
       ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
+      "colSpacing": 1.5,
+      "rowSpacing": 1.5,
       "thumbScale": 2
     },
     {
-      "id": "triple_rank",
-      "name": "点数单位",
+      "id": "triple_J",
+      "name": "三条 J",
       "rows": [
         [
           "melee_guard",
           "melee_guard",
           "melee_guard"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "triple_Q",
+      "name": "三条 Q",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "hero_queen",
+          "hero_queen",
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "triple_K",
+      "name": "三条 K",
+      "rows": [
+        [
+          "hero_king",
+          "hero_king",
+          "hero_king"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "triple_A",
+      "name": "三条 A",
+      "rows": [
+        [
+          "melee_cavalry",
+          "melee_cavalry",
+          "melee_cavalry"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.7
+    },
+    {
+      "id": "triple_small_bomb",
+      "name": "小炸弹",
+      "rows": [
+        [
+          "small_bomb"
         ]
       ],
       "colSpacing": 1.2,
@@ -349,55 +425,130 @@
   ],
   "two_pair": [
     {
-      "id": "two_pair_grunt",
-      "name": "民兵",
+      "id": "two_pair_number",
+      "name": "数字连对",
       "rows": [
         [
+          "melee_grunt",
           "melee_grunt",
           "melee_grunt",
           "melee_grunt"
         ],
         [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "two_pair_A2",
+      "name": "A-2",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_cavalry",
+          "melee_cavalry",
           "melee_grunt"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_archer",
-      "name": "弓手",
-      "rows": [
+        ],
         [
           "ranged_archer",
           "ranged_archer",
-          "ranged_archer"
-        ],
-        [
+          "ranged_archer",
           "ranged_archer"
         ]
       ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
     },
     {
-      "id": "two_pair_rank",
-      "name": "点数单位",
+      "id": "two_pair_10J",
+      "name": "10-J",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_guard",
+          "melee_guard",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "two_pair_JQ",
+      "name": "J-Q",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_guard",
+          "melee_guard",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "hero_queen",
+          "hero_queen",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "two_pair_QK",
+      "name": "Q-K",
+      "rows": [
+        [
+          "melee_grunt",
+          "hero_king",
+          "hero_king",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "hero_queen",
+          "hero_queen",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "two_pair_KA",
+      "name": "K-A",
       "rows": [
         [
           "hero_king",
-          "hero_king",
+          "melee_cavalry",
+          "melee_cavalry",
           "hero_king"
         ],
         [
-          "hero_king"
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
         ]
       ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
     }
   ],
   "straight5": [

@@ -49,8 +49,8 @@ export function updateProjectiles(world: World): void {
     if (gap <= step + projectile.targetRadius) {
       projectile.height = projectile.endHeight;
       if (projectile.fuseBombKind) {
+        // fuseTicks 已在投放时按单位 attackInterval 写入，落地后只开始倒计时
         projectile.landed = true;
-        projectile.fuseTicks = 20;
         continue;
       }
       if (projectile.aoeRadius > 0) {

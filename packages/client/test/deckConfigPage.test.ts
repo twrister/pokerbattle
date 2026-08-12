@@ -134,6 +134,39 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
+  it('三条阵型可编辑站位兵种并刷新预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    const tripleCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+      (button) => button.textContent === '三张',
+    );
+    expect(tripleCategory).toBeDefined();
+    tripleCategory!.click();
+    preview.render.mockClear();
+
+    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
+    const jButton = formationButtons.find((button) => button.textContent === '三条 J');
+    expect(jButton).toBeDefined();
+    jButton!.click();
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][] } | null;
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
+
   it('三顺各点数段均可编辑站位并按段预览', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
@@ -169,6 +202,46 @@ describe('卡组阵型配置页', () => {
     expect(preview.render).toHaveBeenCalled();
     const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][]; id?: string } | null;
     expect(rendered?.id).toBe('straight3_JQK');
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
+
+  it('连对各点数段均可编辑站位并按段预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    const twoPairCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+      (button) => button.textContent === '连对',
+    );
+    expect(twoPairCategory).toBeDefined();
+    twoPairCategory!.click();
+
+    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
+      (button) => button.textContent,
+    );
+    expect(names).toEqual(['数字连对', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A']);
+
+    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === 'Q-K',
+    );
+    expect(segmentButton).toBeDefined();
+    segmentButton!.click();
+    preview.render.mockClear();
+
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][]; id?: string } | null;
+    expect(rendered?.id).toBe('two_pair_QK');
     expect(rendered?.rows?.flat()).toContain(nextType);
 
     page.dispose();

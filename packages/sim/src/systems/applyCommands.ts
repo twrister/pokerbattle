@@ -10,6 +10,7 @@ import {
 } from '../config/cardFormations.js';
 import { getPokerCardById } from '../cards/deck.js';
 import type { PlayingCard } from '../cards/deck.js';
+import { computeTripleSmallBombDamage } from '../config/cardMapping.js';
 import { isBuildingConfig, getUnitConfig } from '../config/units.js';
 import type { World } from '../world.js';
 
@@ -56,7 +57,12 @@ function applyPlayFormation(
     const bombType = getFuseBombTypeId(formation)!;
     const level = formation.slots[0]!.level;
     if (bombType === 'small_bomb') {
-      world.spawnSmallBomb(command.faction, command.x, command.y, level);
+      // 三条兑换小炸弹按牌力线性伤；四条等其它来源仍用单位配置固定伤。
+      const damageOverride =
+        formation.category === 'triple'
+          ? computeTripleSmallBombDamage(cards as PlayingCard[])
+          : undefined;
+      world.spawnSmallBomb(command.faction, command.x, command.y, level, damageOverride);
     } else {
       world.spawnGiantBomb(command.faction, command.x, command.y, level);
     }

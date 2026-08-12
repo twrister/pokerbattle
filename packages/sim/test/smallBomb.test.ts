@@ -4,7 +4,12 @@ import {
   isFuseBombFormation,
   resolveCardFormation,
 } from '../src/config/cardFormations.js';
-import { getPokerCardById } from '../src/cards/deck.js';
+import {
+  computeTripleSmallBombDamage,
+  TRIPLE_SMALL_BOMB_DAMAGE_BASE,
+  TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH,
+} from '../src/config/cardMapping.js';
+import { getCardStrength, getPokerCardById } from '../src/cards/deck.js';
 import { Faction } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
@@ -53,7 +58,7 @@ describe('小炸弹', () => {
     expect(smallBomb.hp).toBe(bombHp);
   });
 
-  it('从己方主堡抛出，落地闪烁一秒后无差别伤害半径内单位与建筑', () => {
+  it('从己方主堡抛出，落地后按 attackInterval 闪烁再无差别伤害半径内单位与建筑', () => {
     const world = new World(1);
     const blueBase = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
     // aoeRadius=3.5：落点 (9,15) 内圈单位应受伤，外侧不受伤
@@ -68,6 +73,8 @@ describe('小炸弹', () => {
     expect(projectile.pos).toEqual(blueBase.pos);
     expect(projectile.visual).toBe('bomb');
     expect(projectile.fuseBombKind).toBe('small_bomb');
+    // small_bomb 配置 attackInterval=10
+    expect(projectile.fuseTicks).toBe(10);
 
     for (let i = 0; i < 100 && !projectile.landed; i += 1) updateProjectiles(world);
     expect(projectile.landed).toBe(true);
@@ -76,7 +83,7 @@ describe('小炸弹', () => {
       fuseBombKind: 'small_bomb',
     });
 
-    for (let i = 0; i < 19; i += 1) updateProjectiles(world);
+    for (let i = 0; i < 9; i += 1) updateProjectiles(world);
     expect(ally.hp).toBe(hp.get(ally.id));
     updateProjectiles(world);
 
@@ -86,5 +93,53 @@ describe('小炸弹', () => {
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(world.explosionEffects).toHaveLength(1);
     expect(world.explosionEffects[0]?.kind).toBe('normal');
+  });
+
+  it('四条小炸弹伤害仍为配置固定值 600', () => {
+    const cards = ['5-spades', '5-hearts', '5-clubs', '5-diamonds'].map((id) => getPokerCardById(id)!);
+    const world = new World(1);
+    world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+    applyCommands(world, [
+      playFormationCommand(
+        Faction.Blue,
+        'bomb_small_bomb',
+        cards.map((card) => card.id),
+        fromFloat(9),
+        fromFloat(15),
+      ),
+    ]);
+    expect(toFloat(world.projectiles[0]!.damage)).toBeCloseTo(600, 3);
+  });
+
+  it('三条兑换小炸弹伤害按牌力线性加成', () => {
+    const triple = findFormationById('triple_small_bomb');
+    expect(triple).toBeDefined();
+    expect(isFuseBombFormation(triple!)).toBe(true);
+
+    const playTriple = (cardIds: string[]) => {
+      const cards = cardIds.map((id) => getPokerCardById(id)!);
+      const expected =
+        TRIPLE_SMALL_BOMB_DAMAGE_BASE +
+        getCardStrength(cards[0]!) * TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH;
+      expect(toFloat(computeTripleSmallBombDamage(cards))).toBeCloseTo(expected, 3);
+
+      const world = new World(1);
+      world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+      applyCommands(world, [
+        playFormationCommand(
+          Faction.Blue,
+          'triple_small_bomb',
+          cardIds,
+          fromFloat(9),
+          fromFloat(15),
+        ),
+      ]);
+      expect(world.projectiles).toHaveLength(1);
+      expect(toFloat(world.projectiles[0]!.damage)).toBeCloseTo(expected, 3);
+      return expected;
+    };
+
+    expect(playTriple(['2-spades', '2-hearts', '2-clubs'])).toBe(400);
+    expect(playTriple(['A-spades', 'A-hearts', 'A-clubs'])).toBe(1000);
   });
 });

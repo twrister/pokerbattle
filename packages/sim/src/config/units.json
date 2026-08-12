@@ -176,7 +176,7 @@
         "mass": 9999,
         "maxHp": 1,
         "damage": 1200,
-        "attackInterval": 20,
+        "attackInterval": 15,
         "attackWindup": 0,
         "range": 0,
         "minRange": 0,
@@ -206,7 +206,7 @@
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 20,
-    "aoeRadius": 3.5,
+    "aoeRadius": 2,
     "levels": {
       "1": {
         "radius": 0.5,
@@ -214,7 +214,7 @@
         "mass": 9999,
         "maxHp": 1,
         "damage": 600,
-        "attackInterval": 20,
+        "attackInterval": 10,
         "attackWindup": 0,
         "range": 0,
         "minRange": 0,

@@ -192,7 +192,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   /**
    * 编辑方案元数据：名称、间距、按钮缩略图放大。
-   * 单张/对子/三顺额外可编辑 rows；其它牌型站位仍由规则引擎推导。
+   * 单张/对子/三条/三顺/连对额外可编辑 rows；其它牌型站位仍由规则引擎推导。
    */
   function renderEditor(): void {
     editor.replaceChildren();
@@ -203,19 +203,30 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     }
 
     const buildingOnly = isBuildingOnlyFormation(draft);
-    const editableRows = category === 'single' || category === 'pair' || category === 'straight3';
+    const editableRows =
+      category === 'single' ||
+      category === 'pair' ||
+      category === 'triple' ||
+      category === 'straight3' ||
+      category === 'two_pair';
     const rankSuffixHint =
       category === 'single'
         ? '_grunt/_archer/_J/_Q/_K/_A/_joker_black/_joker_red'
-        : category === 'pair'
+        : category === 'pair' || category === 'triple'
           ? '_grunt/_archer/_J/_Q/_K/_A'
-          : '_number/_A23/_910J/_10JQ/_JQK/_QKA';
+          : category === 'two_pair'
+            ? '_number/_A2/_10J/_JQ/_QK/_KA'
+            : '_number/_A23/_910J/_10JQ/_JQK/_QKA';
     const rule = document.createElement('section');
     rule.className = 'deck-rows';
     const levelHint =
       category === 'straight3'
         ? '数字三顺等级仍按最大点数推导，含人头段固定 2 级。'
-        : '数字牌等级仍按点数推导（对子再 +1）。';
+        : category === 'triple'
+          ? '数字牌等级仍按点数推导后再 +1，人头固定 3 级；小炸弹方案 ID 含 small_bomb。'
+          : category === 'two_pair'
+            ? '数字连对等级仍按最大点数推导后再 +2，含人头段固定 4 级。'
+            : '数字牌等级仍按点数推导（对子再 +1）。';
     rule.innerHTML = `
       <div class="deck-section-title">规则说明</div>
       <p>${
@@ -384,11 +395,19 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   /**
    * 保存前用规则展开结果回填 rows，避免占位数量被写回配置。
-   * 单张/对子/三顺 rows 由配置页直接编辑，跳过回填以免冲掉手工站位。
+   * 单张/对子/三条/三顺/连对 rows 由配置页直接编辑，跳过回填以免冲掉手工站位。
    */
   function syncDraftRowsFromRules(): void {
     for (const cat of HAND_CATEGORY_ORDER) {
-      if (cat === 'single' || cat === 'pair' || cat === 'straight3') continue;
+      if (
+        cat === 'single' ||
+        cat === 'pair' ||
+        cat === 'triple' ||
+        cat === 'straight3' ||
+        cat === 'two_pair'
+      ) {
+        continue;
+      }
       for (const draft of drafts[cat]) {
         const resolved = previewFormationFromDraftFor(cat, draft);
         if (resolved) draft.rows = resolved.rows.map((row) => [...row]);

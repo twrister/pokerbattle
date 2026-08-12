@@ -1,6 +1,12 @@
 import { getCardStrength, getPokerCardById, type PlayingCard } from '../cards/deck.js';
+import { fromFloat, type Fx } from '../math/fixed.js';
 import { UNIT_CONFIGS, UNIT_LEVELS_ENABLED, type UnitTypeId } from './units.js';
 import type { HandCategory } from './cardFormations.js';
+
+/** 三条兑换小炸弹：基础伤害；最终伤害 = 基础 + 牌力 × 系数。 */
+export const TRIPLE_SMALL_BOMB_DAMAGE_BASE = 300;
+/** 三条兑换小炸弹：每点牌力增加的伤害。 */
+export const TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH = 50;
 
 /** 规则阵型中的单个出兵位，等级随实际出牌点数推导。 */
 export interface MappedFormationUnit {
@@ -71,17 +77,6 @@ function numberRankLevel(card: PlayingCard): number {
 /** 获取组合中牌力最大的牌；规则牌型保证 cards 非空。 */
 function strongestCard(cards: readonly PlayingCard[]): PlayingCard {
   return cards.reduce((strongest, card) => (getCardStrength(card) > getCardStrength(strongest) ? card : strongest));
-}
-
-/** J、Q、K、A 与大小王的唯一兵种映射（多张牌型规则仍用）。 */
-function rankUnit(card: PlayingCard): UnitTypeId | null {
-  if (card.joker === 'black') return 'hero_mage';
-  if (card.joker === 'red') return 'hero_archmage';
-  if (card.rank === 'J') return 'melee_guard';
-  if (card.rank === 'Q') return 'hero_queen';
-  if (card.rank === 'K') return 'hero_king';
-  if (card.rank === 'A') return 'melee_cavalry';
-  return null;
 }
 
 /** 按攻击类型将近战排在前、远程排在后，每排最多三名以控制阵型宽度。 */
@@ -163,26 +158,121 @@ export function resolveStraight3MappedRows(
 }
 
 /**
- * 单张/对子：校验点数匹配后按配置 rows 展开站位（不重排）。
- * 对子在基础等级上 +1，与原规则加成一致；返回 null 表示不适用。
+ * 连对点数段键，与 formationId 后缀约定一致：
+ * `_number`→纯数字连对；`_A2`/`_10J`/`_JQ`/`_QK`/`_KA`→对应相邻段。
  */
-export function resolveRankConfiguredMappedRows(
-  category: 'single' | 'pair',
+export type TwoPairSegmentKey = 'number' | 'A2' | '10J' | 'JQ' | 'QK' | 'KA';
+
+/** 从阵型 id 解析连对点数段；无法识别时返回 null。 */
+export function parseTwoPairSegmentKey(formationId: string): TwoPairSegmentKey | null {
+  // 先匹配更长/更具体后缀，避免被短串误伤。
+  if (formationId.includes('_10J')) return '10J';
+  if (formationId.includes('_A2')) return 'A2';
+  if (formationId.includes('_JQ')) return 'JQ';
+  if (formationId.includes('_QK')) return 'QK';
+  if (formationId.includes('_KA')) return 'KA';
+  if (formationId.includes('_number')) return 'number';
+  return null;
+}
+
+/** 手牌点数是否命中指定连对段（用 rank 集合匹配相邻两对）。 */
+export function cardsMatchTwoPairSegment(
+  cards: readonly PlayingCard[],
+  key: TwoPairSegmentKey,
+): boolean {
+  if (cards.length !== 4 || cards.some((card) => card.joker)) return false;
+  const ranks = [...new Set(cards.map((card) => card.rank))];
+  if (ranks.length !== 2) return false;
+  // 纯数字连对：两对点数都必须在 2～10。
+  if (key === 'number') return cards.every((card) => isNumberRank(card));
+  const sorted = [...ranks].sort().join(',');
+  switch (key) {
+    case 'A2':
+      return sorted === '2,A';
+    case '10J':
+      return sorted === '10,J';
+    case 'JQ':
+      return sorted === 'J,Q';
+    case 'QK':
+      return sorted === 'K,Q';
+    case 'KA':
+      return sorted === 'A,K';
+  }
+}
+
+/**
+ * 连对：校验点数段匹配后按配置 rows 展开站位（不重排）。
+ * 纯数字段等级 = 最大牌点数等级 + 2；含人头段固定 4 级。
+ */
+export function resolveTwoPairMappedRows(
   formationId: string,
   rows: readonly (readonly UnitTypeId[])[],
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[][] | null {
-  const expectedCount = category === 'single' ? 1 : 2;
+  const key = parseTwoPairSegmentKey(formationId);
+  if (!key || !cardsMatchTwoPairSegment(cards, key)) return null;
+  const top = strongestCard(cards);
+  const level = key === 'number' ? numberRankLevel(top) + 2 : 4;
+  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level }))));
+}
+
+/**
+ * 三条兑换小炸弹伤害：300 + 牌力 × 50（牌力 2→400，A→1000）。
+ * 仅用于三条小炸弹；四条小炸弹仍走单位配置固定伤。
+ */
+export function computeTripleSmallBombDamage(cards: readonly PlayingCard[]): Fx {
+  const top = strongestCard(cards);
+  const damage =
+    TRIPLE_SMALL_BOMB_DAMAGE_BASE + getCardStrength(top) * TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH;
+  return fromFloat(damage);
+}
+
+/**
+ * 三条小炸弹：任意同点三条均可兑换，按配置 rows 展开为单槽引信弹。
+ */
+export function resolveTripleSmallBombMappedRows(
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  if (!formationId.includes('small_bomb')) return null;
+  if (cards.length !== 3 || cards.some((card) => card.joker)) return null;
+  const rank = cards[0]!.rank;
+  if (cards.some((card) => card.rank !== rank)) return null;
+  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level: 1 }))));
+}
+
+/**
+ * 单张/对子/三条：校验点数匹配后按配置 rows 展开站位（不重排）。
+ * 对子在基础等级上 +1；三条数字 +1、人头固定 3 级；返回 null 表示不适用。
+ */
+export function resolveRankConfiguredMappedRows(
+  category: 'single' | 'pair' | 'triple',
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  const expectedCount = category === 'single' ? 1 : category === 'pair' ? 2 : 3;
   if (cards.length !== expectedCount) return null;
-  // 双王只走王炸，对子配置路径直接拒绝王牌。
-  if (category === 'pair' && cards.some((card) => card.joker)) return null;
+  // 双王只走王炸；三条不含王牌。
+  if ((category === 'pair' || category === 'triple') && cards.some((card) => card.joker)) return null;
+
+  // 三条小炸弹不走点数键，任意同点三条均可兑换。
+  if (category === 'triple' && formationId.includes('small_bomb')) {
+    return resolveTripleSmallBombMappedRows(formationId, rows, cards);
+  }
 
   const key = parseRankFormationKey(formationId);
   const top = strongestCard(cards);
   if (!key || !cardMatchesRankKey(top, key)) return null;
 
-  const baseLevel = key === 'number' ? numberRankLevel(top) : 1;
-  const level = category === 'pair' ? baseLevel + 1 : baseLevel;
+  let level: number;
+  if (category === 'triple') {
+    level = key === 'number' ? numberRankLevel(top) + 1 : 3;
+  } else {
+    const baseLevel = key === 'number' ? numberRankLevel(top) : 1;
+    level = category === 'pair' ? baseLevel + 1 : baseLevel;
+  }
   return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level }))));
 }
 
@@ -198,7 +288,7 @@ export function resolveSingleMappedRows(
 /**
  * 按实际手牌和阵型方案推导单位与等级。
  * 返回 null 代表该方案不适用于当前点数，调用方不应向玩家展示。
- * 单张/对子由 resolveCardFormation 按配置 rows 展开，此处直接返回 null。
+ * 单张/对子/三条/三顺/连对由 resolveCardFormation 按配置 rows 展开，此处直接返回 null。
  */
 export function resolveHandUnits(
   category: HandCategory,
@@ -206,8 +296,16 @@ export function resolveHandUnits(
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[] | null {
   if (cards.length === 0) return null;
-  // 单张/对子/三顺站位以 cardFormations.json 的 rows 为准，不走规则推导。
-  if (category === 'single' || category === 'pair' || category === 'straight3') return null;
+  // 单张/对子/三条/三顺/连对站位以 cardFormations.json 的 rows 为准，不走规则推导。
+  if (
+    category === 'single' ||
+    category === 'pair' ||
+    category === 'triple' ||
+    category === 'straight3' ||
+    category === 'two_pair'
+  ) {
+    return null;
+  }
 
   const choice = choiceFromFormationId(formationId);
   const top = strongestCard(cards);
@@ -246,33 +344,12 @@ export function resolveHandUnits(
           ? applyLevelGate([{ typeId: 'dragon', level: 2 }])
           : null;
   }
-  // 王炸只走独立的 rocket 规则，不能借由同时命中的「对子」绕过映射。
-  if (cards.some((card) => card.joker)) return null;
-  const numeric = isNumberRank(top);
-  if (numeric && choice !== 'melee' && choice !== 'ranged') return null;
-  if (!numeric && choice !== 'rank') return null;
-  const typeId = numeric
-    ? choice === 'melee'
-      ? 'melee_grunt'
-      : 'ranged_archer'
-    : rankUnit(top);
-  if (!typeId) return null;
-
-  let count = 1;
-  let level = numeric ? numberRankLevel(top) : 1;
-  if (category === 'triple') {
-    count = numeric ? 5 : 3;
-    level = numeric ? level + 1 : 3;
-  } else if (category === 'two_pair') {
-    count = 4;
-    level = numeric ? level + 2 : 4;
-  }
-  return applyLevelGate(Array.from({ length: count }, () => ({ typeId, level })));
+  return null;
 }
 
-/** 按点数键生成单张/对子预览样例牌。 */
+/** 按点数键生成单张/对子/三条预览样例牌。 */
 function previewCardsForRankKey(
-  category: 'single' | 'pair',
+  category: 'single' | 'pair' | 'triple',
   key: RankFormationKey | null,
   card: (id: string) => PlayingCard,
 ): PlayingCard[] {
@@ -281,7 +358,10 @@ function previewCardsForRankKey(
       if (rank === 'joker-black' || rank === 'joker-red') return [card(rank)];
       return [card(`${rank}-spades`)];
     }
-    return [card(`${rank}-spades`), card(`${rank}-hearts`)];
+    if (category === 'pair') {
+      return [card(`${rank}-spades`), card(`${rank}-hearts`)];
+    }
+    return [card(`${rank}-spades`), card(`${rank}-hearts`), card(`${rank}-clubs`)];
   };
   switch (key) {
     case 'J':
@@ -323,9 +403,37 @@ function previewCardsForStraight3Segment(
   }
 }
 
+/** 按连对点数段生成相邻两对预览样例。 */
+function previewCardsForTwoPair(
+  formationId: string,
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  const pair = (low: string, high: string): PlayingCard[] => [
+    card(`${low}-spades`),
+    card(`${low}-hearts`),
+    card(`${high}-clubs`),
+    card(`${high}-diamonds`),
+  ];
+  switch (parseTwoPairSegmentKey(formationId)) {
+    case 'A2':
+      return pair('A', '2');
+    case '10J':
+      return pair('10', 'J');
+    case 'JQ':
+      return pair('J', 'Q');
+    case 'QK':
+      return pair('Q', 'K');
+    case 'KA':
+      return pair('K', 'A');
+    case 'number':
+    default:
+      return pair('4', '5');
+  }
+}
+
 /**
  * 卡组页预览用的样例手牌。
- * 单张/对子/三顺按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
+ * 单张/对子/三条/三顺/连对按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
  */
 export function getPreviewCardsForFormation(
   category: HandCategory,
@@ -337,25 +445,21 @@ export function getPreviewCardsForFormation(
     return found;
   };
 
-  if (category === 'single' || category === 'pair') {
-    return previewCardsForRankKey(category, parseRankFormationKey(formationId), card);
+  if (category === 'single' || category === 'pair' || category === 'triple') {
+    // 三条小炸弹无点数键，用数字三条做预览样例。
+    const key = formationId.includes('small_bomb')
+      ? ('number' as const)
+      : parseRankFormationKey(formationId);
+    return previewCardsForRankKey(category, key, card);
   }
   if (category === 'straight3') {
     return previewCardsForStraight3Segment(parseStraight3SegmentKey(formationId), card);
   }
-
-  const choice = choiceFromFormationId(formationId);
-  const face = choice === 'rank';
+  if (category === 'two_pair') {
+    return previewCardsForTwoPair(formationId, card);
+  }
 
   switch (category) {
-    case 'triple':
-      return face
-        ? [card('J-spades'), card('J-hearts'), card('J-clubs')]
-        : [card('5-spades'), card('5-hearts'), card('5-clubs')];
-    case 'two_pair':
-      return face
-        ? [card('Q-spades'), card('Q-hearts'), card('K-clubs'), card('K-diamonds')]
-        : [card('4-spades'), card('4-hearts'), card('5-clubs'), card('5-diamonds')];
     case 'straight5':
       return [card('2-spades'), card('3-hearts'), card('4-clubs'), card('5-diamonds'), card('6-spades')];
     case 'flush':

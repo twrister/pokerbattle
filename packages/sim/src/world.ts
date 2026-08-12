@@ -1,4 +1,4 @@
-import { type Fx, fromFloat, toFloat } from './math/fixed.js';
+import { type Fx, floorToInt, fromFloat, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
@@ -283,9 +283,24 @@ export class World {
 
   /**
    * 从己方主堡投放小炸弹：伤害与爆炸半径更小，抛物线也更矮。
+   * damageOverride 用于三条兑换等按牌力线性伤，缺省走单位配置。
    */
-  spawnSmallBomb(faction: Faction, targetX: Fx, targetY: Fx, level = 1): Projectile {
-    return this.spawnFuseBomb(faction, 'small_bomb', targetX, targetY, level, BOMB_ARC_APEX);
+  spawnSmallBomb(
+    faction: Faction,
+    targetX: Fx,
+    targetY: Fx,
+    level = 1,
+    damageOverride?: Fx,
+  ): Projectile {
+    return this.spawnFuseBomb(
+      faction,
+      'small_bomb',
+      targetX,
+      targetY,
+      level,
+      BOMB_ARC_APEX,
+      damageOverride,
+    );
   }
 
   /** 主堡抛物线引信弹的共用投放逻辑。 */
@@ -296,6 +311,7 @@ export class World {
     targetY: Fx,
     level: number,
     arcApex: number,
+    damageOverride?: Fx,
   ): Projectile {
     const config = getUnitConfig(typeId, level);
     const base = this.units.find(
@@ -316,7 +332,7 @@ export class World {
       targetX,
       targetY,
       0,
-      config.damage,
+      damageOverride ?? config.damage,
       speed,
       radius,
       GROUND_PROJECTILE_HEIGHT,
@@ -327,6 +343,8 @@ export class World {
       'bomb',
       typeId,
     );
+    // 落地引信时长走单位攻击间隔，便于在配置表调爆炸节奏
+    projectile.fuseTicks = Math.max(0, floorToInt(config.attackInterval));
     this.projectiles.push(projectile);
     return projectile;
   }

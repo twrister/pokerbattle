@@ -44,7 +44,10 @@ export interface Projectile {
   visual: ProjectileVisual;
   /** 飞行速度，单位/秒 */
   speed: Fx;
-  /** 引信炸弹落地后等待引爆的剩余逻辑帧；0 表示仍在飞行或无需引信。 */
+  /**
+   * 引信炸弹等待引爆的剩余逻辑帧（投放时取自单位 attackInterval）。
+   * 落地前为完整引信；落地后每 tick 递减；0 且未落地表示无需引信。
+   */
   fuseTicks: number;
   /** 已抵达固定落点，渲染层据此显示落地闪烁。 */
   landed: boolean;
