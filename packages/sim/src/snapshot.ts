@@ -80,7 +80,7 @@ export interface ExplosionEffectSnapshot {
   x: number;
   y: number;
   radius: number;
-  kind: 'normal' | 'giant_bomb';
+  kind: 'normal' | 'giant_bomb' | 'explode2' | 'explode4' | 'blood3';
   progress: number;
 }
 

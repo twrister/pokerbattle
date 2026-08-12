@@ -1,11 +1,38 @@
-import { type Fx, div, mul, toFloat } from '../math/fixed.js';
+import { type Fx, div, fromFloat, max, mul, toFloat } from '../math/fixed.js';
 import { distSq, lengthOf } from '../math/vec2.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { isBuildingConfig } from '../config/units.js';
+import type { ExplosionEffect } from '../entity/effect.js';
 import { isAlive, type Faction } from '../entity/unit.js';
 import type { Projectile } from '../entity/projectile.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
+
+/** 单体弹道命中爆炸的最小可视半径，避免目标碰撞圈过小看不清。 */
+const MIN_SINGLE_IMPACT_RADIUS = fromFloat(0.8);
+
+/**
+ * 弹道命中 / 引信弹爆炸序列帧总开关。
+ * false 时不生成爆炸特效；单位死亡与炸弹兵自爆不受影响。
+ */
+const PROJECTILE_EXPLOSION_FX_ENABLED = false;
+
+/**
+ * 将弹道落地反馈映射为爆炸序列帧 kind；脉冲或不启用时返回 null。
+ * Explode2/4 打在非建筑上统一改 Blood3，打建筑仍用原爆炸帧。
+ */
+function explosionKindFromImpact(
+  impactFx: Projectile['impactFx'],
+  hitBuilding: boolean,
+): ExplosionEffect['kind'] | null {
+  if (!PROJECTILE_EXPLOSION_FX_ENABLED) return null;
+  if (impactFx === 'explosion') return 'normal';
+  if (impactFx === 'explode2' || impactFx === 'explode4') {
+    return hitBuilding ? impactFx : 'blood3';
+  }
+  return null;
+}
+
 
 /** 复用范围弹查询结果，避免爆炸时创建临时数组。 */
 const neighbors: number[] = [];
@@ -53,6 +80,8 @@ export function updateProjectiles(world: World): void {
         projectile.landed = true;
         continue;
       }
+      // 主目标是否建筑决定 Explode↔Blood；目标已死时按配置足迹判断
+      const hitBuilding = !!target && isBuildingConfig(target.config);
       if (projectile.aoeRadius > 0) {
         resolveProjectileAoe(
           world,
@@ -62,9 +91,20 @@ export function updateProjectiles(world: World): void {
           projectile.damage,
           projectile.faction,
           projectile.impactFx,
+          hitBuilding,
         );
       } else if (target) {
         target.hp -= projectile.damage;
+        // 单体弹道也按发射者配置播命中爆炸（箭/女王/大小王等）
+        const kind = explosionKindFromImpact(projectile.impactFx, hitBuilding);
+        if (kind) {
+          world.spawnExplosionEffect(
+            projectile.impactPos.x,
+            projectile.impactPos.y,
+            max(projectile.targetRadius, MIN_SINGLE_IMPACT_RADIUS),
+            kind,
+          );
+        }
       }
       projectile.dead = true;
       continue;
@@ -89,7 +129,8 @@ function resolveFuseBomb(world: World, projectile: Projectile): void {
     unit.hp -= projectile.damage;
     unit.aoeHitFxLeft = 2;
   }
-  // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列
+  // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列（可由总开关关闭）
+  if (!PROJECTILE_EXPLOSION_FX_ENABLED) return;
   const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
   world.spawnExplosionEffect(
     projectile.impactPos.x,
@@ -128,6 +169,7 @@ function resolveProjectileAoe(
   damage: Fx,
   faction: Faction,
   impactFx: Projectile['impactFx'],
+  hitBuilding: boolean,
 ): void {
   world.unitGrid.clear();
   for (let i = 0; i < world.units.length; i++) {
@@ -147,9 +189,13 @@ function resolveProjectileAoe(
     unit.hp -= damage;
     unit.aoeHitFxLeft = 2;
   }
-  if (impactFx === 'explosion') {
-    world.spawnExplosionEffect(x, y, radius);
-  } else {
+  // 仅 pulse 播地面环；爆炸类在关闭开关或无映射时不回退成脉冲
+  if (impactFx === 'pulse') {
     world.spawnAoePulse('melee_ring', x, y, radius);
+    return;
+  }
+  const kind = explosionKindFromImpact(impactFx, hitBuilding);
+  if (kind) {
+    world.spawnExplosionEffect(x, y, radius, kind);
   }
 }

@@ -41,8 +41,8 @@ export interface ExplosionEffect {
   readonly x: Fx;
   readonly y: Fx;
   readonly radius: Fx;
-  /** 普通爆炸或巨型炸弹的专属爆炸序列帧。 */
-  readonly kind: 'normal' | 'giant_bomb';
+  /** 普通 / 巨型炸弹 / 弹道 Explode2·4 / 命中非建筑 Blood3。 */
+  readonly kind: 'normal' | 'giant_bomb' | 'explode2' | 'explode4' | 'blood3';
   remainingTicks: number;
   readonly totalTicks: number;
 }

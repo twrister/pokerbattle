@@ -2,8 +2,8 @@ import type { Fx } from '../math/fixed.js';
 import { type Vec2, vec } from '../math/vec2.js';
 import type { Faction } from './unit.js';
 
-/** 弹道落地反馈：地面环脉冲或炸弹爆炸序列帧 */
-export type ProjectileImpactFx = 'pulse' | 'explosion';
+/** 弹道落地反馈：地面环脉冲、普通爆炸或弹道 Explode2/4 序列帧 */
+export type ProjectileImpactFx = 'pulse' | 'explosion' | 'explode2' | 'explode4';
 
 /** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
 export type ProjectileVisual = 'orb' | 'bomb' | 'arrow';

@@ -4,6 +4,7 @@ import { toSceneX, toSceneZ } from './coords.js';
 import {
   applyExplosionFrame,
   createExplosionMaterial,
+  getExplosionFrameCount,
   getExplosionGeometry,
 } from './explosionEffectSprites.js';
 
@@ -31,6 +32,7 @@ export class ExplosionEffectView {
   update(effect: ExplosionEffectSnapshot, camera: THREE.Camera): void {
     if (effect.kind !== this.kind) {
       this.kind = effect.kind;
+      this.mesh.geometry = getExplosionGeometry(effect.kind);
       this.mesh.material = createExplosionMaterial(effect.kind);
       this.material.dispose();
       this.material = this.mesh.material as THREE.MeshBasicMaterial;
@@ -45,7 +47,8 @@ export class ExplosionEffectView {
     const height = Math.max(1.1, effect.radius * 1.6);
     this.mesh.scale.setScalar(height);
 
-    const frame = Math.min(7, Math.max(0, Math.floor(progress * 8)));
+    const frameCount = getExplosionFrameCount(effect.kind);
+    const frame = Math.min(frameCount - 1, Math.max(0, Math.floor(progress * frameCount)));
     if (frame !== this.lastFrame) {
       this.lastFrame = frame;
       applyExplosionFrame(this.material, progress, effect.kind);

@@ -50,7 +50,6 @@ describe('巨型炸弹', () => {
       expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(1200, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));
-    expect(world.explosionEffects).toHaveLength(1);
-    expect(world.explosionEffects[0]?.kind).toBe('giant_bomb');
+    expect(world.explosionEffects).toHaveLength(0);
   });
 });

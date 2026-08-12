@@ -85,7 +85,7 @@ describe('战车', () => {
     expect(toFloat(hp.get(splash.id)! - splash.hp)).toBeCloseTo(120, 3);
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(ally.hp).toBe(hp.get(ally.id));
-    expect(world.explosionEffects.length).toBeGreaterThan(0);
+    expect(world.explosionEffects).toHaveLength(0);
     expect(world.aoePulseEffects).toHaveLength(0);
   });
 

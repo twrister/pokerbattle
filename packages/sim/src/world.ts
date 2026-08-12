@@ -250,8 +250,20 @@ export class World {
       || from.config.id === 'building_tower'
       || from.config.id === 'building_tower_advanced'
       || from.config.id === 'building_base';
+    // 箭系 Explode4；女王/龙/大小王 Explode2；战车普通爆炸；其它 AOE 仍用脉冲环
+    const isExplode2 =
+      from.config.id === 'hero_queen'
+      || from.config.id === 'dragon'
+      || from.config.id === 'hero_mage'
+      || from.config.id === 'hero_archmage';
     const arcApex = isBomb ? BOMB_ARC_APEX : 0;
-    const impactFx: ProjectileImpactFx = isBomb ? 'explosion' : 'pulse';
+    const impactFx: ProjectileImpactFx = isBomb
+      ? 'explosion'
+      : isArrow
+        ? 'explode4'
+        : isExplode2
+          ? 'explode2'
+          : 'pulse';
     const visual: ProjectileVisual = isBomb ? 'bomb' : isArrow ? 'arrow' : 'orb';
     const projectile = createProjectile(
       this.nextEntityId++,
@@ -399,8 +411,9 @@ export class World {
     radius: Fx,
     kind: ExplosionEffect['kind'] = 'normal',
   ): void {
-    // 约 0.5 秒，对齐 8 帧 @16fps 的爆炸素材时长
-    const totalTicks = 10;
+    // explode2/4≈0.75s；blood3≈0.58s（7帧@12fps）；其余约 0.5s 对齐 8 帧素材
+    const totalTicks =
+      kind === 'explode2' || kind === 'explode4' ? 15 : kind === 'blood3' ? 12 : 10;
     this.explosionEffects.push({
       id: this.nextEffectId++,
       x,

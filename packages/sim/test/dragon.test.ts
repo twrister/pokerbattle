@@ -87,8 +87,8 @@ describe('飞行巨龙', () => {
     expect(ally.hp).toBe(hp.get(ally.id));
     expect(target.aoeHitFxLeft).toBeGreaterThan(0);
     expect(splash.aoeHitFxLeft).toBeGreaterThan(0);
-    expect(world.aoePulseEffects).toHaveLength(1);
-    expect(toFloat(world.aoePulseEffects[0]!.radius)).toBeCloseTo(2, 3);
+    expect(world.aoePulseEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(0);
   });
 
   it('主目标提前死亡后仍飞向最后位置并触发爆炸', () => {
@@ -111,7 +111,7 @@ describe('飞行巨龙', () => {
 
     expect(splash.hp).toBeLessThan(splashHp);
     expect(projectile.dead).toBe(true);
-    expect(world.aoePulseEffects).toHaveLength(1);
+    expect(world.explosionEffects).toHaveLength(0);
   });
 
   it('近战不能锁定或命中空中单位', () => {

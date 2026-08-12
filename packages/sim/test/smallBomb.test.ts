@@ -95,8 +95,7 @@ describe('小炸弹', () => {
       expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(600, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));
-    expect(world.explosionEffects).toHaveLength(1);
-    expect(world.explosionEffects[0]?.kind).toBe('normal');
+    expect(world.explosionEffects).toHaveLength(0);
   });
 
   it('四条小炸弹伤害仍为配置固定值 600', () => {
