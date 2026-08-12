@@ -14,6 +14,7 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
     type === 'join' ||
     type === 'rejoin' ||
     type === 'listRooms' ||
+    type === 'lobby' ||
     type === 'input' ||
     type === 'hash' ||
     type === 'ping'

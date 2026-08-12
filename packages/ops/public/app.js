@@ -10,6 +10,7 @@ const els = {
   metricRooms: document.getElementById('metric-rooms'),
   metricPlaying: document.getElementById('metric-playing'),
   metricOnline: document.getElementById('metric-online'),
+  metricLobby: document.getElementById('metric-lobby'),
   roomTbody: document.getElementById('room-tbody'),
   refreshHint: document.getElementById('refresh-hint'),
   opsUptime: document.getElementById('ops-uptime'),
@@ -55,6 +56,7 @@ function renderStatus(data) {
   els.metricRooms.textContent = data.gameReachable ? String(summary?.roomCount ?? 0) : '—';
   els.metricPlaying.textContent = data.gameReachable ? String(summary?.playingRooms ?? 0) : '—';
   els.metricOnline.textContent = data.gameReachable ? String(summary?.connectedPlayers ?? 0) : '—';
+  els.metricLobby.textContent = data.gameReachable ? String(data.game?.lobbyPlayers ?? 0) : '—';
 
   els.opsUptime.textContent = formatDuration(data.ops?.uptimeMs);
   els.gameReachable.textContent = data.gameReachable ? '可达' : '不可达';

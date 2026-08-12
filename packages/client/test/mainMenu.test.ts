@@ -4,9 +4,7 @@ import type { PlayerProfile } from '../src/account/types.js';
 import { createMainMenu } from '../src/ui/mainMenu.js';
 
 vi.mock('../src/net/session.js', () => ({
-  fetchRoomList: vi.fn(async () => [
-    { roomId: '042', roomName: '可加入房', playerCount: 1, maxPlayers: 2 },
-  ]),
+  createLobbyPresence: vi.fn(),
 }));
 
 function buildProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
@@ -22,6 +20,23 @@ function buildProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
     stats: { wins: 0, losses: 0, draws: 0, stageAttempts: 0, stageClears: 0 },
     recentBattles: [],
     recentStageChallenges: [],
+    ...overrides,
+  };
+}
+
+/** 测试用默认大厅回调；房间列表由注入的 listRooms 提供。 */
+function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = {}) {
+  return {
+    onStartSandbox: vi.fn(),
+    onStartSolo: vi.fn(),
+    onStartVersus: vi.fn(),
+    onOpenDeckConfig: vi.fn(),
+    onOpenCodex: vi.fn(),
+    getProfile: () => buildProfile(),
+    onRename: vi.fn(),
+    listRooms: vi.fn(async () => [
+      { roomId: '042', roomName: '可加入房', playerCount: 1, maxPlayers: 2 },
+    ]),
     ...overrides,
   };
 }
@@ -75,15 +90,11 @@ describe('大厅玩家档案展示', () => {
 
   it('初始化时展示档案名字与等级', () => {
     let profile = buildProfile();
-    createMainMenu({
-      onStartSandbox: vi.fn(),
-      onStartSolo: vi.fn(),
-      onStartVersus: vi.fn(),
-      onOpenDeckConfig: vi.fn(),
-      onOpenCodex: vi.fn(),
-      getProfile: () => profile,
-      onRename: vi.fn(),
-    });
+    createMainMenu(
+      menuOptions({
+        getProfile: () => profile,
+      }),
+    );
 
     expect(document.querySelector('#player-name')?.textContent).toBe('测试玩家');
     expect(document.querySelector('#player-level')?.textContent).toBe('等级 04');
@@ -96,15 +107,12 @@ describe('大厅玩家档案展示', () => {
       if (name.trim() === '') throw new Error('名字不能为空');
       profile = buildProfile({ displayName: name.trim(), level: 5, exp: 1 });
     });
-    const menu = createMainMenu({
-      onStartSandbox: vi.fn(),
-      onStartSolo: vi.fn(),
-      onStartVersus: vi.fn(),
-      onOpenDeckConfig: vi.fn(),
-      onOpenCodex: vi.fn(),
-      getProfile: () => profile,
-      onRename,
-    });
+    const menu = createMainMenu(
+      menuOptions({
+        getProfile: () => profile,
+        onRename,
+      }),
+    );
 
     document.querySelector<HTMLButtonElement>('#btn-player-profile')!.click();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(false);
@@ -133,15 +141,7 @@ describe('大厅玩家档案展示', () => {
 
   it('简单与困难人机分别传递对应难度', () => {
     const onStartSolo = vi.fn();
-    createMainMenu({
-      onStartSandbox: vi.fn(),
-      onStartSolo,
-      onStartVersus: vi.fn(),
-      onOpenDeckConfig: vi.fn(),
-      onOpenCodex: vi.fn(),
-      getProfile: () => buildProfile(),
-      onRename: vi.fn(),
-    });
+    createMainMenu(menuOptions({ onStartSolo }));
 
     document.querySelector<HTMLButtonElement>('#btn-solo-easy')!.click();
     document.querySelector<HTMLButtonElement>('#btn-solo-hard')!.click();
@@ -152,15 +152,7 @@ describe('大厅玩家档案展示', () => {
 
   it('快速匹配、创建与加入分别传递入房参数', async () => {
     const onStartVersus = vi.fn();
-    createMainMenu({
-      onStartSandbox: vi.fn(),
-      onStartSolo: vi.fn(),
-      onStartVersus,
-      onOpenDeckConfig: vi.fn(),
-      onOpenCodex: vi.fn(),
-      getProfile: () => buildProfile(),
-      onRename: vi.fn(),
-    });
+    createMainMenu(menuOptions({ onStartVersus }));
 
     document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
     expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });

@@ -44,6 +44,9 @@ describe('协议编解码', () => {
     const listRooms = encodeMessage({ type: 'listRooms' });
     expect(decodeClientMessage(listRooms)).toEqual({ type: 'listRooms' });
 
+    const lobby = encodeMessage({ type: 'lobby' });
+    expect(decodeClientMessage(lobby)).toEqual({ type: 'lobby' });
+
     const rejoin = encodeMessage({
       type: 'rejoin',
       roomId: '042',

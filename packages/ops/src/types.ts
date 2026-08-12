@@ -38,6 +38,8 @@ export interface GameServerStatus {
   host: string;
   port: number;
   connectionCount: number;
+  /** 未入联机房间、已登记 lobby 的连接数（含卡组/图鉴等页面）。 */
+  lobbyPlayers: number;
   summary: OpsRoomSummary;
   rooms: OpsRoomSnapshot[];
 }

@@ -60,6 +60,11 @@ export interface ListRoomsMessage {
   type: 'listRooms';
 }
 
+/** C→S：登记大厅 presence（停在主菜单、尚未入房）。 */
+export interface LobbyMessage {
+  type: 'lobby';
+}
+
 /** C→S：上报某一逻辑 tick 的输入（通常为当前可见 tick + inputDelay）。 */
 export interface InputMessage {
   type: 'input';
@@ -84,6 +89,7 @@ export type ClientMessage =
   | JoinMessage
   | RejoinMessage
   | ListRoomsMessage
+  | LobbyMessage
   | InputMessage
   | HashMessage
   | PingMessage;

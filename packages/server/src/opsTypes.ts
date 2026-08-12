@@ -44,6 +44,8 @@ export interface OpsServerStatus {
   port: number;
   /** 当前 WebSocket 连接数（含大厅未入座连接）。 */
   connectionCount: number;
+  /** 停在主菜单、已登记 lobby、尚未 join/rejoin 入房的连接数（含卡组/图鉴等未入房页面）。 */
+  lobbyPlayers: number;
   summary: OpsRoomSummary;
   rooms: OpsRoomSnapshot[];
 }

@@ -15,6 +15,7 @@ export {
   type JoinMessage,
   type JoinMode,
   type ListRoomsMessage,
+  type LobbyMessage,
   type MatchEndMessage,
   type NetMessage,
   type PeerDisconnectedMessage,

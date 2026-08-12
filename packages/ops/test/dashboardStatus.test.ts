@@ -84,6 +84,7 @@ describe('buildDashboardStatus', () => {
           host: '0.0.0.0',
           port: 9090,
           connectionCount: 2,
+          lobbyPlayers: 1,
           summary: {
             roomCount: 1,
             waitingRooms: 0,
@@ -147,6 +148,7 @@ describe('buildDashboardStatus', () => {
 
     expect(status.gameReachable).toBe(true);
     expect(status.game?.summary.playingRooms).toBe(1);
+    expect(status.game?.lobbyPlayers).toBe(1);
     expect(status.message).toBeNull();
     expect(status.services[0]?.reachable).toBe(true);
     expect(status.services[0]?.id).toBe('clientOfficial');
@@ -164,6 +166,7 @@ describe('buildDashboardStatus', () => {
           host: '0.0.0.0',
           port: 9090,
           connectionCount: 0,
+          lobbyPlayers: 0,
           summary: {
             roomCount: 0,
             waitingRooms: 0,

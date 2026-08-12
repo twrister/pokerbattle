@@ -48,7 +48,7 @@ import {
   screenToSim,
 } from './input/placement.js';
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
-import { connectVersusSession } from './net/session.js';
+import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
@@ -57,7 +57,7 @@ import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
 import { createMainMenu, type VersusJoinRequest } from './ui/mainMenu.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
-import { createScreenController, type ScreenController } from './ui/screenController.js';
+import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import {
   loadRuntimeDefaults,
@@ -83,6 +83,30 @@ let screens: ScreenController;
 let selectedSoloDifficulty: SoloDifficulty = 'easy';
 /** 进入 versus 前暂存入房参数，因 ScreenController 不携带 payload。 */
 let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
+/**
+ * 应用层大厅 presence：凡未进入联机房间（含卡组/图鉴/单机）都保持登记。
+ * 仅 versus 入房期间关闭，避免与 join 连接重复计数。
+ */
+let appLobbyPresence: LobbyPresenceHandle | null = null;
+
+/** 确保未入房玩家登记为大厅；幂等。 */
+function ensureAppLobbyPresence(): LobbyPresenceHandle {
+  if (!appLobbyPresence) appLobbyPresence = createLobbyPresence();
+  return appLobbyPresence;
+}
+
+/** 进入联机房间或销毁应用时注销大厅。 */
+function stopAppLobbyPresence(): void {
+  appLobbyPresence?.dispose();
+  appLobbyPresence = null;
+}
+
+/** 按当前页面同步大厅 presence：只有 versus 不算大厅。 */
+function syncLobbyPresenceForScreen(screen: AppScreen): void {
+  if (screen === 'versus') stopAppLobbyPresence();
+  else ensureAppLobbyPresence();
+}
+
 const mainMenu = createMainMenu({
   onStartSandbox: () => screens.show('sandbox'),
   onStartSolo: (difficulty) => {
@@ -99,6 +123,7 @@ const mainMenu = createMainMenu({
   onRename: (displayName) => {
     playerProfile.setDisplayName(displayName);
   },
+  listRooms: () => ensureAppLobbyPresence().listRooms(),
 });
 const deckConfigPage = createDeckConfigPage({
   onBack: () => screens.show('menu'),
@@ -905,29 +930,43 @@ function enterSolo(): () => void {
 
 screens = createScreenController({
   menu: () => {
+    syncLobbyPresenceForScreen('menu');
     mainMenu.show();
     return () => mainMenu.hide();
   },
   'deck-config': () => {
+    syncLobbyPresenceForScreen('deck-config');
     deckConfigPage.show();
     return () => deckConfigPage.hide();
   },
   'hand-odds': () => {
+    syncLobbyPresenceForScreen('hand-odds');
     handOddsPage.show();
     return () => handOddsPage.hide();
   },
   codex: () => {
+    syncLobbyPresenceForScreen('codex');
     codexPage.show();
     return () => codexPage.hide();
   },
-  sandbox: enterSandbox,
-  solo: enterSolo,
-  versus: enterVersus,
+  sandbox: () => {
+    syncLobbyPresenceForScreen('sandbox');
+    return enterSandbox();
+  },
+  solo: () => {
+    syncLobbyPresenceForScreen('solo');
+    return enterSolo();
+  },
+  versus: () => {
+    syncLobbyPresenceForScreen('versus');
+    return enterVersus();
+  },
 });
 screens.show('menu');
 
 function disposeApp(): void {
   screens.dispose();
+  stopAppLobbyPresence();
   sharedConfigPanel?.dispose();
   sharedConfigPanel = null;
   sharedBattleView?.reset();

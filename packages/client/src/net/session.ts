@@ -281,50 +281,119 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
 }
 
 /**
- * 轻量拉取可加入房间列表：连上后发 listRooms，收到 roomList 即关闭。
+ * 主菜单大厅 presence：常驻 WS 登记 lobby，并可复用同连接拉房间列表。
  */
-export function fetchRoomList(): Promise<RoomListEntry[]> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const ws = new WebSocket(buildWsUrl());
+export interface LobbyPresenceHandle {
+  /** 复用大厅连接查询可加入房间。 */
+  listRooms(): Promise<RoomListEntry[]>;
+  /** 离开主菜单时关闭连接，服务端注销大厅计数。 */
+  dispose(): void;
+}
 
-    const finish = (rooms: RoomListEntry[]): void => {
-      if (settled) return;
-      settled = true;
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      resolve(rooms);
-    };
+/**
+ * 建立大厅 presence：连上后发 lobby；dispose 前保持连接。
+ * 口径由应用层决定：未入联机房间即登记（可覆盖卡组/图鉴/单机等页面）。
+ */
+export function createLobbyPresence(): LobbyPresenceHandle {
+  let disposed = false;
+  let ws: WebSocket | null = null;
+  let openWaiters: Array<{ resolve: (socket: WebSocket) => void; reject: (error: Error) => void }> =
+    [];
+  let listInflight: Promise<RoomListEntry[]> | null = null;
+  let listWaiters: Array<{
+    resolve: (rooms: RoomListEntry[]) => void;
+    reject: (error: Error) => void;
+  }> = [];
 
-    const fail = (error: Error): void => {
-      if (settled) return;
-      settled = true;
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      reject(error);
-    };
+  const rejectOpenWaiters = (error: Error): void => {
+    const waiters = openWaiters;
+    openWaiters = [];
+    for (const waiter of waiters) waiter.reject(error);
+  };
 
-    ws.addEventListener('open', () => {
-      ws.send(encodeMessage({ type: 'listRooms' }));
+  const rejectListWaiters = (error: Error): void => {
+    const waiters = listWaiters;
+    listWaiters = [];
+    listInflight = null;
+    for (const waiter of waiters) waiter.reject(error);
+  };
+
+  const resolveOpenWaiters = (socket: WebSocket): void => {
+    const waiters = openWaiters;
+    openWaiters = [];
+    for (const waiter of waiters) waiter.resolve(socket);
+  };
+
+  /** 等待 WS 打开；已打开则立即返回。 */
+  const ensureOpen = (): Promise<WebSocket> => {
+    if (disposed) return Promise.reject(new Error('大厅连接已关闭'));
+    if (ws && ws.readyState === WebSocket.OPEN) return Promise.resolve(ws);
+    return new Promise((resolve, reject) => {
+      openWaiters.push({ resolve, reject });
     });
-    ws.addEventListener('error', () => {
-      fail(new Error('无法连接联机服务'));
-    });
-    ws.addEventListener('close', () => {
-      if (!settled) fail(new Error('连接已断开'));
-    });
-    ws.addEventListener('message', (event) => {
-      const message = decodeServerMessage(String(event.data));
-      if (!message || message.type !== 'roomList') return;
-      finish(message.rooms ?? []);
-    });
+  };
+
+  const socket = new WebSocket(buildWsUrl());
+  ws = socket;
+
+  socket.addEventListener('open', () => {
+    if (disposed || ws !== socket) return;
+    socket.send(encodeMessage({ type: 'lobby' }));
+    resolveOpenWaiters(socket);
   });
+  socket.addEventListener('error', () => {
+    if (disposed || ws !== socket) return;
+    const error = new Error('无法连接联机服务');
+    rejectOpenWaiters(error);
+    rejectListWaiters(error);
+  });
+  socket.addEventListener('close', () => {
+    if (disposed || ws !== socket) return;
+    const error = new Error('连接已断开');
+    rejectOpenWaiters(error);
+    rejectListWaiters(error);
+  });
+  socket.addEventListener('message', (event) => {
+    if (disposed || ws !== socket) return;
+    const message = decodeServerMessage(String(event.data));
+    if (!message || message.type !== 'roomList') return;
+    const rooms = message.rooms ?? [];
+    const waiters = listWaiters;
+    listWaiters = [];
+    listInflight = null;
+    for (const waiter of waiters) waiter.resolve(rooms);
+  });
+
+  return {
+    listRooms() {
+      if (listInflight) return listInflight;
+      listInflight = new Promise<RoomListEntry[]>((resolve, reject) => {
+        listWaiters.push({ resolve, reject });
+        void ensureOpen()
+          .then((active) => {
+            if (disposed || listWaiters.length === 0) return;
+            active.send(encodeMessage({ type: 'listRooms' }));
+          })
+          .catch((error: unknown) => {
+            rejectListWaiters(error instanceof Error ? error : new Error(String(error)));
+          });
+      });
+      return listInflight;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      rejectOpenWaiters(new Error('大厅连接已关闭'));
+      rejectListWaiters(new Error('大厅连接已关闭'));
+      const active = ws;
+      ws = null;
+      try {
+        active?.close();
+      } catch {
+        /* ignore */
+      }
+    },
+  };
 }
 
 /** 开发服与正式预览均走同源 /ws（由 Vite 代理到权威服）。 */

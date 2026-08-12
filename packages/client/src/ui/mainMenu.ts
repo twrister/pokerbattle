@@ -1,6 +1,5 @@
 import { normalizeRoomId, normalizeRoomName, type JoinMode, type RoomListEntry } from '@pb/net';
 import type { PlayerProfile } from '../account/types.js';
-import { fetchRoomList } from '../net/session.js';
 import type { SoloDifficulty } from '@pb/sim';
 
 /** 大厅发起联机时的入房参数。 */
@@ -20,6 +19,8 @@ export interface MainMenuOptions {
   getProfile: () => PlayerProfile;
   /** 改名成功后由编排层持久化；失败应抛错。 */
   onRename: (displayName: string) => void;
+  /** 复用应用层大厅 presence 拉取可加入房间。 */
+  listRooms: () => Promise<RoomListEntry[]>;
 }
 
 export interface MainMenuHandle {
@@ -214,7 +215,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     loading.textContent = '加载中…';
     onlineRoomList.append(loading);
 
-    void fetchRoomList()
+    void options
+      .listRooms()
       .then((rooms) => {
         if (requestId !== roomListRequestId) return;
         renderRoomList(rooms);
