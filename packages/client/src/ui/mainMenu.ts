@@ -13,6 +13,8 @@ export interface MainMenuOptions {
   onStartSandbox: () => void;
   onStartSolo: (difficulty: SoloDifficulty) => void;
   onStartVersus: (request: VersusJoinRequest) => void;
+  /** 匹配等待中取消：编排层应离开 versus 并断连。 */
+  onCancelVersus: () => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
   /** 读取当前设备档案，供大厅展示。 */
@@ -28,6 +30,10 @@ export interface MainMenuHandle {
   hide(): void;
   /** 档案变更后刷新名字/等级展示。 */
   refreshProfile(): void;
+  /** 进入快速匹配等待弹窗（切屏后由编排层恢复）。 */
+  enterMatchWaiting(initialStatus: string): void;
+  /** 更新快速匹配等待文案。 */
+  setMatchStatus(text: string): void;
   dispose(): void;
 }
 
@@ -51,6 +57,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const onlineRoomJoinButton = required<HTMLButtonElement>('#btn-online-room-join', root);
   const onlineRoomRefreshButton = required<HTMLButtonElement>('#btn-online-room-refresh', root);
   const onlineRoomList = required<HTMLElement>('#online-room-list', root);
+  const onlineWaitingStatus = required<HTMLElement>('#online-waiting-status', root);
+  const onlineWaitingCancelButton = required<HTMLButtonElement>('#btn-online-waiting-cancel', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
@@ -73,9 +81,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   );
 
   let roomListRequestId = 0;
+  /** 快速匹配等待中：遮罩/× 视为取消，hide/show 需能恢复弹窗。 */
+  let matchWaiting = false;
 
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
+    exitMatchWaiting();
     hideDialog(soloDialog);
     hideDialog(onlineDialog);
     hideRoomPanel();
@@ -93,6 +104,46 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     onlineRoomPanel.classList.add('is-hidden');
     onlineRoomError.textContent = '';
     onlineRoomError.classList.remove('is-visible');
+  };
+
+  /** 退出快速匹配等待视图（不关弹窗）。 */
+  const exitMatchWaiting = (): void => {
+    matchWaiting = false;
+    onlineDialog.classList.remove('is-waiting');
+    onlineWaitingStatus.textContent = '';
+  };
+
+  /** 进入快速匹配等待：只显示状态与取消，并立刻可更新文案。 */
+  const enterMatchWaiting = (initialStatus: string): void => {
+    matchWaiting = true;
+    closeRenameDialog();
+    hideDialog(soloDialog);
+    hideRoomPanel();
+    onlineDialog.classList.add('is-waiting');
+    onlineWaitingStatus.textContent = initialStatus;
+    showDialog(onlineDialog);
+  };
+
+  /** 更新等待弹窗状态文案。 */
+  const setMatchStatus = (text: string): void => {
+    onlineWaitingStatus.textContent = text;
+  };
+
+  /** 等待中取消匹配；非等待态则仅关弹层。 */
+  const handleModeClose = (): void => {
+    if (matchWaiting) {
+      cancelMatchWaiting();
+      return;
+    }
+    closeModeDialogs();
+  };
+
+  /** 退出等待并通知编排层取消匹配。 */
+  const cancelMatchWaiting = (): void => {
+    exitMatchWaiting();
+    hideDialog(onlineDialog);
+    hideRoomPanel();
+    options.onCancelVersus();
   };
 
   /** 展示房间面板错误文案。 */
@@ -130,6 +181,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const openSoloDialog = (): void => {
+    if (matchWaiting) return;
     closeRenameDialog();
     hideDialog(onlineDialog);
     hideRoomPanel();
@@ -137,13 +189,16 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const openOnlineDialog = (): void => {
+    if (matchWaiting) return;
     closeRenameDialog();
     hideDialog(soloDialog);
     hideRoomPanel();
+    exitMatchWaiting();
     showDialog(onlineDialog);
   };
 
   const openRenameDialog = (): void => {
+    if (matchWaiting) return;
     closeModeDialogs();
     const profile = options.getProfile();
     renameInput.value = profile.displayName;
@@ -162,8 +217,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
   const startSoloEasy = (): void => startSolo('easy');
   const startSoloHard = (): void => startSolo('hard');
+  /** 停留在联机弹窗等待视图，并立刻发起快速匹配。 */
   const startOnlineQuick = (): void => {
-    closeModeDialogs();
+    enterMatchWaiting('正在匹配联机对手…');
     options.onStartVersus({ mode: 'quick' });
   };
 
@@ -233,6 +289,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
 
   /** 展开房号面板；再次点击可收起。 */
   const toggleRoomPanel = (): void => {
+    if (matchWaiting) return;
     const opening = onlineRoomPanel.classList.contains('is-hidden');
     if (!opening) {
       hideRoomPanel();
@@ -294,6 +351,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
   onlineRoomJoinButton.addEventListener('click', startOnlineRoom);
   onlineRoomRefreshButton.addEventListener('click', refreshRoomList);
+  onlineWaitingCancelButton.addEventListener('click', cancelMatchWaiting);
   onlineRoomInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -312,7 +370,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     button.addEventListener('click', showPlaceholder);
   }
   for (const button of closeButtons) {
-    button.addEventListener('click', closeModeDialogs);
+    button.addEventListener('click', handleModeClose);
   }
   for (const button of renameCloseButtons) {
     button.addEventListener('click', closeRenameDialog);
@@ -336,6 +394,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       closeRenameDialog();
     },
     refreshProfile,
+    enterMatchWaiting,
+    setMatchStatus,
     dispose() {
       soloButton.removeEventListener('click', openSoloDialog);
       matchButton.removeEventListener('click', openOnlineDialog);
@@ -349,13 +409,14 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);
       onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
       onlineRoomRefreshButton.removeEventListener('click', refreshRoomList);
+      onlineWaitingCancelButton.removeEventListener('click', cancelMatchWaiting);
       profileButton.removeEventListener('click', openRenameDialog);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {
         button.removeEventListener('click', showPlaceholder);
       }
       for (const button of closeButtons) {
-        button.removeEventListener('click', closeModeDialogs);
+        button.removeEventListener('click', handleModeClose);
       }
       for (const button of renameCloseButtons) {
         button.removeEventListener('click', closeRenameDialog);

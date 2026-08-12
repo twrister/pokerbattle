@@ -41,44 +41,75 @@ export interface ConnectVersusOptions {
   onReconnectFailed?: (reason: string) => void;
 }
 
+/** 联机连接句柄：done 等开局，close 可在匹配期立刻断连离房。 */
+export interface VersusConnecting {
+  done: Promise<VersusSession>;
+  /** 匹配未开局时关闭 WS 离开房间；开局后等同 session.close。 */
+  close: () => void;
+}
+
 /**
  * 连接同源 /ws（经 vite 代理到权威服），完成入座后返回 NetSimLoop。
  * 对局中意外断线会在重连窗口内自动恢复并补帧；主动 close 不重连。
  */
-export function connectVersusSession(options: ConnectVersusOptions = {}): Promise<VersusSession> {
+export function connectVersusSession(options: ConnectVersusOptions = {}): VersusConnecting {
   const status = options.onStatus ?? (() => {});
   const mode: JoinMode = options.mode ?? 'quick';
   const joinRoomId = options.roomId ?? '';
   const joinRoomName = options.roomName ?? '';
   const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let intentionalClose = false;
+  /** 开局后指向会话 close；匹配期由外层 close 直接断连。 */
+  let sessionClose: (() => void) | null = null;
+  let rejectPending: ((error: Error) => void) | null = null;
+  let settled = false;
+  let intentionalClose = false;
+  let activeWs: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearReconnectTimer = (): void => {
+    if (!reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  };
+
+  /** 匹配中或对局中主动离开：关 WS，服务端会释放房间席位。 */
+  const close = (): void => {
+    intentionalClose = true;
+    clearReconnectTimer();
+    if (!settled) {
+      settled = true;
+      try {
+        activeWs?.close();
+      } catch {
+        /* ignore */
+      }
+      rejectPending?.(new Error('已取消匹配'));
+      rejectPending = null;
+      return;
+    }
+    sessionClose?.();
+  };
+
+  const done = new Promise<VersusSession>((resolve, reject) => {
+    rejectPending = reject;
     let loop: NetSimLoop | null = null;
     let faction: Faction | null = null;
     let seat = 0;
     let roomId = '';
     let roomName = '';
     let reconnectToken = '';
-    let activeWs: WebSocket | null = null;
     let reconnectDeadline = 0;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectAttempt = 0;
     /** welcome 建好 loop 前可能先到的下行，建好后立刻回放。 */
     const pending: ServerMessage[] = [];
-
-    const clearReconnectTimer = (): void => {
-      if (!reconnectTimer) return;
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    };
 
     const fail = (error: Error): void => {
       if (settled) return;
       settled = true;
       clearReconnectTimer();
       intentionalClose = true;
+      rejectPending = null;
       try {
         activeWs?.close();
       } catch {
@@ -90,23 +121,25 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
     const finish = (active: NetSimLoop, side: Faction): void => {
       if (settled) return;
       settled = true;
+      rejectPending = null;
       status(`对局开始（房间 ${roomId}${roomName ? ` · ${roomName}` : ''}）`);
+      sessionClose = () => {
+        intentionalClose = true;
+        clearReconnectTimer();
+        active.setInputPaused(false);
+        try {
+          activeWs?.close();
+        } catch {
+          /* ignore */
+        }
+      };
       resolve({
         loop: active,
         faction: side,
         seat,
         roomId,
         roomName,
-        close: () => {
-          intentionalClose = true;
-          clearReconnectTimer();
-          active.setInputPaused(false);
-          try {
-            activeWs?.close();
-          } catch {
-            /* ignore */
-          }
-        },
+        close: sessionClose,
       });
     };
 
@@ -278,6 +311,8 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Promis
     status('正在连接联机服务…');
     attachSocket(new WebSocket(buildWsUrl()), 'join');
   });
+
+  return { done, close };
 }
 
 /**

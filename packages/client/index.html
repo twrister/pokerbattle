@@ -636,6 +636,51 @@
         white-space: nowrap;
       }
 
+      #mode-online-dialog.is-waiting .mode-dialog-options,
+      #mode-online-dialog.is-waiting #online-room-panel {
+        display: none;
+      }
+
+      .online-waiting-panel {
+        display: none;
+        gap: calc(16 * var(--hu));
+        margin-top: calc(4 * var(--hu));
+        padding: calc(16 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.22);
+        border-radius: calc(12 * var(--hu));
+        background: rgba(8, 18, 28, 0.55);
+      }
+
+      #mode-online-dialog.is-waiting .online-waiting-panel {
+        display: grid;
+      }
+
+      #online-waiting-status {
+        color: #e8f2fa;
+        font-size: calc(15 * var(--hu));
+        font-weight: 600;
+        line-height: 1.45;
+        text-align: center;
+        min-height: 2.9em;
+      }
+
+      #btn-online-waiting-cancel {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 700;
+        border: 1px solid rgba(169, 198, 220, 0.35);
+        background: rgba(20, 36, 52, 0.95);
+        color: #eef5fa;
+      }
+
+      #btn-online-waiting-cancel:hover,
+      #btn-online-waiting-cancel:active {
+        border-color: rgba(153, 207, 237, 0.55);
+        background: rgba(28, 52, 74, 0.95);
+      }
+
       .reconnect-banner {
         position: fixed;
         top: max(calc(18 * var(--hu)), env(safe-area-inset-top));
@@ -2761,6 +2806,10 @@
                 <button id="btn-online-room-refresh" type="button">刷新</button>
               </div>
               <div id="online-room-list" role="list"></div>
+            </div>
+            <div id="online-waiting-panel" class="online-waiting-panel" aria-live="polite">
+              <div id="online-waiting-status" role="status">正在匹配联机对手…</div>
+              <button id="btn-online-waiting-cancel" type="button">取消匹配</button>
             </div>
           </div>
         </div>

@@ -30,6 +30,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onStartSandbox: vi.fn(),
     onStartSolo: vi.fn(),
     onStartVersus: vi.fn(),
+    onCancelVersus: vi.fn(),
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
     getProfile: () => buildProfile(),
@@ -41,51 +42,61 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
   };
 }
 
+/** 大厅 DOM fixture，含快速匹配等待面板。 */
+function mountMainMenuDom(): void {
+  document.body.innerHTML = `
+    <main id="main-menu">
+      <button id="btn-player-profile" type="button">
+        <div id="player-avatar"></div>
+        <div id="player-name"></div>
+        <div id="player-level"></div>
+      </button>
+      <button id="btn-solo"></button>
+      <button id="btn-match"></button>
+      <button id="btn-sandbox"></button>
+      <button id="btn-deck"></button>
+      <button id="btn-codex"></button>
+      <button id="btn-solo-easy"></button>
+      <button id="btn-solo-hard"></button>
+      <button id="btn-online-quick"></button>
+      <button id="btn-online-room"></button>
+      <div id="online-room-panel" class="is-hidden">
+        <input id="online-room-name-input" />
+        <input id="online-room-input" />
+        <div id="online-room-error"></div>
+        <button id="btn-online-room-create"></button>
+        <button id="btn-online-room-join"></button>
+        <button id="btn-online-room-refresh"></button>
+        <div id="online-room-list"></div>
+      </div>
+      <div id="online-waiting-panel">
+        <div id="online-waiting-status"></div>
+        <button id="btn-online-waiting-cancel" type="button">取消匹配</button>
+      </div>
+      <div id="lobby-status"></div>
+      <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
+        <button data-mode-close></button>
+      </div>
+      <div id="mode-online-dialog" class="is-hidden" aria-hidden="true">
+        <button data-mode-close></button>
+        <div class="mode-dialog-options"></div>
+      </div>
+      <div id="rename-dialog" class="is-hidden" aria-hidden="true">
+        <button data-rename-close></button>
+        <form id="rename-form">
+          <input id="rename-input" />
+          <div id="rename-error"></div>
+          <button id="btn-rename-cancel" type="button" data-rename-close>取消</button>
+          <button id="btn-rename-confirm" type="submit">保存</button>
+        </form>
+      </div>
+    </main>
+  `;
+}
+
 describe('大厅玩家档案展示', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <main id="main-menu">
-        <button id="btn-player-profile" type="button">
-          <div id="player-avatar"></div>
-          <div id="player-name"></div>
-          <div id="player-level"></div>
-        </button>
-        <button id="btn-solo"></button>
-        <button id="btn-match"></button>
-        <button id="btn-sandbox"></button>
-        <button id="btn-deck"></button>
-        <button id="btn-codex"></button>
-        <button id="btn-solo-easy"></button>
-        <button id="btn-solo-hard"></button>
-        <button id="btn-online-quick"></button>
-        <button id="btn-online-room"></button>
-        <div id="online-room-panel" class="is-hidden">
-          <input id="online-room-name-input" />
-          <input id="online-room-input" />
-          <div id="online-room-error"></div>
-          <button id="btn-online-room-create"></button>
-          <button id="btn-online-room-join"></button>
-          <button id="btn-online-room-refresh"></button>
-          <div id="online-room-list"></div>
-        </div>
-        <div id="lobby-status"></div>
-        <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
-          <button data-mode-close></button>
-        </div>
-        <div id="mode-online-dialog" class="is-hidden" aria-hidden="true">
-          <button data-mode-close></button>
-        </div>
-        <div id="rename-dialog" class="is-hidden" aria-hidden="true">
-          <button data-rename-close></button>
-          <form id="rename-form">
-            <input id="rename-input" />
-            <div id="rename-error"></div>
-            <button id="btn-rename-cancel" type="button" data-rename-close>取消</button>
-            <button id="btn-rename-confirm" type="submit">保存</button>
-          </form>
-        </div>
-      </main>
-    `;
+    mountMainMenuDom();
   });
 
   it('初始化时展示档案名字与等级', () => {
@@ -152,10 +163,13 @@ describe('大厅玩家档案展示', () => {
 
   it('快速匹配、创建与加入分别传递入房参数', async () => {
     const onStartVersus = vi.fn();
-    createMainMenu(menuOptions({ onStartVersus }));
+    const onCancelVersus = vi.fn();
+    createMainMenu(menuOptions({ onStartVersus, onCancelVersus }));
 
     document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
     expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
+    document.querySelector<HTMLButtonElement>('#btn-online-waiting-cancel')!.click();
+    expect(onCancelVersus).toHaveBeenCalledTimes(1);
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
@@ -185,5 +199,38 @@ describe('大厅玩家档案展示', () => {
     });
     document.querySelector<HTMLButtonElement>('.online-room-list-item')!.click();
     expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
+  });
+
+  it('快速匹配停留等待弹窗并立刻发起匹配', () => {
+    const onStartVersus = vi.fn();
+    createMainMenu(menuOptions({ onStartVersus }));
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
+
+    const dialog = document.querySelector('#mode-online-dialog')!;
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    expect(dialog.classList.contains('is-waiting')).toBe(true);
+    expect(document.querySelector('#online-waiting-status')?.textContent).toBe('正在匹配联机对手…');
+    expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
+  });
+
+  it('快速匹配取消匹配时退出等待并回调 onCancelVersus', () => {
+    const onCancelVersus = vi.fn();
+    const menu = createMainMenu(menuOptions({ onCancelVersus }));
+
+    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
+    menu.setMatchStatus('已入座房间 042，等待对手…');
+    expect(document.querySelector('#online-waiting-status')?.textContent).toBe(
+      '已入座房间 042，等待对手…',
+    );
+    expect(document.querySelector('#btn-online-waiting-cancel')?.textContent).toBe('取消匹配');
+
+    document.querySelector<HTMLButtonElement>('#btn-online-waiting-cancel')!.click();
+
+    expect(onCancelVersus).toHaveBeenCalledTimes(1);
+    const dialog = document.querySelector('#mode-online-dialog')!;
+    expect(dialog.classList.contains('is-waiting')).toBe(false);
+    expect(dialog.classList.contains('is-hidden')).toBe(true);
   });
 });

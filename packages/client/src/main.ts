@@ -117,6 +117,7 @@ const mainMenu = createMainMenu({
     pendingVersusJoin = request;
     screens.show('versus');
   },
+  onCancelVersus: () => screens.show('menu'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
   getProfile: () => playerProfile.getProfile(),
@@ -571,30 +572,39 @@ function enterVersus(): () => void {
 
   container.classList.add('is-solo', 'is-versus');
   hud.classList.add('is-solo', 'is-versus');
-  // 匹配期仍留在大厅层提示状态；对局开始后再由 runVersusSession 揭开战场
-  mainMenu.show();
-  setLobbyStatus(
+  // 匹配期仍留在大厅层；快速匹配用弹窗状态，创建/加入仍用大厅 #lobby-status
+  const isQuickMatch = joinRequest.mode === 'quick';
+  const initialStatus =
     joinRequest.mode === 'create'
       ? '正在创建房间…'
       : joinRequest.mode === 'room'
         ? `正在加入房间 ${joinRequest.roomId}…`
-        : '正在匹配联机对手…',
-  );
+        : '正在匹配联机对手…';
+  mainMenu.show();
+  if (isQuickMatch) {
+    mainMenu.enterMatchWaiting(initialStatus);
+  } else {
+    setLobbyStatus(initialStatus);
+  }
+  const reportMatchStatus = (text: string): void => {
+    if (isQuickMatch) mainMenu.setMatchStatus(text);
+    else setLobbyStatus(text);
+  };
 
-  void connectVersusSession({
+  const connecting = connectVersusSession({
     name: playerProfile.getProfile().displayName,
     mode: joinRequest.mode,
     roomId: joinRequest.roomId,
     roomName: joinRequest.roomName,
-    onStatus: setLobbyStatus,
+    onStatus: reportMatchStatus,
     onDesync: (tick, serverHash) => {
       console.error(`[desync] tick=${tick} serverHash=${serverHash}`);
-      setLobbyStatus(`不同步：tick ${tick}`);
+      reportMatchStatus(`不同步：tick ${tick}`);
     },
     onPeerLeft: () => {
       peerLeft = true;
       reconnectBanner.hide();
-      setLobbyStatus('对手已离开');
+      reportMatchStatus('对手已离开');
       screens.show('menu');
     },
     onPeerDisconnected: () => {
@@ -611,7 +621,7 @@ function enterVersus(): () => void {
     },
     onReconnectFailed: (reason) => {
       reconnectBanner.showFailed(reason);
-      setLobbyStatus(reason);
+      reportMatchStatus(reason);
       screens.show('menu');
     },
     onMatchEnd: (result) => {
@@ -619,7 +629,9 @@ function enterVersus(): () => void {
       recordVersusResult(result, localFaction);
       battleResult.show(result, localFaction);
     },
-  })
+  });
+
+  void connecting.done
     .then((session) => {
       if (cancelled) {
         session.close();
@@ -635,13 +647,15 @@ function enterVersus(): () => void {
     .catch((error: unknown) => {
       if (cancelled) return;
       const message = error instanceof Error ? error.message : String(error);
-      setLobbyStatus(message);
+      reportMatchStatus(message);
       screens.show('menu');
     });
 
   return () => {
     cancelled = true;
     disposed = true;
+    // 匹配期也必须断连，否则关闭弹窗后仍占匹配房
+    connecting.close();
     leave?.();
     leave = null;
     reconnectBanner.dispose();

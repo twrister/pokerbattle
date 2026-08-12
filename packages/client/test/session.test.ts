@@ -68,7 +68,7 @@ describe('connectVersusSession', () => {
   });
 
   it('快速匹配入房并在 start 后 resolve', async () => {
-    const promise = connectVersusSession({ mode: 'quick', name: 'Tester' });
+    const { done, close } = connectVersusSession({ mode: 'quick', name: 'Tester' });
     await Promise.resolve();
     const ws = MockWebSocket.instances[0]!;
     expect(JSON.parse(ws.sent[0]!)).toMatchObject({ type: 'join', mode: 'quick' });
@@ -85,15 +85,15 @@ describe('connectVersusSession', () => {
     });
     ws.pushServer({ type: 'start', startTick: 1 });
 
-    const session = await promise;
+    const session = await done;
     expect(session.roomId).toBe('101');
     expect(session.roomName).toBe('Tester的房间');
     expect(session.faction).toBe(Faction.Blue);
-    session.close();
+    close();
   });
 
   it('创建房间会带上 roomName', async () => {
-    const promise = connectVersusSession({
+    const { done, close } = connectVersusSession({
       mode: 'create',
       roomName: '自定义房',
       name: 'Tester',
@@ -117,14 +117,14 @@ describe('connectVersusSession', () => {
       reconnectToken: 'tok-create',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
-    const session = await promise;
+    const session = await done;
     expect(session.roomId).toBe('088');
-    session.close();
+    close();
   });
 
   it('主动 close 后断线不会触发重连', async () => {
     const onReconnecting = vi.fn();
-    const promise = connectVersusSession({
+    const { done } = connectVersusSession({
       mode: 'room',
       roomId: '042',
       name: 'Tester',
@@ -143,18 +143,38 @@ describe('connectVersusSession', () => {
       reconnectToken: 'tok-b',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
-    const session = await promise;
+    const session = await done;
 
     session.close();
     expect(onReconnecting).not.toHaveBeenCalled();
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
+  it('匹配等待期 close 会立刻断连并拒绝 done', async () => {
+    const { done, close } = connectVersusSession({ mode: 'quick', name: 'Tester' });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '055',
+      roomName: '等待房',
+      reconnectToken: 'tok-wait',
+    });
+
+    close();
+    expect(ws.readyState).toBe(MockWebSocket.CLOSED);
+    await expect(done).rejects.toThrow('已取消匹配');
+  });
+
   it('意外断线会自动 rejoin 并恢复输入', async () => {
     vi.useFakeTimers();
     const onReconnecting = vi.fn();
     const onReconnected = vi.fn();
-    const promise = connectVersusSession({
+    const { done, close } = connectVersusSession({
       mode: 'quick',
       name: 'Tester',
       onReconnecting,
@@ -173,7 +193,7 @@ describe('connectVersusSession', () => {
       reconnectToken: 'tok-c',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
-    const session = await promise;
+    const session = await done;
     session.loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
     expect(session.loop.lastConfirmedTick).toBe(1);
 
@@ -206,6 +226,6 @@ describe('connectVersusSession', () => {
     rejoinWs.pushServer({ type: 'frame', tick: 2, commands: [] });
     expect(onReconnected).toHaveBeenCalled();
     expect(session.loop.lastConfirmedTick).toBe(2);
-    session.close();
+    close();
   });
 });
