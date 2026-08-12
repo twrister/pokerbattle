@@ -2668,6 +2668,26 @@
         box-sizing: border-box;
       }
 
+      /* 半径 / 体型列固定 100 */
+      .unit-stats-table th[data-field='radius'],
+      .unit-stats-table td[data-field='radius'],
+      .unit-stats-table th[data-field='bodyScale'],
+      .unit-stats-table td[data-field='bodyScale'] {
+        width: 100px;
+        min-width: 100px;
+        max-width: 100px;
+        box-sizing: border-box;
+      }
+
+      .unit-stats-table td[data-field='radius'] .unit-stats-value,
+      .unit-stats-table td[data-field='radius'] input,
+      .unit-stats-table td[data-field='bodyScale'] .unit-stats-value,
+      .unit-stats-table td[data-field='bodyScale'] input {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+
       /* 前摇列控件固定 88；左右多留内边距，避免与邻列挤在一起 */
       .unit-stats-table th[data-field='attackWindup'],
       .unit-stats-table td[data-field='attackWindup'] {

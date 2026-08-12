@@ -30,10 +30,34 @@ describe('单位参数页', () => {
     const rows = document.querySelectorAll('.unit-stats-table tbody tr');
     expect(rows.length).toBe(14);
     expect(document.querySelector('.unit-stats-table')?.textContent).toContain('DPS');
+    const headFields = Array.from(
+      document.querySelectorAll<HTMLTableCellElement>('.unit-stats-table thead th'),
+    ).map((th) => th.dataset.field);
+    const moveIdx = headFields.indexOf('moveSpeed');
+    expect(headFields.slice(moveIdx, moveIdx + 5)).toEqual([
+      'moveSpeed',
+      'radius',
+      'bodyScale',
+      'attackWindup',
+      'dps',
+    ]);
     expect(
       document.querySelector<HTMLInputElement>('input[data-unit="melee_grunt"][data-field="maxHp"]')
         ?.value,
     ).toBeTruthy();
+    expect(
+      document.querySelector<HTMLInputElement>('input[data-unit="melee_grunt"][data-field="radius"]'),
+    ).toBeTruthy();
+    expect(
+      document.querySelector<HTMLInputElement>(
+        'input[data-unit="melee_grunt"][data-field="bodyScale"]',
+      ),
+    ).toBeTruthy();
+    for (const field of ['radius', 'bodyScale', 'attackWindup'] as const) {
+      expect(
+        document.querySelector(`td[data-field="${field}"] .unit-stats-mini-bar`),
+      ).toBeTruthy();
+    }
 
     const tabNamed = (name: string): HTMLButtonElement | undefined =>
       Array.from(document.querySelectorAll<HTMLButtonElement>('.unit-stats-tab')).find(

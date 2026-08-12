@@ -41,7 +41,12 @@ export const PRIMARY_NUMERIC_KEYS = [
   'moveSpeed',
 ] as const satisfies ReadonlyArray<keyof UnitConfigDraft>;
 
-/** 紧挨攻击方式前展示的字段（固定窄列）。 */
+/** 紧挨移速后展示的体型字段（固定列宽 100）。 */
+export const POST_MOVE_NUMERIC_KEYS = ['radius', 'bodyScale'] as const satisfies ReadonlyArray<
+  keyof UnitConfigDraft
+>;
+
+/** 紧挨体型后展示的字段（固定窄列）。 */
 export const PRE_ATTACK_NUMERIC_KEYS = ['attackWindup'] as const satisfies ReadonlyArray<
   keyof UnitConfigDraft
 >;
