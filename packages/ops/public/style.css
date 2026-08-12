@@ -230,11 +230,37 @@ button:disabled {
   line-height: 1.4;
 }
 
+.service-card .url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .service-card .url {
+  flex: 1;
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
   color: #93c5fd;
   word-break: break-all;
+}
+
+.service-card .copy-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #475569;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.service-card .copy-btn:hover:not(:disabled) {
+  background: #334155;
+}
+
+.service-card .copy-btn.copied {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
 }
 
 .service-card .dist-meta {

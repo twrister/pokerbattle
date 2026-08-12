@@ -25,6 +25,8 @@ let busy = false;
 let busyServiceId = null;
 let pollTimer = null;
 let latestServices = [];
+/** 最近一次成功复制的链接与时间，用于轮询重绘后保留按钮反馈。 */
+let lastCopied = { url: '', at: 0 };
 
 /** 拉取聚合状态并刷新 UI。 */
 async function refreshStatus() {
@@ -86,6 +88,7 @@ function renderServices(services) {
       const state = service.process?.state ?? 'stopped';
       const display = resolveDisplayState(service.process, service.reachable);
       const url = `http://${host}:${service.port}${service.path || '/'}`;
+      const copied = isRecentlyCopied(url);
       const canOpen = Boolean(service.reachable);
       const busyThis = busy && busyServiceId === service.id;
       const external = Boolean(service.process?.externalConflict) || display.key === 'external';
@@ -110,7 +113,10 @@ function renderServices(services) {
           <div class="state-pill state-${escapeHtml(display.key)}">${escapeHtml(display.label)}</div>
         </div>
         <p class="desc">${escapeHtml(service.description || '')}</p>
-        <div class="url">${escapeHtml(url)}</div>
+        <div class="url-row">
+          <div class="url">${escapeHtml(url)}</div>
+          <button type="button" class="copy-btn${copied ? ' copied' : ''}" data-action="copy" data-url="${escapeHtml(url)}" title="复制链接">${copied ? '已复制' : '复制'}</button>
+        </div>
         ${distLine}
         <div class="reach ${service.reachable ? 'ok' : ''}">${service.reachable ? '端口可达' : '端口未监听'}</div>
         <div class="button-row">
@@ -262,6 +268,41 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+/** 判断该链接是否仍在「已复制」反馈窗口内。 */
+function isRecentlyCopied(url) {
+  return lastCopied.url === url && Date.now() - lastCopied.at < 1500;
+}
+
+/** 将服务入口链接写入剪贴板；反馈状态写入 lastCopied，避免轮询重绘冲掉。 */
+async function copyUrl(url) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      // 非安全上下文等场景下回退到 execCommand
+      const input = document.createElement('textarea');
+      input.value = url;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.left = '-9999px';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+    const copiedAt = Date.now();
+    lastCopied = { url, at: copiedAt };
+    renderServices(latestServices);
+    setTimeout(() => {
+      if (lastCopied.at !== copiedAt) return;
+      lastCopied = { url: '', at: 0 };
+      renderServices(latestServices);
+    }, 1500);
+  } catch {
+    showMessage('复制失败，请手动选择地址', false);
+  }
+}
+
 els.btnStart.addEventListener('click', () => invokeControl('/api/server/start'));
 els.btnStop.addEventListener('click', () => invokeControl('/api/server/stop'));
 els.btnRestart.addEventListener('click', () => invokeControl('/api/server/restart'));
@@ -270,8 +311,14 @@ els.serviceEntries.addEventListener('click', (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
   const action = target.getAttribute('data-action');
+  if (!action) return;
+  if (action === 'copy') {
+    const url = target.getAttribute('data-url');
+    if (url) void copyUrl(url);
+    return;
+  }
   const id = target.getAttribute('data-id');
-  if (!action || !id) return;
+  if (!id) return;
   void invokeControl(`/api/services/${id}/${action}`, id);
 });
 
