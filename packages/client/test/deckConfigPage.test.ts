@@ -246,4 +246,44 @@ describe('卡组阵型配置页', () => {
 
     page.dispose();
   });
+
+  it('五顺各点数段均可编辑站位并按段预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    const straight5Category = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+      (button) => button.textContent === '五顺',
+    );
+    expect(straight5Category).toBeDefined();
+    straight5Category!.click();
+
+    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
+      (button) => button.textContent,
+    );
+    expect(names).toEqual(['数字五顺', 'A-2-3-4-5', '9-10-J-Q-K', '10-J-Q-K-A', '箭塔', '战车']);
+
+    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '10-J-Q-K-A',
+    );
+    expect(segmentButton).toBeDefined();
+    segmentButton!.click();
+    preview.render.mockClear();
+
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][]; id?: string } | null;
+    expect(rendered?.id).toBe('straight5_10JQKA');
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
 });

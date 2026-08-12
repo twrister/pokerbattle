@@ -7,6 +7,7 @@ import {
   resolveHandUnits,
   resolveRankConfiguredMappedRows,
   resolveStraight3MappedRows,
+  resolveStraight5MappedRows,
   resolveTwoPairMappedRows,
   type MappedFormationUnit,
 } from './cardMapping.js';
@@ -221,7 +222,7 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
 
 /**
  * 将静态方案模板按实际牌面展开为可出兵阵型。
- * 单张/对子/三条/三顺/连对按配置 rows 出兵（尊重行列）；其它牌型由规则推导后近战前排、远程后排。
+ * 单张/对子/三条/三顺/连对/五顺按配置 rows 出兵（尊重行列）；其它牌型由规则推导后近战前排、远程后排。
  * 不适用的方案返回 null。
  */
 export function resolveCardFormation(
@@ -249,6 +250,11 @@ export function resolveCardFormation(
   }
   if (formation.category === 'two_pair') {
     const mappedRows = resolveTwoPairMappedRows(formation.id, formation.rows, cards);
+    if (!mappedRows) return null;
+    return formationFromMappedRows(formation, mappedRows);
+  }
+  if (formation.category === 'straight5') {
+    const mappedRows = resolveStraight5MappedRows(formation.id, formation.rows, cards);
     if (!mappedRows) return null;
     return formationFromMappedRows(formation, mappedRows);
   }

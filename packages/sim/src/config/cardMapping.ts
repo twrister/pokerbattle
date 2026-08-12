@@ -158,6 +158,62 @@ export function resolveStraight3MappedRows(
 }
 
 /**
+ * 五顺点数段键，与 formationId 后缀约定一致：
+ * `_number`→纯数字五顺；`_A2345`/`_910JQK`/`_10JQKA`→对应固定点数段。
+ */
+export type Straight5SegmentKey = 'number' | 'A2345' | '910JQK' | '10JQKA';
+
+/** 从阵型 id 解析五顺点数段；无法识别时返回 null。 */
+export function parseStraight5SegmentKey(formationId: string): Straight5SegmentKey | null {
+  // 先匹配更长后缀，避免被短串误伤。
+  if (formationId.includes('_A2345')) return 'A2345';
+  if (formationId.includes('_910JQK')) return '910JQK';
+  if (formationId.includes('_10JQKA')) return '10JQKA';
+  if (formationId.includes('_number')) return 'number';
+  return null;
+}
+
+/** 手牌点数是否命中指定五顺段（用 rank 集合匹配）。 */
+export function cardsMatchStraight5Segment(
+  cards: readonly PlayingCard[],
+  key: Straight5SegmentKey,
+): boolean {
+  if (cards.length !== 5 || cards.some((card) => card.joker)) return false;
+  if (key === 'number') return cards.every((card) => isNumberRank(card));
+  const sorted = [...new Set(cards.map((card) => card.rank))].sort().join(',');
+  switch (key) {
+    case 'A2345':
+      return sorted === '2,3,4,5,A';
+    case '910JQK':
+      return sorted === '10,9,J,K,Q';
+    case '10JQKA':
+      return sorted === '10,A,J,K,Q';
+  }
+}
+
+/**
+ * 五顺：校验点数段匹配后按配置 rows 展开站位（不重排）。
+ * 箭塔/战车为全局方案（任意合法五顺可用）；纯数字段等级跟最大牌；含人头段固定 2 级。
+ */
+export function resolveStraight5MappedRows(
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  if (cards.length !== 5 || cards.some((card) => card.joker)) return null;
+
+  // 箭塔/战车：任意五顺均可兑换，尊重配置 rows。
+  if (formationId.includes('_tower') || formationId.includes('_chariot')) {
+    return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level: 1 }))));
+  }
+
+  const key = parseStraight5SegmentKey(formationId);
+  if (!key || !cardsMatchStraight5Segment(cards, key)) return null;
+  const level = key === 'number' ? numberRankLevel(strongestCard(cards)) : 2;
+  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level }))));
+}
+
+/**
  * 连对点数段键，与 formationId 后缀约定一致：
  * `_number`→纯数字连对；`_A2`/`_10J`/`_JQ`/`_QK`/`_KA`→对应相邻段。
  */
@@ -288,7 +344,7 @@ export function resolveSingleMappedRows(
 /**
  * 按实际手牌和阵型方案推导单位与等级。
  * 返回 null 代表该方案不适用于当前点数，调用方不应向玩家展示。
- * 单张/对子/三条/三顺/连对由 resolveCardFormation 按配置 rows 展开，此处直接返回 null。
+ * 单张/对子/三条/三顺/连对/五顺由 resolveCardFormation 按配置 rows 展开，此处直接返回 null。
  */
 export function resolveHandUnits(
   category: HandCategory,
@@ -296,13 +352,14 @@ export function resolveHandUnits(
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[] | null {
   if (cards.length === 0) return null;
-  // 单张/对子/三条/三顺/连对站位以 cardFormations.json 的 rows 为准，不走规则推导。
+  // 单张/对子/三条/三顺/连对/五顺站位以 cardFormations.json 的 rows 为准，不走规则推导。
   if (
     category === 'single' ||
     category === 'pair' ||
     category === 'triple' ||
     category === 'straight3' ||
-    category === 'two_pair'
+    category === 'two_pair' ||
+    category === 'straight5'
   ) {
     return null;
   }
@@ -318,13 +375,6 @@ export function resolveHandUnits(
     // bomb_small_bomb → 小炸弹；其余炸弹方案（含 bomb_giant_bomb）→ 巨型炸弹
     const typeId: UnitTypeId = formationId.includes('small_bomb') ? 'small_bomb' : 'giant_bomb';
     return applyLevelGate([{ typeId, level: isNumberRank(top) ? 1 : 2 }]);
-  }
-  if (category === 'straight5') {
-    return choice === 'tower'
-      ? applyLevelGate([{ typeId: 'building_tower', level: 1 }])
-      : choice === 'chariot'
-        ? applyLevelGate([{ typeId: 'ranged_chariot', level: 1 }])
-        : null;
   }
   if (category === 'flush' || category === 'full_house') {
     return choice === 'tower'
@@ -403,6 +453,49 @@ function previewCardsForStraight3Segment(
   }
 }
 
+/** 按五顺点数段生成预览样例牌；箭塔/战车用数字五顺样例。 */
+function previewCardsForStraight5Segment(
+  formationId: string,
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  const numberStraight = [
+    card('2-spades'),
+    card('3-hearts'),
+    card('4-clubs'),
+    card('5-diamonds'),
+    card('6-spades'),
+  ];
+  switch (parseStraight5SegmentKey(formationId)) {
+    case 'A2345':
+      return [
+        card('A-spades'),
+        card('2-hearts'),
+        card('3-clubs'),
+        card('4-diamonds'),
+        card('5-spades'),
+      ];
+    case '910JQK':
+      return [
+        card('9-spades'),
+        card('10-hearts'),
+        card('J-clubs'),
+        card('Q-diamonds'),
+        card('K-spades'),
+      ];
+    case '10JQKA':
+      return [
+        card('10-spades'),
+        card('J-hearts'),
+        card('Q-clubs'),
+        card('K-diamonds'),
+        card('A-spades'),
+      ];
+    case 'number':
+    default:
+      return numberStraight;
+  }
+}
+
 /** 按连对点数段生成相邻两对预览样例。 */
 function previewCardsForTwoPair(
   formationId: string,
@@ -433,7 +526,7 @@ function previewCardsForTwoPair(
 
 /**
  * 卡组页预览用的样例手牌。
- * 单张/对子/三条/三顺/连对按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
+ * 单张/对子/三条/三顺/连对/五顺按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
  */
 export function getPreviewCardsForFormation(
   category: HandCategory,
@@ -458,10 +551,11 @@ export function getPreviewCardsForFormation(
   if (category === 'two_pair') {
     return previewCardsForTwoPair(formationId, card);
   }
+  if (category === 'straight5') {
+    return previewCardsForStraight5Segment(formationId, card);
+  }
 
   switch (category) {
-    case 'straight5':
-      return [card('2-spades'), card('3-hearts'), card('4-clubs'), card('5-diamonds'), card('6-spades')];
     case 'flush':
       return [card('2-spades'), card('4-spades'), card('6-spades'), card('8-spades'), card('J-spades')];
     case 'full_house':

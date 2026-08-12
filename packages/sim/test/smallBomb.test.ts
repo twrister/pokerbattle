@@ -58,11 +58,12 @@ describe('小炸弹', () => {
     expect(smallBomb.hp).toBe(bombHp);
   });
 
-  it('从己方主堡抛出，落地后按 attackInterval 闪烁再无差别伤害半径内单位与建筑', () => {
+  it('从己方主堡抛出，落地后按 attackInterval 闪烁再伤害半径内敌军单位与建筑', () => {
     const world = new World(1);
     const blueBase = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
     // aoeRadius=3.5：落点 (9,15) 内圈单位应受伤，外侧不受伤
     const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(15));
+    const allyBuilding = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(7), fromFloat(15))!;
     const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(15));
     const air = world.spawnUnit(Faction.Red, 'dragon', fromFloat(8), fromFloat(15));
     const building = world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(11), fromFloat(15))!;
@@ -87,7 +88,10 @@ describe('小炸弹', () => {
     expect(ally.hp).toBe(hp.get(ally.id));
     updateProjectiles(world);
 
-    for (const unit of [ally, enemy, air, building]) {
+    // 己方单位与建筑不受伤
+    expect(ally.hp).toBe(hp.get(ally.id));
+    expect(allyBuilding.hp).toBe(hp.get(allyBuilding.id));
+    for (const unit of [enemy, air, building]) {
       expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(600, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));

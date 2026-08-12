@@ -553,8 +553,83 @@
   ],
   "straight5": [
     {
+      "id": "straight5_number",
+      "name": "数字五顺",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "straight5_A2345",
+      "name": "A-2-3-4-5",
+      "rows": [
+        [
+          "melee_cavalry",
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 2,
+      "thumbScale": 1.7
+    },
+    {
+      "id": "straight5_910JQK",
+      "name": "9-10-J-Q-K",
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_guard"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "straight5_10JQKA",
+      "name": "10-J-Q-K-A",
+      "rows": [
+        [
+          "melee_guard",
+          "hero_king",
+          "melee_cavalry"
+        ],
+        [
+          "hero_queen",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 2,
+      "thumbScale": 1.7
+    },
+    {
       "id": "straight5_tower",
-      "name": "1级箭塔",
+      "name": "箭塔",
       "rows": [
         [
           "building_tower"
@@ -566,7 +641,7 @@
     },
     {
       "id": "straight5_chariot",
-      "name": "1级战车",
+      "name": "战车",
       "rows": [
         [
           "ranged_chariot"
@@ -580,7 +655,7 @@
   "flush": [
     {
       "id": "flush_tower",
-      "name": "2级箭塔",
+      "name": "箭塔",
       "rows": [
         [
           "building_tower"
@@ -592,7 +667,7 @@
     },
     {
       "id": "flush_chariot",
-      "name": "2级战车",
+      "name": "战车",
       "rows": [
         [
           "ranged_chariot"
@@ -604,7 +679,7 @@
     },
     {
       "id": "flush_dragon",
-      "name": "1级巨龙",
+      "name": "巨龙",
       "rows": [
         [
           "dragon"
@@ -618,7 +693,7 @@
   "full_house": [
     {
       "id": "full_house_tower",
-      "name": "2级箭塔",
+      "name": "箭塔",
       "rows": [
         [
           "building_tower"
@@ -630,7 +705,7 @@
     },
     {
       "id": "full_house_chariot",
-      "name": "2级战车",
+      "name": "战车",
       "rows": [
         [
           "ranged_chariot"
@@ -642,7 +717,7 @@
     },
     {
       "id": "full_house_dragon",
-      "name": "1级巨龙",
+      "name": "巨龙",
       "rows": [
         [
           "dragon"
@@ -656,7 +731,7 @@
   "rocket": [
     {
       "id": "rocket_bomb",
-      "name": "3级巨型炸弹",
+      "name": "巨型炸弹",
       "rows": [
         [
           "giant_bomb"
@@ -678,7 +753,7 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 1.7
     },
     {
       "id": "bomb_small_bomb",
@@ -696,7 +771,7 @@
   "straight_flush": [
     {
       "id": "straight_flush_tower",
-      "name": "3级箭塔",
+      "name": "箭塔",
       "rows": [
         [
           "building_tower"
@@ -708,7 +783,7 @@
     },
     {
       "id": "straight_flush_chariot",
-      "name": "3级战车",
+      "name": "战车",
       "rows": [
         [
           "ranged_chariot"
@@ -720,7 +795,7 @@
     },
     {
       "id": "straight_flush_dragon",
-      "name": "2级巨龙",
+      "name": "巨龙",
       "rows": [
         [
           "dragon"
@@ -728,7 +803,7 @@
       ],
       "colSpacing": 2,
       "rowSpacing": 2,
-      "thumbScale": 2
+      "thumbScale": 1.2
     }
   ]
 }

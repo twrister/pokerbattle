@@ -77,11 +77,11 @@ export function updateProjectiles(world: World): void {
   }
 }
 
-/** 引信炸弹落地结束后，对半径内所有单位和建筑造成无差别伤害。 */
+/** 引信炸弹落地结束后，对半径内敌军单位和建筑造成伤害（不伤己方）。 */
 function resolveFuseBomb(world: World, projectile: Projectile): void {
   const radiusSq = mul(projectile.aoeRadius, projectile.aoeRadius);
   for (const unit of world.units) {
-    if (!isAlive(unit)) continue;
+    if (!isAlive(unit) || unit.faction === projectile.faction) continue;
     const inside = isBuildingConfig(unit.config)
       ? distSqToBuildingFootprint(projectile.impactPos.x, projectile.impactPos.y, unit) <= radiusSq
       : distSq(projectile.impactPos.x, projectile.impactPos.y, unit.pos.x, unit.pos.y) <= radiusSq;

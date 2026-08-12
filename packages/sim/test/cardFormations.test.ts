@@ -298,6 +298,109 @@ describe('牌型兵种阵型配置', () => {
     }
   });
 
+  it('五顺按点数段匹配可配置站位，且箭塔战车全局可选', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const idsFor = (cardIds: string[]) =>
+      getFormationsFor(['straight5'], cards(...cardIds)).map((formation) => formation.id);
+    const formationFor = (cardIds: string[], id: string) =>
+      getFormationsFor(['straight5'], cards(...cardIds)).find((formation) => formation.id === id)!;
+
+    expect(CARD_FORMATIONS.straight5.map((entry) => entry.id)).toEqual([
+      'straight5_number',
+      'straight5_A2345',
+      'straight5_910JQK',
+      'straight5_10JQKA',
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+
+    expect(idsFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'])).toEqual([
+      'straight5_number',
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+    expect(
+      formationFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'], 'straight5_number').units,
+    ).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 4 },
+      { typeId: 'ranged_archer', level: 1, count: 4 },
+    ]);
+
+    expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'])).toEqual([
+      'straight5_A2345',
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+    expect(
+      formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'], 'straight5_A2345').rows,
+    ).toEqual([
+      ['melee_cavalry', 'melee_grunt', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer'],
+    ]);
+
+    expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'])).toEqual([
+      'straight5_910JQK',
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+    expect(
+      formationFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'], 'straight5_910JQK').rows,
+    ).toEqual([
+      ['melee_grunt', 'melee_guard'],
+      ['ranged_archer', 'ranged_archer', 'hero_queen'],
+    ]);
+
+    expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'])).toEqual([
+      'straight5_10JQKA',
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+    expect(
+      formationFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'], 'straight5_10JQKA').rows,
+    ).toEqual([
+      ['melee_guard', 'hero_king', 'melee_cavalry'],
+      ['hero_queen', 'ranged_archer'],
+    ]);
+
+    // 未分段的五顺只保留箭塔/战车
+    expect(idsFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'])).toEqual([
+      'straight5_tower',
+      'straight5_chariot',
+    ]);
+  });
+
+  it('五顺尊重配置 rows，不因规则重排站位', () => {
+    const draft = dumpCardFormationDrafts();
+    draft.straight5 = [
+      {
+        id: 'straight5_number',
+        name: '自定义数字五顺',
+        rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
+        colSpacing: 1.2,
+        rowSpacing: 1.4,
+        thumbScale: 2,
+      },
+      {
+        id: 'straight5_tower',
+        name: '箭塔',
+        rows: [['building_tower']],
+        colSpacing: 1.2,
+        rowSpacing: 1.4,
+        thumbScale: 2,
+      },
+    ];
+    applyCardFormationDrafts(draft);
+    try {
+      const cards = ['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'].map(
+        (id) => getPokerCardById(id)!,
+      );
+      const formation = getFormationsFor(['straight5'], cards).find((entry) => entry.id === 'straight5_number')!;
+      expect(formation.rows).toEqual([['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']]);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+  });
+
   it('连对按点数段匹配可配置站位，且只展示命中段', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const idsFor = (cardIds: string[]) =>

@@ -53,7 +53,7 @@ export interface Projectile {
   landed: boolean;
   /**
    * 主堡投放的引信炸弹种类；非 null 时固定落点、不追踪单位，
-   * 落地后按 fuseTicks 引爆并结算无差别 AOE。
+   * 落地后按 fuseTicks 引爆并结算仅伤敌军的 AOE。
    */
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null;
   dead: boolean;
