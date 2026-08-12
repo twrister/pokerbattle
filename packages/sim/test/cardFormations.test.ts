@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   CARD_FORMATIONS,
-  FORMATION_COL_SPACING,
-  FORMATION_ROW_SPACING,
   Faction,
   HAND_CATEGORY_ORDER,
   UNIT_LEVELS_ENABLED,
@@ -73,9 +71,9 @@ describe('牌型兵种阵型配置', () => {
     expect(Math.min(...front.map((point) => point.y))).toBeGreaterThan(
       Math.max(...back.map((point) => point.y)),
     );
-    // 默认间距生效，且阵型相对锚点居中。
-    expect(front[1]!.x - front[0]!.x).toBeCloseTo(FORMATION_COL_SPACING, 6);
-    expect(front[0]!.y - back[0]!.y).toBeCloseTo(FORMATION_ROW_SPACING, 6);
+    // 配置间距生效，且阵型相对锚点居中。
+    expect(front[1]!.x - front[0]!.x).toBeCloseTo(formation.colSpacing, 6);
+    expect(front[0]!.y - back[0]!.y).toBeCloseTo(formation.rowSpacing, 6);
     const midY = (Math.max(...points.map((p) => p.y)) + Math.min(...points.map((p) => p.y))) / 2;
     expect(midY).toBeCloseTo(8, 6);
   });
@@ -282,6 +280,8 @@ describe('牌型兵种阵型配置', () => {
       {
         id: 'straight3_number',
         name: '自定义数字三顺',
+        match: { kind: 'numbers' },
+        level: { kind: 'byNumberRank', offset: 0 },
         rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -375,6 +375,8 @@ describe('牌型兵种阵型配置', () => {
       {
         id: 'straight5_number',
         name: '自定义数字五顺',
+        match: { kind: 'numbers' },
+        level: { kind: 'byNumberRank', offset: 0 },
         rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -383,6 +385,8 @@ describe('牌型兵种阵型配置', () => {
       {
         id: 'straight5_tower',
         name: '箭塔',
+        match: { kind: 'any' },
+        level: { kind: 'fixed', value: 1 },
         rows: [['building_tower']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -425,28 +429,28 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'])).toEqual(['two_pair_A2']);
     expect(formationFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'], 'two_pair_A2').rows).toEqual([
-      ['melee_cavalry', 'melee_cavalry'],
-      ['melee_grunt', 'melee_grunt'],
+      ['melee_grunt', 'melee_cavalry', 'melee_cavalry', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
     expect(idsFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'])).toEqual(['two_pair_10J']);
     expect(formationFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'], 'two_pair_10J').rows).toEqual([
-      ['melee_grunt', 'melee_grunt'],
-      ['melee_guard', 'melee_guard'],
+      ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
     expect(idsFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'])).toEqual(['two_pair_JQ']);
     expect(formationFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'], 'two_pair_JQ').rows).toEqual([
-      ['melee_guard', 'melee_guard'],
-      ['hero_queen', 'hero_queen'],
+      ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'hero_queen', 'ranged_archer'],
     ]);
     expect(idsFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'])).toEqual(['two_pair_QK']);
     expect(formationFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'], 'two_pair_QK').rows).toEqual([
-      ['hero_queen', 'hero_queen'],
-      ['hero_king', 'hero_king'],
+      ['melee_grunt', 'hero_king', 'hero_king', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'hero_queen', 'ranged_archer'],
     ]);
     expect(idsFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'])).toEqual(['two_pair_KA']);
     expect(formationFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'], 'two_pair_KA').rows).toEqual([
-      ['hero_king', 'hero_king'],
-      ['melee_cavalry', 'melee_cavalry'],
+      ['hero_king', 'melee_cavalry', 'melee_cavalry', 'hero_king'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
   });
 
@@ -456,6 +460,8 @@ describe('牌型兵种阵型配置', () => {
       {
         id: 'two_pair_number',
         name: '自定义数字连对',
+        match: { kind: 'numbers' },
+        level: { kind: 'byNumberRank', offset: 2 },
         rows: [['ranged_archer', 'ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -464,6 +470,8 @@ describe('牌型兵种阵型配置', () => {
       {
         id: 'two_pair_QK',
         name: '自定义 Q-K 连对',
+        match: { kind: 'ranks', ranks: ['Q', 'K'] },
+        level: { kind: 'fixed', value: 4 },
         rows: [['hero_king'], ['hero_queen', 'hero_queen', 'hero_queen']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -586,5 +594,47 @@ describe('牌型兵种阵型配置', () => {
     ]);
 
     resetCardFormationsToDefault();
+  });
+
+  it('缺少 match 或 level 的草稿被严格拒绝', () => {
+    const missingMatch = dumpCardFormationDrafts();
+    delete (missingMatch.single[0] as { match?: unknown }).match;
+    expect(validateCardFormationDrafts(missingMatch)).toContain('缺少牌面匹配配置');
+
+    const missingLevel = dumpCardFormationDrafts();
+    delete (missingLevel.single[0] as { level?: unknown }).level;
+    expect(validateCardFormationDrafts(missingLevel)).toContain('缺少等级配置');
+
+    const badRanks = dumpCardFormationDrafts();
+    badRanks.single[0]!.match = { kind: 'ranks', ranks: [] };
+    expect(validateCardFormationDrafts(badRanks)).toContain('点数匹配不能为空');
+  });
+
+  it('同花与炸弹出兵以配置 rows 为准', () => {
+    const drafts = dumpCardFormationDrafts();
+    const flushDragon = drafts.flush.find((entry) => entry.id === 'flush_dragon');
+    expect(flushDragon).toBeDefined();
+    flushDragon!.rows = [['melee_grunt']];
+    const bomb = drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb');
+    expect(bomb).toBeDefined();
+    bomb!.rows = [['small_bomb']];
+    applyCardFormationDrafts(drafts);
+    try {
+      const flushCards = ['2-spades', '4-spades', '6-spades', '8-spades', 'J-spades'].map(
+        (id) => getPokerCardById(id)!,
+      );
+      const flush = getFormationsFor(['flush'], flushCards).find((entry) => entry.id === 'flush_dragon');
+      expect(flush?.rows).toEqual([['melee_grunt']]);
+
+      const bombCards = ['5-spades', '5-hearts', '5-clubs', '5-diamonds'].map(
+        (id) => getPokerCardById(id)!,
+      );
+      const resolvedBomb = getFormationsFor(['bomb'], bombCards).find(
+        (entry) => entry.id === 'bomb_giant_bomb',
+      );
+      expect(resolvedBomb?.rows).toEqual([['small_bomb']]);
+    } finally {
+      resetCardFormationsToDefault();
+    }
   });
 });

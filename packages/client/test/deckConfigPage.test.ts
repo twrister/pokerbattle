@@ -84,10 +84,13 @@ describe('卡组阵型配置页', () => {
     expect(jButton).toBeDefined();
     jButton!.click();
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
-    expect(select).not.toBeNull();
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
+    expect(titles).toContain('牌面匹配');
+    expect(titles).toContain('等级规则');
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
+    expect(select).not.toBeNull();
 
     const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
     expect(nextType).toBeTruthy();
@@ -117,7 +120,7 @@ describe('卡组阵型配置页', () => {
     expect(jButton).toBeDefined();
     jButton!.click();
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
@@ -150,7 +153,7 @@ describe('卡组阵型配置页', () => {
     expect(jButton).toBeDefined();
     jButton!.click();
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
@@ -192,7 +195,7 @@ describe('卡组阵型配置页', () => {
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();
     const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
     expect(nextType).toBeTruthy();
@@ -232,7 +235,7 @@ describe('卡组阵型配置页', () => {
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();
     const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
     expect(nextType).toBeTruthy();
@@ -272,7 +275,7 @@ describe('卡组阵型配置页', () => {
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
 
-    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();
     const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
     expect(nextType).toBeTruthy();

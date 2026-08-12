@@ -217,7 +217,9 @@ describe('单机手牌交互', () => {
       'data:image/png;base64,thumb',
     );
     const label = option.getAttribute('aria-label') ?? '';
-    expect(label).toContain('4级民兵x3');
+    expect(label).toContain('数字三顺');
+    expect(label).toContain('民兵x2');
+    expect(label).toContain('弓手x2');
 
     panel.dispose();
   });
