@@ -192,7 +192,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   /**
    * 编辑方案元数据：名称、间距、按钮缩略图放大。
-   * 兵种站位由出牌规则引擎推导，这里只展示说明，不再手工改 rows。
+   * 单张/对子额外可编辑 rows；其它牌型站位仍由规则引擎推导。
    */
   function renderEditor(): void {
     editor.replaceChildren();
@@ -203,14 +203,23 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     }
 
     const buildingOnly = isBuildingOnlyFormation(draft);
+    const editableRows = category === 'single' || category === 'pair';
+    const rankSuffixHint =
+      category === 'single'
+        ? '_grunt/_archer/_J/_Q/_K/_A/_joker_black/_joker_red'
+        : '_grunt/_archer/_J/_Q/_K/_A';
     const rule = document.createElement('section');
     rule.className = 'deck-rows';
     rule.innerHTML = `
       <div class="deck-section-title">规则说明</div>
       <p>${
-        UNIT_LEVELS_ENABLED
-          ? '兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
-          : '兵种和数量会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
+        editableRows
+          ? UNIT_LEVELS_ENABLED
+            ? `${HAND_CATEGORY_NAMES[category]}站位以本页配置的兵种为准；数字牌等级仍按点数推导（对子再 +1）。阵型 ID 需带匹配后缀（${rankSuffixHint}）。`
+            : `${HAND_CATEGORY_NAMES[category]}站位以本页配置的兵种为准。阵型 ID 需带匹配后缀（${rankSuffixHint}）。`
+          : UNIT_LEVELS_ENABLED
+            ? '兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
+            : '兵种和数量会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
       }</p>
     `;
     editor.appendChild(rule);
@@ -222,8 +231,13 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       }),
       textInput('阵型 ID', draft.id, (value) => {
         draft.id = value;
+        if (editableRows) refreshPreview();
       }),
     );
+
+    if (editableRows) {
+      editor.appendChild(renderRowsEditor(draft));
+    }
 
     // 单建筑阵型不需要间距；普通阵型才显示
     if (!buildingOnly) {
@@ -259,6 +273,95 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     editor.appendChild(remove);
   }
 
+  /** 单张站位编辑：增删排/单位，下拉选择兵种。 */
+  function renderRowsEditor(draft: FormationDraft): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'deck-rows';
+    const title = document.createElement('div');
+    title.className = 'deck-section-title';
+    title.textContent = '站位配置';
+    section.appendChild(title);
+
+    draft.rows.forEach((row, rowIndex) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'deck-row';
+      const label = document.createElement('span');
+      label.className = 'deck-row-label';
+      label.textContent =
+        rowIndex === 0 ? '前排' : rowIndex === draft.rows.length - 1 ? '后排' : `排${rowIndex + 1}`;
+      rowEl.appendChild(label);
+
+      row.forEach((typeId, colIndex) => {
+        const select = document.createElement('select');
+        for (const id of UNIT_TYPE_IDS) {
+          const option = document.createElement('option');
+          option.value = id;
+          option.textContent = UNIT_CONFIGS[id]?.name ?? id;
+          if (id === typeId) option.selected = true;
+          select.appendChild(option);
+        }
+        select.addEventListener('change', () => {
+          row[colIndex] = select.value as UnitTypeId;
+          if (IS_DEV_SERVER) renderEditor();
+          refreshPreview();
+        });
+        rowEl.appendChild(select);
+
+        const removeUnit = document.createElement('button');
+        removeUnit.type = 'button';
+        removeUnit.className = 'deck-icon-button';
+        removeUnit.textContent = '×';
+        removeUnit.title = '移除单位';
+        removeUnit.addEventListener('click', () => {
+          if (row.length <= 1 && draft.rows.length <= 1) return;
+          row.splice(colIndex, 1);
+          if (row.length === 0) draft.rows.splice(rowIndex, 1);
+          if (IS_DEV_SERVER) renderEditor();
+          refreshPreview();
+        });
+        rowEl.appendChild(removeUnit);
+      });
+
+      const addUnit = document.createElement('button');
+      addUnit.type = 'button';
+      addUnit.className = 'deck-mini-button';
+      addUnit.textContent = '+单位';
+      addUnit.addEventListener('click', () => {
+        row.push(DEFAULT_MOBILE_TYPE_ID);
+        if (IS_DEV_SERVER) renderEditor();
+        refreshPreview();
+      });
+      rowEl.appendChild(addUnit);
+
+      if (draft.rows.length > 1) {
+        const removeRow = document.createElement('button');
+        removeRow.type = 'button';
+        removeRow.className = 'deck-mini-button';
+        removeRow.textContent = '删排';
+        removeRow.addEventListener('click', () => {
+          draft.rows.splice(rowIndex, 1);
+          if (IS_DEV_SERVER) renderEditor();
+          refreshPreview();
+        });
+        rowEl.appendChild(removeRow);
+      }
+
+      section.appendChild(rowEl);
+    });
+
+    const addRow = document.createElement('button');
+    addRow.type = 'button';
+    addRow.className = 'deck-mini-button';
+    addRow.textContent = '+后排';
+    addRow.addEventListener('click', () => {
+      draft.rows.push([DEFAULT_MOBILE_TYPE_ID]);
+      if (IS_DEV_SERVER) renderEditor();
+      refreshPreview();
+    });
+    section.appendChild(addRow);
+    return section;
+  }
+
   function addFormation(): void {
     const number = drafts[category].length + 1;
     drafts[category].push({
@@ -273,9 +376,13 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     renderAll();
   }
 
-  /** 保存前用规则展开结果回填 rows，避免占位数量（如三顺弓手写成 1 个）被写回配置。 */
+  /**
+   * 保存前用规则展开结果回填 rows，避免占位数量（如三顺弓手写成 1 个）被写回配置。
+   * 单张/对子 rows 由配置页直接编辑，跳过回填以免冲掉手工站位。
+   */
   function syncDraftRowsFromRules(): void {
     for (const cat of HAND_CATEGORY_ORDER) {
+      if (cat === 'single' || cat === 'pair') continue;
       for (const draft of drafts[cat]) {
         const resolved = previewFormationFromDraftFor(cat, draft);
         if (resolved) draft.rows = resolved.rows.map((row) => [...row]);

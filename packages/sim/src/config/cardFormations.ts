@@ -2,7 +2,12 @@ import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
 import type { PlayingCard } from '../cards/deck.js';
 import { Faction } from '../entity/unit.js';
 import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
-import { layoutMappedUnits, resolveHandUnits, type MappedFormationUnit } from './cardMapping.js';
+import {
+  layoutMappedUnits,
+  resolveHandUnits,
+  resolveRankConfiguredMappedRows,
+  type MappedFormationUnit,
+} from './cardMapping.js';
 import rawCardFormations from './cardFormations.json';
 
 /** 发牌限制可识别的全部牌型 id。 */
@@ -214,12 +219,23 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
 
 /**
  * 将静态方案模板按实际牌面展开为可出兵阵型。
- * 近战自动编入前排，远程自动编入后排；不适用的方案返回 null。
+ * 单张/对子按配置 rows 出兵（尊重行列）；其它牌型由规则推导后近战前排、远程后排。
+ * 不适用的方案返回 null。
  */
 export function resolveCardFormation(
   formation: CardFormation,
   cards: readonly PlayingCard[],
 ): CardFormation | null {
+  if (formation.category === 'single' || formation.category === 'pair') {
+    const mappedRows = resolveRankConfiguredMappedRows(
+      formation.category,
+      formation.id,
+      formation.rows,
+      cards,
+    );
+    if (!mappedRows) return null;
+    return formationFromMappedRows(formation, mappedRows);
+  }
   const units = resolveHandUnits(formation.category, formation.id, cards);
   if (!units) return null;
   const mappedRows = layoutMappedUnits(units);

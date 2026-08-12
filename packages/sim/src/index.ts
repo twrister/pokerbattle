@@ -115,10 +115,18 @@ export {
 } from './cards/deck.js';
 export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
 export {
+  cardMatchesRankKey,
+  cardMatchesSingleKey,
   getPreviewCardsForFormation,
   layoutMappedUnits,
+  parseRankFormationKey,
+  parseSingleFormationKey,
   resolveHandUnits,
+  resolveRankConfiguredMappedRows,
+  resolveSingleMappedRows,
   type MappedFormationUnit,
+  type RankFormationKey,
+  type SingleFormationKey,
 } from './config/cardMapping.js';
 export {
   HAND_ODDS_DEFAULT_TRIALS,

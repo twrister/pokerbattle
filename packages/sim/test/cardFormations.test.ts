@@ -42,11 +42,10 @@ describe('牌型兵种阵型配置', () => {
   it('规则阵型保留近战前排，远程后排', () => {
     const formation = CARD_FORMATIONS.two_pair.find((entry) => entry.id === 'two_pair_grunt');
     expect(formation).toBeDefined();
-    expect(formation!.rows).toEqual([
-      ['melee_grunt', 'melee_grunt'],
-      ['melee_grunt', 'melee_grunt'],
-    ]);
+    // 占位 rows 与规则展开一致：4 名近战按每排最多 3 人排成 3+1
+    expect(formation!.rows).toEqual([['melee_grunt', 'melee_grunt', 'melee_grunt'], ['melee_grunt']]);
     expect(formation!.slots.filter((slot) => slot.row === 0).map((slot) => slot.typeId)).toEqual([
+      'melee_grunt',
       'melee_grunt',
       'melee_grunt',
     ]);
@@ -99,7 +98,10 @@ describe('牌型兵种阵型配置', () => {
       'rocket_bomb',
       'pair_grunt',
       'pair_archer',
-      'pair_rank',
+      'pair_J',
+      'pair_Q',
+      'pair_K',
+      'pair_A',
     ]);
   });
 
@@ -202,19 +204,79 @@ describe('牌型兵种阵型配置', () => {
     }
   });
 
-  it('单张大小王分别映射为法师与大法师，且不能走对子绕过王炸', () => {
+  it('单张按点数匹配独立阵型，且不能走对子绕过王炸', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
       getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id);
+    const idsFor = (category: Parameters<typeof getFormationsFor>[0], cardIds: string[]) =>
+      getFormationsFor(category, cards(...cardIds)).map((formation) => formation.id);
 
-    expect(formationFor(['single'], ['joker-black'], 'single_rank')?.units).toEqual([
+    expect(formationFor(['single'], ['joker-black'], 'single_joker_black')?.units).toEqual([
       { typeId: 'hero_mage', level: 1, count: 1 },
     ]);
-    expect(formationFor(['single'], ['joker-red'], 'single_rank')?.units).toEqual([
+    expect(formationFor(['single'], ['joker-red'], 'single_joker_red')?.units).toEqual([
       { typeId: 'hero_archmage', level: 1, count: 1 },
     ]);
-    // 数字牌方案对王牌不适用；王炸对子也不应展开为 rank 兵种。
+    expect(idsFor(['single'], ['J-spades'])).toEqual(['single_J']);
+    expect(idsFor(['single'], ['Q-hearts'])).toEqual(['single_Q']);
+    expect(idsFor(['single'], ['K-clubs'])).toEqual(['single_K']);
+    expect(idsFor(['single'], ['A-diamonds'])).toEqual(['single_A']);
+    expect(idsFor(['single'], ['5-spades']).sort()).toEqual(['single_archer', 'single_grunt']);
+    // 数字牌方案对王牌不适用；王炸对子也不应展开为对子方案。
     expect(formationFor(['single'], ['joker-black'], 'single_grunt')).toBeUndefined();
-    expect(formationFor(['pair'], ['joker-black', 'joker-red'], 'pair_rank')).toBeUndefined();
+    expect(idsFor(['pair'], ['joker-black', 'joker-red'])).toEqual([]);
+  });
+
+  it('单张出兵以配置 rows 为准，可按点数单独改兵种', () => {
+    const drafts = dumpCardFormationDrafts();
+    const ace = drafts.single.find((entry) => entry.id === 'single_A');
+    expect(ace).toBeDefined();
+    ace!.rows = [['melee_grunt', 'ranged_archer']];
+    applyCardFormationDrafts(drafts);
+
+    const formation = getFormationsFor(['single'], [getPokerCardById('A-spades')!]).find(
+      (entry) => entry.id === 'single_A',
+    );
+    expect(formation?.rows).toEqual([['melee_grunt', 'ranged_archer']]);
+    expect(formation?.units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 1 },
+      { typeId: 'ranged_archer', level: 1, count: 1 },
+    ]);
+    // J 不受 A 配置影响
+    expect(
+      getFormationsFor(['single'], [getPokerCardById('J-spades')!]).find((entry) => entry.id === 'single_J')
+        ?.units,
+    ).toEqual([{ typeId: 'melee_guard', level: 1, count: 1 }]);
+
+    resetCardFormationsToDefault();
+  });
+
+  it('对子按点数匹配独立阵型，出兵以配置 rows 为准', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const idsFor = (cardIds: string[]) =>
+      getFormationsFor(['pair'], cards(...cardIds)).map((formation) => formation.id);
+
+    expect(idsFor(['J-spades', 'J-hearts'])).toEqual(['pair_J']);
+    expect(idsFor(['Q-spades', 'Q-hearts'])).toEqual(['pair_Q']);
+    expect(idsFor(['K-spades', 'K-hearts'])).toEqual(['pair_K']);
+    expect(idsFor(['A-spades', 'A-hearts'])).toEqual(['pair_A']);
+    expect(idsFor(['5-spades', '5-hearts']).sort()).toEqual(['pair_archer', 'pair_grunt']);
+
+    const drafts = dumpCardFormationDrafts();
+    const ace = drafts.pair.find((entry) => entry.id === 'pair_A');
+    expect(ace).toBeDefined();
+    ace!.rows = [['melee_grunt'], ['ranged_archer']];
+    applyCardFormationDrafts(drafts);
+
+    const formation = getFormationsFor(['pair'], cards('A-spades', 'A-hearts')).find(
+      (entry) => entry.id === 'pair_A',
+    );
+    expect(formation?.rows).toEqual([['melee_grunt'], ['ranged_archer']]);
+    expect(formation?.units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 1 },
+      { typeId: 'ranged_archer', level: 1, count: 1 },
+    ]);
+
+    resetCardFormationsToDefault();
   });
 });

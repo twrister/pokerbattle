@@ -10,7 +10,7 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2.2
     },
     {
       "id": "single_archer",
@@ -22,14 +22,74 @@
       ],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2.2
     },
     {
-      "id": "single_rank",
-      "name": "点数单位",
+      "id": "single_J",
+      "name": "单张 J",
       "rows": [
         [
           "melee_guard"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "single_Q",
+      "name": "单张 Q",
+      "rows": [
+        [
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "single_K",
+      "name": "单张 K",
+      "rows": [
+        [
+          "hero_king"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "single_A",
+      "name": "单张 A",
+      "rows": [
+        [
+          "melee_cavalry"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 1.7
+    },
+    {
+      "id": "single_joker_black",
+      "name": "小王",
+      "rows": [
+        [
+          "hero_mage"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "single_joker_red",
+      "name": "大王",
+      "rows": [
+        [
+          "hero_archmage"
         ]
       ],
       "colSpacing": 1.2,
@@ -60,22 +120,61 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 1.2,
+      "colSpacing": 1.4,
       "rowSpacing": 1.4,
       "thumbScale": 2
     },
     {
-      "id": "pair_rank",
-      "name": "点数单位",
+      "id": "pair_J",
+      "name": "对子 J",
       "rows": [
         [
           "melee_guard",
           "melee_guard"
         ]
       ],
-      "colSpacing": 1.2,
+      "colSpacing": 1.8,
       "rowSpacing": 1.4,
       "thumbScale": 2
+    },
+    {
+      "id": "pair_Q",
+      "name": "对子 Q",
+      "rows": [
+        [
+          "hero_queen",
+          "hero_queen"
+        ]
+      ],
+      "colSpacing": 1.8,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "pair_K",
+      "name": "对子 K",
+      "rows": [
+        [
+          "hero_king",
+          "hero_king"
+        ]
+      ],
+      "colSpacing": 1.8,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "pair_A",
+      "name": "对子 A",
+      "rows": [
+        [
+          "melee_cavalry",
+          "melee_cavalry"
+        ]
+      ],
+      "colSpacing": 2,
+      "rowSpacing": 1.4,
+      "thumbScale": 1.7
     }
   ],
   "straight3": [

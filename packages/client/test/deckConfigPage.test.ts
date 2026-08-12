@@ -72,4 +72,65 @@ describe('卡组阵型配置页', () => {
 
     page.dispose();
   });
+
+  it('单张阵型可编辑站位兵种并刷新预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+    preview.render.mockClear();
+
+    // 默认牌型即为单张；选中「单张 J」
+    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
+    const jButton = formationButtons.find((button) => button.textContent === '单张 J');
+    expect(jButton).toBeDefined();
+    jButton!.click();
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][] } | null;
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
+
+  it('对子阵型可编辑站位兵种并刷新预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    const pairCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+      (button) => button.textContent === '对子',
+    );
+    expect(pairCategory).toBeDefined();
+    pairCategory!.click();
+    preview.render.mockClear();
+
+    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
+    const jButton = formationButtons.find((button) => button.textContent === '对子 J');
+    expect(jButton).toBeDefined();
+    jButton!.click();
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][] } | null;
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
 });

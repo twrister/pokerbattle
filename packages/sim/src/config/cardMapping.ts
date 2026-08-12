@@ -11,6 +11,14 @@ export interface MappedFormationUnit {
 type UnitChoice = 'melee' | 'ranged' | 'rank' | 'tower' | 'chariot' | 'dragon' | 'bomb';
 
 /**
+ * 点数阵型匹配键（单张/对子共用），与 formationId 后缀约定一致：
+ * `_grunt`/`_archer`→数字牌，`_J`/`_Q`/`_K`/`_A`/`_joker_black`/`_joker_red`→对应点数。
+ */
+export type RankFormationKey = 'number' | 'J' | 'Q' | 'K' | 'A' | 'joker_black' | 'joker_red';
+/** @deprecated 使用 RankFormationKey */
+export type SingleFormationKey = RankFormationKey;
+
+/**
  * 根据静态阵型 id 识别其可选方案。
  * 规则由代码统一维护，JSON 只保留方案的 id、名称和缩略图参数。
  */
@@ -24,10 +32,36 @@ function choiceFromFormationId(id: string): UnitChoice {
   return 'rank';
 }
 
+/** 从阵型 id 解析点数匹配键；无法识别时返回 null（自定义未命名方案不出兵）。 */
+export function parseRankFormationKey(formationId: string): RankFormationKey | null {
+  if (formationId.includes('_joker_black')) return 'joker_black';
+  if (formationId.includes('_joker_red')) return 'joker_red';
+  if (formationId.includes('_grunt') || formationId.includes('_archer')) return 'number';
+  const face = /_(J|Q|K|A)$/.exec(formationId);
+  if (face?.[1] === 'J' || face?.[1] === 'Q' || face?.[1] === 'K' || face?.[1] === 'A') {
+    return face[1];
+  }
+  return null;
+}
+
+/** @deprecated 使用 parseRankFormationKey */
+export const parseSingleFormationKey = parseRankFormationKey;
+
 /** 判断点数是否走民兵/弓手的 1～9 级阶梯。 */
 function isNumberRank(card: PlayingCard): boolean {
   return !card.joker && ['2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(card.rank);
 }
+
+/** 手牌是否命中点数阵型键。 */
+export function cardMatchesRankKey(card: PlayingCard, key: RankFormationKey): boolean {
+  if (key === 'number') return isNumberRank(card);
+  if (key === 'joker_black') return card.joker === 'black';
+  if (key === 'joker_red') return card.joker === 'red';
+  return !card.joker && card.rank === key;
+}
+
+/** @deprecated 使用 cardMatchesRankKey */
+export const cardMatchesSingleKey = cardMatchesRankKey;
 
 /** 数字牌 2-10 对应 1-9 级。 */
 function numberRankLevel(card: PlayingCard): number {
@@ -39,7 +73,7 @@ function strongestCard(cards: readonly PlayingCard[]): PlayingCard {
   return cards.reduce((strongest, card) => (getCardStrength(card) > getCardStrength(strongest) ? card : strongest));
 }
 
-/** J、Q、K、A 与大小王的唯一兵种映射。 */
+/** J、Q、K、A 与大小王的唯一兵种映射（多张牌型规则仍用）。 */
 function rankUnit(card: PlayingCard): UnitTypeId | null {
   if (card.joker === 'black') return 'hero_mage';
   if (card.joker === 'red') return 'hero_archmage';
@@ -75,8 +109,42 @@ function applyLevelGate(units: MappedFormationUnit[]): MappedFormationUnit[] {
 }
 
 /**
+ * 单张/对子：校验点数匹配后按配置 rows 展开站位（不重排）。
+ * 对子在基础等级上 +1，与原规则加成一致；返回 null 表示不适用。
+ */
+export function resolveRankConfiguredMappedRows(
+  category: 'single' | 'pair',
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  const expectedCount = category === 'single' ? 1 : 2;
+  if (cards.length !== expectedCount) return null;
+  // 双王只走王炸，对子配置路径直接拒绝王牌。
+  if (category === 'pair' && cards.some((card) => card.joker)) return null;
+
+  const key = parseRankFormationKey(formationId);
+  const top = strongestCard(cards);
+  if (!key || !cardMatchesRankKey(top, key)) return null;
+
+  const baseLevel = key === 'number' ? numberRankLevel(top) : 1;
+  const level = category === 'pair' ? baseLevel + 1 : baseLevel;
+  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level }))));
+}
+
+/** 单张便捷封装，供旧调用方使用。 */
+export function resolveSingleMappedRows(
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  return resolveRankConfiguredMappedRows('single', formationId, rows, cards);
+}
+
+/**
  * 按实际手牌和阵型方案推导单位与等级。
  * 返回 null 代表该方案不适用于当前点数，调用方不应向玩家展示。
+ * 单张/对子由 resolveCardFormation 按配置 rows 展开，此处直接返回 null。
  */
 export function resolveHandUnits(
   category: HandCategory,
@@ -84,6 +152,9 @@ export function resolveHandUnits(
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[] | null {
   if (cards.length === 0) return null;
+  // 单张/对子站位以 cardFormations.json 的 rows 为准，不走规则推导。
+  if (category === 'single' || category === 'pair') return null;
+
   const choice = choiceFromFormationId(formationId);
   const top = strongestCard(cards);
 
@@ -121,8 +192,7 @@ export function resolveHandUnits(
   }
 
   // 王炸只走独立的 rocket 规则，不能借由同时命中的「对子」绕过映射。
-  // 单张大小王仍走 rank 兵种（小王→法师，大王→大法师）。
-  if (cards.some((card) => card.joker) && category !== 'single') return null;
+  if (cards.some((card) => card.joker)) return null;
   const numeric = isNumberRank(top);
   if (numeric && choice !== 'melee' && choice !== 'ranged') return null;
   if (!numeric && choice !== 'rank') return null;
@@ -135,10 +205,7 @@ export function resolveHandUnits(
 
   let count = 1;
   let level = numeric ? numberRankLevel(top) : 1;
-  if (category === 'pair') {
-    count = 2;
-    level += 1;
-  } else if (category === 'straight3') {
+  if (category === 'straight3') {
     count = 3;
     level = numeric ? level : 2;
   } else if (category === 'triple') {
@@ -151,9 +218,40 @@ export function resolveHandUnits(
   return applyLevelGate(Array.from({ length: count }, () => ({ typeId, level })));
 }
 
+/** 按点数键生成单张/对子预览样例牌。 */
+function previewCardsForRankKey(
+  category: 'single' | 'pair',
+  key: RankFormationKey | null,
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  const pick = (rank: string): PlayingCard[] => {
+    if (category === 'single') {
+      if (rank === 'joker-black' || rank === 'joker-red') return [card(rank)];
+      return [card(`${rank}-spades`)];
+    }
+    return [card(`${rank}-spades`), card(`${rank}-hearts`)];
+  };
+  switch (key) {
+    case 'J':
+      return pick('J');
+    case 'Q':
+      return pick('Q');
+    case 'K':
+      return pick('K');
+    case 'A':
+      return pick('A');
+    case 'joker_black':
+      return category === 'single' ? [card('joker-black')] : pick('5');
+    case 'joker_red':
+      return category === 'single' ? [card('joker-red')] : pick('5');
+    default:
+      return pick('5');
+  }
+}
+
 /**
  * 卡组页预览用的样例手牌。
- * 按方案 id 选数字牌或人头牌，确保 resolveHandUnits 能展开出真实数量与站位。
+ * 单张/对子按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
  */
 export function getPreviewCardsForFormation(
   category: HandCategory,
@@ -164,16 +262,15 @@ export function getPreviewCardsForFormation(
     if (!found) throw new Error(`缺少预览样例牌：${id}`);
     return found;
   };
+
+  if (category === 'single' || category === 'pair') {
+    return previewCardsForRankKey(category, parseRankFormationKey(formationId), card);
+  }
+
   const choice = choiceFromFormationId(formationId);
   const face = choice === 'rank';
 
   switch (category) {
-    case 'single':
-      return [face ? card('J-spades') : card('5-spades')];
-    case 'pair':
-      return face
-        ? [card('J-spades'), card('J-hearts')]
-        : [card('5-spades'), card('5-hearts')];
     case 'straight3':
       return face
         ? [card('Q-spades'), card('K-hearts'), card('A-clubs')]

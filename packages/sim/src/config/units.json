@@ -20,7 +20,7 @@
     "levels": {
       "1": {
         "radius": 0.5,
-        "bodyScale": 1,
+        "bodyScale": 1.1,
         "mass": 2,
         "maxHp": 400,
         "damage": 60,
@@ -40,8 +40,8 @@
   "melee_guard": {
     "id": "melee_guard",
     "name": "卫士",
-    "radius": 0.5,
-    "bodyScale": 1.1999969482421875,
+    "radius": 0.5500030517578125,
+    "bodyScale": 1.399993896484375,
     "mass": 2,
     "maxHp": 500,
     "damage": 80,
@@ -58,7 +58,7 @@
     "levels": {
       "1": {
         "radius": 0.55,
-        "bodyScale": 1.2,
+        "bodyScale": 1.4,
         "mass": 2,
         "maxHp": 500,
         "damage": 80,
@@ -78,7 +78,7 @@
   "ranged_archer": {
     "id": "ranged_archer",
     "name": "弓手",
-    "radius": 0.399993896484375,
+    "radius": 0.5,
     "bodyScale": 0.899993896484375,
     "mass": 2,
     "maxHp": 240,
@@ -96,7 +96,7 @@
     "levels": {
       "1": {
         "radius": 0.5,
-        "bodyScale": 0.9,
+        "bodyScale": 0.8,
         "mass": 2,
         "maxHp": 240,
         "damage": 70,
@@ -116,7 +116,7 @@
   "ranged_chariot": {
     "id": "ranged_chariot",
     "name": "战车",
-    "radius": 0.6999969482421875,
+    "radius": 0.8000030517578125,
     "bodyScale": 1.1999969482421875,
     "mass": 2,
     "maxHp": 1200,
@@ -301,7 +301,7 @@
     "id": "hero_queen",
     "name": "女王",
     "radius": 0.600006103515625,
-    "bodyScale": 1.1999969482421875,
+    "bodyScale": 1,
     "mass": 2,
     "maxHp": 400,
     "damage": 100,
@@ -323,7 +323,7 @@
     "levels": {
       "1": {
         "radius": 0.6,
-        "bodyScale": 1.2,
+        "bodyScale": 1,
         "mass": 2,
         "maxHp": 400,
         "damage": 100,
@@ -440,7 +440,7 @@
   "dragon": {
     "id": "dragon",
     "name": "巨龙",
-    "radius": 0.600006103515625,
+    "radius": 0.8000030517578125,
     "bodyScale": 1.3000030517578125,
     "mass": 2,
     "maxHp": 2600,
