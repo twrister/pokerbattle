@@ -4,7 +4,7 @@ import { canBuildingAttack, isBuildingConfig } from '../config/units.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
-import { canAttackTarget, isWithinAttackReach } from './combatRange.js';
+import { canAttackTarget, canThreatenTarget, isWithinAttackReach } from './combatRange.js';
 
 /**
  * 选敌策略：
@@ -59,11 +59,12 @@ export function updateTargeting(world: World): void {
     }
 
     if (unit.config.heal) {
-      // 当前受伤友军仍有效则继续跟着走，避免每帧换最近目标导致抖路径
+      // 当前受伤友军仍有效则继续跟着走，避免每帧换最近目标导致抖路径；建筑不可作为治疗寻路目标
       if (
         isAlive(current)
         && current.faction === unit.faction
         && current.id !== unit.id
+        && !isBuildingConfig(current.config)
         && current.hp < current.stats.maxHp
       ) {
         unit.engageSlot = NO_ENGAGE_SLOT;
@@ -173,15 +174,16 @@ function hasEnemyBuildingInSight(world: World, unit: Unit, sightSq: Fx): boolean
 }
 
 /**
- * 远距索敌候选：必须能打到对方；有敌方建筑在视野时，额外只保留建筑或能打到自己的威胁。
+ * 远距索敌候选：必须能打到对方；有敌方建筑在视野时，额外只保留建筑或能威胁到自己的单位。
+ * 威胁用 canThreatenTarget（忽略不可锁定），使炸弹兵与骷髅兵在推家过滤下选敌一致。
  */
 function isEnemyTargetCandidate(unit: Unit, other: Unit, buildingInSight: boolean): boolean {
   if (!canAttackTarget(unit, other)) return false;
   if (!buildingInSight) return true;
-  return isBuildingConfig(other.config) || canAttackTarget(other, unit);
+  return isBuildingConfig(other.config) || canThreatenTarget(other, unit);
 }
 
-/** 全场扫描最近的受伤友军（排除自身），供治疗单位在无敌军时寻路接近。 */
+/** 全场扫描最近的受伤友军（排除自身与建筑），供治疗单位在无敌军时寻路接近。 */
 function findNearestInjuredAlly(world: World, unit: Unit): number {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
   let bestId = NO_TARGET;
@@ -189,6 +191,7 @@ function findNearestInjuredAlly(world: World, unit: Unit): number {
 
   for (const other of world.units) {
     if (other.dead || other.id === unit.id || other.faction !== unit.faction) continue;
+    if (isBuildingConfig(other.config)) continue;
     if (other.hp >= other.stats.maxHp) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d > sightSq) continue;

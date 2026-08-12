@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Faction } from '../src/entity/unit.js';
+import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
@@ -23,12 +23,63 @@ describe('炸弹兵自爆', () => {
     expect(bomber.hp).toBe(bomberHp);
   });
 
+  it('视野有敌方建筑时仍优先锁更近的地面兵，与骷髅兵一致', () => {
+    const world = new World(1);
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(8), fromFloat(18));
+    expect(base).not.toBeNull();
+    // 地面兵更近；若推家过滤把炸弹兵当「无人能威胁」会只咬基地
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(10));
+    const bomber = world.spawnUnit(Faction.Blue, 'summoned_bomber', fromFloat(8), fromFloat(8));
+    const skeleton = world.spawnUnit(Faction.Blue, 'summoned_skeleton', fromFloat(8.1), fromFloat(8));
+    bomber.retargetIn = 0;
+    skeleton.retargetIn = 0;
+    bomber.stats.moveSpeed = 0;
+    skeleton.stats.moveSpeed = 0;
+    ground.stats.damage = 0;
+
+    world.step();
+
+    expect(bomber.targetId).toBe(ground.id);
+    expect(skeleton.targetId).toBe(ground.id);
+  });
+
+  it('追到目标射程后站定点燃引信并自爆', () => {
+    const world = new World(1);
+    const bomber = world.spawnUnit(Faction.Blue, 'summoned_bomber', fromFloat(8), fromFloat(8));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(8));
+    enemy.stats.moveSpeed = 0;
+    enemy.stats.damage = 0;
+    bomber.retargetIn = 0;
+
+    let litFuse = false;
+    for (let i = 0; i < 80; i++) {
+      world.step();
+      if (bomber.detonateWindupLeft > 0) {
+        litFuse = true;
+        // 点燃当帧仍是 Attack；下一帧 AI 切 Idle 站定蓄力
+        expect(bomber.state).not.toBe(UnitState.Seek);
+        expect(bomber.targetId).toBe(enemy.id);
+        world.step();
+        if (world.units.find((unit) => unit.id === bomber.id)) {
+          expect(bomber.state).toBe(UnitState.Idle);
+          expect(bomber.detonateWindupLeft).toBeGreaterThan(0);
+        }
+        break;
+      }
+    }
+    expect(litFuse).toBe(true);
+
+    for (let i = 0; i < 20; i++) world.step();
+    expect(world.units.find((unit) => unit.id === bomber.id)).toBeUndefined();
+  });
+
   it('大法师前摇结束后召唤炸弹兵', () => {
     const world = new World(1);
     const archmage = world.spawnUnit(Faction.Blue, 'hero_archmage', fromFloat(8), fromFloat(8));
 
     world.step();
-    expect(archmage.summonCooldown).toBe(fromFloat(100));
+    // 与 units.json 1 级 summon.cooldown 对齐
+    expect(archmage.summonCooldown).toBe(fromFloat(60));
     expect(archmage.summonWindupLeft).toBeGreaterThan(0);
     expect(world.units).toHaveLength(1);
 

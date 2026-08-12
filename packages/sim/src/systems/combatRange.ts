@@ -32,6 +32,14 @@ export function isUntargetableBomb(unit: Unit): boolean {
  */
 export function canAttackTarget(attacker: Unit, target: Unit): boolean {
   if (isUntargetableBomb(target)) return false;
+  return canThreatenTarget(attacker, target);
+}
+
+/**
+ * 推家威胁判定：只看攻击层，忽略目标「不可锁定」。
+ * 炸弹兵自身不可被锁定，若用 canAttackTarget 反查会永远判无威胁，视野有建筑时只会推家。
+ */
+export function canThreatenTarget(attacker: Unit, target: Unit): boolean {
   const kind = attacker.config.attack.kind;
   if ((kind === 'melee' || kind === 'melee_aoe') && target.config.movementLayer === 'air') {
     return false;

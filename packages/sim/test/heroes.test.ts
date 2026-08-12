@@ -9,8 +9,8 @@ describe('国王与女王', () => {
     const world = new World(1);
     const king = world.spawnUnit(Faction.Blue, 'hero_king', fromFloat(8), fromFloat(8));
 
-    expect(toFloat(king.stats.maxHp)).toBe(800);
-    expect(toFloat(king.stats.damage)).toBe(100);
+    expect(king.stats.maxHp).toBe(king.config.maxHp);
+    expect(king.stats.damage).toBe(king.config.damage);
     expect(king.config.attack.kind).toBe('melee');
   });
 
@@ -54,9 +54,10 @@ describe('国王与女王', () => {
     world.step();
 
     // 前摇刚起手：特效 + 攻击蓄力姿势，治疗尚未结算，目标已锁定
+    const heal = queen.config.heal!;
     expect(queen.healWindupLeft).toBeGreaterThan(0);
     expect(queen.healCastTargetId).toBe(lowHp.id);
-    expect(queen.healCooldown).toBe(fromFloat(100));
+    expect(queen.healCooldown).toBe(heal.cooldown);
     expect(queen.castFxLeft).toBeGreaterThan(0);
     expect(lowHp.hp).toBe(lowBefore);
     const windupSnap = takeSnapshot(world);
@@ -71,7 +72,7 @@ describe('国王与女王', () => {
 
     expect(queen.healWindupLeft).toBe(0);
     expect(queen.healCastTargetId).toBe(0);
-    expect(toFloat(lowHp.hp - lowBefore)).toBe(120);
+    expect(lowHp.hp - lowBefore).toBe(heal.amount);
     expect(nearby.hp).toBe(nearbyBefore);
     expect(outOfRange.hp).toBe(outBefore);
     expect(takeSnapshot(world).healEffects).toHaveLength(1);
@@ -86,6 +87,38 @@ describe('国王与女王', () => {
 
     expect(queen.healCooldown).toBe(0);
     expect(takeSnapshot(world).healEffects).toHaveLength(0);
+  });
+
+  it('女王不能治疗友方建筑，仅有受伤建筑时不施放', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(8), fromFloat(10));
+    expect(base).not.toBeNull();
+    base!.hp -= fromFloat(500);
+    const baseBefore = base!.hp;
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(8));
+    ally.hp -= fromFloat(150);
+    const allyBefore = ally.hp;
+
+    world.step();
+
+    // 范围内有更残的基地也不锁建筑；起手锁地面友军
+    expect(queen.healCastTargetId).toBe(ally.id);
+    expect(queen.healCooldown).toBe(queen.config.heal!.cooldown);
+    for (let i = 0; i < toFloat(queen.stats.attackWindup); i++) world.step();
+
+    expect(ally.hp).toBeGreaterThan(allyBefore);
+    expect(base!.hp).toBe(baseBefore);
+
+    // 仅剩受伤建筑时不进入治疗
+    ally.hp = ally.stats.maxHp;
+    queen.healCooldown = 0;
+    queen.healWindupLeft = 0;
+    queen.healCastTargetId = 0;
+    world.step();
+    expect(queen.healCooldown).toBe(0);
+    expect(queen.healCastTargetId).toBe(0);
+    expect(base!.hp).toBe(baseBefore);
   });
 
   it('女王不能以自身为目标回血', () => {
@@ -107,12 +140,13 @@ describe('国王与女王', () => {
     const allyHurt = ally.hp;
     world.step();
     // 前摇起手进冷却；走完前摇后才结算
-    expect(queen.healCooldown).toBe(fromFloat(100));
+    const heal = queen.config.heal!;
+    expect(queen.healCooldown).toBe(heal.cooldown);
     expect(queen.healWindupLeft).toBeGreaterThan(0);
     for (let i = 0; i < toFloat(queen.stats.attackWindup); i++) world.step();
 
     // 有其他受伤友军时正常单体治疗，且绝不回自己
-    expect(toFloat(ally.hp - allyHurt)).toBe(120);
+    expect(ally.hp - allyHurt).toBe(heal.amount);
     expect(queen.hp).toBe(queenBefore);
   });
 
