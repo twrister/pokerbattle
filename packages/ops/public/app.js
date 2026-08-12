@@ -43,8 +43,9 @@ async function refreshStatus() {
 function renderStatus(data) {
   const process = data.process ?? {};
   const state = process.state ?? 'stopped';
-  els.processState.textContent = state;
-  els.processState.className = `state-pill state-${state}`;
+  const display = resolveDisplayState(process, data.gameReachable);
+  els.processState.textContent = display.label;
+  els.processState.className = `state-pill state-${display.key}`;
   els.processPid.textContent = process.pid ?? '—';
   els.processStarted.textContent = process.startedAt ? formatTime(process.startedAt) : '—';
   els.processUptime.textContent = formatDuration(process.uptimeMs);
@@ -59,7 +60,7 @@ function renderStatus(data) {
   els.gameReachable.textContent = data.gameReachable ? '可达' : '不可达';
 
   if (data.message) {
-    showMessage(data.message, data.gameReachable && state === 'running');
+    showMessage(data.message, data.gameReachable && (state === 'running' || display.key === 'external'));
   } else if (!busy) {
     hideMessage();
   }
@@ -67,7 +68,7 @@ function renderStatus(data) {
   latestServices = Array.isArray(data.services) ? data.services : [];
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
-  updateButtons(state);
+  updateButtons(state, process);
 }
 
 /** 渲染开发服/正式服快速入口卡片。 */
@@ -81,28 +82,61 @@ function renderServices(services) {
   els.serviceEntries.innerHTML = services
     .map((service) => {
       const state = service.process?.state ?? 'stopped';
+      const display = resolveDisplayState(service.process, service.reachable);
       const url = `http://${host}:${service.port}${service.path || '/'}`;
       const canOpen = Boolean(service.reachable);
       const busyThis = busy && busyServiceId === service.id;
-      const transitioning = state === 'starting' || state === 'stopping' || busyThis;
-      const startDisabled = transitioning || state === 'running' || service.process?.externalConflict;
-      const stopDisabled = transitioning || (state === 'stopped' && !service.process?.pid);
+      const external = Boolean(service.process?.externalConflict) || display.key === 'external';
+      const transitioning =
+        state === 'starting' || state === 'stopping' || state === 'building' || busyThis;
+      const startDisabled = transitioning || state === 'running' || external;
+      // 外部进程不由本站托管，禁止停止；无 pid 的 stopped 同样不可停
+      const stopDisabled = transitioning || external || !service.process?.pid;
+      const isOfficial = service.id === 'clientOfficial';
+      const redeployDisabled = transitioning || external;
+      const distLine = isOfficial
+        ? `<div class="dist-meta">dist：${
+            service.distBuiltAt != null ? escapeHtml(formatTime(service.distBuiltAt)) : '尚未构建'
+          }</div>`
+        : '';
+      const redeployBtn = isOfficial
+        ? `<button type="button" class="secondary" data-action="redeploy" data-id="${escapeHtml(service.id)}" ${redeployDisabled ? 'disabled' : ''}>重新部署</button>`
+        : '';
       return `<article class="service-card" data-id="${escapeHtml(service.id)}">
         <div class="title-row">
           <h3>${escapeHtml(service.label)} · :${service.port}</h3>
-          <div class="state-pill state-${escapeHtml(state)}">${escapeHtml(state)}</div>
+          <div class="state-pill state-${escapeHtml(display.key)}">${escapeHtml(display.label)}</div>
         </div>
         <p class="desc">${escapeHtml(service.description || '')}</p>
         <div class="url">${escapeHtml(url)}</div>
+        ${distLine}
         <div class="reach ${service.reachable ? 'ok' : ''}">${service.reachable ? '端口可达' : '端口未监听'}</div>
         <div class="button-row">
           <a class="open-link ${canOpen ? '' : 'disabled'}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">打开</a>
           <button type="button" data-action="start" data-id="${escapeHtml(service.id)}" ${startDisabled ? 'disabled' : ''}>启动</button>
           <button type="button" class="danger" data-action="stop" data-id="${escapeHtml(service.id)}" ${stopDisabled ? 'disabled' : ''}>停止</button>
+          ${redeployBtn}
         </div>
       </article>`;
     })
     .join('');
+}
+
+/**
+ * 把托管状态归一成展示文案：外部占用显示「外部运行」，避免误判为已停止。
+ */
+function resolveDisplayState(process, reachable) {
+  const state = process?.state ?? 'stopped';
+  if (state === 'building') {
+    return { key: 'building', label: '构建中' };
+  }
+  const external =
+    Boolean(process?.externalConflict) ||
+    (Boolean(reachable) && !process?.pid && (state === 'stopped' || state === 'error'));
+  if (external) {
+    return { key: 'external', label: '外部运行' };
+  }
+  return { key: state, label: state };
 }
 
 /** 按阶段渲染房间表；无数据时展示占位行。 */
@@ -135,11 +169,13 @@ function renderRooms(rooms) {
     .join('');
 }
 
-function updateButtons(state) {
+function updateButtons(state, process = {}) {
+  const external = Boolean(process.externalConflict);
   const disabled = busy || state === 'starting' || state === 'stopping';
-  els.btnStart.disabled = disabled || state === 'running';
-  els.btnStop.disabled = disabled || state === 'stopped';
-  els.btnRestart.disabled = disabled || state === 'stopped';
+  els.btnStart.disabled = disabled || state === 'running' || external;
+  // 仅本站托管且有 pid 时可停/重启；外部占用不强制杀进程
+  els.btnStop.disabled = disabled || external || !process.pid;
+  els.btnRestart.disabled = disabled || external || !process.pid;
 }
 
 /** 调用启停接口，期间禁用按钮避免重复点击。 */

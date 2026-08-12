@@ -43,7 +43,13 @@ export interface GameServerStatus {
 }
 
 /** 运维托管的游戏服进程状态。 */
-export type ManagedProcessState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error';
+export type ManagedProcessState =
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'building'
+  | 'error';
 
 export interface ManagedProcessInfo {
   state: ManagedProcessState;
@@ -67,6 +73,8 @@ export interface OpsServiceEntry {
   description: string;
   reachable: boolean;
   process: ManagedProcessInfo;
+  /** 正式服：最近一次 dist/index.html 构建时间；其他服务为 null。 */
+  distBuiltAt: number | null;
 }
 
 /** 运维站聚合给前端的总状态。 */

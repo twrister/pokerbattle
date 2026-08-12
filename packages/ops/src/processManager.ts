@@ -96,8 +96,8 @@ export class ProcessManager {
     if (this.state === 'running' || this.state === 'starting') {
       return { ok: true, message: `${this.label}已在运行或正在启动` };
     }
-    if (this.state === 'stopping') {
-      return { ok: false, message: `${this.label}正在停止，请稍后再试` };
+    if (this.state === 'building' || this.state === 'stopping') {
+      return { ok: false, message: `${this.label}正在${this.state === 'building' ? '构建' : '停止'}，请稍后再试` };
     }
 
     const open = await this.isPortOpenFn(this.host, this.port);
@@ -244,18 +244,165 @@ export class ProcessManager {
     return this.start();
   }
 
+  /**
+   * 正式服重新部署：停掉本站进程 → 构建 dist → 再启动 preview。
+   * 外部占用端口时拒绝，不杀未知进程。
+   */
+  async redeploy(options: {
+    buildPnpmArgs: string[];
+    buildTimeoutMs?: number;
+  }): Promise<{ ok: boolean; message: string }> {
+    if (
+      this.state === 'building' ||
+      this.state === 'starting' ||
+      this.state === 'stopping'
+    ) {
+      return { ok: false, message: `${this.label}正在忙碌，请稍后再试` };
+    }
+
+    // 无托管进程时若端口已开，视为外部占用
+    if (!this.child) {
+      const open = await this.isPortOpenFn(this.host, this.port);
+      if (open || this.externalConflict) {
+        this.externalConflict = true;
+        this.lastError = `端口 ${this.port} 已被其他进程占用，无法由运维站重新部署`;
+        return { ok: false, message: this.lastError };
+      }
+    }
+
+    if (this.child) {
+      const stopped = await this.stop();
+      if (!stopped.ok) return stopped;
+    }
+
+    this.state = 'building';
+    this.lastError = null;
+    this.startedAt = null;
+    this.externalConflict = false;
+
+    const buildTimeoutMs = options.buildTimeoutMs ?? 300_000;
+    const built = await this.runOneShotBuild(options.buildPnpmArgs, buildTimeoutMs);
+    if (!built.ok) {
+      this.state = 'error';
+      this.lastError = built.message;
+      return built;
+    }
+
+    this.state = 'stopped';
+    const started = await this.start();
+    if (!started.ok) return started;
+    return { ok: true, message: `${this.label}已重新部署并启动` };
+  }
+
   /** 运维站退出时清理子进程，避免孤儿进程残留。 */
   async dispose(): Promise<void> {
     await this.stop();
   }
 
-  /** 在状态轮询时同步：若我们有 child 且端口已开，则升为 running。 */
+  /**
+   * 状态轮询同步：
+   * - 本站托管且端口已开 → starting 升为 running
+   * - 无托管子进程但端口已开 → 标记外部占用（避免 UI 误显示 stopped）
+   * - 外部占用消失 → 清除冲突标记
+   */
   async refreshFromPort(): Promise<void> {
-    if (this.state !== 'starting' && this.state !== 'running') return;
+    // 构建中不探测端口占用，避免误标外部冲突
+    if (this.state === 'building') return;
+
     const open = await this.isPortOpenFn(this.host, this.port);
-    if (open && this.child && this.state === 'starting') {
-      this.state = 'running';
+
+    if (this.child) {
+      if (open && this.state === 'starting') {
+        this.state = 'running';
+      }
+      this.externalConflict = false;
+      return;
     }
+
+    if (open) {
+      // 端口在听，但不是本站拉起的进程
+      this.externalConflict = true;
+      return;
+    }
+
+    if (this.externalConflict) {
+      this.externalConflict = false;
+      // 仅清理「外部占用」导致的 error，保留真正的启动/崩溃错误信息
+      if (this.state === 'error') {
+        this.state = 'stopped';
+        this.lastError = null;
+      }
+    }
+  }
+
+  /** 执行一次性 pnpm build，等待退出；超时则杀掉构建进程。 */
+  private async runOneShotBuild(
+    pnpmArgs: string[],
+    timeoutMs: number,
+  ): Promise<{ ok: boolean; message: string }> {
+    const child = this.spawnFn(
+      process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+      pnpmArgs,
+      {
+        cwd: this.workspaceRoot,
+        env: {
+          ...process.env,
+          ...this.env,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
+        shell: process.platform === 'win32',
+      },
+    );
+    this.child = child;
+
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      process.stdout.write(`[${this.logPrefix}:build] ${chunk}`);
+    });
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      process.stderr.write(`[${this.logPrefix}:build:err] ${chunk}`);
+    });
+
+    const exitCode = await new Promise<number | null>((resolve) => {
+      let settled = false;
+      const done = (code: number | null): void => {
+        if (settled) return;
+        settled = true;
+        resolve(code);
+      };
+      child.on('exit', (code) => {
+        this.child = null;
+        this.resolveStopWaiters(true);
+        done(code);
+      });
+      child.on('error', (error) => {
+        this.lastError = error.message;
+        this.child = null;
+        this.resolveStopWaiters(false);
+        done(null);
+      });
+      setTimeout(() => {
+        if (settled) return;
+        void terminateChild(child).finally(() => done(null));
+      }, timeoutMs);
+    });
+
+    if (this.child) {
+      try {
+        await forceKill(this.child);
+      } catch {
+        /* ignore */
+      }
+      this.child = null;
+    }
+
+    if (exitCode === null) {
+      return { ok: false, message: `${this.label}构建超时或启动失败` };
+    }
+    if (exitCode !== 0) {
+      return { ok: false, message: `${this.label}构建失败（code=${exitCode}）` };
+    }
+    return { ok: true, message: `${this.label}构建成功` };
   }
 
   private async waitUntilPortOpen(timeoutMs: number): Promise<boolean> {

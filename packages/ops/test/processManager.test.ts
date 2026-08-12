@@ -163,4 +163,102 @@ describe('ProcessManager', () => {
     await startPromise;
     expect(calls[0]?.[1]).toEqual(['official']);
   });
+
+  it('轮询时识别外部占用，端口关闭后清除标记', async () => {
+    let open = true;
+    const manager = createManager({
+      spawnFn: vi.fn() as never,
+      isPortOpenFn: async () => open,
+    });
+
+    await manager.refreshFromPort();
+    expect(manager.getInfo()).toMatchObject({
+      state: 'stopped',
+      externalConflict: true,
+      pid: null,
+    });
+
+    open = false;
+    await manager.refreshFromPort();
+    expect(manager.getInfo()).toMatchObject({
+      state: 'stopped',
+      externalConflict: false,
+    });
+  });
+
+  it('redeploy 在外部占用时拒绝', async () => {
+    const spawnFn = vi.fn();
+    const manager = createManager({
+      id: 'clientOfficial',
+      label: '正式服',
+      port: 9080,
+      pnpmArgs: ['preview'],
+      spawnFn: spawnFn as never,
+      isPortOpenFn: async () => true,
+    });
+
+    const result = await manager.redeploy({ buildPnpmArgs: ['build'] });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('占用');
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
+  it('redeploy 构建失败时不启动 preview', async () => {
+    const buildChild = new FakeChild();
+    const spawnFn = vi.fn(() => buildChild);
+    const manager = createManager({
+      id: 'clientOfficial',
+      label: '正式服',
+      port: 9080,
+      pnpmArgs: ['preview'],
+      spawnFn: spawnFn as never,
+      isPortOpenFn: async () => false,
+    });
+
+    const promise = manager.redeploy({ buildPnpmArgs: ['build'] });
+    queueMicrotask(() => buildChild.emit('exit', 1, null));
+    const result = await promise;
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('构建失败');
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(manager.getInfo().state).toBe('error');
+  });
+
+  it('redeploy 构建成功后启动 preview', async () => {
+    let open = false;
+    let call = 0;
+    let current = new FakeChild();
+    const spawnFn = vi.fn(() => {
+      call += 1;
+      current = new FakeChild();
+      current.pid = 1000 + call;
+      if (call === 1) {
+        queueMicrotask(() => current.emit('exit', 0, null));
+      } else {
+        queueMicrotask(() => {
+          open = true;
+        });
+      }
+      return current;
+    });
+    const manager = createManager({
+      id: 'clientOfficial',
+      label: '正式服',
+      port: 9080,
+      pnpmArgs: ['--filter', '@pb/client', 'preview'],
+      spawnFn: spawnFn as never,
+      isPortOpenFn: async () => open,
+    });
+
+    const result = await manager.redeploy({
+      buildPnpmArgs: ['--filter', '@pb/client', 'build'],
+    });
+    expect(result.ok).toBe(true);
+    expect(spawnFn).toHaveBeenCalledTimes(2);
+    const firstArgs = spawnFn.mock.calls[0] as unknown as [string, string[]];
+    const secondArgs = spawnFn.mock.calls[1] as unknown as [string, string[]];
+    expect(firstArgs[1]).toEqual(['--filter', '@pb/client', 'build']);
+    expect(secondArgs[1]).toEqual(['--filter', '@pb/client', 'preview']);
+    expect(manager.getInfo().state).toBe('running');
+  });
 });

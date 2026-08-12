@@ -87,6 +87,7 @@ const serviceDescriptors: ServiceDescriptor[] = [
     path: '/',
     description: '正式预览产物，适合联机与局域网访问',
     manager: clientOfficialManager,
+    distIndexPath: CLIENT_DIST,
   },
 ];
 
@@ -176,6 +177,16 @@ async function handleApi(
   }
   if (req.method === 'POST' && pathname === '/api/server/restart') {
     const result = await processManager.restart();
+    writeJson(res, result.ok ? 200 : 409, result);
+    return;
+  }
+
+  // 正式服一键重新部署：停 → build → preview
+  if (req.method === 'POST' && pathname === '/api/services/clientOfficial/redeploy') {
+    const result = await clientOfficialManager.redeploy({
+      buildPnpmArgs: ['--filter', '@pb/client', 'build'],
+      buildTimeoutMs: 300_000,
+    });
     writeJson(res, result.ok ? 200 : 409, result);
     return;
   }

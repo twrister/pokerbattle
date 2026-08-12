@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { buildDashboardStatus } from '../src/dashboardStatus.js';
 import type { ProcessManager } from '../src/processManager.js';
 import type { ManagedProcessInfo } from '../src/types.js';
@@ -17,7 +20,7 @@ describe('buildDashboardStatus', () => {
     vi.restoreAllMocks();
   });
 
-  it('游戏服未启动时归一化为不可达与提示文案', async () => {
+  it('normalizes unreachable game server message', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -41,7 +44,7 @@ describe('buildDashboardStatus', () => {
       services: [
         {
           id: 'clientDev',
-          label: '开发服',
+          label: 'clientDev',
           port: 9081,
           path: '/',
           description: 'dev',
@@ -62,12 +65,14 @@ describe('buildDashboardStatus', () => {
 
     expect(status.gameReachable).toBe(false);
     expect(status.game).toBeNull();
-    expect(status.message).toBe('游戏服务器未启动');
+    expect(status.message).toBeTruthy();
+    expect(String(status.message).includes('\u672a\u542f\u52a8')).toBe(true);
     expect(status.services).toHaveLength(1);
     expect(status.services[0]?.reachable).toBe(false);
+    expect(status.services[0]?.distBuiltAt).toBeNull();
   });
 
-  it('进程 running 且状态接口可达时返回房间数据', async () => {
+  it('returns room data when process running and status reachable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -90,7 +95,7 @@ describe('buildDashboardStatus', () => {
           rooms: [
             {
               roomId: '001',
-              roomName: '测试',
+              roomName: 'test',
               phase: 'playing',
               serverTick: 12,
               playerCount: 2,
@@ -121,7 +126,7 @@ describe('buildDashboardStatus', () => {
       services: [
         {
           id: 'clientOfficial',
-          label: '正式服',
+          label: 'clientOfficial',
           port: 9080,
           path: '/',
           description: 'official',
@@ -147,7 +152,7 @@ describe('buildDashboardStatus', () => {
     expect(status.services[0]?.id).toBe('clientOfficial');
   });
 
-  it('外部端口冲突时保留冲突提示', async () => {
+  it('keeps external conflict message', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -182,14 +187,121 @@ describe('buildDashboardStatus', () => {
         pid: null,
         startedAt: null,
         uptimeMs: null,
-        lastError: '端口 9090 已被其他进程占用，无法由运维站托管启动',
+        lastError: 'port 9090 occupied',
         externalConflict: true,
       }),
       services: [],
     });
 
     expect(status.process.externalConflict).toBe(true);
-    expect(status.message).toContain('占用');
+    expect(status.message).toContain('occupied');
     expect(status.services).toEqual([]);
+  });
+
+  it('exposes reachable external clientDev process summary', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('fetch failed');
+      }),
+    );
+
+    const status = await buildDashboardStatus({
+      opsHost: '0.0.0.0',
+      opsPort: 9091,
+      opsStartedAt: Date.now(),
+      gameBaseUrl: 'http://127.0.0.1:9090',
+      processManager: fakeManager({
+        state: 'stopped',
+        pid: null,
+        startedAt: null,
+        uptimeMs: null,
+        lastError: null,
+        externalConflict: false,
+      }),
+      services: [
+        {
+          id: 'clientDev',
+          label: 'clientDev',
+          port: 9081,
+          path: '/',
+          description: 'dev',
+          manager: fakeManager(
+            {
+              state: 'stopped',
+              pid: null,
+              startedAt: null,
+              uptimeMs: null,
+              lastError: null,
+              externalConflict: true,
+            },
+            true,
+          ),
+        },
+      ],
+    });
+
+    expect(status.services[0]).toMatchObject({
+      id: 'clientDev',
+      reachable: true,
+      process: { state: 'stopped', externalConflict: true },
+      distBuiltAt: null,
+    });
+  });
+
+  it('attaches distBuiltAt for official service', async () => {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'pb-ops-dash-dist-'));
+    const indexPath = path.join(dir, 'index.html');
+    await fs.promises.writeFile(indexPath, '<html></html>', 'utf8');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('fetch failed');
+      }),
+    );
+
+    try {
+      const status = await buildDashboardStatus({
+        opsHost: '0.0.0.0',
+        opsPort: 9091,
+        opsStartedAt: Date.now(),
+        gameBaseUrl: 'http://127.0.0.1:9090',
+        processManager: fakeManager({
+          state: 'stopped',
+          pid: null,
+          startedAt: null,
+          uptimeMs: null,
+          lastError: null,
+          externalConflict: false,
+        }),
+        services: [
+          {
+            id: 'clientOfficial',
+            label: 'clientOfficial',
+            port: 9080,
+            path: '/',
+            description: 'official',
+            distIndexPath: indexPath,
+            manager: fakeManager(
+              {
+                state: 'stopped',
+                pid: null,
+                startedAt: null,
+                uptimeMs: null,
+                lastError: null,
+                externalConflict: false,
+              },
+              false,
+            ),
+          },
+        ],
+      });
+
+      expect(status.services[0]?.distBuiltAt).toBeTypeOf('number');
+      expect(status.services[0]?.distBuiltAt).toBeGreaterThan(0);
+    } finally {
+      await fs.promises.rm(dir, { recursive: true, force: true });
+    }
   });
 });

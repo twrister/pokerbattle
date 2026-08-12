@@ -1,3 +1,4 @@
+import { readDistInfo } from './distInfo.js';
 import { fetchGameStatus } from './gameStatus.js';
 import type { ProcessManager } from './processManager.js';
 import type { OpsDashboardStatus, OpsServiceEntry, OpsServiceId } from './types.js';
@@ -9,6 +10,8 @@ export interface ServiceDescriptor {
   path: string;
   description: string;
   manager: ProcessManager;
+  /** 正式服：指向 packages/client/dist/index.html，用于展示构建时间。 */
+  distIndexPath?: string;
 }
 
 export interface BuildDashboardStatusOptions {
@@ -32,8 +35,9 @@ export async function buildDashboardStatus(
   const services = await Promise.all(options.services.map((service) => toServiceEntry(service)));
 
   let message: string | null = null;
-  if (processInfo.externalConflict) {
-    message = processInfo.lastError ?? '游戏服端口被外部进程占用';
+  if (processInfo.externalConflict || (gameResult.reachable && processInfo.state === 'stopped')) {
+    // 端口/状态接口可达但非本站托管：提示外部占用，不伪装成本站 running
+    message = processInfo.lastError ?? '检测到游戏服可达，但并非由本运维站托管';
   } else if (processInfo.state === 'error') {
     message = processInfo.lastError ?? '游戏服务器处于错误状态';
   } else if (processInfo.state === 'stopped' && !gameResult.reachable) {
@@ -43,9 +47,6 @@ export async function buildDashboardStatus(
     !gameResult.reachable
   ) {
     message = gameResult.error ?? '游戏服务器进程在跑，但状态接口暂不可达';
-  } else if (gameResult.reachable && processInfo.state === 'stopped') {
-    // 外部已有游戏服在响应，但非本站托管
-    message = '检测到游戏服可达，但并非由本运维站托管';
   }
 
   return {
@@ -68,6 +69,9 @@ async function toServiceEntry(service: ServiceDescriptor): Promise<OpsServiceEnt
   await service.manager.refreshFromPort();
   const process = service.manager.getInfo();
   const reachable = await service.manager.isReachable();
+  const distBuiltAt = service.distIndexPath
+    ? (await readDistInfo(service.distIndexPath)).builtAt
+    : null;
   return {
     id: service.id,
     label: service.label,
@@ -76,5 +80,6 @@ async function toServiceEntry(service: ServiceDescriptor): Promise<OpsServiceEnt
     description: service.description,
     reachable,
     process,
+    distBuiltAt,
   };
 }
