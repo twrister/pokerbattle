@@ -82,6 +82,7 @@ describe('connectVersusSession', () => {
       roomId: '101',
       roomName: 'Tester的房间',
       reconnectToken: 'tok-a',
+      opponentName: 'Rival',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
 
@@ -89,6 +90,7 @@ describe('connectVersusSession', () => {
     expect(session.roomId).toBe('101');
     expect(session.roomName).toBe('Tester的房间');
     expect(session.faction).toBe(Faction.Blue);
+    expect(session.opponentName).toBe('Rival');
     close();
   });
 
@@ -115,10 +117,12 @@ describe('connectVersusSession', () => {
       roomId: '088',
       roomName: '自定义房',
       reconnectToken: 'tok-create',
+      opponentName: 'Peer',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
     const session = await done;
     expect(session.roomId).toBe('088');
+    expect(session.opponentName).toBe('Peer');
     close();
   });
 
@@ -141,6 +145,7 @@ describe('connectVersusSession', () => {
       roomId: '042',
       roomName: '对局房',
       reconnectToken: 'tok-b',
+      opponentName: 'Other',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
     const session = await done;
@@ -163,6 +168,7 @@ describe('connectVersusSession', () => {
       roomId: '055',
       roomName: '等待房',
       reconnectToken: 'tok-wait',
+      opponentName: '',
     });
 
     close();
@@ -191,6 +197,7 @@ describe('connectVersusSession', () => {
       roomId: '009',
       roomName: '匹配房',
       reconnectToken: 'tok-c',
+      opponentName: 'Rival',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
     const session = await done;
@@ -222,6 +229,7 @@ describe('connectVersusSession', () => {
       roomId: '009',
       roomName: '匹配房',
       reconnectToken: 'tok-c',
+      opponentName: 'Rival',
     });
     rejoinWs.pushServer({ type: 'frame', tick: 2, commands: [] });
     expect(onReconnected).toHaveBeenCalled();

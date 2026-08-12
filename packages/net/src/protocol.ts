@@ -113,6 +113,8 @@ export interface WelcomeMessage {
   roomId: string;
   roomName: string;
   reconnectToken: string;
+  /** 对手席位显示名；尚未入座时为空串。 */
+  opponentName: string;
 }
 
 /** S→C：可加入房间列表。 */

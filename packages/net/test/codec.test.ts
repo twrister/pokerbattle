@@ -69,12 +69,14 @@ describe('协议编解码', () => {
       roomId: '042',
       roomName: 'Alice的房间',
       reconnectToken: 'tok',
+      opponentName: 'Bob',
     });
     expect(decodeServerMessage(welcome)).toMatchObject({
       type: 'welcome',
       roomId: '042',
       roomName: 'Alice的房间',
       reconnectToken: 'tok',
+      opponentName: 'Bob',
     });
 
     const roomList = encodeMessage({

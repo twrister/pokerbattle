@@ -16,6 +16,8 @@ export interface VersusSession {
   seat: number;
   roomId: string;
   roomName: string;
+  /** 对手显示名；welcome 未带时为空串。 */
+  opponentName: string;
   close: () => void;
 }
 
@@ -98,6 +100,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
     let seat = 0;
     let roomId = '';
     let roomName = '';
+    let opponentName = '';
     let reconnectToken = '';
     let reconnectDeadline = 0;
     let reconnectAttempt = 0;
@@ -139,6 +142,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
         seat,
         roomId,
         roomName,
+        opponentName,
         close: sessionClose,
       });
     };
@@ -223,6 +227,9 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
           reconnectToken = message.reconnectToken || reconnectToken;
           seat = message.seat;
           faction = message.faction;
+          if (typeof message.opponentName === 'string') {
+            opponentName = message.opponentName;
+          }
 
           if (message.seed === 0) {
             const label = roomName ? `${roomId} · ${roomName}` : roomId;

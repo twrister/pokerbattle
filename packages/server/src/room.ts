@@ -458,6 +458,7 @@ export class MatchRoom {
   }
 
   private sendWelcome(seat: Seat, seed: number): void {
+    const opponent = this.seats.find((entry) => entry && entry.seat !== seat.seat) ?? null;
     this.send(seat.ws, {
       type: 'welcome',
       seat: seat.seat,
@@ -467,6 +468,7 @@ export class MatchRoom {
       roomId: this.roomId,
       roomName: this.roomName,
       reconnectToken: seat.reconnectToken,
+      opponentName: opponent?.name ?? '',
     });
   }
 

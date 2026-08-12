@@ -52,6 +52,7 @@ import {
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
 import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
+import { createBattleAnnounce } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createCodexPage } from './ui/codexPage.js';
@@ -140,6 +141,7 @@ const codexPage = createCodexPage({
   onOpenUnitStats: () => screens.show('unit-stats'),
 });
 const battleHud = createBattleHud();
+const battleAnnounce = createBattleAnnounce();
 const battleResult = createBattleResult(() => screens.show('menu'));
 const openUnitStatsButton = document.querySelector<HTMLButtonElement>('#btn-open-unit-stats');
 
@@ -184,6 +186,12 @@ function enterBattleSession(mode: BattleMode): () => void {
   hud.classList.remove('is-hidden');
   if (isSolo) {
     battleResult.hide();
+    battleAnnounce.reset();
+    battleHud.setContext({
+      localFaction: Faction.Blue,
+      localName: playerProfile.getProfile().displayName,
+      opponentName: '电脑',
+    });
     battleHud.show();
   }
 
@@ -499,6 +507,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     handPanel?.update(deltaMs);
     if (isSolo) {
       battleHud.update(loop.match!);
+      battleAnnounce.tick(loop.match!);
       if (loop.match!.result && !resultShown) {
         resultShown = true;
         // 单机仅在权威结算时记一笔；中途返回不写档案
@@ -520,6 +529,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     cancelAnimationFrame(animationFrameId);
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleAnnounce.reset();
     battleResult.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo');
@@ -642,10 +652,19 @@ function enterVersus(): () => void {
       }
       localFaction = session.faction;
       matchStarted = true;
-      leave = runVersusSession(session.loop, session.faction, session.close, {
-        onOfficialResult: (result) => recordVersusResult(result, session.faction),
-        onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
-      });
+      leave = runVersusSession(
+        session.loop,
+        session.faction,
+        session.close,
+        {
+          onOfficialResult: (result) => recordVersusResult(result, session.faction),
+          onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
+        },
+        {
+          localName: playerProfile.getProfile().displayName,
+          opponentName: session.opponentName || '对手',
+        },
+      );
     })
     .catch((error: unknown) => {
       if (cancelled) return;
@@ -678,6 +697,10 @@ function runVersusSession(
     onOfficialResult: (result: MatchResult) => void;
     onLeaveWithoutResult: () => void;
   },
+  names: {
+    localName: string;
+    opponentName: string;
+  },
 ): () => void {
   mainMenu.hide();
   container.classList.add('is-solo', 'is-versus');
@@ -685,6 +708,12 @@ function runVersusSession(
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
   battleResult.hide();
+  battleAnnounce.reset();
+  battleHud.setContext({
+    localFaction: faction,
+    localName: names.localName,
+    opponentName: names.opponentName,
+  });
   battleHud.show();
 
   const sceneContext = ensureBattleScene('solo', faction);
@@ -900,6 +929,7 @@ function runVersusSession(
     }
     handPanel.update(deltaMs);
     battleHud.update(netLoop.match);
+    battleAnnounce.tick(netLoop.match);
     if (netLoop.match.result && !resultShown) {
       resultShown = true;
       // 与 onMatchEnd 共用会话防重；谁先到都只记一次
@@ -922,6 +952,7 @@ function runVersusSession(
     else accountHooks.onLeaveWithoutResult();
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleAnnounce.reset();
     battleResult.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-versus');
