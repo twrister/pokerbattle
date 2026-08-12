@@ -24,8 +24,8 @@ const MIN_DRAW_INTERVAL_MS = 250;
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
 /** 选中超过牌型上限（5 张）时的提示。 */
 const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
-/** 拖到战场但整阵越界时的提示。 */
-const STATUS_INVALID_DROP = '请在己方半场内放置完整阵型';
+/** 拖到战场但落点不在白色部署区时的提示。 */
+const STATUS_INVALID_DROP = '请在白色高亮区域内放置';
 /** 拖拽建筑阵型时的操作提示。 */
 const STATUS_BUILDING_DRAG = '拖到白色格子上松手放置';
 /** 单次出牌可识别的牌型最多张数。 */

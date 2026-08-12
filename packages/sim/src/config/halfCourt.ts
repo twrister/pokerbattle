@@ -10,7 +10,6 @@ import { ARENA_RIVER_MAX_Y, ARENA_RIVER_MIN_Y } from './arenaTerrain.js';
 import {
   getFormationBuildingTypeId,
   isBuildingOnlyFormation,
-  resolveFormationSpawns,
   type CardFormation,
   type FormationSpawnPoint,
 } from './cardFormations.js';
@@ -34,21 +33,32 @@ export function halfCourtYRange(faction: Faction): { minY: number; maxY: number 
 }
 
 /**
+ * 出兵锚点（拖拽落点）是否落在白色部署区内。
+ * 与客户端半场高亮范围一致：锚点合法即可放置，允许阵型贴边溢出。
+ */
+export function isDeployAnchorInsideHalfCourt(
+  x: number,
+  y: number,
+  faction: Faction,
+): boolean {
+  const { minY, maxY } = halfCourtYRange(faction);
+  return (
+    x >= 0
+    && x <= ARENA_W
+    && y >= minY
+    && (faction === Faction.Blue ? y < maxY : y <= maxY)
+  );
+}
+
+/**
  * 整套阵型是否都落在指定阵营半场内。
- * 故意不做逐单位 clamp：贴边时 clamp 会把整排压扁重叠。
+ * 仅用于需要“整阵收拢”的辅助逻辑；正式落点校验请用 isDeployAnchorInsideHalfCourt。
  */
 export function isFormationInsideHalfCourt(
   points: readonly FormationSpawnPoint[],
   faction: Faction,
 ): boolean {
-  const { minY, maxY } = halfCourtYRange(faction);
-  return points.every(
-    (point) =>
-      point.x >= 0
-      && point.x <= ARENA_W
-      && point.y >= minY
-      && (faction === Faction.Blue ? point.y < maxY : point.y <= maxY),
-  );
+  return points.every((point) => isDeployAnchorInsideHalfCourt(point.x, point.y, faction));
 }
 
 /**
@@ -70,8 +80,8 @@ export function isBuildingInsideHalfCourt(
 }
 
 /**
- * 自动出兵落点：从己方半场中央出发，再按阵型包围盒把锚点推回合法区域。
- * 阵型比半场还大时返回 null。
+ * 自动出兵落点：优先半场中央。
+ * 兵种阵型只要锚点在白色部署区即可；建筑仍按占地能否完整放下决定。
  */
 export function halfCourtSafeAnchor(formation: CardFormation, faction: Faction): SimPoint | null {
   if (isBuildingOnlyFormation(formation)) {
@@ -81,14 +91,8 @@ export function halfCourtSafeAnchor(formation: CardFormation, faction: Faction):
   const { minY, maxY } = halfCourtYRange(faction);
   const centerX = ARENA_W / 2;
   const centerY = (minY + maxY) / 2;
-  const points = resolveFormationSpawns(formation, faction, centerX, centerY);
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const offsetX = shiftIntoRange(Math.min(...xs), Math.max(...xs), 0, ARENA_W);
-  const maxDeployY = faction === Faction.Blue ? maxY - 1e-6 : maxY;
-  const offsetY = shiftIntoRange(Math.min(...ys), Math.max(...ys), minY, maxDeployY);
-  if (offsetX === null || offsetY === null) return null;
-  return { x: centerX + offsetX, y: centerY + offsetY };
+  if (!isDeployAnchorInsideHalfCourt(centerX, centerY, faction)) return null;
+  return { x: centerX, y: centerY };
 }
 
 /** 己方半场内可容纳指定占地的吸附中心；装不下则返回 null。 */
@@ -106,12 +110,4 @@ export function halfCourtSafeBuildingAnchor(footprint: number, faction: Faction)
   const cy = snapBuildingCenter((minCenter + maxCenterY) / 2, size);
   if (!isBuildingInsideHalfCourt(cx, cy, size, faction)) return null;
   return { x: cx, y: cy };
-}
-
-/** 求把 [min, max] 整体推入 [low, high] 所需的位移；区间本身超长则无解。 */
-function shiftIntoRange(min: number, max: number, low: number, high: number): number | null {
-  if (max - min > high - low) return null;
-  if (min < low) return low - min;
-  if (max > high) return high - max;
-  return 0;
 }

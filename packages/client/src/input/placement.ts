@@ -5,6 +5,7 @@ import {
   halfCourtSafeAnchor,
   halfCourtSafeBuildingAnchor,
   isBuildingInsideHalfCourt,
+  isDeployAnchorInsideHalfCourt,
   isFormationInsideHalfCourt,
   type CardFormation,
   type FormationSpawnPoint,
@@ -72,6 +73,20 @@ export function isFormationInsideFactionHalf(
   faction: Faction,
 ): boolean {
   return isFormationInsideHalfCourt(points, faction);
+}
+
+/** 出兵锚点是否落在蓝方白色部署区内。 */
+export function isDeployAnchorInsideBlueHalf(x: number, y: number): boolean {
+  return isDeployAnchorInsideHalfCourt(x, y, Faction.Blue);
+}
+
+/** 出兵锚点是否落在指定阵营白色部署区内。 */
+export function isDeployAnchorInsideFactionHalf(
+  x: number,
+  y: number,
+  faction: Faction,
+): boolean {
+  return isDeployAnchorInsideHalfCourt(x, y, faction);
 }
 
 /** 吸附后的建筑占地是否完全落在蓝方半场内。 */

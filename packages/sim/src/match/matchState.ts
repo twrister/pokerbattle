@@ -11,10 +11,9 @@ import {
   isFuseBombFormation,
   isBuildingOnlyFormation,
   resolveCardFormation,
-  resolveFormationSpawnsFx,
 } from '../config/cardFormations.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
-import { isBuildingInsideHalfCourt, isFormationInsideHalfCourt } from '../config/halfCourt.js';
+import { isBuildingInsideHalfCourt, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { UNIT_CONFIGS } from '../config/units.js';
@@ -307,15 +306,8 @@ export class MatchState {
       return this.world.canPlaceBuilding(typeId, cmd.x, cmd.y);
     }
 
-    const points = resolveFormationSpawnsFx(formation, cmd.faction, cmd.x, cmd.y).map((point) => ({
-      typeId: point.typeId,
-      level: point.level,
-      x: toFloat(point.x),
-      y: toFloat(point.y),
-      row: point.row,
-      col: point.col,
-    }));
-    return isFormationInsideHalfCourt(points, cmd.faction);
+    // 与白色部署区高亮一致：只校验锚点，阵型贴边溢出仍可放置
+    return isDeployAnchorInsideHalfCourt(anchorX, anchorY, cmd.faction);
   }
 }
 

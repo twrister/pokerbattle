@@ -5,11 +5,10 @@ import {
   getFormationsFor,
   isBuildingOnlyFormation,
   isFuseBombFormation,
-  resolveFormationSpawns,
   type CardFormation,
 } from '../config/cardFormations.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
-import { halfCourtSafeAnchor, halfCourtYRange, isFormationInsideHalfCourt } from '../config/halfCourt.js';
+import { halfCourtSafeAnchor, halfCourtYRange, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
 import { UNIT_CONFIGS } from '../config/units.js';
 import { Faction } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
@@ -146,7 +145,7 @@ export class SoloBotController {
       : [minY + depth * 0.2, safe.y, maxY - depth * 0.2];
     const xs = this.difficulty === 'easy' ? [safe.x] : [width * 0.28, safe.x, width * 0.72];
     return xs.flatMap((x) => ys.filter((y) =>
-      isFormationInsideHalfCourt(resolveFormationSpawns(formation, this.faction, x, y), this.faction),
+      isDeployAnchorInsideHalfCourt(x, y, this.faction),
     ).map((y) => ({ x, y })));
   }
 

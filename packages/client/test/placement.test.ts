@@ -16,6 +16,7 @@ import {
   blueHalfSafeAnchor,
   blueHalfSafeBuildingAnchor,
   isBuildingInsideBlueHalf,
+  isDeployAnchorInsideBlueHalf,
   isFormationInsideBlueHalf,
 } from '../src/input/placement.js';
 import { collectHalfCourtPlaceableCells } from '../src/input/placeableHighlight.js';
@@ -38,39 +39,33 @@ function squadFormation(): ReturnType<typeof createCardFormation> {
 }
 
 describe('蓝方阵型落点校验', () => {
-  it('半场中央的整阵合法，越过中线则判非法', () => {
+  it('白色部署区内锚点合法，越过中线则非法', () => {
+    expect(isDeployAnchorInsideBlueHalf(ARENA_W / 2, 8)).toBe(true);
+    expect(isDeployAnchorInsideBlueHalf(ARENA_W / 2, BLUE_HALF_MAX_Y)).toBe(false);
+
     const formation = squadFormation();
     const inside = resolveFormationSpawns(formation, Faction.Blue, ARENA_W / 2, 8);
     expect(isFormationInsideBlueHalf(inside)).toBe(true);
-
-    const acrossHalfLine = resolveFormationSpawns(
-      formation,
-      Faction.Blue,
-      ARENA_W / 2,
-      BLUE_HALF_MAX_Y,
-    );
-    expect(isFormationInsideBlueHalf(acrossHalfLine)).toBe(false);
   });
 
-  it('锚点在场内但阵型有单位越过左右边界时判非法', () => {
+  it('锚点在白色部署区即可放置，即使阵型贴边溢出', () => {
     const formation = squadFormation();
-    // 锚点贴着左边界，最左一列会落到 x<0。
+    // 锚点贴着左边界，最左一列会落到 x<0，但白色区内仍应可放。
+    expect(isDeployAnchorInsideBlueHalf(0.2, 8)).toBe(true);
     const overflow = resolveFormationSpawns(formation, Faction.Blue, 0.2, 8);
     expect(isFormationInsideBlueHalf(overflow)).toBe(false);
   });
 
-  it('自动落点位于蓝方半场且整阵合法', () => {
+  it('自动落点位于蓝方白色部署区', () => {
     const formation = squadFormation();
     const anchor = blueHalfSafeAnchor(formation)!;
     expect(anchor).not.toBeNull();
-    expect(anchor.y).toBeGreaterThan(0);
+    expect(anchor.y).toBeGreaterThanOrEqual(0);
     expect(anchor.y).toBeLessThan(BLUE_HALF_MAX_Y);
-    expect(isFormationInsideBlueHalf(resolveFormationSpawns(formation, Faction.Blue, anchor.x, anchor.y))).toBe(
-      true,
-    );
+    expect(isDeployAnchorInsideBlueHalf(anchor.x, anchor.y)).toBe(true);
   });
 
-  it('阵型比半场还大时没有安全落点', () => {
+  it('超宽阵型仍可自动落到半场中央', () => {
     const oversized = createCardFormation('two_pair', {
       id: 'test_oversized',
       name: '超宽阵',
@@ -80,7 +75,9 @@ describe('蓝方阵型落点校验', () => {
       colSpacing: 40,
       rowSpacing: 2,
     });
-    expect(blueHalfSafeAnchor(oversized)).toBeNull();
+    const anchor = blueHalfSafeAnchor(oversized)!;
+    expect(anchor).not.toBeNull();
+    expect(isDeployAnchorInsideBlueHalf(anchor.x, anchor.y)).toBe(true);
   });
 
   it('单建筑阵型安全锚点保证整块占地在蓝方半场内', () => {

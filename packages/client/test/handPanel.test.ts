@@ -439,7 +439,7 @@ describe('单机手牌交互', () => {
 
     vi.advanceTimersByTime(360);
     expect(panel.deck.hand).toHaveLength(3);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在己方半场内放置完整阵型');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
     // 非法落点不消耗选牌，阵型按钮应全部保留
     expect(document.querySelectorAll('.formation-option')).toHaveLength(formationCount);
 
@@ -491,11 +491,11 @@ describe('单机手牌交互', () => {
     const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
     option.getBoundingClientRect = () => buttonRect();
     dropOn(document.querySelector('#battle-canvas')!, option, 52, 200, 300);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在己方半场内放置完整阵型');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
 
     panel.update(250);
     expect(panel.deck.hand).toHaveLength(4);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在己方半场内放置完整阵型');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
 
     panel.dispose();
   });

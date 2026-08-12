@@ -17,11 +17,10 @@ import {
   isBuildingConfig,
   isBuildingInsideHalfCourt,
   isBuildingOnlyFormation,
+  isDeployAnchorInsideHalfCourt,
   isFuseBombFormation,
-  isFormationInsideHalfCourt,
   toFloat,
   playFormationCommand,
-  resolveFormationSpawns,
   snapBuildingCenter,
   spawnCommand,
   takeSnapshot,
@@ -46,7 +45,6 @@ import {
 import {
   enablePlacement,
   isBuildingInsideBlueHalf,
-  isFormationInsideBlueHalf,
   screenToSim,
 } from './input/placement.js';
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
@@ -243,7 +241,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     aoePreview = null;
   };
 
-  /** 显示蓝方半场的基础部署区，具体阵型边界仍由落点校验处理。 */
+  /** 显示蓝方半场白色部署区；落点锚点落在该区域内即可放置。 */
   const startPlaceableHighlight = (): void => {
     stopPlaceableHighlight();
     placeableHighlight = showPlaceableHighlight(
@@ -313,8 +311,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         )
       : halfCourtSafeAnchor(formation, Faction.Blue);
     if (!anchor) return false;
-    const points = resolveFormationSpawns(formation, Faction.Blue, anchor.x, anchor.y);
-    return isFormationInsideBlueHalf(points);
+    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
   };
 
   /** 单机出兵：上报 PlayFormation，由 MatchState 扣牌并展开。 */
@@ -743,7 +740,7 @@ function runVersusSession(
     aoePreview = null;
   };
 
-  /** 显示本地阵营半场的基础部署区，具体阵型边界仍由落点校验处理。 */
+  /** 显示本地阵营白色部署区；落点锚点落在该区域内即可放置。 */
   const startPlaceableHighlight = (): void => {
     stopPlaceableHighlight();
     placeableHighlight = showPlaceableHighlight(sceneContext.scene, collectHalfCourtPlaceableCells(faction));
@@ -791,8 +788,7 @@ function runVersusSession(
         )
       : halfCourtSafeAnchor(formation, faction);
     if (!anchor) return false;
-    const points = resolveFormationSpawns(formation, faction, anchor.x, anchor.y);
-    return isFormationInsideHalfCourt(points, faction);
+    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, faction);
   };
 
   const requestSpawn = (request: FormationSpawnRequest): boolean => {

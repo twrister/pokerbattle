@@ -1053,26 +1053,6 @@
       "thumbScale": 2
     },
     {
-      "id": "flush_chariot",
-      "name": "战车",
-      "match": {
-        "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
-      "rows": [
-        [
-          "ranged_chariot",
-          "ranged_chariot"
-        ]
-      ],
-      "colSpacing": 2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
       "id": "flush_dragon",
       "name": "巨龙",
       "match": {
@@ -1090,6 +1070,25 @@
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
       "thumbScale": 1.3
+    },
+    {
+      "id": "flush_custom_3",
+      "name": "石头人",
+      "match": {
+        "kind": "any"
+      },
+      "level": {
+        "kind": "fixed",
+        "value": 1
+      },
+      "rows": [
+        [
+          "melee_golem"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 1.7
     }
   ],
   "full_house": [
@@ -1105,26 +1104,7 @@
       },
       "rows": [
         [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "full_house_chariot",
-      "name": "战车",
-      "match": {
-        "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
-      "rows": [
-        [
-          "ranged_chariot"
+          "building_tower_advanced"
         ]
       ],
       "colSpacing": 1.2,
@@ -1149,6 +1129,25 @@
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
       "thumbScale": 2
+    },
+    {
+      "id": "full_house_custom_4",
+      "name": "石头人",
+      "match": {
+        "kind": "any"
+      },
+      "level": {
+        "kind": "fixed",
+        "value": 1
+      },
+      "rows": [
+        [
+          "melee_golem"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 1.7
     }
   ],
   "rocket": [
@@ -1196,27 +1195,8 @@
   ],
   "straight_flush": [
     {
-      "id": "straight_flush_tower",
-      "name": "箭塔",
-      "match": {
-        "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 2,
-      "rowSpacing": 2,
-      "thumbScale": 2
-    },
-    {
       "id": "straight_flush_chariot",
-      "name": "战车",
+      "name": "石头人",
       "match": {
         "kind": "any"
       },
@@ -1226,12 +1206,13 @@
       },
       "rows": [
         [
-          "ranged_chariot"
+          "melee_golem",
+          "melee_golem"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 3,
       "rowSpacing": 2,
-      "thumbScale": 2
+      "thumbScale": 1.5
     },
     {
       "id": "straight_flush_dragon",

@@ -18,7 +18,7 @@ export interface PlaceableHighlightHandle {
 
 /**
  * 枚举指定阵营部署半场内的 1×1 格心。
- * 高亮只提示基础半场范围；阵型贴边时仍由实际落点校验决定是否可放。
+ * 与 isDeployAnchorInsideHalfCourt 对齐：白色高亮区域内锚点均可放置。
  */
 export function collectHalfCourtPlaceableCells(faction: Faction): PlaceableCell[] {
   const { minY, maxY } = halfCourtYRange(faction);

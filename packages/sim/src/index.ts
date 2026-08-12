@@ -100,6 +100,7 @@ export {
   halfCourtSafeBuildingAnchor,
   halfCourtYRange,
   isBuildingInsideHalfCourt,
+  isDeployAnchorInsideHalfCourt,
   isFormationInsideHalfCourt,
   type SimPoint as HalfCourtPoint,
 } from './config/halfCourt.js';
