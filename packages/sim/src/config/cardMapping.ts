@@ -109,6 +109,60 @@ function applyLevelGate(units: MappedFormationUnit[]): MappedFormationUnit[] {
 }
 
 /**
+ * 三顺点数段键，与 formationId 后缀约定一致：
+ * `_number`→纯数字顺，`_A23`/`_910J`/`_10JQ`/`_JQK`/`_QKA`→对应固定点数段。
+ */
+export type Straight3SegmentKey = 'number' | 'A23' | '910J' | '10JQ' | 'JQK' | 'QKA';
+
+/** 从阵型 id 解析三顺点数段；无法识别时返回 null。 */
+export function parseStraight3SegmentKey(formationId: string): Straight3SegmentKey | null {
+  if (formationId.includes('_A23')) return 'A23';
+  if (formationId.includes('_910J')) return '910J';
+  if (formationId.includes('_10JQ')) return '10JQ';
+  if (formationId.includes('_JQK')) return 'JQK';
+  if (formationId.includes('_QKA')) return 'QKA';
+  if (formationId.includes('_number')) return 'number';
+  return null;
+}
+
+/** 手牌点数是否命中指定三顺段（用 rank 集合，避免 A-2-3 与 Q-K-A 混淆）。 */
+export function cardsMatchStraight3Segment(
+  cards: readonly PlayingCard[],
+  key: Straight3SegmentKey,
+): boolean {
+  if (cards.length !== 3 || cards.some((card) => card.joker)) return false;
+  if (key === 'number') return cards.every((card) => isNumberRank(card));
+  const sorted = [...new Set(cards.map((card) => card.rank))].sort().join(',');
+  switch (key) {
+    case 'A23':
+      return sorted === '2,3,A';
+    case '910J':
+      return sorted === '10,9,J';
+    case '10JQ':
+      return sorted === '10,J,Q';
+    case 'JQK':
+      return sorted === 'J,K,Q';
+    case 'QKA':
+      return sorted === 'A,K,Q';
+  }
+}
+
+/**
+ * 三顺：校验点数段匹配后按配置 rows 展开站位（不重排）。
+ * 纯数字段等级跟最大牌；含人头段固定 2 级。
+ */
+export function resolveStraight3MappedRows(
+  formationId: string,
+  rows: readonly (readonly UnitTypeId[])[],
+  cards: readonly PlayingCard[],
+): MappedFormationUnit[][] | null {
+  const key = parseStraight3SegmentKey(formationId);
+  if (!key || !cardsMatchStraight3Segment(cards, key)) return null;
+  const level = key === 'number' ? numberRankLevel(strongestCard(cards)) : 2;
+  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level }))));
+}
+
+/**
  * 单张/对子：校验点数匹配后按配置 rows 展开站位（不重排）。
  * 对子在基础等级上 +1，与原规则加成一致；返回 null 表示不适用。
  */
@@ -152,8 +206,8 @@ export function resolveHandUnits(
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[] | null {
   if (cards.length === 0) return null;
-  // 单张/对子站位以 cardFormations.json 的 rows 为准，不走规则推导。
-  if (category === 'single' || category === 'pair') return null;
+  // 单张/对子/三顺站位以 cardFormations.json 的 rows 为准，不走规则推导。
+  if (category === 'single' || category === 'pair' || category === 'straight3') return null;
 
   const choice = choiceFromFormationId(formationId);
   const top = strongestCard(cards);
@@ -163,7 +217,9 @@ export function resolveHandUnits(
   }
   if (category === 'bomb') {
     if (choice !== 'bomb') return null;
-    return applyLevelGate([{ typeId: 'giant_bomb', level: isNumberRank(top) ? 1 : 2 }]);
+    // bomb_small_bomb → 小炸弹；其余炸弹方案（含 bomb_giant_bomb）→ 巨型炸弹
+    const typeId: UnitTypeId = formationId.includes('small_bomb') ? 'small_bomb' : 'giant_bomb';
+    return applyLevelGate([{ typeId, level: isNumberRank(top) ? 1 : 2 }]);
   }
   if (category === 'straight5') {
     return choice === 'tower'
@@ -190,7 +246,6 @@ export function resolveHandUnits(
           ? applyLevelGate([{ typeId: 'dragon', level: 2 }])
           : null;
   }
-
   // 王炸只走独立的 rocket 规则，不能借由同时命中的「对子」绕过映射。
   if (cards.some((card) => card.joker)) return null;
   const numeric = isNumberRank(top);
@@ -205,10 +260,7 @@ export function resolveHandUnits(
 
   let count = 1;
   let level = numeric ? numberRankLevel(top) : 1;
-  if (category === 'straight3') {
-    count = 3;
-    level = numeric ? level : 2;
-  } else if (category === 'triple') {
+  if (category === 'triple') {
     count = numeric ? 5 : 3;
     level = numeric ? level + 1 : 3;
   } else if (category === 'two_pair') {
@@ -249,9 +301,31 @@ function previewCardsForRankKey(
   }
 }
 
+/** 按三顺点数段生成预览样例牌。 */
+function previewCardsForStraight3Segment(
+  key: Straight3SegmentKey | null,
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  switch (key) {
+    case 'A23':
+      return [card('A-spades'), card('2-hearts'), card('3-clubs')];
+    case '910J':
+      return [card('9-spades'), card('10-hearts'), card('J-clubs')];
+    case '10JQ':
+      return [card('10-spades'), card('J-hearts'), card('Q-clubs')];
+    case 'JQK':
+      return [card('J-spades'), card('Q-hearts'), card('K-clubs')];
+    case 'QKA':
+      return [card('Q-spades'), card('K-hearts'), card('A-clubs')];
+    case 'number':
+    default:
+      return [card('8-spades'), card('9-hearts'), card('10-clubs')];
+  }
+}
+
 /**
  * 卡组页预览用的样例手牌。
- * 单张/对子按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
+ * 单张/对子/三顺按 formationId 点数键选牌；其它牌型按方案 id 选数字牌或人头牌。
  */
 export function getPreviewCardsForFormation(
   category: HandCategory,
@@ -266,15 +340,14 @@ export function getPreviewCardsForFormation(
   if (category === 'single' || category === 'pair') {
     return previewCardsForRankKey(category, parseRankFormationKey(formationId), card);
   }
+  if (category === 'straight3') {
+    return previewCardsForStraight3Segment(parseStraight3SegmentKey(formationId), card);
+  }
 
   const choice = choiceFromFormationId(formationId);
   const face = choice === 'rank';
 
   switch (category) {
-    case 'straight3':
-      return face
-        ? [card('Q-spades'), card('K-hearts'), card('A-clubs')]
-        : [card('3-spades'), card('4-hearts'), card('5-clubs')];
     case 'triple':
       return face
         ? [card('J-spades'), card('J-hearts'), card('J-clubs')]

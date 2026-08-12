@@ -23,14 +23,14 @@ export function updateProjectiles(world: World): void {
     if (projectile.landed) {
       projectile.fuseTicks -= 1;
       if (projectile.fuseTicks <= 0) {
-        resolveGiantBomb(world, projectile);
+        resolveFuseBomb(world, projectile);
         projectile.dead = true;
       }
       continue;
     }
 
     const target = world.getUnit(projectile.targetId);
-    if (!projectile.giantBomb && isAlive(target)) {
+    if (!projectile.fuseBombKind && isAlive(target)) {
       projectile.impactPos.x = target.pos.x;
       projectile.impactPos.y = target.pos.y;
       projectile.targetRadius = target.config.radius;
@@ -48,7 +48,7 @@ export function updateProjectiles(world: World): void {
     // 这一帧能飞进目标的碰撞圈就算命中，避免高速弹穿过目标
     if (gap <= step + projectile.targetRadius) {
       projectile.height = projectile.endHeight;
-      if (projectile.giantBomb) {
+      if (projectile.fuseBombKind) {
         projectile.landed = true;
         projectile.fuseTicks = 20;
         continue;
@@ -77,8 +77,8 @@ export function updateProjectiles(world: World): void {
   }
 }
 
-/** 巨型炸弹在落地引信结束后，对半径内所有单位和建筑造成无差别伤害。 */
-function resolveGiantBomb(world: World, projectile: Projectile): void {
+/** 引信炸弹落地结束后，对半径内所有单位和建筑造成无差别伤害。 */
+function resolveFuseBomb(world: World, projectile: Projectile): void {
   const radiusSq = mul(projectile.aoeRadius, projectile.aoeRadius);
   for (const unit of world.units) {
     if (!isAlive(unit)) continue;
@@ -89,11 +89,13 @@ function resolveGiantBomb(world: World, projectile: Projectile): void {
     unit.hp -= projectile.damage;
     unit.aoeHitFxLeft = 2;
   }
+  // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列
+  const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
   world.spawnExplosionEffect(
     projectile.impactPos.x,
     projectile.impactPos.y,
     projectile.aoeRadius,
-    'giant_bomb',
+    kind,
   );
 }
 

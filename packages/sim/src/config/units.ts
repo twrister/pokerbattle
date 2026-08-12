@@ -7,6 +7,7 @@ export type UnitTypeId =
   | 'ranged_archer'
   | 'ranged_chariot'
   | 'giant_bomb'
+  | 'small_bomb'
   | 'melee_cavalry'
   | 'hero_king'
   | 'hero_queen'

@@ -27,20 +27,24 @@ describe('巨型炸弹', () => {
     const projectile = world.spawnGiantBomb(Faction.Blue, fromFloat(9), fromFloat(15));
     expect(projectile.pos).toEqual(blueBase.pos);
     expect(projectile.visual).toBe('bomb');
-    expect(projectile.giantBomb).toBe(true);
+    expect(projectile.fuseBombKind).toBe('giant_bomb');
 
     for (let i = 0; i < 100 && !projectile.landed; i += 1) updateProjectiles(world);
     expect(projectile.landed).toBe(true);
-    expect(takeSnapshot(world).projectiles[0]).toMatchObject({ landed: true, giantBomb: true });
+    expect(takeSnapshot(world).projectiles[0]).toMatchObject({
+      landed: true,
+      fuseBombKind: 'giant_bomb',
+    });
 
     for (let i = 0; i < 19; i += 1) updateProjectiles(world);
     expect(ally.hp).toBe(hp.get(ally.id));
     updateProjectiles(world);
 
     for (const unit of [ally, enemy, air, building]) {
-      expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(1500, 3);
+      expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(1200, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('giant_bomb');
   });
 });

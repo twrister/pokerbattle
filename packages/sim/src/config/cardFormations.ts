@@ -6,6 +6,7 @@ import {
   layoutMappedUnits,
   resolveHandUnits,
   resolveRankConfiguredMappedRows,
+  resolveStraight3MappedRows,
   type MappedFormationUnit,
 } from './cardMapping.js';
 import rawCardFormations from './cardFormations.json';
@@ -219,7 +220,7 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
 
 /**
  * 将静态方案模板按实际牌面展开为可出兵阵型。
- * 单张/对子按配置 rows 出兵（尊重行列）；其它牌型由规则推导后近战前排、远程后排。
+ * 单张/对子/三顺按配置 rows 出兵（尊重行列）；其它牌型由规则推导后近战前排、远程后排。
  * 不适用的方案返回 null。
  */
 export function resolveCardFormation(
@@ -233,6 +234,11 @@ export function resolveCardFormation(
       formation.rows,
       cards,
     );
+    if (!mappedRows) return null;
+    return formationFromMappedRows(formation, mappedRows);
+  }
+  if (formation.category === 'straight3') {
+    const mappedRows = resolveStraight3MappedRows(formation.id, formation.rows, cards);
     if (!mappedRows) return null;
     return formationFromMappedRows(formation, mappedRows);
   }
@@ -324,8 +330,9 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
       // 建筑只能单独成阵：恰好 1 个槽位且该槽是建筑，不可与兵种混编
       const buildingError = validateBuildingOnlyRows(formation.rows, id);
       if (buildingError) return buildingError;
-      if (formation.rows.flat().includes('giant_bomb') && !isGiantBombFormation(formation)) {
-        return `阵型「${id}」巨型炸弹只能单独配置`;
+      const fuseBombs = formation.rows.flat().filter(isFuseBombTypeId);
+      if (fuseBombs.length > 0 && !isFuseBombFormation(formation)) {
+        return `阵型「${id}」引信炸弹只能单独配置`;
       }
       if (formation.colSpacing !== undefined && (!Number.isFinite(formation.colSpacing) || formation.colSpacing <= 0)) {
         return `阵型「${id}」横向间距必须大于 0`;
@@ -374,12 +381,32 @@ export function getFormationBuildingTypeId(
   return formation.rows.flat()[0]!;
 }
 
-/** 巨型炸弹只能单独释放，不生成常规单位。 */
-export function isGiantBombFormation(
+/** 是否为投放用的引信炸弹兵种（巨型/小炸弹）。 */
+export function isFuseBombTypeId(typeId: UnitTypeId): typeId is 'giant_bomb' | 'small_bomb' {
+  return typeId === 'giant_bomb' || typeId === 'small_bomb';
+}
+
+/** 引信炸弹只能单独释放，走主堡抛物线投放，不生成常规单位。 */
+export function isFuseBombFormation(
   formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
 ): boolean {
   const slots = formation.rows.flat();
-  return slots.length === 1 && slots[0] === 'giant_bomb';
+  return slots.length === 1 && isFuseBombTypeId(slots[0]!);
+}
+
+/** 单槽引信炸弹阵型的兵种 id；非此类阵型返回 null。 */
+export function getFuseBombTypeId(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): 'giant_bomb' | 'small_bomb' | null {
+  if (!isFuseBombFormation(formation)) return null;
+  return formation.rows.flat()[0] as 'giant_bomb' | 'small_bomb';
+}
+
+/** @deprecated 使用 isFuseBombFormation；仅判定巨型炸弹单槽阵型。 */
+export function isGiantBombFormation(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): boolean {
+  return getFuseBombTypeId(formation) === 'giant_bomb';
 }
 
 /** 校验通过后原地更新运行时阵型，使已引用 CARD_FORMATIONS 的 UI 即刻读到新数据。 */

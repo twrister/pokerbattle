@@ -2,7 +2,7 @@ import {
   detectHandCategories,
   findStrongestHand,
   getFormationsFor,
-  isGiantBombFormation,
+  isFuseBombFormation,
   isBuildingOnlyFormation,
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
@@ -348,7 +348,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     dragPointerId = event.pointerId;
     dragButtonRect = button.getBoundingClientRect();
     draggingBuilding = isBuildingOnlyFormation(formation);
-    draggingAoe = isGiantBombFormation(formation);
+    draggingAoe = isFuseBombFormation(formation);
     formationsElement.setPointerCapture(event.pointerId);
     drawArrow(event.clientX, event.clientY);
     if (draggingBuilding) {
@@ -421,7 +421,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (!button || button.disabled) return;
     const formation = formations.find((entry) => entry.id === button.dataset.formationId) ?? null;
     if (!formation) return;
-    if (isBuildingOnlyFormation(formation) || isGiantBombFormation(formation)) {
+    if (isBuildingOnlyFormation(formation) || isFuseBombFormation(formation)) {
       setActionStatus(STATUS_BUILDING_DRAG);
       return;
     }
@@ -481,7 +481,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (!formation || !dragButtonRect) return false;
     if (isInsideRect(dragButtonRect, clientX, clientY)) {
       // 建筑没有自动落点，停留在按钮上视为非法
-      if (isBuildingOnlyFormation(formation) || isGiantBombFormation(formation)) return false;
+      if (isBuildingOnlyFormation(formation) || isFuseBombFormation(formation)) return false;
       return options.canDropAt?.(null, formation) !== false;
     }
     if (!isOverBattlefield(clientX, clientY)) return false;

@@ -192,7 +192,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   /**
    * 编辑方案元数据：名称、间距、按钮缩略图放大。
-   * 单张/对子额外可编辑 rows；其它牌型站位仍由规则引擎推导。
+   * 单张/对子/三顺额外可编辑 rows；其它牌型站位仍由规则引擎推导。
    */
   function renderEditor(): void {
     editor.replaceChildren();
@@ -203,19 +203,25 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     }
 
     const buildingOnly = isBuildingOnlyFormation(draft);
-    const editableRows = category === 'single' || category === 'pair';
+    const editableRows = category === 'single' || category === 'pair' || category === 'straight3';
     const rankSuffixHint =
       category === 'single'
         ? '_grunt/_archer/_J/_Q/_K/_A/_joker_black/_joker_red'
-        : '_grunt/_archer/_J/_Q/_K/_A';
+        : category === 'pair'
+          ? '_grunt/_archer/_J/_Q/_K/_A'
+          : '_number/_A23/_910J/_10JQ/_JQK/_QKA';
     const rule = document.createElement('section');
     rule.className = 'deck-rows';
+    const levelHint =
+      category === 'straight3'
+        ? '数字三顺等级仍按最大点数推导，含人头段固定 2 级。'
+        : '数字牌等级仍按点数推导（对子再 +1）。';
     rule.innerHTML = `
       <div class="deck-section-title">规则说明</div>
       <p>${
         editableRows
           ? UNIT_LEVELS_ENABLED
-            ? `${HAND_CATEGORY_NAMES[category]}站位以本页配置的兵种为准；数字牌等级仍按点数推导（对子再 +1）。阵型 ID 需带匹配后缀（${rankSuffixHint}）。`
+            ? `${HAND_CATEGORY_NAMES[category]}站位以本页配置的兵种为准；${levelHint}阵型 ID 需带匹配后缀（${rankSuffixHint}）。`
             : `${HAND_CATEGORY_NAMES[category]}站位以本页配置的兵种为准。阵型 ID 需带匹配后缀（${rankSuffixHint}）。`
           : UNIT_LEVELS_ENABLED
             ? '兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
@@ -377,12 +383,12 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   }
 
   /**
-   * 保存前用规则展开结果回填 rows，避免占位数量（如三顺弓手写成 1 个）被写回配置。
-   * 单张/对子 rows 由配置页直接编辑，跳过回填以免冲掉手工站位。
+   * 保存前用规则展开结果回填 rows，避免占位数量被写回配置。
+   * 单张/对子/三顺 rows 由配置页直接编辑，跳过回填以免冲掉手工站位。
    */
   function syncDraftRowsFromRules(): void {
     for (const cat of HAND_CATEGORY_ORDER) {
-      if (cat === 'single' || cat === 'pair') continue;
+      if (cat === 'single' || cat === 'pair' || cat === 'straight3') continue;
       for (const draft of drafts[cat]) {
         const resolved = previewFormationFromDraftFor(cat, draft);
         if (resolved) draft.rows = resolved.rows.map((row) => [...row]);

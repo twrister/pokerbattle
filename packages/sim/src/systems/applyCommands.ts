@@ -2,7 +2,8 @@ import { type Command, CommandKind } from '../commands.js';
 import {
   findFormationById,
   getFormationBuildingTypeId,
-  isGiantBombFormation,
+  getFuseBombTypeId,
+  isFuseBombFormation,
   isBuildingOnlyFormation,
   resolveCardFormation,
   resolveFormationSpawnsFx,
@@ -51,8 +52,14 @@ function applyPlayFormation(
     world.spawnBuilding(command.faction, typeId, command.x, command.y, formation.slots[0]!.level);
     return;
   }
-  if (isGiantBombFormation(formation)) {
-    world.spawnGiantBomb(command.faction, command.x, command.y, formation.slots[0]!.level);
+  if (isFuseBombFormation(formation)) {
+    const bombType = getFuseBombTypeId(formation)!;
+    const level = formation.slots[0]!.level;
+    if (bombType === 'small_bomb') {
+      world.spawnSmallBomb(command.faction, command.x, command.y, level);
+    } else {
+      world.spawnGiantBomb(command.faction, command.x, command.y, level);
+    }
     return;
   }
 

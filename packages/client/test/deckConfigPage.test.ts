@@ -133,4 +133,44 @@ describe('卡组阵型配置页', () => {
 
     page.dispose();
   });
+
+  it('三顺各点数段均可编辑站位并按段预览', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    const straight3Category = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+      (button) => button.textContent === '三顺',
+    );
+    expect(straight3Category).toBeDefined();
+    straight3Category!.click();
+
+    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
+      (button) => button.textContent,
+    );
+    expect(names).toEqual(['数字三顺', 'A-2-3', '9-10-J', '10-J-Q', 'J-Q-K', 'Q-K-A']);
+
+    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === 'J-Q-K',
+    );
+    expect(segmentButton).toBeDefined();
+    segmentButton!.click();
+    preview.render.mockClear();
+
+    const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
+    expect(titles).toContain('站位配置');
+
+    const select = document.querySelector<HTMLSelectElement>('#deck-editor select');
+    expect(select).not.toBeNull();
+    const nextType = [...select!.options].find((option) => option.value !== select!.value)?.value;
+    expect(nextType).toBeTruthy();
+    select!.value = nextType!;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(preview.render).toHaveBeenCalled();
+    const rendered = preview.render.mock.calls.at(-1)?.[0] as { rows?: string[][]; id?: string } | null;
+    expect(rendered?.id).toBe('straight3_JQK');
+    expect(rendered?.rows?.flat()).toContain(nextType);
+
+    page.dispose();
+  });
 });

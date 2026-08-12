@@ -11,12 +11,15 @@ import {
   type UnitTypeId,
   fromFloat,
   getFormationBuildingTypeId,
+  getFuseBombTypeId,
+  getUnitConfig,
   halfCourtSafeAnchor,
   isBuildingConfig,
   isBuildingInsideHalfCourt,
   isBuildingOnlyFormation,
-  isGiantBombFormation,
+  isFuseBombFormation,
   isFormationInsideHalfCourt,
+  toFloat,
   playFormationCommand,
   resolveFormationSpawns,
   snapBuildingCenter,
@@ -263,7 +266,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
-    if (isGiantBombFormation(formation)) {
+    if (isFuseBombFormation(formation)) {
       if (!point) return false;
       const anchor = screenToSim(
         sceneContext.renderer.domElement,
@@ -369,14 +372,14 @@ function enterBattleSession(mode: BattleMode): () => void {
           soloBuildingPreview?.syncPointer(clientX, clientY);
         },
         onBuildingDragEnd: stopSoloBuildingPreview,
-        onAoeDragStart: () => {
+        onAoeDragStart: (formation) => {
           stopAoePreview();
           aoePreview = enableAoePlacement({
             domElement: sceneContext.renderer.domElement,
             camera: sceneContext.camera,
             groundPlane: sceneContext.groundPlane,
             scene: sceneContext.scene,
-            radius: 8,
+            radius: fuseBombPreviewRadius(formation),
           });
         },
         onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
@@ -721,7 +724,7 @@ function runVersusSession(
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
-    if (isGiantBombFormation(formation)) {
+    if (isFuseBombFormation(formation)) {
       if (!point) return false;
       const anchor = screenToSim(
         sceneContext.renderer.domElement,
@@ -836,14 +839,14 @@ function runVersusSession(
     },
     onBuildingDragMove: (clientX, clientY) => soloBuildingPreview?.syncPointer(clientX, clientY),
     onBuildingDragEnd: stopBuildingPreview,
-    onAoeDragStart: () => {
+    onAoeDragStart: (formation) => {
       stopAoePreview();
       aoePreview = enableAoePlacement({
         domElement: sceneContext.renderer.domElement,
         camera: sceneContext.camera,
         groundPlane: sceneContext.groundPlane,
         scene: sceneContext.scene,
-        radius: 8,
+        radius: fuseBombPreviewRadius(formation),
       });
     },
     onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
@@ -1020,6 +1023,14 @@ function recordLocalBattle(
   } catch (error) {
     console.error('[account] 对战记录写入失败', error);
   }
+}
+
+/** 引信炸弹拖拽预览半径：读取兵种 aoeRadius，缺省回落 8。 */
+function fuseBombPreviewRadius(formation: CardFormation): number {
+  const typeId = getFuseBombTypeId(formation);
+  if (!typeId) return 8;
+  const attack = getUnitConfig(typeId).attack;
+  return attack.kind === 'projectile_aoe' ? toFloat(attack.aoeRadius) : 8;
 }
 
 function spawnBrawl(target: SimLoop): void {

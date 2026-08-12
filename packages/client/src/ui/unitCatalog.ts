@@ -13,10 +13,11 @@ export interface UnitCatalogEntry {
   name: string;
 }
 
-/** 特殊兵种：战车、巨型炸弹、巨龙、防御塔。 */
+/** 特殊兵种：战车、巨型/小炸弹、巨龙、防御塔。 */
 const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'ranged_chariot',
   'giant_bomb',
+  'small_bomb',
   'dragon',
   'building_tower',
 ]);
@@ -36,6 +37,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'hero_archmage',
   'ranged_chariot',
   'giant_bomb',
+  'small_bomb',
   'dragon',
   'building_tower',
   'summoned_skeleton',

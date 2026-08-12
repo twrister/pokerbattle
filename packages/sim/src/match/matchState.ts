@@ -8,7 +8,7 @@ import {
 import {
   findFormationById,
   getFormationBuildingTypeId,
-  isGiantBombFormation,
+  isFuseBombFormation,
   isBuildingOnlyFormation,
   resolveCardFormation,
   resolveFormationSpawnsFx,
@@ -295,7 +295,7 @@ export class MatchState {
     const anchorX = toFloat(cmd.x);
     const anchorY = toFloat(cmd.y);
 
-    if (isGiantBombFormation(formation)) {
+    if (isFuseBombFormation(formation)) {
       return anchorX >= 0 && anchorX <= toFloat(ARENA_WIDTH) && anchorY >= 0 && anchorY <= toFloat(ARENA_HEIGHT);
     }
 

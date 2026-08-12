@@ -20,11 +20,18 @@ export function distSqToBuildingFootprint(px: Fx, py: Fx, building: Unit): Fx {
   return distSq(px, py, closestX, closestY);
 }
 
+/** 投放炸弹与炸弹兵：不可被索敌锁定，也不吃普攻/近战范围结算。 */
+export function isUntargetableBomb(unit: Unit): boolean {
+  const id = unit.typeId;
+  return id === 'giant_bomb' || id === 'small_bomb' || id === 'summoned_bomber';
+}
+
 /**
- * 攻击层规则：近战/近战范围打不到空中；远程默认可打地/空。
+ * 攻击层规则：近战/近战范围打不到空中；炸弹类单位不可锁定；远程默认可打地/空。
  * 索敌与战斗结算共用，避免规则漂移。
  */
 export function canAttackTarget(attacker: Unit, target: Unit): boolean {
+  if (isUntargetableBomb(target)) return false;
   const kind = attacker.config.attack.kind;
   if ((kind === 'melee' || kind === 'melee_aoe') && target.config.movementLayer === 'air') {
     return false;

@@ -59,6 +59,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 138 / 215,
     sourceFacing: 1,
   },
+  small_bomb: {
+    frontUrl: 'projectiles/bomb.png',
+    backUrl: 'projectiles/bomb.png',
+    // 图鉴缩略比巨型炸弹更小，体现体量差异
+    heightMul: 1.6,
+    aspect: 138 / 215,
+    sourceFacing: 1,
+  },
   melee_cavalry: {
     frontUrl: 'units/knight-front.png',
     backUrl: 'units/knight-back.png',

@@ -278,7 +278,26 @@ export class World {
    * 主堡不存在时使用己方场边中央，保证沙盒与测试环境也能确定性运行。
    */
   spawnGiantBomb(faction: Faction, targetX: Fx, targetY: Fx, level = 1): Projectile {
-    const config = getUnitConfig('giant_bomb', level);
+    return this.spawnFuseBomb(faction, 'giant_bomb', targetX, targetY, level, BOMB_ARC_APEX * 2);
+  }
+
+  /**
+   * 从己方主堡投放小炸弹：伤害与爆炸半径更小，抛物线也更矮。
+   */
+  spawnSmallBomb(faction: Faction, targetX: Fx, targetY: Fx, level = 1): Projectile {
+    return this.spawnFuseBomb(faction, 'small_bomb', targetX, targetY, level, BOMB_ARC_APEX);
+  }
+
+  /** 主堡抛物线引信弹的共用投放逻辑。 */
+  private spawnFuseBomb(
+    faction: Faction,
+    typeId: 'giant_bomb' | 'small_bomb',
+    targetX: Fx,
+    targetY: Fx,
+    level: number,
+    arcApex: number,
+  ): Projectile {
+    const config = getUnitConfig(typeId, level);
     const base = this.units.find(
       (unit) => unit.faction === faction && unit.typeId === 'building_base' && !unit.dead,
     );
@@ -303,10 +322,10 @@ export class World {
       GROUND_PROJECTILE_HEIGHT,
       0,
       lengthOf(dx, dy),
-      BOMB_ARC_APEX * 2,
+      arcApex,
       'explosion',
       'bomb',
-      true,
+      typeId,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -486,7 +505,7 @@ export class World {
       h = mix(h, projectile.aoeRadius);
       h = mix(h, projectile.fuseTicks);
       h = mix(h, projectile.landed ? 1 : 0);
-      h = mix(h, projectile.giantBomb ? 1 : 0);
+      h = mix(h, projectile.fuseBombKind === 'giant_bomb' ? 2 : projectile.fuseBombKind === 'small_bomb' ? 1 : 0);
     }
     for (const effect of this.healEffects) {
       h = mix(h, effect.id);

@@ -153,16 +153,12 @@ describe('牌型兵种阵型配置', () => {
     const pair = formationFor(['pair'], ['10-spades', '10-hearts'], 'pair_grunt');
     expect(pair.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 2 }]);
 
-    const straight3 = formationFor(['straight3'], ['8-spades', '9-hearts', '10-clubs'], 'straight3_grunt');
-    expect(straight3.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 3 }]);
-
-    const straight3Archers = formationFor(
-      ['straight3'],
-      ['3-spades', '4-hearts', '5-clubs'],
-      'straight3_archer',
-    );
-    expect(straight3Archers.units).toEqual([{ typeId: 'ranged_archer', level: 1, count: 3 }]);
-    expect(straight3Archers.slots).toHaveLength(3);
+    const straight3 = formationFor(['straight3'], ['8-spades', '9-hearts', '10-clubs'], 'straight3_number');
+    expect(straight3.units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 2 },
+      { typeId: 'ranged_archer', level: 1, count: 2 },
+    ]);
+    expect(straight3.slots).toHaveLength(4);
 
     const triple = formationFor(['triple'], ['10-spades', '10-hearts', '10-clubs'], 'triple_grunt');
     expect(triple.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 5 }]);
@@ -180,6 +176,78 @@ describe('牌型兵种阵型配置', () => {
       expect(resolveFormationSpawns(entry, Faction.Blue, 9, 8).every((point) => point.level === 1)).toBe(
         true,
       );
+    }
+  });
+
+  it('三顺按点数段匹配可配置站位，且只展示命中段', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const idsFor = (cardIds: string[]) =>
+      getFormationsFor(['straight3'], cards(...cardIds)).map((formation) => formation.id);
+    const formationFor = (cardIds: string[], id: string) =>
+      getFormationsFor(['straight3'], cards(...cardIds)).find((formation) => formation.id === id)!;
+
+    expect(CARD_FORMATIONS.straight3.map((entry) => entry.id)).toEqual([
+      'straight3_number',
+      'straight3_A23',
+      'straight3_910J',
+      'straight3_10JQ',
+      'straight3_JQK',
+      'straight3_QKA',
+    ]);
+
+    expect(idsFor(['3-spades', '4-hearts', '5-clubs'])).toEqual(['straight3_number']);
+    expect(formationFor(['3-spades', '4-hearts', '5-clubs'], 'straight3_number').units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 2 },
+      { typeId: 'ranged_archer', level: 1, count: 2 },
+    ]);
+    expect(idsFor(['A-spades', '2-hearts', '3-clubs'])).toEqual(['straight3_A23']);
+    expect(formationFor(['A-spades', '2-hearts', '3-clubs'], 'straight3_A23').units).toEqual([
+      { typeId: 'melee_cavalry', level: 1, count: 1 },
+      { typeId: 'melee_grunt', level: 1, count: 1 },
+      { typeId: 'ranged_archer', level: 1, count: 2 },
+    ]);
+    expect(idsFor(['9-spades', '10-hearts', 'J-clubs'])).toEqual(['straight3_910J']);
+    expect(formationFor(['9-spades', '10-hearts', 'J-clubs'], 'straight3_910J').units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 1 },
+      { typeId: 'melee_guard', level: 1, count: 1 },
+      { typeId: 'ranged_archer', level: 1, count: 2 },
+    ]);
+    expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs'])).toEqual(['straight3_10JQ']);
+    expect(formationFor(['10-spades', 'J-hearts', 'Q-clubs'], 'straight3_10JQ').rows).toEqual([
+      ['melee_grunt', 'melee_guard'],
+      ['ranged_archer', 'hero_queen'],
+    ]);
+    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs'])).toEqual(['straight3_JQK']);
+    expect(formationFor(['J-spades', 'Q-hearts', 'K-clubs'], 'straight3_JQK').rows).toEqual([
+      ['melee_guard', 'hero_king', 'melee_grunt'],
+      ['hero_queen', 'ranged_archer'],
+    ]);
+    expect(idsFor(['Q-spades', 'K-hearts', 'A-clubs'])).toEqual(['straight3_QKA']);
+    expect(formationFor(['Q-spades', 'K-hearts', 'A-clubs'], 'straight3_QKA').rows).toEqual([
+      ['hero_king', 'melee_cavalry', 'melee_grunt'],
+      ['hero_queen', 'ranged_archer'],
+    ]);
+  });
+
+  it('三顺尊重配置 rows，不因规则重排站位', () => {
+    const draft = dumpCardFormationDrafts();
+    draft.straight3 = [
+      {
+        id: 'straight3_number',
+        name: '自定义数字三顺',
+        rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
+        colSpacing: 1.2,
+        rowSpacing: 1.4,
+        thumbScale: 2,
+      },
+    ];
+    applyCardFormationDrafts(draft);
+    try {
+      const cards = ['8-spades', '9-hearts', '10-clubs'].map((id) => getPokerCardById(id)!);
+      const formation = getFormationsFor(['straight3'], cards).find((entry) => entry.id === 'straight3_number')!;
+      expect(formation.rows).toEqual([['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']]);
+    } finally {
+      resetCardFormationsToDefault();
     }
   });
 

@@ -3,7 +3,7 @@
     "id": "melee_grunt",
     "name": "民兵",
     "radius": 0.5,
-    "bodyScale": 1,
+    "bodyScale": 1.100006103515625,
     "mass": 2,
     "maxHp": 400,
     "damage": 60,
@@ -79,7 +79,7 @@
     "id": "ranged_archer",
     "name": "弓手",
     "radius": 0.5,
-    "bodyScale": 0.899993896484375,
+    "bodyScale": 0.8000030517578125,
     "mass": 2,
     "maxHp": 240,
     "damage": 70,
@@ -186,6 +186,44 @@
         "attackKind": "projectile_aoe",
         "projectileSpeed": 20,
         "aoeRadius": 7
+      }
+    }
+  },
+  "small_bomb": {
+    "id": "small_bomb",
+    "name": "小炸弹",
+    "radius": 0.5,
+    "bodyScale": 1,
+    "mass": 9999,
+    "maxHp": 1,
+    "damage": 600,
+    "attackInterval": 20,
+    "attackWindup": 0,
+    "range": 0,
+    "minRange": 0,
+    "moveSpeed": 0,
+    "sightRange": 0,
+    "movementLayer": "ground",
+    "attackKind": "projectile_aoe",
+    "projectileSpeed": 20,
+    "aoeRadius": 3.5,
+    "levels": {
+      "1": {
+        "radius": 0.5,
+        "bodyScale": 1,
+        "mass": 9999,
+        "maxHp": 1,
+        "damage": 600,
+        "attackInterval": 20,
+        "attackWindup": 0,
+        "range": 0,
+        "minRange": 0,
+        "moveSpeed": 0,
+        "sightRange": 0,
+        "movementLayer": "ground",
+        "attackKind": "projectile_aoe",
+        "projectileSpeed": 20,
+        "aoeRadius": 2
       }
     }
   },

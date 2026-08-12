@@ -308,7 +308,12 @@ export class BattleView {
       if (visual === 'orb') {
         mesh.material = PROJECTILE_MATERIALS[projectile.faction]!;
       }
-      const size = projectile.giantBomb ? 3 : 1;
+      const size =
+        projectile.fuseBombKind === 'giant_bomb'
+          ? 3
+          : projectile.fuseBombKind === 'small_bomb'
+            ? 1.5
+            : 1;
       mesh.scale.setScalar(size);
       mesh.visible = !projectile.landed || Math.floor(performance.now() / 100) % 2 === 0;
       // 落地闪烁时抬到面片半高，避免中心锚地导致下半截埋进地面

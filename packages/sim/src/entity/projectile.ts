@@ -44,12 +44,15 @@ export interface Projectile {
   visual: ProjectileVisual;
   /** 飞行速度，单位/秒 */
   speed: Fx;
-  /** 巨型炸弹落地后等待引爆的剩余逻辑帧；0 表示仍在飞行或无需引信。 */
+  /** 引信炸弹落地后等待引爆的剩余逻辑帧；0 表示仍在飞行或无需引信。 */
   fuseTicks: number;
   /** 已抵达固定落点，渲染层据此显示落地闪烁。 */
   landed: boolean;
-  /** 巨型炸弹固定落点弹道，不追踪单位目标。 */
-  giantBomb: boolean;
+  /**
+   * 主堡投放的引信炸弹种类；非 null 时固定落点、不追踪单位，
+   * 落地后按 fuseTicks 引爆并结算无差别 AOE。
+   */
+  fuseBombKind: 'giant_bomb' | 'small_bomb' | null;
   dead: boolean;
 }
 
@@ -71,7 +74,7 @@ export function createProjectile(
   arcApex: number = 0,
   impactFx: ProjectileImpactFx = 'pulse',
   visual: ProjectileVisual = 'orb',
-  giantBomb: boolean = false,
+  fuseBombKind: 'giant_bomb' | 'small_bomb' | null = null,
 ): Projectile {
   return {
     id,
@@ -92,7 +95,7 @@ export function createProjectile(
     speed,
     fuseTicks: 0,
     landed: false,
-    giantBomb,
+    fuseBombKind,
     dead: false,
   };
 }

@@ -4,7 +4,7 @@ import { playFormationCommand, type PlayFormationCommand } from '../commands.js'
 import {
   getFormationsFor,
   isBuildingOnlyFormation,
-  isGiantBombFormation,
+  isFuseBombFormation,
   resolveFormationSpawns,
   type CardFormation,
 } from '../config/cardFormations.js';
@@ -133,7 +133,7 @@ export class SoloBotController {
 
   /** 根据场上攻守压力给阵型生成前、中、后排落点；炸弹则优先瞄准敌军密集点。 */
   private candidateAnchors(match: MatchState, formation: CardFormation): Array<{ x: number; y: number }> {
-    if (isGiantBombFormation(formation)) return this.bombAnchors(match);
+    if (isFuseBombFormation(formation)) return this.bombAnchors(match);
     const safe = halfCourtSafeAnchor(formation, this.faction);
     if (!safe) return [];
     if (isBuildingOnlyFormation(formation)) return [safe];
@@ -180,7 +180,7 @@ export class SoloBotController {
     const forward = (y - minY) / Math.max(1, maxY - minY);
     const defensiveBias = enemyUnits > selfUnits ? -forward * 8 : forward * 5;
     const handPressure = match.decks[this.faction].hand.length >= 8 ? 18 : 0;
-    const bombScore = isGiantBombFormation(formation)
+    const bombScore = isFuseBombFormation(formation)
       ? nearbyPointEnemies(match, x, y, this.faction) * 10
       : 0;
     const playerThreat = this.difficulty === 'hard'

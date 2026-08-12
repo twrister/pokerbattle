@@ -5,6 +5,24 @@ import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
 describe('炸弹兵自爆', () => {
+  it('敌军不能锁定或普攻命中炸弹兵', () => {
+    const world = new World(1);
+    const melee = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(8));
+    // 比地面兵更近，若可锁定会优先咬炸弹兵
+    const bomber = world.spawnUnit(Faction.Red, 'summoned_bomber', fromFloat(9), fromFloat(12));
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(14));
+    melee.retargetIn = 0;
+    // 冻住炸弹兵，避免其主动贴脸自爆干扰断言
+    bomber.stats.moveSpeed = 0;
+    ground.stats.damage = 0;
+    const bomberHp = bomber.hp;
+
+    for (let i = 0; i < 20; i++) world.step();
+
+    expect(melee.targetId).toBe(ground.id);
+    expect(bomber.hp).toBe(bomberHp);
+  });
+
   it('大法师前摇结束后召唤炸弹兵', () => {
     const world = new World(1);
     const archmage = world.spawnUnit(Faction.Blue, 'hero_archmage', fromFloat(8), fromFloat(8));

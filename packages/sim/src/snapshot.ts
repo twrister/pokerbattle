@@ -46,10 +46,10 @@ export interface ProjectileSnapshot {
   height: number;
   /** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
   visual: 'orb' | 'bomb' | 'arrow';
-  /** 巨型炸弹已落地引信中，客户端显示闪烁。 */
+  /** 引信炸弹已落地，客户端显示闪烁。 */
   landed: boolean;
-  /** 巨型炸弹使用更大的弹体比例。 */
-  giantBomb: boolean;
+  /** 引信炸弹种类；客户端据此缩放弹体（巨型更大、小炸弹次之）。 */
+  fuseBombKind: 'giant_bomb' | 'small_bomb' | null;
 }
 
 /** 女王单体治疗落在受疗单位上的反馈效果。 */
@@ -136,7 +136,7 @@ export function takeSnapshot(world: World): Snapshot {
       height: p.height,
       visual: p.visual,
       landed: p.landed,
-      giantBomb: p.giantBomb,
+      fuseBombKind: p.fuseBombKind,
     });
   }
 

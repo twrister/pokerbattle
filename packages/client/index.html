@@ -1908,8 +1908,7 @@
         color: var(--text-dim);
       }
 
-      .deck-field input,
-      .deck-row select {
+      .deck-field input {
         min-width: 0;
         padding: 6px 7px;
         border: 1px solid var(--panel-border);
@@ -1917,6 +1916,30 @@
         background: rgba(255, 255, 255, 0.07);
         color: var(--text);
         font: inherit;
+      }
+
+      /* 站位下拉与单位参数页 select 对齐，保证展开选项可读 */
+      .deck-row select {
+        flex: 1 1 88px;
+        min-width: 88px;
+        box-sizing: border-box;
+        padding: 5px 8px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font: inherit;
+      }
+
+      #deck-config select option {
+        color: #1a2332;
+        background-color: #ffffff;
+      }
+
+      #deck-config select option:checked,
+      #deck-config select option:hover {
+        color: #ffffff;
+        background-color: #3d4f66;
       }
 
       .deck-rows {
@@ -1944,10 +1967,6 @@
         width: 42px;
         color: #91a2b4;
         font-size: 11px;
-      }
-
-      .deck-row select {
-        flex: 1 1 82px;
       }
 
       .deck-mini-button,

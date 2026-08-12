@@ -33,7 +33,8 @@ export function updateTargeting(world: World): void {
 
     const current = world.getUnit(unit.targetId);
     // 敌军粘性：已能出手则咬住；够不着时按空/地规则决定是否打断
-    if (isAlive(current) && current.faction !== unit.faction) {
+    // 不可打目标（如炸弹）立即放弃，避免粘性卡住
+    if (isAlive(current) && current.faction !== unit.faction && canAttackTarget(unit, current)) {
       if (isWithinAttackReach(unit, current)) continue;
 
       if (unit.config.movementLayer === 'air') {

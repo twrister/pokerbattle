@@ -5,6 +5,7 @@ import { MAX_UNIT_RADIUS } from '../config/units.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
+import { isUntargetableBomb } from './combatRange.js';
 
 /** 复用邻居缓冲，避免每帧分配 */
 const neighbors: number[] = [];
@@ -86,6 +87,8 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
     if (other.config.movementLayer === 'air') continue;
+    // 炸弹类单位不可被冲刺锁定命中
+    if (isUntargetableBomb(other)) continue;
     if (unit.chargeHits.includes(other.id)) continue;
 
     const dx = other.pos.x - unit.pos.x;
@@ -126,8 +129,9 @@ function hasEnemyBodyContact(world: World, unit: Unit): boolean {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
-    // 飞行单位不参与冲刺体碰判定
+    // 飞行单位与炸弹不参与冲刺体碰判定
     if (other.config.movementLayer === 'air') continue;
+    if (isUntargetableBomb(other)) continue;
 
     const minDist = unit.config.radius + other.config.radius;
     if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) < mul(minDist, minDist)) {
