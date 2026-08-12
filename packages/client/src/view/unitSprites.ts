@@ -37,6 +37,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 175 / 214,
     sourceFacing: -1,
   },
+  melee_golem: {
+    frontUrl: 'units/golem-front.png',
+    backUrl: 'units/golem-back.png',
+    // 石头人体型偏宽，倍率略高于卫士以压住碰撞圈
+    heightMul: 3.4,
+    aspect: 241 / 218,
+    sourceFacing: 1,
+  },
   ranged_archer: {
     frontUrl: 'units/archer-front.png',
     backUrl: 'units/archer-back.png',
@@ -136,6 +144,16 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     sourceFacing: 1,
   },
   building_tower: {
+    frontUrl: 'buildings/tower.png',
+    backUrl: 'buildings/tower.png',
+    frontUrlRed: 'buildings/tower_red.png',
+    backUrlRed: 'buildings/tower_red.png',
+    heightMul: 1,
+    aspect: 177 / 222,
+    sourceFacing: 1,
+  },
+  // 高级箭塔暂复用普通塔贴图；塔顶双弓手由 unitView garrison 表现
+  building_tower_advanced: {
     frontUrl: 'buildings/tower.png',
     backUrl: 'buildings/tower.png',
     frontUrlRed: 'buildings/tower_red.png',

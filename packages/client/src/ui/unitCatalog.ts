@@ -13,13 +13,15 @@ export interface UnitCatalogEntry {
   name: string;
 }
 
-/** 特殊兵种：战车、巨型/小炸弹、巨龙、防御塔。 */
+/** 特殊兵种：战车、巨型/小炸弹、巨龙、基地、防御塔。 */
 const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'ranged_chariot',
   'giant_bomb',
   'small_bomb',
   'dragon',
+  'building_base',
   'building_tower',
+  'building_tower_advanced',
 ]);
 
 /**
@@ -30,6 +32,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'melee_grunt',
   'ranged_archer',
   'melee_guard',
+  'melee_golem',
   'hero_queen',
   'hero_king',
   'melee_cavalry',
@@ -39,12 +42,14 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'giant_bomb',
   'small_bomb',
   'dragon',
+  'building_base',
   'building_tower',
+  'building_tower_advanced',
   'summoned_skeleton',
   'summoned_bomber',
 ];
 
-/** 按图鉴页签归类：召唤物看前缀，战车/巨龙/防御塔归特殊，其余可移动单位归单兵种。 */
+/** 按图鉴页签归类：召唤物看前缀，战车/巨龙/基地/防御塔归特殊，其余可移动单位归单兵种。 */
 export function getUnitCatalogCategory(typeId: UnitTypeId): UnitCatalogCategory {
   if (typeId.startsWith('summoned_')) return 'summoned';
   if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';
@@ -57,7 +62,7 @@ function getDisplayOrder(typeId: UnitTypeId): number {
   return index === -1 ? DISPLAY_ORDER.length : index;
 }
 
-/** 将模拟层配置转为可展示条目；建筑默认排除，特殊兵种中的防御塔例外。 */
+/** 将模拟层配置转为可展示条目；建筑默认排除，特殊列表中的基地/防御塔例外。 */
 export function getUnitCatalogEntries(): UnitCatalogEntry[] {
   return UNIT_TYPE_IDS.filter((typeId) => {
     if (SPECIAL_TYPE_IDS.has(typeId)) return true;

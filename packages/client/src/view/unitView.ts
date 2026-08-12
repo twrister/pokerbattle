@@ -51,6 +51,8 @@ export class UnitView {
   private readonly isBuilding: boolean;
   /** 防御塔塔顶弓手纯表现（非独立单位）。 */
   private readonly hasTowerGarrison: boolean;
+  /** 塔顶弓手数：普通塔 1、高级塔 2。 */
+  private readonly garrisonCount: number;
   /** 炸弹兵：引信期间播闪烁警示，不挂 Teleport 施法特效。 */
   private readonly isDetonator: boolean;
   /**
@@ -69,8 +71,10 @@ export class UnitView {
   private readonly spriteMaterials: SpriteMaterials | null = null;
   /** 共享模板材质；贴图异步就绪后只改模板的 visible，克隆体每帧同步 */
   private readonly sharedSpriteMaterials: SpriteMaterials | null = null;
-  /** 塔顶弓手精灵（仅防御塔） */
-  private readonly garrisonSprite: THREE.Mesh | null = null;
+  /** 塔顶弓手精灵（仅防御塔；高级塔为左右各一） */
+  private readonly garrisonSprites: THREE.Mesh[] = [];
+  /** 各弓手相对塔中心的屏幕 X 锚点 */
+  private readonly garrisonBaseXs: number[] = [];
   private readonly garrisonMaterials: SpriteMaterials | null = null;
   private readonly sharedGarrisonMaterials: SpriteMaterials | null = null;
   private readonly garrisonSize: number = 0;
@@ -136,7 +140,10 @@ export class UnitView {
     const config = UNIT_CONFIGS[typeId];
     this.isAir = config.movementLayer === 'air';
     this.isBuilding = config.footprint > 0;
-    this.hasTowerGarrison = typeId === 'building_tower';
+    this.hasTowerGarrison =
+      typeId === 'building_tower' || typeId === 'building_tower_advanced';
+    // 高级箭塔塔顶挂两名弓手立绘，普通塔一名
+    this.garrisonCount = typeId === 'building_tower_advanced' ? 2 : this.hasTowerGarrison ? 1 : 0;
     this.isDetonator = !!config.detonate;
     // 碰撞圈用真实半径；显示半径 = 民兵基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
@@ -190,11 +197,19 @@ export class UnitView {
         this.garrisonWidth = this.garrisonSize * archerDef.aspect;
         this.garrisonSourceFacing = archerDef.sourceFacing;
         this.garrisonBaseY = this.spriteSize * 0.62;
-        this.garrisonSprite = new THREE.Mesh(SPRITE_GEOMETRY, this.garrisonMaterials.front);
-        this.garrisonSprite.scale.set(this.garrisonWidth, this.garrisonSize, 1);
-        this.garrisonSprite.position.y = this.garrisonBaseY;
-        this.garrisonSprite.renderOrder = 1;
-        this.billboard.add(this.garrisonSprite);
+        // 双弓手左右错开；单弓手居中
+        const sideGap = this.spriteWidth * 0.22;
+        for (let i = 0; i < this.garrisonCount; i++) {
+          const baseX =
+            this.garrisonCount === 1 ? 0 : (i === 0 ? -sideGap : sideGap);
+          const mesh = new THREE.Mesh(SPRITE_GEOMETRY, this.garrisonMaterials.front);
+          mesh.scale.set(this.garrisonWidth, this.garrisonSize, 1);
+          mesh.position.set(baseX, this.garrisonBaseY, 0);
+          mesh.renderOrder = 1;
+          this.billboard.add(mesh);
+          this.garrisonSprites.push(mesh);
+          this.garrisonBaseXs.push(baseX);
+        }
         topY = Math.max(topY, this.garrisonBaseY + this.garrisonSize);
       }
 
@@ -377,7 +392,7 @@ export class UnitView {
         this.sprite.rotation.z = 0;
         this.sprite.scale.set(this.spriteWidth, this.spriteSize, 1);
         this.applyBuildingNearEdge(camera);
-        if (this.garrisonSprite) {
+        if (this.garrisonSprites.length > 0) {
           this.updateGarrisonDirection(sceneX, sceneZ, facingX, facingZ, camera);
           this.applyGarrisonPose(state, attacking, timeSec);
         }
@@ -530,9 +545,12 @@ export class UnitView {
   ): void {
     this.updateFacingFromCamera(sceneX, sceneZ, facingX, facingZ, camera);
     this.mirror = this.screenFacing * this.garrisonSourceFacing;
-    this.garrisonSprite!.material = this.showingFront
+    const material = this.showingFront
       ? this.garrisonMaterials!.front
       : this.garrisonMaterials!.back;
+    for (const sprite of this.garrisonSprites) {
+      sprite.material = material;
+    }
   }
 
   /** 根据相机与世界朝向更新 screenFacing / showingFront。 */
@@ -581,18 +599,21 @@ export class UnitView {
     );
   }
 
-  /** 塔顶弓手攻击/待机姿势；脚底锚在 garrisonBaseY。 */
+  /** 塔顶弓手攻击/待机姿势；脚底锚在 garrisonBaseY，多弓手保留各自 baseX。 */
   private applyGarrisonPose(state: UnitState, attacking: boolean, timeSec: number): void {
-    this.applyPoseToSprite(
-      this.garrisonSprite!,
-      this.garrisonSize,
-      this.garrisonWidth,
-      this.garrisonBaseY,
-      state,
-      attacking,
-      timeSec,
-      false,
-    );
+    for (let i = 0; i < this.garrisonSprites.length; i++) {
+      this.applyPoseToSprite(
+        this.garrisonSprites[i]!,
+        this.garrisonSize,
+        this.garrisonWidth,
+        this.garrisonBaseY,
+        state,
+        attacking,
+        timeSec,
+        false,
+        this.garrisonBaseXs[i] ?? 0,
+      );
+    }
   }
 
   /**
@@ -611,6 +632,7 @@ export class UnitView {
     attacking: boolean,
     timeSec: number,
     allowWalkBob: boolean,
+    baseX = 0,
   ): void {
     // 前摇刚结束 → 开一段短促突刺；池化复用时 wasAttacking 会跟着实例走，行为正确
     if (this.wasAttacking && !attacking) {
@@ -646,7 +668,7 @@ export class UnitView {
       stretch = 1 + Math.sin(t * 2.4) * 0.008;
     }
 
-    sprite.position.set(this.screenFacing * lunge, baseY + bob, 0);
+    sprite.position.set(baseX + this.screenFacing * lunge, baseY + bob, 0);
     // rotation 在 scale 之后作用，倾斜方向不会被镜像抵消，乘屏幕朝向让身体始终按面向侧倒
     sprite.rotation.z = this.screenFacing * tilt;
     sprite.scale.set(this.mirror * width, size * stretch, 1);
@@ -684,7 +706,7 @@ export class UnitView {
       // 精灵面片、软阴影、施法序列帧用的是全局共享几何，不能跟着单个视图销毁
       if (
         object === this.sprite
-        || object === this.garrisonSprite
+        || this.garrisonSprites.includes(object)
         || object.geometry === BLOB_SHADOW_GEOMETRY
       ) {
         return;

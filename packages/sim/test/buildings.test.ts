@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getUnitConfig } from '../src/config/units.js';
 import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { buildingCellRange, snapBuildingCenter } from '../src/nav/buildingGrid.js';
@@ -155,6 +156,28 @@ describe('建筑系统', () => {
     for (let i = 0; i < 80; i++) world.step();
     expect(tower.state).toBe(UnitState.Attack);
     expect(enemy.hp).toBeLessThan(hp0);
+  });
+
+  it('高级箭塔数值高于普通箭塔且可放置', () => {
+    const advanced = getUnitConfig('building_tower_advanced');
+    const basic = getUnitConfig('building_tower');
+    expect(advanced.name).toBe('高级箭塔');
+    expect(toFloat(advanced.maxHp)).toBe(3000);
+    expect(toFloat(advanced.damage)).toBe(150);
+    expect(toFloat(advanced.attackInterval)).toBe(7);
+    expect(toFloat(advanced.maxHp)).toBeGreaterThan(toFloat(basic.maxHp));
+    expect(toFloat(advanced.damage)).toBeGreaterThan(toFloat(basic.damage));
+    expect(toFloat(advanced.attackInterval)).toBeLessThan(toFloat(basic.attackInterval));
+
+    const world = new World(1);
+    const tower = world.spawnBuilding(
+      Faction.Blue,
+      'building_tower_advanced',
+      fromFloat(8),
+      fromFloat(10),
+    );
+    expect(tower).not.toBeNull();
+    expect(tower!.config.id).toBe('building_tower_advanced');
   });
 
   it('基地在射程内以投射物攻击敌军（同 1 级箭塔）', () => {

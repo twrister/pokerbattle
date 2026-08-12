@@ -234,7 +234,9 @@ export class World {
     const startHeight =
       from.config.movementLayer === 'air'
         ? AIR_PROJECTILE_HEIGHT
-        : from.config.id === 'building_tower' || from.config.id === 'building_base'
+        : from.config.id === 'building_tower'
+          || from.config.id === 'building_tower_advanced'
+          || from.config.id === 'building_base'
           ? TOWER_PROJECTILE_HEIGHT
           : GROUND_PROJECTILE_HEIGHT;
     const endHeight = target.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : 0;
@@ -246,6 +248,7 @@ export class World {
     const isArrow =
       from.config.id === 'ranged_archer'
       || from.config.id === 'building_tower'
+      || from.config.id === 'building_tower_advanced'
       || from.config.id === 'building_base';
     const arcApex = isBomb ? BOMB_ARC_APEX : 0;
     const impactFx: ProjectileImpactFx = isBomb ? 'explosion' : 'pulse';

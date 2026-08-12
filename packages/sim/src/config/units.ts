@@ -4,6 +4,7 @@ import rawUnitConfigs from './units.json';
 export type UnitTypeId =
   | 'melee_grunt'
   | 'melee_guard'
+  | 'melee_golem'
   | 'ranged_archer'
   | 'ranged_chariot'
   | 'giant_bomb'
@@ -17,7 +18,8 @@ export type UnitTypeId =
   | 'summoned_skeleton'
   | 'summoned_bomber'
   | 'building_base'
-  | 'building_tower';
+  | 'building_tower'
+  | 'building_tower_advanced';
 
 export type MovementLayer = 'ground' | 'air';
 
