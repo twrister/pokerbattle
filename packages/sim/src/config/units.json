@@ -318,7 +318,7 @@
           "speedMul": 2,
           "triggerMin": 2,
           "triggerMax": 2.5,
-          "hitDamage": 30,
+          "hitDamage": 50,
           "knockback": 1,
           "aoeRadius": 1.5
         }
@@ -367,8 +367,8 @@
         "aoeRadius": 0,
         "inspire": {
           "radius": 3,
-          "attackIntervalMul": 0.8000030517578125,
-          "moveSpeedMul": 1.1999969482421875
+          "attackIntervalMul": 0.8,
+          "moveSpeedMul": 1.3
         }
       }
     }
@@ -414,9 +414,9 @@
         "projectileSpeed": 9,
         "aoeRadius": 0,
         "heal": {
-          "cooldown": 100,
-          "targetRange": 3,
-          "amount": 120
+          "cooldown": 1,
+          "targetRange": 5,
+          "amount": 50
         }
       }
     }
@@ -461,7 +461,7 @@
         "projectileSpeed": 9,
         "aoeRadius": 0,
         "summon": {
-          "cooldown": 100,
+          "cooldown": 60,
           "unitTypeId": "summoned_skeleton"
         }
       }
@@ -507,7 +507,7 @@
         "projectileSpeed": 9,
         "aoeRadius": 0,
         "summon": {
-          "cooldown": 100,
+          "cooldown": 60,
           "unitTypeId": "summoned_bomber"
         }
       }
@@ -574,8 +574,8 @@
         "radius": 0.3,
         "bodyScale": 0.6,
         "mass": 2,
-        "maxHp": 220,
-        "damage": 50,
+        "maxHp": 200,
+        "damage": 40,
         "attackInterval": 20,
         "attackWindup": 7,
         "range": 0.5,
@@ -642,8 +642,8 @@
     "bodyScale": 4,
     "mass": 9999,
     "maxHp": 5000,
-    "damage": 65,
-    "attackInterval": 24,
+    "damage": 120,
+    "attackInterval": 10,
     "attackWindup": 9,
     "range": 6,
     "minRange": 0,
@@ -682,7 +682,7 @@
     "bodyScale": 2,
     "mass": 9999,
     "maxHp": 2000,
-    "damage": 100,
+    "damage": 120,
     "attackInterval": 10,
     "attackWindup": 9,
     "range": 6.5,
@@ -723,7 +723,7 @@
     "mass": 9999,
     "maxHp": 3000,
     "damage": 150,
-    "attackInterval": 7,
+    "attackInterval": 8,
     "attackWindup": 6,
     "range": 6.5,
     "minRange": 0,

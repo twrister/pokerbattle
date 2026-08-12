@@ -1,5 +1,6 @@
 import {
   TICK_RATE,
+  UNIT_CONFIGS,
   UNIT_LEVELS_ENABLED,
   type UnitConfigDraft,
   type UnitLevelConfigDraft,
@@ -14,6 +15,7 @@ import {
   getLevelDraft,
   loadDefaultUnitDrafts,
   loadUnitDrafts,
+  presentSkillGroups,
   readControlsIntoDrafts,
   saveUnitDrafts,
   type UnitDraftMap,
@@ -196,6 +198,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     appendHead('攻击方式', 'attackKind');
     appendHead('移动层', 'movementLayer');
     appendHead('更多', 'more');
+    appendHead('技能', 'skill');
     thead.appendChild(headRow);
     table.appendChild(thead);
 
@@ -256,6 +259,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     row.appendChild(makeAttackKindCell(typeId, level, levelDraft.attackKind));
     row.appendChild(makeMovementLayerCell(typeId, level, levelDraft.movementLayer));
     row.appendChild(makeMoreCell(typeId, level, levelDraft));
+    row.appendChild(makeSkillCell(typeId, level, levelDraft));
     return row;
   }
 
@@ -422,6 +426,78 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       input.value = formatDraftNumber(value);
       label.append(caption, input);
       list.appendChild(label);
+    }
+    details.appendChild(list);
+    cell.appendChild(details);
+    return cell;
+  }
+
+  /** 有技能块时折叠编辑；无技能显示破折号。 */
+  function makeSkillCell(
+    typeId: UnitTypeId,
+    level: number,
+    levelDraft: UnitLevelConfigDraft,
+  ): HTMLTableCellElement {
+    const cell = document.createElement('td');
+    cell.dataset.field = 'skill';
+    const groups = presentSkillGroups(levelDraft);
+    if (groups.length === 0) {
+      cell.textContent = '—';
+      return cell;
+    }
+    const details = document.createElement('details');
+    details.className = 'unit-stats-more';
+    const summary = document.createElement('summary');
+    summary.textContent = groups.map((group) => group.title).join('、');
+    details.appendChild(summary);
+    const list = document.createElement('div');
+    list.className = 'unit-stats-more-fields';
+    for (const group of groups) {
+      const block = levelDraft[group.key];
+      if (!block) continue;
+      const title = document.createElement('div');
+      title.className = 'unit-stats-skill-group';
+      title.textContent = group.title;
+      list.appendChild(title);
+      for (const field of group.fields) {
+        const label = document.createElement('label');
+        label.className = 'unit-stats-more-row';
+        const caption = document.createElement('span');
+        caption.textContent = field.label;
+        if (field.kind === 'select') {
+          const select = document.createElement('select');
+          select.dataset.unit = typeId;
+          select.dataset.level = String(level);
+          select.dataset.skill = group.key;
+          select.dataset.field = field.key;
+          const current =
+            group.key === 'summon' && 'unitTypeId' in block
+              ? String(block.unitTypeId)
+              : '';
+          for (const optionId of field.options) {
+            const option = document.createElement('option');
+            option.value = optionId;
+            option.textContent = displayUnitName(UNIT_CONFIGS[optionId].name);
+            option.selected = optionId === current;
+            select.appendChild(option);
+          }
+          label.append(caption, select);
+        } else {
+          const raw = (block as Record<string, unknown>)[field.key];
+          if (typeof raw !== 'number') continue;
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.step = field.step;
+          input.dataset.unit = typeId;
+          input.dataset.level = String(level);
+          input.dataset.skill = group.key;
+          input.dataset.field = field.key;
+          input.value = formatDraftNumber(raw);
+          if (field.hint) input.title = field.hint;
+          label.append(caption, input);
+        }
+        list.appendChild(label);
+      }
     }
     details.appendChild(list);
     cell.appendChild(details);

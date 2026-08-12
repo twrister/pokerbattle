@@ -28,7 +28,7 @@ describe('单位参数页', () => {
     page.show();
 
     const rows = document.querySelectorAll('.unit-stats-table tbody tr');
-    expect(rows.length).toBe(14);
+    expect(rows.length).toBe(18);
     expect(document.querySelector('.unit-stats-table')?.textContent).toContain('DPS');
     const headFields = Array.from(
       document.querySelectorAll<HTMLTableCellElement>('.unit-stats-table thead th'),
@@ -41,6 +41,7 @@ describe('单位参数页', () => {
       'attackWindup',
       'dps',
     ]);
+    expect(headFields).toContain('skill');
     expect(
       document.querySelector<HTMLInputElement>('input[data-unit="melee_grunt"][data-field="maxHp"]')
         ?.value,
@@ -65,11 +66,11 @@ describe('单位参数页', () => {
       );
 
     tabNamed('属性柱状')?.click();
-    expect(document.querySelectorAll('.unit-stats-bar')).toHaveLength(14);
+    expect(document.querySelectorAll('.unit-stats-bar')).toHaveLength(18);
     expect(document.querySelector('.unit-stats-svg')?.getAttribute('aria-label')).toContain('生命');
 
     tabNamed('兵种雷达')?.click();
-    expect(document.querySelectorAll('.unit-stats-radar-option')).toHaveLength(14);
+    expect(document.querySelectorAll('.unit-stats-radar-option')).toHaveLength(18);
     expect(document.querySelector('.unit-stats-radar-poly')).toBeTruthy();
     expect(document.querySelector('.unit-stats-radar-table')).toBeTruthy();
 
@@ -106,6 +107,42 @@ describe('单位参数页', () => {
     // 恢复快照，避免污染其它用例依赖的运行时配置
     document.querySelector<HTMLButtonElement>('#btn-unit-stats-reset')?.click();
     expect(UNIT_CONFIGS.melee_grunt.maxHp).not.toBe(999);
+    page.dispose();
+  });
+
+  it('有技能兵种可编辑技能参数并保存写回', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = createUnitStatsPage({ onBack: vi.fn() });
+    page.show();
+
+    expect(
+      document.querySelector('td[data-field="skill"] input[data-skill="charge"]'),
+    ).toBeTruthy();
+    const gruntSkill = document.querySelector<HTMLTableCellElement>(
+      'tr[data-unit="melee_grunt"] td[data-field="skill"]',
+    );
+    expect(gruntSkill?.textContent).toBe('—');
+
+    const hitDamage = document.querySelector<HTMLInputElement>(
+      'input[data-unit="melee_cavalry"][data-skill="charge"][data-field="hitDamage"]',
+    );
+    expect(hitDamage).toBeTruthy();
+    hitDamage!.value = '77';
+    hitDamage!.dispatchEvent(new Event('change'));
+
+    document.querySelector<HTMLButtonElement>('#btn-unit-stats-save')?.click();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(dumpUnitConfigDrafts().melee_cavalry.levels?.['1']?.charge?.hitDamage).toBe(77);
+
+    document.querySelector<HTMLButtonElement>('#btn-unit-stats-reset')?.click();
+    expect(UNIT_CONFIGS.melee_cavalry.charge).toBeTruthy();
     page.dispose();
   });
 
