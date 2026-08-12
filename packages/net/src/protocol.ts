@@ -6,6 +6,8 @@ export const DEFAULT_INPUT_DELAY = 4;
 export const HASH_INTERVAL_TICKS = 20;
 /** 对局中断线后保留席位的毫秒数；超时才判对手离开。 */
 export const RECONNECT_TIMEOUT_MS = 30_000;
+/** 对局中双方均离线超过该时长则直接关房，避免空转占坑。 */
+export const BOTH_OFFLINE_CLOSE_MS = 3_000;
 /** 房号为三位数字，前后端共用同一校验。 */
 export const ROOM_ID_PATTERN = /^\d{3}$/;
 /** 房间名最大长度（字符）。 */

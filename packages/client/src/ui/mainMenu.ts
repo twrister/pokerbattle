@@ -30,10 +30,8 @@ export interface MainMenuHandle {
   hide(): void;
   /** 档案变更后刷新名字/等级展示。 */
   refreshProfile(): void;
-  /** 进入快速匹配等待弹窗（切屏后由编排层恢复）。 */
-  enterMatchWaiting(initialStatus: string): void;
-  /** 更新快速匹配等待文案。 */
-  setMatchStatus(text: string): void;
+  /** 匹配等待时显示大厅状态旁的取消按钮。 */
+  setRoomWaitingCancelVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -57,10 +55,10 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const onlineRoomJoinButton = required<HTMLButtonElement>('#btn-online-room-join', root);
   const onlineRoomRefreshButton = required<HTMLButtonElement>('#btn-online-room-refresh', root);
   const onlineRoomList = required<HTMLElement>('#online-room-list', root);
-  const onlineWaitingStatus = required<HTMLElement>('#online-waiting-status', root);
-  const onlineWaitingCancelButton = required<HTMLButtonElement>('#btn-online-waiting-cancel', root);
+  const lobbyRoomCancelButton = required<HTMLButtonElement>('#btn-lobby-room-cancel', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
+  const onlineDialogTitle = required<HTMLElement>('#mode-online-title', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
   const renameForm = required<HTMLFormElement>('#rename-form', root);
   const renameInput = required<HTMLInputElement>('#rename-input', root);
@@ -81,12 +79,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   );
 
   let roomListRequestId = 0;
-  /** 快速匹配等待中：遮罩/× 视为取消，hide/show 需能恢复弹窗。 */
-  let matchWaiting = false;
 
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
-    exitMatchWaiting();
     hideDialog(soloDialog);
     hideDialog(onlineDialog);
     hideRoomPanel();
@@ -99,50 +94,33 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     renameError.classList.remove('is-visible');
   };
 
-  /** 收起自定义房间输入区。 */
+  /** 收起房间视图，恢复快速匹配/房间入口。 */
   const hideRoomPanel = (): void => {
     onlineRoomPanel.classList.add('is-hidden');
+    onlineDialog.classList.remove('is-room');
+    onlineDialogTitle.textContent = '多人联机';
     onlineRoomError.textContent = '';
     onlineRoomError.classList.remove('is-visible');
   };
 
-  /** 退出快速匹配等待视图（不关弹窗）。 */
-  const exitMatchWaiting = (): void => {
-    matchWaiting = false;
-    onlineDialog.classList.remove('is-waiting');
-    onlineWaitingStatus.textContent = '';
-  };
-
-  /** 进入快速匹配等待：只显示状态与取消，并立刻可更新文案。 */
-  const enterMatchWaiting = (initialStatus: string): void => {
-    matchWaiting = true;
-    closeRenameDialog();
-    hideDialog(soloDialog);
-    hideRoomPanel();
-    onlineDialog.classList.add('is-waiting');
-    onlineWaitingStatus.textContent = initialStatus;
-    showDialog(onlineDialog);
-  };
-
-  /** 更新等待弹窗状态文案。 */
-  const setMatchStatus = (text: string): void => {
-    onlineWaitingStatus.textContent = text;
-  };
-
-  /** 等待中取消匹配；非等待态则仅关弹层。 */
+  /** 房间视图先退回联机选项；否则关弹层。 */
   const handleModeClose = (): void => {
-    if (matchWaiting) {
-      cancelMatchWaiting();
+    if (!onlineRoomPanel.classList.contains('is-hidden')) {
+      hideRoomPanel();
       return;
     }
     closeModeDialogs();
   };
 
-  /** 退出等待并通知编排层取消匹配。 */
-  const cancelMatchWaiting = (): void => {
-    exitMatchWaiting();
-    hideDialog(onlineDialog);
-    hideRoomPanel();
+  /** 显示/隐藏大厅房间等待取消按钮。 */
+  const setRoomWaitingCancelVisible = (visible: boolean): void => {
+    lobbyRoomCancelButton.classList.toggle('is-hidden', !visible);
+  };
+
+  /** 大厅状态旁取消：离开匹配中的房间。 */
+  const cancelLobbyRoomWaiting = (): void => {
+    setRoomWaitingCancelVisible(false);
+    status.classList.remove('is-visible');
     options.onCancelVersus();
   };
 
@@ -181,7 +159,6 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const openSoloDialog = (): void => {
-    if (matchWaiting) return;
     closeRenameDialog();
     hideDialog(onlineDialog);
     hideRoomPanel();
@@ -189,16 +166,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const openOnlineDialog = (): void => {
-    if (matchWaiting) return;
     closeRenameDialog();
     hideDialog(soloDialog);
     hideRoomPanel();
-    exitMatchWaiting();
     showDialog(onlineDialog);
   };
 
   const openRenameDialog = (): void => {
-    if (matchWaiting) return;
     closeModeDialogs();
     const profile = options.getProfile();
     renameInput.value = profile.displayName;
@@ -217,9 +191,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
   const startSoloEasy = (): void => startSolo('easy');
   const startSoloHard = (): void => startSolo('hard');
-  /** 停留在联机弹窗等待视图，并立刻发起快速匹配。 */
+  /** 关弹层后发起快速匹配，等待态与主动创建房间相同（大厅状态 + 取消）。 */
   const startOnlineQuick = (): void => {
-    enterMatchWaiting('正在匹配联机对手…');
+    closeModeDialogs();
     options.onStartVersus({ mode: 'quick' });
   };
 
@@ -287,22 +261,27 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       });
   };
 
-  /** 展开房号面板；再次点击可收起。 */
-  const toggleRoomPanel = (): void => {
-    if (matchWaiting) return;
-    const opening = onlineRoomPanel.classList.contains('is-hidden');
-    if (!opening) {
-      hideRoomPanel();
-      return;
-    }
+  /** 展开房间视图：隐藏入口按钮并放大内容区。 */
+  const showRoomPanel = (): void => {
     clearRoomError();
     if (!onlineRoomNameInput.value.trim()) {
       onlineRoomNameInput.value = defaultRoomName();
     }
+    onlineDialog.classList.add('is-room');
+    onlineDialogTitle.textContent = '房间';
     onlineRoomPanel.classList.remove('is-hidden');
     onlineRoomNameInput.focus();
     onlineRoomNameInput.select();
     refreshRoomList();
+  };
+
+  /** 展开房间视图；再次调用可收起（入口隐藏后主要由关闭键退回）。 */
+  const toggleRoomPanel = (): void => {
+    if (!onlineRoomPanel.classList.contains('is-hidden')) {
+      hideRoomPanel();
+      return;
+    }
+    showRoomPanel();
   };
 
   /** 用当前房间名创建房间。 */
@@ -351,7 +330,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
   onlineRoomJoinButton.addEventListener('click', startOnlineRoom);
   onlineRoomRefreshButton.addEventListener('click', refreshRoomList);
-  onlineWaitingCancelButton.addEventListener('click', cancelMatchWaiting);
+  lobbyRoomCancelButton.addEventListener('click', cancelLobbyRoomWaiting);
   onlineRoomInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -383,6 +362,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
       status.classList.remove('is-visible');
+      setRoomWaitingCancelVisible(false);
       closeModeDialogs();
       closeRenameDialog();
       refreshProfile();
@@ -390,12 +370,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     hide() {
       root.classList.add('is-hidden');
       root.setAttribute('aria-hidden', 'true');
+      setRoomWaitingCancelVisible(false);
       closeModeDialogs();
       closeRenameDialog();
     },
     refreshProfile,
-    enterMatchWaiting,
-    setMatchStatus,
+    setRoomWaitingCancelVisible,
     dispose() {
       soloButton.removeEventListener('click', openSoloDialog);
       matchButton.removeEventListener('click', openOnlineDialog);
@@ -409,7 +389,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);
       onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
       onlineRoomRefreshButton.removeEventListener('click', refreshRoomList);
-      onlineWaitingCancelButton.removeEventListener('click', cancelMatchWaiting);
+      lobbyRoomCancelButton.removeEventListener('click', cancelLobbyRoomWaiting);
       profileButton.removeEventListener('click', openRenameDialog);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {

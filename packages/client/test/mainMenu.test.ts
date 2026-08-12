@@ -42,7 +42,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
   };
 }
 
-/** 大厅 DOM fixture，含快速匹配等待面板。 */
+/** 大厅 DOM fixture，含联机房间面板与大厅取消按钮。 */
 function mountMainMenuDom(): void {
   document.body.innerHTML = `
     <main id="main-menu">
@@ -69,16 +69,16 @@ function mountMainMenuDom(): void {
         <button id="btn-online-room-refresh"></button>
         <div id="online-room-list"></div>
       </div>
-      <div id="online-waiting-panel">
-        <div id="online-waiting-status"></div>
-        <button id="btn-online-waiting-cancel" type="button">取消匹配</button>
+      <div class="lobby-status-row">
+        <div id="lobby-status"></div>
+        <button id="btn-lobby-room-cancel" class="is-hidden" type="button">取消</button>
       </div>
-      <div id="lobby-status"></div>
       <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
         <button data-mode-close></button>
       </div>
       <div id="mode-online-dialog" class="is-hidden" aria-hidden="true">
         <button data-mode-close></button>
+        <h2 id="mode-online-title">多人联机</h2>
         <div class="mode-dialog-options"></div>
       </div>
       <div id="rename-dialog" class="is-hidden" aria-hidden="true">
@@ -163,16 +163,17 @@ describe('大厅玩家档案展示', () => {
 
   it('快速匹配、创建与加入分别传递入房参数', async () => {
     const onStartVersus = vi.fn();
-    const onCancelVersus = vi.fn();
-    createMainMenu(menuOptions({ onStartVersus, onCancelVersus }));
+    createMainMenu(menuOptions({ onStartVersus }));
 
     document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
     expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
-    document.querySelector<HTMLButtonElement>('#btn-online-waiting-cancel')!.click();
-    expect(onCancelVersus).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(true);
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    const onlineDialog = document.querySelector('#mode-online-dialog')!;
+    expect(onlineDialog.classList.contains('is-room')).toBe(true);
+    expect(document.querySelector('#mode-online-title')?.textContent).toBe('房间');
     const nameInput = document.querySelector<HTMLInputElement>('#online-room-name-input')!;
     expect(nameInput.value).toBe('测试玩家的房间');
 
@@ -201,7 +202,23 @@ describe('大厅玩家档案展示', () => {
     expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
   });
 
-  it('快速匹配停留等待弹窗并立刻发起匹配', () => {
+  it('房间视图关闭时先退回联机选项', () => {
+    createMainMenu(menuOptions());
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
+    const dialog = document.querySelector('#mode-online-dialog')!;
+    expect(dialog.classList.contains('is-room')).toBe(true);
+    expect(document.querySelector('#online-room-panel')?.classList.contains('is-hidden')).toBe(false);
+
+    document.querySelector<HTMLButtonElement>('#mode-online-dialog [data-mode-close]')!.click();
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    expect(dialog.classList.contains('is-room')).toBe(false);
+    expect(document.querySelector('#online-room-panel')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#mode-online-title')?.textContent).toBe('多人联机');
+  });
+
+  it('快速匹配关弹层后发起，流程与主动创建一致', () => {
     const onStartVersus = vi.fn();
     createMainMenu(menuOptions({ onStartVersus }));
 
@@ -209,28 +226,25 @@ describe('大厅玩家档案展示', () => {
     document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
 
     const dialog = document.querySelector('#mode-online-dialog')!;
-    expect(dialog.classList.contains('is-hidden')).toBe(false);
-    expect(dialog.classList.contains('is-waiting')).toBe(true);
-    expect(document.querySelector('#online-waiting-status')?.textContent).toBe('正在匹配联机对手…');
+    expect(dialog.classList.contains('is-hidden')).toBe(true);
     expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
   });
 
-  it('快速匹配取消匹配时退出等待并回调 onCancelVersus', () => {
+  it('大厅房间等待取消会离房并回调 onCancelVersus', () => {
     const onCancelVersus = vi.fn();
     const menu = createMainMenu(menuOptions({ onCancelVersus }));
+    const cancelButton = document.querySelector<HTMLButtonElement>('#btn-lobby-room-cancel')!;
+    const status = document.querySelector('#lobby-status')!;
 
-    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
-    menu.setMatchStatus('已入座房间 042，等待对手…');
-    expect(document.querySelector('#online-waiting-status')?.textContent).toBe(
-      '已入座房间 042，等待对手…',
-    );
-    expect(document.querySelector('#btn-online-waiting-cancel')?.textContent).toBe('取消匹配');
+    menu.setRoomWaitingCancelVisible(true);
+    status.textContent = '已入座房间 042 · 测试房，等待对手…';
+    status.classList.add('is-visible');
+    expect(cancelButton.classList.contains('is-hidden')).toBe(false);
 
-    document.querySelector<HTMLButtonElement>('#btn-online-waiting-cancel')!.click();
+    cancelButton.click();
 
     expect(onCancelVersus).toHaveBeenCalledTimes(1);
-    const dialog = document.querySelector('#mode-online-dialog')!;
-    expect(dialog.classList.contains('is-waiting')).toBe(false);
-    expect(dialog.classList.contains('is-hidden')).toBe(true);
+    expect(cancelButton.classList.contains('is-hidden')).toBe(true);
+    expect(status.classList.contains('is-visible')).toBe(false);
   });
 });

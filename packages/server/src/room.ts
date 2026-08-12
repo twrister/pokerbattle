@@ -1,4 +1,5 @@
 import {
+  BOTH_OFFLINE_CLOSE_MS,
   DEFAULT_INPUT_DELAY,
   HASH_INTERVAL_TICKS,
   RECONNECT_TIMEOUT_MS,
@@ -55,6 +56,8 @@ export class MatchRoom {
   private ended = false;
   private disposed = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** 双方均离线时的关房倒计时；任一方重连则取消。 */
+  private bothOfflineTimer: ReturnType<typeof setTimeout> | null = null;
   /** 房间创建时刻，供运维页展示存活时长。 */
   private readonly createdAt = Date.now();
   /** 最近一次席位/消息活跃时间，用于判断僵尸房。 */
@@ -167,6 +170,7 @@ export class MatchRoom {
     seat.connected = true;
     this.touchActive();
     this.bindSocket(seat);
+    this.syncBothOfflineTimer();
 
     this.sendWelcome(seat, this.seed);
     this.replayFrom(seat, lastTick | 0);
@@ -180,6 +184,7 @@ export class MatchRoom {
     this.disposed = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.clearBothOfflineTimer();
     for (const seat of this.seats) {
       if (!seat) continue;
       this.clearDisconnectTimer(seat);
@@ -337,16 +342,47 @@ export class MatchRoom {
     seat.disconnectTimer = setTimeout(() => {
       this.finishDisconnectedSeat(seatIndex);
     }, RECONNECT_TIMEOUT_MS);
+    // 双方都掉线时缩短为空房倒计时，避免空转占满重连窗口
+    this.syncBothOfflineTimer();
   }
 
   /** 重连超时：通知对手并清场，不影响其他房间。 */
   private finishDisconnectedSeat(seatIndex: number): void {
     const seat = this.seats[seatIndex];
     if (!seat || seat.connected) return;
+    this.closeRoomDueToDisconnect();
+  }
 
+  /** 是否所有在座席位都已离线。 */
+  private areAllSeatedPlayersOffline(): boolean {
+    const seated = this.seats.filter((entry): entry is Seat => entry !== null);
+    return seated.length > 0 && seated.every((seat) => !seat.connected);
+  }
+
+  /** 双方离线则启动短倒计时关房；否则取消。 */
+  private syncBothOfflineTimer(): void {
+    this.clearBothOfflineTimer();
+    if (this.disposed || !this.started || this.ended) return;
+    if (!this.areAllSeatedPlayersOffline()) return;
+    this.bothOfflineTimer = setTimeout(() => {
+      this.bothOfflineTimer = null;
+      if (this.disposed || !this.areAllSeatedPlayersOffline()) return;
+      this.closeRoomDueToDisconnect();
+    }, BOTH_OFFLINE_CLOSE_MS);
+  }
+
+  private clearBothOfflineTimer(): void {
+    if (!this.bothOfflineTimer) return;
+    clearTimeout(this.bothOfflineTimer);
+    this.bothOfflineTimer = null;
+  }
+
+  /** 因断线超时或双方离线而结束并清场。 */
+  private closeRoomDueToDisconnect(): void {
     this.broadcast({ type: 'peerLeft' });
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.clearBothOfflineTimer();
     this.started = false;
     this.ended = true;
     this.match = null;

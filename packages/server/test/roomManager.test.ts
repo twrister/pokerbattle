@@ -318,6 +318,63 @@ describe('MatchRoom 断线重连', () => {
     vi.advanceTimersByTime(30_000);
     expect(b.messages().some((m) => m.type === 'peerLeft')).toBe(true);
   });
+
+  it('双方均离线超过 3s 后关闭房间', () => {
+    vi.useFakeTimers();
+    let disposed = false;
+    const room = new MatchRoom({
+      roomId: '003',
+      roomName: '双方离线房',
+      onDispose: () => {
+        disposed = true;
+      },
+    });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+
+    a.close();
+    b.close();
+    expect(room.toOpsSnapshot().connectedCount).toBe(0);
+    expect(disposed).toBe(false);
+
+    vi.advanceTimersByTime(2_999);
+    expect(disposed).toBe(false);
+
+    vi.advanceTimersByTime(1);
+    expect(disposed).toBe(true);
+    expect(room.isEmpty).toBe(true);
+  });
+
+  it('双方离线未满 3s 有一方重连则不关房', () => {
+    vi.useFakeTimers();
+    let disposed = false;
+    const room = new MatchRoom({
+      roomId: '004',
+      roomName: '短暂双离线',
+      onDispose: () => {
+        disposed = true;
+      },
+    });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+
+    const tokenA = latestWelcome(a).reconnectToken;
+    a.close();
+    b.close();
+    vi.advanceTimersByTime(2_000);
+
+    const resumed = new FakeWebSocket();
+    expect(room.handleRejoin(resumed as never, tokenA, 0)).toBe(true);
+    vi.advanceTimersByTime(3_000);
+    expect(disposed).toBe(false);
+    expect(room.toOpsSnapshot().connectedCount).toBe(1);
+    expect(room.toOpsSnapshot().phase).toBe('playing');
+    room.dispose();
+  });
 });
 
 function welcomeRoom(ws: FakeWebSocket): string {

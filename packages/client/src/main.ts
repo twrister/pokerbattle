@@ -572,8 +572,7 @@ function enterVersus(): () => void {
 
   container.classList.add('is-solo', 'is-versus');
   hud.classList.add('is-solo', 'is-versus');
-  // 匹配期仍留在大厅层；快速匹配用弹窗状态，创建/加入仍用大厅 #lobby-status
-  const isQuickMatch = joinRequest.mode === 'quick';
+  // 匹配期仍留在大厅层：状态文案与取消按钮都走 #lobby-status 行
   const initialStatus =
     joinRequest.mode === 'create'
       ? '正在创建房间…'
@@ -581,14 +580,10 @@ function enterVersus(): () => void {
         ? `正在加入房间 ${joinRequest.roomId}…`
         : '正在匹配联机对手…';
   mainMenu.show();
-  if (isQuickMatch) {
-    mainMenu.enterMatchWaiting(initialStatus);
-  } else {
-    setLobbyStatus(initialStatus);
-  }
+  setLobbyStatus(initialStatus);
+  mainMenu.setRoomWaitingCancelVisible(true);
   const reportMatchStatus = (text: string): void => {
-    if (isQuickMatch) mainMenu.setMatchStatus(text);
-    else setLobbyStatus(text);
+    setLobbyStatus(text);
   };
 
   const connecting = connectVersusSession({
