@@ -55,6 +55,7 @@ export {
   resetUnitConfigsToDefault,
   toUnitConfigDraft,
   UNIT_LEVEL_CONFIGS,
+  UNIT_LEVELS_ENABLED,
 } from './config/units.js';
 export {
   CARD_FORMATIONS,

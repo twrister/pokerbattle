@@ -1,5 +1,5 @@
 import { getCardStrength, getPokerCardById, type PlayingCard } from '../cards/deck.js';
-import { UNIT_CONFIGS, type UnitTypeId } from './units.js';
+import { UNIT_CONFIGS, UNIT_LEVELS_ENABLED, type UnitTypeId } from './units.js';
 import type { HandCategory } from './cardFormations.js';
 
 /** 规则阵型中的单个出兵位，等级随实际出牌点数推导。 */
@@ -68,6 +68,12 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return rows;
 }
 
+/** 等级关闭时把推算结果钳到 1 级，保留上方公式便于重新启用。 */
+function applyLevelGate(units: MappedFormationUnit[]): MappedFormationUnit[] {
+  if (UNIT_LEVELS_ENABLED) return units;
+  return units.map((unit) => (unit.level === 1 ? unit : { ...unit, level: 1 }));
+}
+
 /**
  * 按实际手牌和阵型方案推导单位与等级。
  * 返回 null 代表该方案不适用于当前点数，调用方不应向玩家展示。
@@ -82,35 +88,35 @@ export function resolveHandUnits(
   const top = strongestCard(cards);
 
   if (category === 'rocket') {
-    return choice === 'bomb' ? [{ typeId: 'giant_bomb', level: 3 }] : null;
+    return choice === 'bomb' ? applyLevelGate([{ typeId: 'giant_bomb', level: 3 }]) : null;
   }
   if (category === 'bomb') {
     if (choice !== 'bomb') return null;
-    return [{ typeId: 'giant_bomb', level: isNumberRank(top) ? 1 : 2 }];
+    return applyLevelGate([{ typeId: 'giant_bomb', level: isNumberRank(top) ? 1 : 2 }]);
   }
   if (category === 'straight5') {
     return choice === 'tower'
-      ? [{ typeId: 'building_tower', level: 1 }]
+      ? applyLevelGate([{ typeId: 'building_tower', level: 1 }])
       : choice === 'chariot'
-        ? [{ typeId: 'ranged_chariot', level: 1 }]
+        ? applyLevelGate([{ typeId: 'ranged_chariot', level: 1 }])
         : null;
   }
   if (category === 'flush' || category === 'full_house') {
     return choice === 'tower'
-      ? [{ typeId: 'building_tower', level: 2 }]
+      ? applyLevelGate([{ typeId: 'building_tower', level: 2 }])
       : choice === 'chariot'
-        ? [{ typeId: 'ranged_chariot', level: 2 }]
+        ? applyLevelGate([{ typeId: 'ranged_chariot', level: 2 }])
         : choice === 'dragon'
-          ? [{ typeId: 'dragon', level: 1 }]
+          ? applyLevelGate([{ typeId: 'dragon', level: 1 }])
           : null;
   }
   if (category === 'straight_flush') {
     return choice === 'tower'
-      ? [{ typeId: 'building_tower', level: 3 }]
+      ? applyLevelGate([{ typeId: 'building_tower', level: 3 }])
       : choice === 'chariot'
-        ? [{ typeId: 'ranged_chariot', level: 3 }]
+        ? applyLevelGate([{ typeId: 'ranged_chariot', level: 3 }])
         : choice === 'dragon'
-          ? [{ typeId: 'dragon', level: 2 }]
+          ? applyLevelGate([{ typeId: 'dragon', level: 2 }])
           : null;
   }
 
@@ -142,7 +148,7 @@ export function resolveHandUnits(
     count = 4;
     level = numeric ? level + 2 : 4;
   }
-  return Array.from({ length: count }, () => ({ typeId, level }));
+  return applyLevelGate(Array.from({ length: count }, () => ({ typeId, level })));
 }
 
 /**

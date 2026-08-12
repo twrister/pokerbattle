@@ -5,6 +5,7 @@ import {
   FORMATION_ROW_SPACING,
   Faction,
   HAND_CATEGORY_ORDER,
+  UNIT_LEVELS_ENABLED,
   applyCardFormationDrafts,
   dumpCardFormationDrafts,
   getFormationBuildingTypeId,
@@ -139,39 +140,58 @@ describe('牌型兵种阵型配置', () => {
     expect(validateCardFormationDrafts(multiBuilding)).toContain('只能配置单个建筑');
   });
 
-  it('按选中牌面推导数字牌组合的数量与等级', () => {
+  it('按选中牌面推导数字牌组合的数量；等级关闭时一律为 1 级', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
       getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id)!;
 
     const single = formationFor(['single'], ['10-spades'], 'single_grunt');
-    expect(single.units).toEqual([{ typeId: 'melee_grunt', level: 9, count: 1 }]);
+    expect(single.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 1 }]);
 
     const pair = formationFor(['pair'], ['10-spades', '10-hearts'], 'pair_grunt');
-    expect(pair.units).toEqual([{ typeId: 'melee_grunt', level: 10, count: 2 }]);
+    expect(pair.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 2 }]);
 
     const straight3 = formationFor(['straight3'], ['8-spades', '9-hearts', '10-clubs'], 'straight3_grunt');
-    expect(straight3.units).toEqual([{ typeId: 'melee_grunt', level: 9, count: 3 }]);
+    expect(straight3.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 3 }]);
 
     const straight3Archers = formationFor(
       ['straight3'],
       ['3-spades', '4-hearts', '5-clubs'],
       'straight3_archer',
     );
-    expect(straight3Archers.units).toEqual([{ typeId: 'ranged_archer', level: 4, count: 3 }]);
+    expect(straight3Archers.units).toEqual([{ typeId: 'ranged_archer', level: 1, count: 3 }]);
     expect(straight3Archers.slots).toHaveLength(3);
 
     const triple = formationFor(['triple'], ['10-spades', '10-hearts', '10-clubs'], 'triple_grunt');
-    expect(triple.units).toEqual([{ typeId: 'melee_grunt', level: 10, count: 5 }]);
+    expect(triple.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 5 }]);
 
     const twoPair = formationFor(
       ['two_pair'],
       ['9-spades', '9-hearts', '10-clubs', '10-diamonds'],
       'two_pair_grunt',
     );
-    expect(twoPair.units).toEqual([{ typeId: 'melee_grunt', level: 11, count: 4 }]);
+    expect(twoPair.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 4 }]);
 
-    // 单牌 3～10 必须落在 2～9 级，避免 UI/出兵仍按模板默认 1 级。
+    for (const rank of ['3', '5', '10'] as const) {
+      const entry = formationFor(['single'], [`${rank}-spades`], 'single_grunt');
+      expect(entry.slots.every((slot) => slot.level === 1)).toBe(true);
+      expect(resolveFormationSpawns(entry, Faction.Blue, 9, 8).every((point) => point.level === 1)).toBe(
+        true,
+      );
+    }
+  });
+
+  it.skipIf(!UNIT_LEVELS_ENABLED)('等级开启时按牌面推导多级数值', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
+      getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id)!;
+
+    expect(formationFor(['single'], ['10-spades'], 'single_grunt').units).toEqual([
+      { typeId: 'melee_grunt', level: 9, count: 1 },
+    ]);
+    expect(formationFor(['pair'], ['10-spades', '10-hearts'], 'pair_grunt').units).toEqual([
+      { typeId: 'melee_grunt', level: 10, count: 2 },
+    ]);
     for (const [rank, level] of [
       ['3', 2],
       ['5', 4],
@@ -179,9 +199,6 @@ describe('牌型兵种阵型配置', () => {
     ] as const) {
       const single = formationFor(['single'], [`${rank}-spades`], 'single_grunt');
       expect(single.slots.every((slot) => slot.level === level)).toBe(true);
-      expect(resolveFormationSpawns(single, Faction.Blue, 9, 8).every((point) => point.level === level)).toBe(
-        true,
-      );
     }
   });
 

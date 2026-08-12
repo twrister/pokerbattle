@@ -8,6 +8,7 @@ import {
   MAX_HAND_SIZE,
   PokerDeck,
   UNIT_CONFIGS,
+  UNIT_LEVELS_ENABLED,
   type CardFormation,
   type PlayingCard,
   type UnitTypeId,
@@ -854,7 +855,10 @@ function formatRowUnits(formation: CardFormation, rowIndex: number): string {
   return order
     .map(({ typeId, level }) => {
       const name = UNIT_CONFIGS[typeId]?.name.replace(/（.*?）/, '') ?? typeId;
-      return `${level}级${name}x${counts.get(`${typeId}:${level}`)}`;
+      // 等级关闭时不展示「N级」前缀，避免全是 1 级的噪音。
+      return UNIT_LEVELS_ENABLED
+        ? `${level}级${name}x${counts.get(`${typeId}:${level}`)}`
+        : `${name}x${counts.get(`${typeId}:${level}`)}`;
     })
     .join(' · ');
 }

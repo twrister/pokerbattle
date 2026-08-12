@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UNIT_LEVELS_ENABLED } from '@pb/sim';
 import { createCodexPage } from '../src/ui/codexPage.js';
 
 describe('兵种图鉴页', () => {
@@ -22,7 +23,7 @@ describe('兵种图鉴页', () => {
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(14);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
-    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 16\.5289/);
+    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 13\.333/);
     expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
 
     /** 页签每次渲染会重建，点击前需重新查询。 */
@@ -61,12 +62,19 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
   });
 
-  it('民兵与弓手可切换等级，属性条随等级变化', () => {
+  it('等级关闭时不展示等级切换；开启后民兵与弓手可切换等级', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
     const levelButtons = (): HTMLButtonElement[] =>
       Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-level'));
+
+    if (!UNIT_LEVELS_ENABLED) {
+      expect(levelButtons()).toHaveLength(0);
+      page.dispose();
+      return;
+    }
+
     const hpFillWidth = (): string =>
       document.querySelector('.codex-stat-bar span')?.getAttribute('style') ?? '';
 

@@ -468,13 +468,18 @@ export function recomputeMaxUnitRadius(): void {
 
 recomputeMaxUnitRadius();
 
+/** 兵种等级总开关：false 时一律按 1 级生效，并隐藏等级 UI；改 true 并恢复多级表即可重新启用。 */
+export const UNIT_LEVELS_ENABLED = false;
+
 /** 查询指定等级配置；未传等级或等级不存在时回退到 1 级，保证旧调用兼容。 */
 export function getUnitConfig(typeId: UnitTypeId, level = 1): UnitConfig {
+  if (!UNIT_LEVELS_ENABLED) return UNIT_LEVEL_CONFIGS[typeId][1]!;
   return UNIT_LEVEL_CONFIGS[typeId][level] ?? UNIT_LEVEL_CONFIGS[typeId][1]!;
 }
 
 /** 取得一个兵种的所有已配置等级，供编辑器和图鉴等界面显示。 */
 export function getUnitLevels(typeId: UnitTypeId): number[] {
+  if (!UNIT_LEVELS_ENABLED) return [1];
   return Object.keys(UNIT_LEVEL_CONFIGS[typeId]).map(Number).sort((a, b) => a - b);
 }
 

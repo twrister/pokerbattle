@@ -1,6 +1,7 @@
 import {
   TICK_RATE,
   UNIT_CONFIGS,
+  UNIT_LEVELS_ENABLED,
   UNIT_TYPE_IDS,
   getUnitConfig,
   getUnitLevels,
@@ -219,24 +220,26 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     summary.className = 'codex-detail-summary';
     summary.textContent = getSummary(config);
 
-    // 多等级兵种提供切换；单等级也显示当前等级，方便与战场徽章对照。
+    // 多等级兵种提供切换；等级关闭时整行隐藏，代码保留便于重新启用。
     const levelRow = document.createElement('div');
     levelRow.className = 'codex-levels';
     levelRow.setAttribute('role', 'group');
     levelRow.setAttribute('aria-label', '兵种等级');
-    for (const unitLevel of levels) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'codex-level';
-      button.textContent = String(unitLevel);
-      button.classList.toggle('is-active', unitLevel === level);
-      button.setAttribute('aria-pressed', String(unitLevel === level));
-      button.setAttribute('aria-label', `查看${unitLevel}级参数`);
-      button.addEventListener('click', () => {
-        selectedLevel = unitLevel;
-        render();
-      });
-      levelRow.appendChild(button);
+    if (UNIT_LEVELS_ENABLED) {
+      for (const unitLevel of levels) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'codex-level';
+        button.textContent = String(unitLevel);
+        button.classList.toggle('is-active', unitLevel === level);
+        button.setAttribute('aria-pressed', String(unitLevel === level));
+        button.setAttribute('aria-label', `查看${unitLevel}级参数`);
+        button.addEventListener('click', () => {
+          selectedLevel = unitLevel;
+          render();
+        });
+        levelRow.appendChild(button);
+      }
     }
 
     const stats = document.createElement('dl');
@@ -269,7 +272,9 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     const skillDescription = document.createElement('p');
     skillDescription.textContent = skill.description;
     skillBlock.append(skillLabel, skillTitle, skillDescription);
-    detail.append(header, summary, levelRow, stats, skillBlock);
+    detail.append(header, summary);
+    if (UNIT_LEVELS_ENABLED) detail.appendChild(levelRow);
+    detail.append(stats, skillBlock);
   }
 
   render();

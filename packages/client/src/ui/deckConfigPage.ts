@@ -3,6 +3,7 @@ import {
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
   UNIT_CONFIGS,
+  UNIT_LEVELS_ENABLED,
   UNIT_TYPE_IDS,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
@@ -206,7 +207,11 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     rule.className = 'deck-rows';
     rule.innerHTML = `
       <div class="deck-section-title">规则说明</div>
-      <p>兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。</p>
+      <p>${
+        UNIT_LEVELS_ENABLED
+          ? '兵种、数量和等级会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
+          : '兵种和数量会按实际打出的牌面自动推导；近战单位自动排在前排，远程单位自动排在后排。'
+      }</p>
     `;
     editor.appendChild(rule);
 

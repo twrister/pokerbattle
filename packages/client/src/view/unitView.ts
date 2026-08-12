@@ -4,6 +4,7 @@ import {
   BODY_SCALE_REFERENCE,
   Faction,
   UNIT_CONFIGS,
+  UNIT_LEVELS_ENABLED,
   UnitState,
   type UnitTypeId,
   toFloat,
@@ -325,6 +326,8 @@ export class UnitView {
     );
     this.levelBadge.position.set(-(this.barWidth + 0.2) / 2, 0, HP_FILL_Z + 0.01);
     this.levelBadge.renderOrder = 4;
+    // 等级关闭时隐藏徽章；保留 mesh 与 setLevel，便于重新启用。
+    this.levelBadge.visible = UNIT_LEVELS_ENABLED;
     this.hpBaseY = topY + (this.isBuilding ? 0.45 : 0.35);
     // 血条跟建筑贴图一起落到近端格边上方；符号在 update 里与贴图同步
     this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetMag);
@@ -411,6 +414,7 @@ export class UnitView {
 
   /** 同步单位等级；对象池复用时每帧写入，避免沿用上一名单位的徽章。 */
   setLevel(level: number): void {
+    if (!UNIT_LEVELS_ENABLED) return;
     const normalized = Math.max(1, Math.floor(level));
     if (normalized === this.displayedLevel) return;
     this.displayedLevel = normalized;

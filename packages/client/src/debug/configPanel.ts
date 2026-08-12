@@ -1,5 +1,6 @@
 import {
   UNIT_TYPE_IDS,
+  UNIT_LEVELS_ENABLED,
   applyUnitConfigDrafts,
   captureUnitConfigsAsDefault,
   dumpDefaultUnitConfigDrafts,
@@ -135,7 +136,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanelHandl
     section.appendChild(makeTextRow(typeId, 'name', '名称', draft.name));
     const level = selectedLevels.get(typeId) ?? 1;
     const levelDraft = getLevelDraft(draft, level);
-    section.appendChild(makeLevelRow(typeId, draft, level));
+    // 等级关闭时隐藏多级控件，只编 1 级；makeLevelRow 保留便于重新启用。
+    if (UNIT_LEVELS_ENABLED) section.appendChild(makeLevelRow(typeId, draft, level));
 
     for (const field of NUMERIC_FIELDS) {
       const value = levelDraft[field.key as keyof UnitLevelConfigDraft];
