@@ -9,6 +9,7 @@ describe('页面状态管理', () => {
     const leaveDeckConfig = vi.fn();
     const leaveHandOdds = vi.fn();
     const leaveCodex = vi.fn();
+    const leaveUnitStats = vi.fn();
     const leaveVersus = vi.fn();
     const enterMenu = vi.fn(() => leaveMenu);
     const enterSolo = vi.fn(() => leaveSolo);
@@ -16,6 +17,7 @@ describe('页面状态管理', () => {
     const enterDeckConfig = vi.fn(() => leaveDeckConfig);
     const enterHandOdds = vi.fn(() => leaveHandOdds);
     const enterCodex = vi.fn(() => leaveCodex);
+    const enterUnitStats = vi.fn(() => leaveUnitStats);
     const enterVersus = vi.fn(() => leaveVersus);
     const screens = createScreenController({
       menu: enterMenu,
@@ -24,6 +26,7 @@ describe('页面状态管理', () => {
       'deck-config': enterDeckConfig,
       'hand-odds': enterHandOdds,
       codex: enterCodex,
+      'unit-stats': enterUnitStats,
       versus: enterVersus,
     });
 
@@ -66,6 +69,7 @@ describe('页面状态管理', () => {
       'deck-config': () => vi.fn(),
       'hand-odds': () => vi.fn(),
       codex: () => vi.fn(),
+      'unit-stats': () => vi.fn(),
       versus: () => vi.fn(),
     });
 

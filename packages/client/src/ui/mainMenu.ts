@@ -43,8 +43,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const sandboxButton = required<HTMLButtonElement>('#btn-sandbox', root);
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
-  const soloEasyButton = required<HTMLButtonElement>('#btn-solo-easy', root);
-  const soloHardButton = required<HTMLButtonElement>('#btn-solo-hard', root);
+  const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
   const onlineRoomButton = required<HTMLButtonElement>('#btn-online-room', root);
   const onlineRoomPanel = required<HTMLElement>('#online-room-panel', root);
@@ -184,13 +183,11 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const startSandbox = (): void => options.onStartSandbox();
-  /** 关弹层后把选择的难度交给战斗编排层。 */
-  const startSolo = (difficulty: SoloDifficulty): void => {
+  /** 关弹层后以人机对战（hard）进入单机。 */
+  const startSoloAi = (): void => {
     closeModeDialogs();
-    options.onStartSolo(difficulty);
+    options.onStartSolo('hard');
   };
-  const startSoloEasy = (): void => startSolo('easy');
-  const startSoloHard = (): void => startSolo('hard');
   /** 关弹层后发起快速匹配，等待态与主动创建房间相同（大厅状态 + 取消）。 */
   const startOnlineQuick = (): void => {
     closeModeDialogs();
@@ -323,8 +320,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
-  soloEasyButton.addEventListener('click', startSoloEasy);
-  soloHardButton.addEventListener('click', startSoloHard);
+  soloAiButton.addEventListener('click', startSoloAi);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
   onlineRoomButton.addEventListener('click', toggleRoomPanel);
   onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
@@ -382,8 +378,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
-      soloEasyButton.removeEventListener('click', startSoloEasy);
-      soloHardButton.removeEventListener('click', startSoloHard);
+      soloAiButton.removeEventListener('click', startSoloAi);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
       onlineRoomButton.removeEventListener('click', toggleRoomPanel);
       onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);

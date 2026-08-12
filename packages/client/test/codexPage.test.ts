@@ -121,4 +121,21 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex')?.classList.contains('is-hidden')).toBe(true);
     page.dispose();
   });
+
+  it('开发服单位参数入口会回调 onOpenUnitStats', () => {
+    document.body.innerHTML = `
+      <main id="codex" class="is-hidden">
+        <button id="btn-codex-back"></button>
+        <button id="btn-codex-unit-stats"></button>
+        <nav id="codex-category-list"></nav>
+        <div id="codex-unit-list"></div>
+        <article id="codex-detail"></article>
+      </main>
+    `;
+    const onOpenUnitStats = vi.fn();
+    const page = createCodexPage({ onBack: vi.fn(), onOpenUnitStats });
+    document.querySelector<HTMLButtonElement>('#btn-codex-unit-stats')?.click();
+    expect(onOpenUnitStats).toHaveBeenCalledOnce();
+    page.dispose();
+  });
 });

@@ -2,30 +2,28 @@ import {
   TICK_RATE,
   UNIT_CONFIGS,
   UNIT_LEVELS_ENABLED,
-  UNIT_TYPE_IDS,
   getUnitConfig,
   getUnitLevels,
-  isBuildingConfig,
   toFloat,
   type UnitConfig,
   type UnitTypeId,
 } from '@pb/sim';
 import { SPRITE_DEFS } from '../view/unitSprites.js';
+import {
+  displayUnitName,
+  getUnitCatalogEntries,
+  type UnitCatalogCategory,
+  type UnitCatalogEntry,
+} from './unitCatalog.js';
 
-type CodexCategory = 'single' | 'special' | 'summoned';
-type CodexFilter = 'all' | CodexCategory;
-
-interface CodexUnit {
-  category: CodexCategory;
-  typeId: UnitTypeId;
-  /** 兵种名称取 1 级配置，等级切换不改变显示名。 */
-  name: string;
-}
+type CodexFilter = 'all' | UnitCatalogCategory;
 
 type StatKey = 'hp' | 'damage' | 'attackSpeed' | 'range' | 'moveSpeed';
 
 export interface CodexPageOptions {
   onBack: () => void;
+  /** 开发服：打开单位参数对比/编辑页。 */
+  onOpenUnitStats?: () => void;
 }
 
 export interface CodexPageHandle {
@@ -41,30 +39,6 @@ const CATEGORY_NAMES: Record<CodexFilter, string> = {
   summoned: '召唤物',
 };
 
-/** 特殊兵种：战车、巨型炸弹、巨龙、防御塔。 */
-const SPECIAL_TYPE_IDS = new Set<UnitTypeId>(['ranged_chariot', 'giant_bomb', 'dragon', 'building_tower']);
-
-/**
- * 图鉴展示顺序：单兵种按策划指定排列，其后是特殊兵种与召唤物。
- * 未列入的单位排在同分类末尾，避免新增兵种时被遗漏。
- */
-const CODEX_DISPLAY_ORDER: readonly UnitTypeId[] = [
-  'melee_grunt',
-  'ranged_archer',
-  'melee_guard',
-  'hero_queen',
-  'hero_king',
-  'melee_cavalry',
-  'hero_mage',
-  'hero_archmage',
-  'ranged_chariot',
-  'giant_bomb',
-  'dragon',
-  'building_tower',
-  'summoned_skeleton',
-  'summoned_bomber',
-];
-
 const STAT_NAMES: Record<StatKey, string> = {
   hp: '生命',
   damage: '伤害',
@@ -73,43 +47,15 @@ const STAT_NAMES: Record<StatKey, string> = {
   moveSpeed: '移速',
 };
 
-/**
- * 按图鉴页签归类：召唤物看前缀，战车/巨龙/防御塔归特殊，其余可移动单位归单兵种。
- */
-function getCategory(typeId: UnitTypeId): CodexCategory {
-  if (typeId.startsWith('summoned_')) return 'summoned';
-  if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';
-  return 'single';
-}
-
-/** 图鉴排序键：优先用展示序，未知 ID 靠后且保持相对稳定。 */
-function getDisplayOrder(typeId: UnitTypeId): number {
-  const index = CODEX_DISPLAY_ORDER.indexOf(typeId);
-  return index === -1 ? CODEX_DISPLAY_ORDER.length : index;
-}
-
-/** 将模拟层配置转为图鉴条目；建筑默认排除，特殊兵种中的防御塔例外。 */
-function getCodexUnits(): CodexUnit[] {
-  return UNIT_TYPE_IDS.filter((typeId) => {
-    if (SPECIAL_TYPE_IDS.has(typeId)) return true;
-    return !isBuildingConfig(UNIT_CONFIGS[typeId]);
-  })
-    .map((typeId) => ({
-      typeId,
-      name: UNIT_CONFIGS[typeId].name,
-      category: getCategory(typeId),
-    }))
-    .sort((a, b) => getDisplayOrder(a.typeId) - getDisplayOrder(b.typeId));
-}
-
 /** 图鉴页：用兵种配置和现有立绘生成可筛选的只读单位档案。 */
 export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   const root = required<HTMLElement>('#codex');
   const backButton = required<HTMLButtonElement>('#btn-codex-back', root);
+  const unitStatsButton = root.querySelector<HTMLButtonElement>('#btn-codex-unit-stats');
   const categoryList = required<HTMLElement>('#codex-category-list', root);
   const unitList = required<HTMLElement>('#codex-unit-list', root);
   const detail = required<HTMLElement>('#codex-detail', root);
-  const units = getCodexUnits();
+  const units = getUnitCatalogEntries();
   // 进度条上限覆盖所有等级，避免高等级单位撑破相对比较。
   const statMaxima = getStatMaxima(units);
   let category: CodexFilter = 'all';
@@ -117,7 +63,9 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   let selectedLevel = 1;
 
   const back = (): void => options.onBack();
+  const openUnitStats = (): void => options.onOpenUnitStats?.();
   backButton.addEventListener('click', back);
+  unitStatsButton?.addEventListener('click', openUnitStats);
 
   /** 根据当前分类、选中兵种与等级重新渲染整页内容。 */
   function render(): void {
@@ -152,7 +100,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   }
 
   /** 渲染当前分类的兵种立绘卡片。 */
-  function renderUnits(visibleUnits: readonly CodexUnit[]): void {
+  function renderUnits(visibleUnits: readonly UnitCatalogEntry[]): void {
     unitList.replaceChildren(
       ...visibleUnits.map((unit) => {
         const button = document.createElement('button');
@@ -161,7 +109,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
         const selected = unit.typeId === selectedTypeId;
         button.classList.toggle('is-active', selected);
         button.setAttribute('aria-pressed', String(selected));
-        button.setAttribute('aria-label', `查看${displayName(unit.name)}档案`);
+        button.setAttribute('aria-label', `查看${displayUnitName(unit.name)}档案`);
         const sprite = SPRITE_DEFS[unit.typeId];
         if (sprite) {
           const image = document.createElement('img');
@@ -172,7 +120,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
         }
         const name = document.createElement('span');
         name.className = 'codex-unit-name';
-        name.textContent = displayName(unit.name);
+        name.textContent = displayUnitName(unit.name);
         button.appendChild(name);
         button.addEventListener('click', () => {
           selectedTypeId = unit.typeId;
@@ -187,7 +135,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
 
   /** 渲染选中兵种在指定等级下的属性进度、攻击方式与技能说明。 */
   function renderDetail(
-    unit: CodexUnit | undefined,
+    unit: UnitCatalogEntry | undefined,
     level: number,
     maxima: Record<StatKey, number>,
   ): void {
@@ -212,7 +160,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     categoryLabel.className = 'codex-detail-category';
     categoryLabel.textContent = CATEGORY_NAMES[unit.category];
     const heading = document.createElement('h2');
-    heading.textContent = displayName(unit.name);
+    heading.textContent = displayUnitName(unit.name);
     title.append(categoryLabel, heading);
     header.appendChild(title);
 
@@ -290,13 +238,9 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     },
     dispose() {
       backButton.removeEventListener('click', back);
+      unitStatsButton?.removeEventListener('click', openUnitStats);
     },
   };
-}
-
-/** 删除名称中的括号标签，避免卡片与详情重复展示类别或技能。 */
-function displayName(name: string): string {
-  return name.replace(/（.*?）/g, '');
 }
 
 /** 将记忆等级钳到当前兵种可用等级；缺省取最低一级。 */
@@ -328,7 +272,7 @@ function getStats(config: UnitConfig): Array<[StatKey, number]> {
 }
 
 /** 从所有可展示兵种的全部等级取每项属性最大值，保证进度条横向可比较。 */
-function getStatMaxima(units: readonly CodexUnit[]): Record<StatKey, number> {
+function getStatMaxima(units: readonly UnitCatalogEntry[]): Record<StatKey, number> {
   const maxima: Record<StatKey, number> = {
     hp: 0,
     damage: 0,
@@ -354,7 +298,7 @@ function getSkill(config: UnitConfig): { title: string; description: string } {
   if (config.summon) {
     return {
       title: '召唤',
-      description: `周期性召唤${displayName(UNIT_CONFIGS[config.summon.unitTypeId].name)}加入战斗。`,
+      description: `周期性召唤${displayUnitName(UNIT_CONFIGS[config.summon.unitTypeId].name)}加入战斗。`,
     };
   }
   if (config.detonate) return { title: '自爆', description: '接近目标后点燃引信，对范围内敌人造成爆炸伤害。' };

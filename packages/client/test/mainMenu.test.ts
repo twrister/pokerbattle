@@ -56,8 +56,7 @@ function mountMainMenuDom(): void {
       <button id="btn-sandbox"></button>
       <button id="btn-deck"></button>
       <button id="btn-codex"></button>
-      <button id="btn-solo-easy"></button>
-      <button id="btn-solo-hard"></button>
+      <button id="btn-solo-ai"></button>
       <button id="btn-online-quick"></button>
       <button id="btn-online-room"></button>
       <div id="online-room-panel" class="is-hidden">
@@ -150,15 +149,14 @@ describe('大厅玩家档案展示', () => {
     expect(document.querySelector('#player-level')?.textContent).toBe('等级 09');
   });
 
-  it('简单与困难人机分别传递对应难度', () => {
+  it('人机对战以 hard 难度启动单机', () => {
     const onStartSolo = vi.fn();
     createMainMenu(menuOptions({ onStartSolo }));
 
-    document.querySelector<HTMLButtonElement>('#btn-solo-easy')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-solo-hard')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-solo-ai')!.click();
 
-    expect(onStartSolo).toHaveBeenNthCalledWith(1, 'easy');
-    expect(onStartSolo).toHaveBeenNthCalledWith(2, 'hard');
+    expect(onStartSolo).toHaveBeenCalledTimes(1);
+    expect(onStartSolo).toHaveBeenCalledWith('hard');
   });
 
   it('快速匹配、创建与加入分别传递入房参数', async () => {

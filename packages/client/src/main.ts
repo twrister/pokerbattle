@@ -29,7 +29,6 @@ import {
   shouldRecordVersusAbandon,
 } from './account/index.js';
 import { SimLoop } from './loop.js';
-import { createConfigPanel, type ConfigPanelHandle } from './debug/configPanel.js';
 import { createPanel } from './debug/panel.js';
 import { IS_DEV_SERVER } from './env.js';
 import {
@@ -58,6 +57,7 @@ import { createHandOddsPage } from './ui/handOddsPage.js';
 import { createMainMenu, type VersusJoinRequest } from './ui/mainMenu.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
+import { createUnitStatsPage } from './ui/unitStatsPage.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import {
   loadRuntimeDefaults,
@@ -80,7 +80,7 @@ const playerProfile = createPlayerProfileService();
 
 let screens: ScreenController;
 /** 大厅选择只影响下一场单机，避免在 UI 路由中扩散难度状态。 */
-let selectedSoloDifficulty: SoloDifficulty = 'easy';
+let selectedSoloDifficulty: SoloDifficulty = 'hard';
 /** 进入 versus 前暂存入房参数，因 ScreenController 不携带 payload。 */
 let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
 /**
@@ -131,17 +131,21 @@ const deckConfigPage = createDeckConfigPage({
   onOpenHandOdds: () => screens.show('hand-odds'),
 });
 const handOddsPage = createHandOddsPage({ onBack: () => screens.show('deck-config') });
-const codexPage = createCodexPage({ onBack: () => screens.show('menu') });
+const unitStatsPage = createUnitStatsPage({ onBack: () => screens.show('codex') });
+const codexPage = createCodexPage({
+  onBack: () => screens.show('menu'),
+  onOpenUnitStats: () => screens.show('unit-stats'),
+});
 const battleHud = createBattleHud();
 const battleResult = createBattleResult(() => screens.show('menu'));
+const openUnitStatsButton = document.querySelector<HTMLButtonElement>('#btn-open-unit-stats');
 
 /**
- * 战斗场景与配置面板跨「大厅 ↔ 单机/沙盒/联机」复用。
- * 退出大厅只停循环、藏 UI；WebGL dispose 与整表单拆解推迟到页面卸载，避免返回卡顿。
+ * 战斗场景跨「大厅 ↔ 单机/沙盒/联机」复用。
+ * 退出大厅只停循环、藏 UI；WebGL dispose 推迟到页面卸载，避免返回卡顿。
  */
 let sharedScene: SceneContext | null = null;
 let sharedBattleView: BattleView | null = null;
-let sharedConfigPanel: ConfigPanelHandle | null = null;
 
 /** 懒创建或切换镜头模式，始终复用同一个 WebGLRenderer。 */
 function ensureBattleScene(mode: BattleMode, viewFaction: Faction = Faction.Blue): SceneContext {
@@ -163,14 +167,6 @@ function ensureBattleScene(mode: BattleMode, viewFaction: Faction = Faction.Blue
     sharedScene.setSoloViewBottomExtra(defaults.viewBottomExtra);
   }
   return sharedScene;
-}
-
-/** 配置表单 DOM 很重，只建一次，会话切换只换 onApplied。 */
-function ensureConfigPanel(): ConfigPanelHandle {
-  if (!sharedConfigPanel) {
-    sharedConfigPanel = createConfigPanel({ onApplied: () => {} });
-  }
-  return sharedConfigPanel;
 }
 
 type BattleMode = 'sandbox' | 'solo';
@@ -463,15 +459,22 @@ function enterBattleSession(mode: BattleMode): () => void {
       : { onBrawl: () => spawnBrawl(loop) }),
   });
 
-  const configPanel = IS_DEV_SERVER ? ensureConfigPanel() : null;
-  configPanel?.setOnApplied(() => {
-    clearBattlefield();
-    panel.refreshUnitLabels();
-  });
+  /** 战场入口以 overlay 打开参数页，避免切屏拆掉对局。 */
+  const openUnitStatsOverlay = (): void => {
+    unitStatsPage.setOnApplied(() => {
+      clearBattlefield();
+      panel.refreshUnitLabels();
+    });
+    unitStatsPage.showAsOverlay();
+  };
+  if (IS_DEV_SERVER) openUnitStatsButton?.addEventListener('click', openUnitStatsOverlay);
 
   if (!isSolo && !panel.buildingType) bindUnitPlacement();
 
-  const returnToMenu = (): void => screens.show('menu');
+  const returnToMenu = (): void => {
+    unitStatsPage.hide();
+    screens.show('menu');
+  };
   backButton.addEventListener('click', returnToMenu);
 
   let lastFrameAt = performance.now();
@@ -527,7 +530,9 @@ function enterBattleSession(mode: BattleMode): () => void {
     handPanel?.dispose();
     removeSoloBot();
     panel.dispose();
-    configPanel?.setOnApplied(() => {});
+    openUnitStatsButton?.removeEventListener('click', openUnitStatsOverlay);
+    unitStatsPage.setOnApplied(() => {});
+    unitStatsPage.hide();
     battleView.reset();
   };
 }
@@ -958,6 +963,12 @@ screens = createScreenController({
     codexPage.show();
     return () => codexPage.hide();
   },
+  'unit-stats': () => {
+    syncLobbyPresenceForScreen('unit-stats');
+    unitStatsPage.setOnApplied(() => {});
+    unitStatsPage.show();
+    return () => unitStatsPage.hide();
+  },
   sandbox: () => {
     syncLobbyPresenceForScreen('sandbox');
     return enterSandbox();
@@ -976,8 +987,6 @@ screens.show('menu');
 function disposeApp(): void {
   screens.dispose();
   stopAppLobbyPresence();
-  sharedConfigPanel?.dispose();
-  sharedConfigPanel = null;
   sharedBattleView?.reset();
   sharedBattleView = null;
   sharedScene?.dispose();
@@ -986,6 +995,7 @@ function disposeApp(): void {
   mainMenu.dispose();
   deckConfigPage.dispose();
   handOddsPage.dispose();
+  unitStatsPage.dispose();
   codexPage.dispose();
 }
 

@@ -39,7 +39,8 @@
       }
 
       /* 正式服（无 html.is-dev）：隐藏仅开发服可用的调试/编辑入口 */
-      html:not(.is-dev) #panel-config,
+      html:not(.is-dev) #btn-open-unit-stats,
+      html:not(.is-dev) #unit-stats,
       html:not(.is-dev) #hud.is-solo #panel-controls,
       html:not(.is-dev) #btn-deck-add-formation,
       html:not(.is-dev) #btn-deck-hand-odds,
@@ -1183,186 +1184,31 @@
       }
 
       #hud.is-solo #panel-help,
-      #hud.is-solo #panel-config {
-        bottom: max(16px, env(safe-area-inset-bottom));
-      }
-
       /* 联机：禁运行控制/改表/操作提示，避免调试面板盖住战场或误操作 */
       #hud.is-versus #panel-controls,
-      #hud.is-versus #panel-config,
+      #hud.is-versus #btn-open-unit-stats,
       #hud.is-versus #panel-help {
         display: none !important;
       }
 
-      /* 锚在右下角；column-reverse 让标题+切换钮始终贴底，展开收起位置不变 */
-      #panel-config {
+      /* 战场入口：右下角打开单位参数对比/编辑页（overlay） */
+      #btn-open-unit-stats {
+        position: absolute;
         bottom: 16px;
         right: 16px;
-        width: auto;
-        max-height: calc(100vh - 32px);
-        display: flex;
-        flex-direction: column-reverse;
-        gap: 10px;
         z-index: 5;
-      }
-
-      /* 展开后铺满视口（留边距），内容在上、切换钮仍在右下角 */
-      #panel-config:not(.is-collapsed) {
-        width: calc(100vw - 32px);
-        height: calc(100vh - 32px);
-        max-height: none;
-        z-index: 30;
-      }
-
-      #panel-config .config-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 0;
-        flex-shrink: 0;
-      }
-
-      #panel-config .config-header .title {
-        margin-bottom: 0;
-      }
-
-      #btn-config-toggle {
-        padding: 4px 10px;
-        font-size: 12px;
-        flex-shrink: 0;
-        min-width: 3.5em;
-      }
-
-      #panel-config.is-collapsed {
-        width: auto;
-        height: auto;
-        gap: 0;
-      }
-
-      #panel-config.is-collapsed #config-body {
-        display: none;
-      }
-
-      #config-body {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 0;
-        flex: 1;
-      }
-
-      #panel-config .config-scroll {
-        overflow: auto;
-        overscroll-behavior: contain;
-        padding-right: 2px;
-        flex: 1;
-        min-height: 0;
-      }
-
-      /* 每个兵种一列固定宽度，从左排布；超出可左右滚动 */
-      #config-form {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        justify-content: flex-start;
-        gap: 12px;
-        align-items: start;
-        width: max-content;
-      }
-
-      .config-unit {
-        flex: 0 0 220px;
-        width: 220px;
-        box-sizing: border-box;
-        padding: 10px 10px 4px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid var(--panel-border);
-      }
-
-      .config-unit-title {
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        color: var(--text);
-        margin-bottom: 8px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid var(--panel-border);
-      }
-
-      .config-row {
-        display: grid;
-        grid-template-columns: 88px 1fr;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 6px;
-      }
-
-      .config-label {
-        color: var(--text-dim);
-        line-height: 1.25;
-      }
-
-      .config-label small {
-        display: block;
-        font-size: 10px;
-        opacity: 0.75;
-      }
-
-      .config-levels > div {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-      }
-
-      .config-levels button {
-        min-width: 26px;
-        padding: 3px 6px;
+        padding: 8px 12px;
         font: inherit;
+        font-size: 12px;
         color: var(--text);
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(18, 28, 40, 0.92);
         border: 1px solid var(--panel-border);
-        border-radius: 5px;
+        border-radius: 8px;
         cursor: pointer;
       }
 
-      .config-levels button.is-active {
-        color: #172030;
-        background: #f5d26b;
-        border-color: #f5d26b;
-      }
-
-      #panel-config input,
-      #panel-config select {
-        width: 100%;
-        font: inherit;
-        font-variant-numeric: tabular-nums;
-        color: var(--text);
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
-        padding: 5px 8px;
-      }
-
-      #panel-config input:focus,
-      #panel-config select:focus {
-        outline: none;
-        border-color: var(--accent);
-      }
-
-      #config-status {
-        min-height: 1.2em;
-        font-size: 11px;
-        color: var(--text-dim);
-      }
-
-      #config-status[data-tone='ok'] {
-        color: var(--accent);
-      }
-
-      #config-status[data-tone='error'] {
-        color: var(--red);
+      #hud.is-solo #btn-open-unit-stats {
+        bottom: max(16px, env(safe-area-inset-bottom));
       }
 
       .title {
@@ -2230,15 +2076,16 @@
       }
 
       .codex-header {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
-        justify-content: space-between;
         gap: calc(12 * var(--hu));
       }
 
       .codex-header h1 {
         margin: 0;
         font-size: calc(34 * var(--hu));
+        text-align: center;
       }
 
       .codex-back,
@@ -2647,6 +2494,332 @@
         font-size: 12px;
       }
 
+      /* 开发工具页：铺满视口，不跟大厅 9:16/--hu 窄屏舞台缩放 */
+      #unit-stats {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 22% 18%, rgba(120, 96, 48, 0.22), transparent 34%),
+          #0a1018;
+      }
+
+      #unit-stats.is-overlay {
+        z-index: 40;
+        background: rgba(6, 10, 16, 0.94);
+      }
+
+      .unit-stats-shell {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        min-height: 100%;
+        margin: 0;
+        padding: 16px 20px 12px;
+        gap: 12px;
+        overflow: hidden;
+        box-shadow: none;
+        background: transparent;
+      }
+
+      .unit-stats-shell::before,
+      .unit-stats-shell::after {
+        display: none;
+      }
+
+      .unit-stats-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .unit-stats-header h1 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .unit-stats-back,
+      .unit-stats-tab,
+      .unit-stats-footer button {
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .unit-stats-back,
+      .unit-stats-tab,
+      .unit-stats-footer button {
+        min-height: 34px;
+        padding: 7px 12px;
+      }
+
+      .unit-stats-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .unit-stats-tab.is-active {
+        color: #172030;
+        background: #f5d26b;
+        border-color: #f5d26b;
+      }
+
+      .unit-stats-panel {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .unit-stats-table-wrap {
+        overflow: auto;
+        max-height: 100%;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(18, 28, 40, 0.72);
+      }
+
+      .unit-stats-table {
+        width: 100%;
+        min-width: 100%;
+        border-collapse: collapse;
+        table-layout: auto;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .unit-stats-table th,
+      .unit-stats-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(144, 166, 187, 0.14);
+        text-align: left;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+
+      .unit-stats-table th {
+        position: sticky;
+        top: 0;
+        background: rgba(14, 22, 32, 0.96);
+        color: var(--text-dim);
+        font-weight: 600;
+        z-index: 1;
+      }
+
+      /* 列随屏宽分配；控件下限 88，宽屏可继续拉长 */
+      .unit-stats-table input,
+      .unit-stats-table select {
+        width: 100%;
+        min-width: 88px;
+        box-sizing: border-box;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 5px 8px;
+      }
+
+      .unit-stats-compare-controls select {
+        width: auto;
+        min-width: 120px;
+        font: inherit;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 5px 8px;
+      }
+
+      /* 系统下拉多为白底，选项勿继承页面浅色字，否则未选中项几乎看不见 */
+      #unit-stats select option {
+        color: #1a2332;
+        background-color: #ffffff;
+      }
+
+      #unit-stats select option:checked,
+      #unit-stats select option:hover {
+        color: #ffffff;
+        background-color: #3d4f66;
+      }
+
+      .unit-stats-table th[data-field='name'],
+      .unit-stats-table td.unit-stats-name {
+        width: 220px;
+        min-width: 220px;
+        max-width: 220px;
+        box-sizing: border-box;
+      }
+
+      .unit-stats-name input {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      /* 前摇列控件固定 88；左右多留内边距，避免与邻列挤在一起 */
+      .unit-stats-table th[data-field='attackWindup'],
+      .unit-stats-table td[data-field='attackWindup'] {
+        width: 112px;
+        max-width: 112px;
+        padding-left: 16px;
+        padding-right: 16px;
+        box-sizing: content-box;
+      }
+
+      .unit-stats-table td[data-field='attackWindup'] .unit-stats-value,
+      .unit-stats-table td[data-field='attackWindup'] input {
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+      }
+
+      .unit-stats-value {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        min-width: 88px;
+      }
+
+      .unit-stats-mini-bar {
+        width: 100%;
+        min-width: 72px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .unit-stats-mini-bar span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #c9a44a, #f5d26b);
+      }
+
+      .unit-stats-readonly {
+        color: var(--text-dim);
+      }
+
+      .unit-stats-more summary {
+        cursor: pointer;
+        color: var(--accent);
+      }
+
+      .unit-stats-more-fields {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+        min-width: 160px;
+      }
+
+      .unit-stats-more-row {
+        display: grid;
+        grid-template-columns: 64px 1fr;
+        gap: 6px;
+        align-items: center;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .unit-stats-compare-controls,
+      .unit-stats-radar-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        margin-bottom: 14px;
+        align-items: center;
+      }
+
+      .unit-stats-radar-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+
+      .unit-stats-chart {
+        display: grid;
+        gap: 16px;
+        justify-items: start;
+      }
+
+      .unit-stats-svg {
+        width: min(100%, 960px);
+        height: auto;
+        background: rgba(18, 28, 40, 0.55);
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+      }
+
+      .unit-stats-bar {
+        fill: #f5d26b;
+      }
+
+      .unit-stats-axis-label {
+        fill: rgba(210, 222, 234, 0.78);
+        font-size: 11px;
+      }
+
+      .unit-stats-radar-grid {
+        fill: none;
+        stroke: rgba(144, 166, 187, 0.2);
+      }
+
+      .unit-stats-radar-axis {
+        stroke: rgba(144, 166, 187, 0.28);
+      }
+
+      .unit-stats-radar-poly {
+        stroke-width: 2;
+      }
+
+      .unit-stats-radar-table td.is-best {
+        color: #f5d26b;
+        font-weight: 600;
+      }
+
+      .unit-stats-hint {
+        margin: 0;
+        color: var(--text-dim);
+      }
+
+      .unit-stats-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        padding: 8px 0 0;
+        background: transparent;
+      }
+
+      #unit-stats-status {
+        flex: 1;
+        min-width: 160px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      #unit-stats-status[data-tone='ok'] {
+        color: var(--accent);
+      }
+
+      #unit-stats-status[data-tone='error'] {
+        color: var(--red);
+      }
+
       @media (max-width: 720px) {
         .hand-odds-body {
           grid-template-columns: 1fr;
@@ -2763,12 +2936,8 @@
               <button class="mode-dialog-close" type="button" aria-label="关闭" data-mode-close>×</button>
             </header>
             <div class="mode-dialog-options">
-              <button id="btn-solo-easy" class="mode-option mode-option-ready" type="button">
-                简单人机
-                <small>现有单机</small>
-              </button>
-              <button id="btn-solo-hard" class="mode-option mode-option-ready" type="button">
-                困难人机
+              <button id="btn-solo-ai" class="mode-option mode-option-ready" type="button">
+                人机对战
                 <small>预判手牌，主动攻守</small>
               </button>
               <button class="mode-option mode-option-soon" type="button" data-placeholder="关卡挑战">
@@ -2874,6 +3043,7 @@
         <header class="codex-header">
           <button id="btn-codex-back" class="codex-back" type="button">返回主界面</button>
           <h1>兵种图鉴</h1>
+          <button id="btn-codex-unit-stats" class="codex-back dev-only" type="button">单位参数</button>
         </header>
         <section class="codex-toolbar">
           <p class="codex-toolbar-copy">浏览可移动单位的战斗属性与特性，选择兵种查看详细档案。</p>
@@ -2992,6 +3162,23 @@
             <div id="hand-odds-legend" class="hand-odds-legend"></div>
           </div>
         </section>
+      </div>
+    </main>
+
+    <main id="unit-stats" class="is-hidden" aria-hidden="true">
+      <div class="unit-stats-shell">
+        <header class="unit-stats-header">
+          <button id="btn-unit-stats-back" class="unit-stats-back" type="button">返回图鉴</button>
+          <h1>单位参数</h1>
+          <span aria-hidden="true"></span>
+        </header>
+        <nav id="unit-stats-tabs" class="unit-stats-tabs" aria-label="单位参数视图"></nav>
+        <section id="unit-stats-panel" class="unit-stats-panel" aria-live="polite"></section>
+        <footer class="unit-stats-footer">
+          <div id="unit-stats-status" role="status" aria-live="polite">改完点保存写回配置文件</div>
+          <button id="btn-unit-stats-reset" type="button">重置</button>
+          <button id="btn-unit-stats-save" type="button">保存</button>
+        </footer>
       </div>
     </main>
 
@@ -3117,22 +3304,7 @@
         </div>
       </section>
 
-      <section class="panel is-collapsed" id="panel-config">
-        <div class="config-header">
-          <div class="title">单位参数</div>
-          <button id="btn-config-toggle" type="button" aria-expanded="false">展开</button>
-        </div>
-        <div id="config-body">
-          <div class="config-scroll">
-            <div id="config-form"></div>
-          </div>
-          <div class="btn-row">
-            <button id="btn-config-reset" type="button">重置</button>
-            <button id="btn-config-save" type="button">保存</button>
-          </div>
-          <div id="config-status">改完点保存写回配置文件；重置恢复文件快照</div>
-        </div>
-      </section>
+      <button id="btn-open-unit-stats" class="dev-only" type="button">单位参数</button>
 
       <div id="panel-bottom-dock">
         <section class="panel" id="panel-building">
