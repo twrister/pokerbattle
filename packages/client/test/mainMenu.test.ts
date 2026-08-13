@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerProfile } from '../src/account/types.js';
 import { createMainMenu } from '../src/ui/mainMenu.js';
 
+const envState = vi.hoisted(() => ({ isDev: true }));
+
+vi.mock('../src/env.js', () => ({
+  get IS_DEV_SERVER() {
+    return envState.isDev;
+  },
+}));
+
 vi.mock('../src/net/session.js', () => ({
   createLobbyPresence: vi.fn(),
 }));
@@ -95,6 +103,7 @@ function mountMainMenuDom(): void {
 
 describe('大厅玩家档案展示', () => {
   beforeEach(() => {
+    envState.isDev = true;
     mountMainMenuDom();
   });
 
@@ -157,6 +166,22 @@ describe('大厅玩家档案展示', () => {
 
     expect(onStartSolo).toHaveBeenCalledTimes(1);
     expect(onStartSolo).toHaveBeenCalledWith('hard');
+  });
+
+  it('开发服点击模拟沙盒会进入，正式服仅提示不可进入', () => {
+    const onStartSandbox = vi.fn();
+    createMainMenu(menuOptions({ onStartSandbox }));
+
+    document.querySelector<HTMLButtonElement>('#btn-sandbox')!.click();
+    expect(onStartSandbox).toHaveBeenCalledTimes(1);
+
+    envState.isDev = false;
+    onStartSandbox.mockClear();
+    document.querySelector<HTMLButtonElement>('#btn-sandbox')!.click();
+    expect(onStartSandbox).not.toHaveBeenCalled();
+    const status = document.querySelector('#lobby-status')!;
+    expect(status.classList.contains('is-visible')).toBe(true);
+    expect(status.textContent).toContain('正式服不可进入模拟沙盒');
   });
 
   it('快速匹配、创建与加入分别传递入房参数', async () => {

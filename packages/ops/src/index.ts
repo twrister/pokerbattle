@@ -1,9 +1,9 @@
 import http from 'node:http';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDashboardStatus, type ServiceDescriptor } from './dashboardStatus.js';
+import { listLanIPv4, writeLanIpsJson } from './lanIps.js';
 import { ProcessManager } from './processManager.js';
 import type { OpsServiceId } from './types.js';
 
@@ -109,10 +109,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(OPS_PORT, OPS_HOST, () => {
+  const lanIps = writeLanIpsJson(PUBLIC_DIR);
   console.log(`[pb-ops] http://${OPS_HOST === '0.0.0.0' ? '0.0.0.0' : OPS_HOST}:${OPS_PORT}`);
   console.log('[pb-ops] 仅建议在受信局域网使用，当前未启用鉴权');
   console.log(`[pb-ops] 本机打开: http://127.0.0.1:${OPS_PORT}/`);
-  for (const ip of listLanIPv4()) {
+  for (const ip of lanIps) {
     console.log(`[pb-ops] 局域网: http://${ip}:${OPS_PORT}/`);
   }
 });
@@ -159,6 +160,7 @@ async function handleApi(
       gameBaseUrl: GAME_BASE_URL,
       processManager,
       services: serviceDescriptors,
+      lanIps: listLanIPv4(),
     });
     writeJson(res, 200, status);
     return;
@@ -276,16 +278,4 @@ function contentTypeFor(filePath: string): string {
   if (filePath.endsWith('.svg')) return 'image/svg+xml';
   if (filePath.endsWith('.json')) return 'application/json; charset=utf-8';
   return 'application/octet-stream';
-}
-
-function listLanIPv4(): string[] {
-  const result: string[] = [];
-  for (const entries of Object.values(os.networkInterfaces())) {
-    for (const entry of entries ?? []) {
-      if (entry.family === 'IPv4' && !entry.internal) {
-        result.push(entry.address);
-      }
-    }
-  }
-  return result;
 }

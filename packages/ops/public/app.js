@@ -25,6 +25,8 @@ let busy = false;
 let busyServiceId = null;
 let pollTimer = null;
 let latestServices = [];
+/** 最近一次 /api/status 的 ops 段，重绘入口时用来解析局域网 IP。 */
+let latestOps = null;
 /** 最近一次成功复制的链接与时间，用于轮询重绘后保留按钮反馈。 */
 let lastCopied = { url: '', at: 0 };
 
@@ -34,11 +36,28 @@ async function refreshStatus() {
     const response = await fetch('/api/status', { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    data.ops = data.ops ?? {};
+    // 旧运维进程没有 lanIps 字段时，改读静态清单，避免入口继续显示 localhost
+    if (!Array.isArray(data.ops.lanIps) || data.ops.lanIps.length === 0) {
+      data.ops.lanIps = await fetchLanIpsFallback();
+    }
     renderStatus(data);
     els.refreshHint.textContent = `上次刷新 ${formatTime(Date.now())}`;
   } catch (error) {
     els.refreshHint.textContent = '刷新失败';
     showMessage(error instanceof Error ? error.message : '状态刷新失败', false);
+  }
+}
+
+/** 读取 public/lan-ips.json；运维站未重启时接口没有局域网 IP。 */
+async function fetchLanIpsFallback() {
+  try {
+    const response = await fetch('/lan-ips.json', { cache: 'no-store' });
+    if (!response.ok) return [];
+    const body = await response.json();
+    return Array.isArray(body?.lanIps) ? body.lanIps : [];
+  } catch {
+    return [];
   }
 }
 
@@ -69,6 +88,7 @@ function renderStatus(data) {
     hideMessage();
   }
 
+  latestOps = data.ops ?? null;
   latestServices = Array.isArray(data.services) ? data.services : [];
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
@@ -82,7 +102,7 @@ function renderServices(services) {
     return;
   }
 
-  const host = location.hostname || '127.0.0.1';
+  const host = resolvePublicHost(latestOps);
   els.serviceEntries.innerHTML = services
     .map((service) => {
       const state = service.process?.state ?? 'stopped';
@@ -128,6 +148,27 @@ function renderServices(services) {
       </article>`;
     })
     .join('');
+}
+
+/**
+ * 入口地址优先用局域网 IPv4：用 localhost 打开运维站时，复制出去的链接才能给其他设备用。
+ * 若当前就是用某个非回环 IP 访问的，则沿用该 IP，避免多网卡时挑错。
+ */
+function resolvePublicHost(ops) {
+  const hostname = location.hostname || '';
+  const lanIps = Array.isArray(ops?.lanIps) ? ops.lanIps : [];
+  if (isUsableIPv4(hostname) && !isLoopbackHost(hostname)) return hostname;
+  if (lanIps.length > 0) return lanIps[0];
+  return hostname || '127.0.0.1';
+}
+
+function isLoopbackHost(host) {
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}
+
+/** 仅接受点分十进制 IPv4，排除 localhost 等主机名。 */
+function isUsableIPv4(host) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
 }
 
 /**

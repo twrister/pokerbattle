@@ -4,3 +4,4 @@ dist/
 .DS_Store
 .vite/
 .history/
+packages/ops/public/lan-ips.json

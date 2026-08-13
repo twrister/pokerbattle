@@ -41,6 +41,7 @@
       /* 正式服（无 html.is-dev）：隐藏仅开发服可用的调试/编辑入口 */
       html:not(.is-dev) #btn-open-unit-stats,
       html:not(.is-dev) #unit-stats,
+      html:not(.is-dev) #panel-stats,
       html:not(.is-dev) #hud.is-solo #panel-controls,
       html:not(.is-dev) #btn-deck-add-formation,
       html:not(.is-dev) #btn-deck-hand-odds,
@@ -829,8 +830,14 @@
         transform: translateX(-50%);
       }
 
-      canvas {
+      /*
+       * 高分屏 setPixelRatio 后缓冲大于 CSS 像素；必须用 100% 把显示尺寸压回 #app，
+       * 否则 canvas 按缓冲像素撑大并被裁切，场景会放大偏移。配合 setSize(..., false)。
+       */
+      #app canvas {
         display: block;
+        width: 100%;
+        height: 100%;
       }
 
       /* HUD 整体不吃事件，只有具体控件吃，这样空白处的点击能穿透到画布上放兵 */

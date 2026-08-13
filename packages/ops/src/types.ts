@@ -70,7 +70,7 @@ export interface OpsServiceEntry {
   id: OpsServiceId;
   label: string;
   port: number;
-  /** 相对路径，前端拼到 hostname 上形成打开链接。 */
+  /** 相对路径，前端拼到局域网 IP 上形成打开链接。 */
   path: string;
   description: string;
   reachable: boolean;
@@ -86,6 +86,8 @@ export interface OpsDashboardStatus {
     port: number;
     startedAt: number;
     uptimeMs: number;
+    /** 本机局域网 IPv4；前端拼服务入口，避免把 localhost 复制给其他设备。 */
+    lanIps: string[];
   };
   process: ManagedProcessInfo;
   game: GameServerStatus | null;

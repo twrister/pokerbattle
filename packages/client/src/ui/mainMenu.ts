@@ -1,6 +1,7 @@
 import { normalizeRoomId, normalizeRoomName, type JoinMode, type RoomListEntry } from '@pb/net';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
+import { IS_DEV_SERVER } from '../env.js';
 
 /** 大厅发起联机时的入房参数。 */
 export interface VersusJoinRequest {
@@ -182,7 +183,15 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     renameInput.select();
   };
 
-  const startSandbox = (): void => options.onStartSandbox();
+  /** 开发服进入沙盒；正式服仅提示不可进入，入口仍保留。 */
+  const startSandbox = (): void => {
+    if (!IS_DEV_SERVER) {
+      status.textContent = '正式服不可进入模拟沙盒，请使用开发服';
+      status.classList.add('is-visible');
+      return;
+    }
+    options.onStartSandbox();
+  };
   /** 关弹层后以人机对战（hard）进入单机。 */
   const startSoloAi = (): void => {
     closeModeDialogs();

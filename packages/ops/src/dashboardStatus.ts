@@ -21,6 +21,8 @@ export interface BuildDashboardStatusOptions {
   gameBaseUrl: string;
   processManager: ProcessManager;
   services: ServiceDescriptor[];
+  /** 本机局域网 IPv4；缺省为空，由调用方探测后注入。 */
+  lanIps?: string[];
 }
 
 /**
@@ -55,6 +57,7 @@ export async function buildDashboardStatus(
       port: options.opsPort,
       startedAt: options.opsStartedAt,
       uptimeMs: Date.now() - options.opsStartedAt,
+      lanIps: options.lanIps ?? [],
     },
     process: processInfo,
     game: gameResult.status,

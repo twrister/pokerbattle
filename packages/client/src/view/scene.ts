@@ -112,8 +112,11 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
   setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
 
   const resize = (): void => {
+    // 跨显示器 / 系统缩放变化时同步 DPR，避免仍用创建时的像素比
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
+    // false：不写内联 CSS，由 #app canvas { width/height: 100% } 锁定显示尺寸
     renderer.setSize(width, height, false);
     resizeCamera(camera, width / height, soloCameraAngleDeg, viewFaction, soloViewBottomExtra);
   };

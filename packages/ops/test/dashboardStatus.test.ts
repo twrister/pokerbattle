@@ -70,6 +70,7 @@ describe('buildDashboardStatus', () => {
     expect(status.services).toHaveLength(1);
     expect(status.services[0]?.reachable).toBe(false);
     expect(status.services[0]?.distBuiltAt).toBeNull();
+    expect(status.ops.lanIps).toEqual([]);
   });
 
   it('returns room data when process running and status reachable', async () => {
@@ -152,6 +153,7 @@ describe('buildDashboardStatus', () => {
     expect(status.message).toBeNull();
     expect(status.services[0]?.reachable).toBe(true);
     expect(status.services[0]?.id).toBe('clientOfficial');
+    expect(status.ops.lanIps).toEqual([]);
   });
 
   it('keeps external conflict message', async () => {
