@@ -10,29 +10,80 @@ const GAME_META = process.env.GAME_META || '/opt/projects/poker-battle/deploy.me
 const GAME_UNIT = process.env.GAME_SYSTEMD_UNIT || 'poker-battle';
 const OPS_UNIT = process.env.OPS_SYSTEMD_UNIT || 'poker-battle-ops';
 const PUBLIC_BASE = process.env.VITE_PUBLIC_BASE || '/poker-battle';
-
+const PNPM_VERSION = '11.20.0';
 /**
- * 在服务器工作区构建并覆盖运行包，最后重启 systemd。
- * 由线上运维站「pnpm deploy」调用；不走 SSH。
+ * 官方 Node tarball 把 corepack/pnpm 放在 node 同目录；systemd PATH 默认不含这里。
+ * 本脚本由线上运维站「pnpm deploy」调用，在工作区构建并覆盖运行包。
  */
+const NODE_BIN_DIRS = [
+  path.dirname(process.execPath),
+  '/usr/local/bin',
+  '/usr/local/lib/nodejs/bin',
+];
+
+function toolchainEnv(extraEnv = {}) {
+  return {
+    ...process.env,
+    PATH: [...NODE_BIN_DIRS, process.env.PATH || '/usr/bin:/bin'].join(path.delimiter),
+    HOME: process.env.HOME || '/root',
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: '0',
+    ...extraEnv,
+  };
+}
+
 function run(command, args, extraEnv = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, ...extraEnv },
+    env: toolchainEnv(extraEnv),
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
 }
 
-/** 没有 pnpm 时用 corepack 启用仓库锁定的版本。 */
+/** 按 node 安装目录查找可执行文件，避免依赖残缺 PATH。 */
+function resolveTool(name) {
+  const bins = process.platform === 'win32' ? [`${name}.cmd`, name] : [name];
+  for (const dir of NODE_BIN_DIRS) {
+    for (const bin of bins) {
+      const full = path.join(dir, bin);
+      if (fs.existsSync(full)) return full;
+    }
+  }
+  return null;
+}
+
+function hasPnpm() {
+  const pnpm = resolveTool('pnpm') || 'pnpm';
+  const check = spawnSync(pnpm, ['-v'], {
+    cwd: root,
+    shell: true,
+    encoding: 'utf8',
+    env: toolchainEnv(),
+  });
+  return check.status === 0;
+}
+
+/** 线上不用 corepack：Node 20 自带版本签名密钥过期。改用 npm 装真实 pnpm。 */
 function ensurePnpm() {
-  const check = spawnSync('pnpm', ['-v'], { cwd: root, shell: true, encoding: 'utf8' });
-  if (check.status === 0) return;
-  run('corepack', ['enable']);
-  run('corepack', ['prepare', 'pnpm@11.20.0', '--activate']);
+  const corepack = resolveTool('corepack');
+  if (corepack) {
+    spawnSync(corepack, ['disable'], {
+      cwd: root,
+      stdio: 'inherit',
+      shell: true,
+      env: toolchainEnv(),
+    });
+  }
+  if (hasPnpm()) return;
+  const npmBin = resolveTool('npm') || 'npm';
+  run(npmBin, ['install', '-g', `pnpm@${PNPM_VERSION}`]);
+  if (!hasPnpm()) {
+    console.error('[apply-on-server] 找不到 pnpm，npm 全局安装也失败');
+    process.exit(1);
+  }
 }
 
 /** 覆盖复制目录到目标路径。 */
@@ -42,8 +93,9 @@ function copyDir(src, dest) {
 }
 
 ensurePnpm();
-run('pnpm', ['install', '--frozen-lockfile']);
-run('pnpm', ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE });
+const pnpm = resolveTool('pnpm') || 'pnpm';
+run(pnpm, ['install', '--frozen-lockfile']);
+run(pnpm, ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE });
 
 const dist = path.join(root, 'dist');
 const distServer = path.join(root, 'dist-server');

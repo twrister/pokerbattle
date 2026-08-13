@@ -279,8 +279,10 @@ server {
 }
 SRV
 fi
-if [ ! -x /usr/local/bin/node ]; then
-  VER=v20.18.1
+VER=v22.23.2
+MAJOR=$(/usr/local/bin/node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)
+# pnpm 11 需要 Node >= 22.13；已装 Node 20 时也要升级
+if [ ! -x /usr/local/bin/node ] || [ "$MAJOR" -lt 22 ]; then
   ARCH=$(uname -m)
   case "$ARCH" in
     x86_64) NODEARCH=x64 ;;
@@ -288,12 +290,30 @@ if [ ! -x /usr/local/bin/node ]; then
     *) echo "unsupported arch $ARCH"; exit 1 ;;
   esac
   curl -fsSL "https://nodejs.org/dist/\${VER}/node-\${VER}-linux-\${NODEARCH}.tar.xz" -o /tmp/node.tar.xz
-  mkdir -p /usr/local/lib/nodejs
-  tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
+  rm -rf /tmp/node-extract
+  mkdir -p /tmp/node-extract
+  tar -xJf /tmp/node.tar.xz -C /tmp/node-extract --strip-components=1
+  rm -rf /usr/local/lib/nodejs
+  mv /tmp/node-extract /usr/local/lib/nodejs
   ln -sfn /usr/local/lib/nodejs/bin/node /usr/local/bin/node
   ln -sfn /usr/local/lib/nodejs/bin/npm /usr/local/bin/npm
 fi
+# Node 20 自带 corepack 签名密钥过期，enable 出的 pnpm 垫片不可用；改 npm 装真实二进制
+if [ -x /usr/local/lib/nodejs/bin/npx ]; then
+  ln -sfn /usr/local/lib/nodejs/bin/npx /usr/local/bin/npx
+fi
+if [ -x /usr/local/lib/nodejs/bin/corepack ]; then
+  ln -sfn /usr/local/lib/nodejs/bin/corepack /usr/local/bin/corepack
+  /usr/local/bin/corepack disable >/dev/null 2>&1 || true
+fi
+if ! pnpm -v >/dev/null 2>&1; then
+  /usr/local/bin/npm install -g pnpm@11.20.0
+fi
+if [ -x /usr/local/lib/nodejs/bin/pnpm ]; then
+  ln -sfn /usr/local/lib/nodejs/bin/pnpm /usr/local/bin/pnpm
+fi
 /usr/local/bin/node -v
+pnpm -v
 if ! command -v curl >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get install -y curl;
   elif command -v dnf >/dev/null 2>&1; then dnf install -y curl;
@@ -635,7 +655,7 @@ Environment=OPS_WORKSPACE=${WORKSPACE_REMOTE}
 Environment=OPS_DEPLOY_STATUS=${OPS_REMOTE_ROOT}/last-deploy.json
 Environment=GAME_APP=${REMOTE_APP}
 Environment=OPS_APP=${OPS_REMOTE_APP}
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/usr/local/bin:/usr/local/lib/nodejs/bin:/usr/bin:/bin
 Environment=HOME=/root
 Environment=NODE_ENV=production
 ExecStart=/usr/local/bin/node ${OPS_REMOTE_APP}/server.cjs

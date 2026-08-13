@@ -16,7 +16,8 @@ describe('单机扑克牌堆', () => {
     expect(cards).toHaveLength(54);
     expect(new Set(cards.map((card) => card.id))).toHaveLength(54);
     expect(cards.filter((card) => card.rank === 'JOKER')).toHaveLength(2);
-    expect(cardImageUrl(cards.find((card) => card.id === 'A-spades')!)).toBe('/cards/A_1.png');
+    expect(cardImageUrl(cards.find((card) => card.id === 'A-spades')!)).toBe('cards/A_1.png');
+    expect(cardImageUrl(cards.find((card) => card.id === 'joker-red')!)).toBe('cards/Joker_2.png');
   });
 
   it('抽牌离开有限牌堆且不能突破九张手牌上限', () => {

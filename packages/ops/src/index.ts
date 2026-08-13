@@ -319,7 +319,7 @@ function createDeployRunner(): DeployRunner {
     args: ['scripts/apply-on-server.mjs'],
     cwd: workspace,
     env: {
-      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+      PATH: `/usr/local/bin:/usr/local/lib/nodejs/bin:${process.env.PATH || '/usr/bin:/bin'}`,
       HOME: process.env.HOME || '/root',
       SKIP_OPS_RESTART: '1',
       GAME_APP: process.env.GAME_APP || '/opt/projects/poker-battle/app',
