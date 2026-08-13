@@ -595,7 +595,7 @@
     "radius": 0.3000030517578125,
     "bodyScale": 0.600006103515625,
     "mass": 2,
-    "maxHp": 150,
+    "maxHp": 200,
     "damage": 100,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -630,7 +630,7 @@
         "aoeRadius": 0,
         "detonate": {
           "fuse": 10,
-          "aoeRadius": 1.5
+          "aoeRadius": 2
         }
       }
     }
