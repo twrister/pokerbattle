@@ -22,6 +22,8 @@ export interface UnitSnapshot {
   facingX: number;
   facingY: number;
   radius: number;
+  /** 叠完 Buff 的攻击射程，供选中时画范围圈 */
+  range: number;
   /** 占地边长（整数格）；0 表示普通单位 */
   footprint: number;
   hpRatio: number;
@@ -113,6 +115,7 @@ export function takeSnapshot(world: World): Snapshot {
       facingX: toFloat(unit.facing.x),
       facingY: toFloat(unit.facing.y),
       radius: toFloat(unit.config.radius),
+      range: toFloat(unit.stats.range),
       footprint: unit.config.footprint,
       hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
       // 普攻与各类技能前摇共用同一套攻击蓄力姿势

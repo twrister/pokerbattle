@@ -62,7 +62,9 @@ describe('渲染同步', () => {
     world.step();
     const afterDeath = takeSnapshot(world);
     view.render(snapshot, afterDeath, 1, camera);
-    expect(scene.children.length).toBe(baseChildren);
+    expect(afterDeath.units).toHaveLength(0);
+    // 死亡会播 explode4，单位视图必须拿走，特效可以短暂留在场景
+    expect(scene.children.length).toBe(baseChildren + afterDeath.explosionEffects.length);
   });
 
   it('视图按位置插值，alpha 为 0.5 时落在两帧中点', () => {
@@ -267,5 +269,77 @@ describe('渲染同步', () => {
     const snap = takeSnapshot(world);
     view.render(snap, snap, 1, camera);
     expect(scene.children.some((child) => child.name === 'aoe-ground-mark')).toBe(false);
+  });
+
+  it('选中单位后显示白色无填充攻击范围圈，且同时只存在一个', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(6), fromFloat(10));
+    const grunt = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
+    const snap = takeSnapshot(world);
+    const archerSnap = snap.units.find((unit) => unit.id === archer.id)!;
+    expect(archerSnap.range).toBeGreaterThan(0);
+
+    view.render(snap, snap, 1, camera);
+    view.selectUnit(archer.id);
+    view.render(snap, snap, 1, camera);
+
+    const marks = scene.children.filter((child) => child.name === 'attack-range-mark');
+    expect(marks).toHaveLength(1);
+    const mark = marks[0]!;
+    expect(mark.position.x).toBeCloseTo(toSceneX(6), 5);
+    expect(mark.position.z).toBeCloseTo(toSceneZ(10), 5);
+    // 只要描边、不要预警圈那种半透明填充
+    expect(mark.children.some((child) => child instanceof THREE.Mesh)).toBe(false);
+    const line = mark.children.find((child) => child instanceof THREE.LineLoop) as THREE.LineLoop;
+    expect(line).toBeDefined();
+    expect((line.material as THREE.LineBasicMaterial).color.getHex()).toBe(0xffffff);
+    expect(line.scale.x).toBeCloseTo(archerSnap.range + archerSnap.radius, 5);
+
+    view.selectUnit(grunt.id);
+    view.render(snap, snap, 1, camera);
+    const afterSwitch = scene.children.filter((child) => child.name === 'attack-range-mark');
+    expect(afterSwitch).toHaveLength(1);
+    expect(afterSwitch[0]!.position.x).toBeCloseTo(toSceneX(12), 5);
+  });
+
+  it('点空地取消选中，单位死亡后范围圈回收', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(8));
+    const snap = takeSnapshot(world);
+    view.render(snap, snap, 1, camera);
+    view.selectUnit(unit.id);
+    view.render(snap, snap, 1, camera);
+    expect(scene.children.some((child) => child.name === 'attack-range-mark')).toBe(true);
+
+    view.selectUnit(null);
+    view.render(snap, snap, 1, camera);
+    expect(scene.children.some((child) => child.name === 'attack-range-mark')).toBe(false);
+
+    view.selectUnit(unit.id);
+    view.render(snap, snap, 1, camera);
+    unit.hp = 0;
+    world.step();
+    const afterDeath = takeSnapshot(world);
+    view.render(snap, afterDeath, 1, camera);
+    expect(scene.children.some((child) => child.name === 'attack-range-mark')).toBe(false);
+  });
+
+  it('点击拾取命中最近单位，空地返回 null', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const near = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(10));
+    const far = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
+    const snap = takeSnapshot(world);
+    view.render(snap, snap, 1, camera);
+
+    expect(view.pickUnitAtSim(8, 10)).toBe(near.id);
+    expect(view.pickUnitAtSim(12, 10)).toBe(far.id);
+    expect(view.pickUnitAtSim(8.3, 10)).toBe(near.id);
+    expect(view.pickUnitAtSim(9, 20)).toBeNull();
   });
 });

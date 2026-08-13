@@ -27,9 +27,21 @@ export interface PlacementOptions {
   onPlace: (simX: number, simY: number) => void;
 }
 
-/** 拖拽超过这个像素就算在转相机，不算点击放兵 */
+/** 拖拽超过这个像素就算在转相机，不算点击放兵 / 选中 */
 const CLICK_DRAG_TOLERANCE = 6;
 const CLICK_MAX_DURATION_MS = 500;
+
+/** 按下到抬起位移小且时间短，视为点击而非拖拽转镜头。 */
+export function isShortClick(
+  event: PointerEvent,
+  downX: number,
+  downY: number,
+  downTime: number,
+): boolean {
+  if (event.button !== 0) return false;
+  if (event.timeStamp - downTime > CLICK_MAX_DURATION_MS) return false;
+  return Math.hypot(event.clientX - downX, event.clientY - downY) <= CLICK_DRAG_TOLERANCE;
+}
 
 /** 点击落点是否在场地矩形内（含边界） */
 function isInsideArena(simX: number, simY: number): boolean {
@@ -147,9 +159,7 @@ export function enablePlacement(options: PlacementOptions): () => void {
   };
 
   const onPointerUp = (event: PointerEvent) => {
-    if (event.button !== 0) return;
-    if (event.timeStamp - downTime > CLICK_MAX_DURATION_MS) return;
-    if (Math.hypot(event.clientX - downX, event.clientY - downY) > CLICK_DRAG_TOLERANCE) return;
+    if (!isShortClick(event, downX, downY, downTime)) return;
 
     const rect = domElement.getBoundingClientRect();
     ndc.set(

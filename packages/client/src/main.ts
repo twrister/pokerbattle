@@ -50,6 +50,7 @@ import {
   screenToSim,
 } from './input/placement.js';
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
+import { enableUnitSelection } from './input/unitSelection.js';
 import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
@@ -237,6 +238,13 @@ function enterBattleSession(mode: BattleMode): () => void {
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
   let disableDebugUnitDrag = (): void => {};
+  const disableUnitSelection = enableUnitSelection({
+    domElement: sceneContext.renderer.domElement,
+    camera: sceneContext.camera,
+    groundPlane: sceneContext.groundPlane,
+    pickUnit: (simX, simY) => battleView.pickUnitAtSim(simX, simY),
+    onSelect: (unitId) => battleView.selectUnit(unitId),
+  });
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
   let aoePreview: AoePlacementHandle | null = null;
@@ -651,6 +659,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     disableUnitPlacement();
     disableBuildingPlacementFn();
     disableDebugUnitDrag();
+    disableUnitSelection();
     stopSoloBuildingPreview();
     stopPlaceableHighlight();
     stopAoePreview();
@@ -834,6 +843,13 @@ function runVersusSession(
   sceneContext.resize();
   const battleView = sharedBattleView!;
   battleView.reset();
+  const disableUnitSelection = enableUnitSelection({
+    domElement: sceneContext.renderer.domElement,
+    camera: sceneContext.camera,
+    groundPlane: sceneContext.groundPlane,
+    pickUnit: (simX, simY) => battleView.pickUnitAtSim(simX, simY),
+    onSelect: (unitId) => battleView.selectUnit(unitId),
+  });
 
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
@@ -1074,6 +1090,7 @@ function runVersusSession(
     stopBuildingPreview();
     stopPlaceableHighlight();
     stopAoePreview();
+    disableUnitSelection();
     handPanel.dispose();
     panel.dispose();
     battleView.reset();

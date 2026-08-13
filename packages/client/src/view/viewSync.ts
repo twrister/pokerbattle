@@ -37,6 +37,9 @@ const _arrowSide = new THREE.Vector3();
 const _arrowNormal = new THREE.Vector3();
 const _arrowBasis = new THREE.Matrix4();
 
+/** 点击拾取比碰撞圈略大，斜视镜头点到立绘中心时地面落点会往近端偏。 */
+const PICK_SLACK = 0.9;
+
 /** 懒加载共享炸弹材质；测试环境无 DOM 时给占位不可见图 */
 function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
   if (bombProjectileMaterial) return bombProjectileMaterial;
@@ -149,6 +152,11 @@ export class BattleView {
   private readonly explosionPool: ExplosionEffectView[] = [];
   private readonly activeAoeWarnings = new Map<number, AoeGroundMark>();
   private readonly aoeWarningPool: AoeGroundMark[] = [];
+  /** 选中单位的攻击范围圈：预警圈同款描边、无填充、白色。 */
+  private readonly attackRangeMark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  private selectedUnitId: number | null = null;
+  /** 最近一帧插值后的单位位置，供点击拾取。 */
+  private pickUnits: { id: number; x: number; y: number; radius: number; footprint: number }[] = [];
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -156,11 +164,39 @@ export class BattleView {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+    this.attackRangeMark.group.name = 'attack-range-mark';
+  }
+
+  /** 选中场上一个单位；传 null 取消。同一时刻只保留一个选中。 */
+  selectUnit(unitId: number | null): void {
+    this.selectedUnitId = unitId;
+  }
+
+  /**
+   * 按 sim 坐标拾取单位。建筑走占地 AABB，其余走碰撞圆，并留一点余量方便点到立绘。
+   * 重叠时取离点击更近的那个。
+   */
+  pickUnitAtSim(simX: number, simY: number): number | null {
+    let bestId: number | null = null;
+    let bestDist = Infinity;
+    for (const unit of this.pickUnits) {
+      const dx = unit.x - simX;
+      const dy = unit.y - simY;
+      const dist = Math.hypot(dx, dy);
+      const hit = unit.footprint > 0
+        ? Math.abs(dx) <= unit.footprint / 2 + PICK_SLACK && Math.abs(dy) <= unit.footprint / 2 + PICK_SLACK
+        : dist <= unit.radius + PICK_SLACK;
+      if (!hit || dist >= bestDist) continue;
+      bestDist = dist;
+      bestId = unit.id;
+    }
+    return bestId;
   }
 
   render(prev: Snapshot, curr: Snapshot, alpha: number, camera: THREE.Camera): void {
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
+    this.syncAttackRangeMark(curr, alpha);
     this.renderAoeImpactWarnings(prev, curr, alpha);
     this.renderProjectiles(prev, curr, alpha, camera);
     this.renderHealEffects(curr);
@@ -178,6 +214,7 @@ export class BattleView {
 
   private renderUnits(curr: Snapshot, alpha: number, camera: THREE.Camera): void {
     this.seen.clear();
+    this.pickUnits.length = 0;
     // 程序动画的时钟。用真实时间而不是逻辑 tick，20fps 的逻辑帧下动作依然是 60fps 平滑的
     const timeSec = performance.now() * 0.001;
 
@@ -196,9 +233,18 @@ export class BattleView {
 
       // 刚出场的单位在上一帧不存在，直接用当前值，不然会从原点飞过来
       const from = this.prevUnits.get(unit.id) ?? unit;
+      const x = lerp(from.x, unit.x, alpha);
+      const y = lerp(from.y, unit.y, alpha);
+      this.pickUnits.push({
+        id: unit.id,
+        x,
+        y,
+        radius: unit.radius,
+        footprint: unit.footprint,
+      });
       view.update(
-        toSceneX(lerp(from.x, unit.x, alpha)),
-        toSceneZ(lerp(from.y, unit.y, alpha)),
+        toSceneX(x),
+        toSceneZ(y),
         lerp(from.facingX, unit.facingX, alpha),
         toSceneFacingZ(lerp(from.facingY, unit.facingY, alpha)),
         lerp(from.hpRatio, unit.hpRatio, alpha),
@@ -261,6 +307,28 @@ export class BattleView {
       this.activeAoePulses.delete(id);
       this.aoePulsePool.push(view);
     }
+  }
+
+  /**
+   * 选中单位脚下画白色攻击范围圈（range + 自身半径，与打到点目标/建筑表面的口径一致）。
+   * 单位已死或取消选中时从场景拿掉，避免空圈留在场上。
+   */
+  private syncAttackRangeMark(curr: Snapshot, alpha: number): void {
+    const selected = this.selectedUnitId == null
+      ? undefined
+      : curr.units.find((unit) => unit.id === this.selectedUnitId);
+    if (!selected) {
+      this.selectedUnitId = null;
+      if (this.attackRangeMark.group.parent) this.scene.remove(this.attackRangeMark.group);
+      return;
+    }
+    const from = this.prevUnits.get(selected.id) ?? selected;
+    this.attackRangeMark.update(
+      toSceneX(lerp(from.x, selected.x, alpha)),
+      toSceneZ(lerp(from.y, selected.y, alpha)),
+      selected.range + selected.radius,
+    );
+    if (!this.attackRangeMark.group.parent) this.scene.add(this.attackRangeMark.group);
   }
 
   /**
@@ -467,6 +535,9 @@ export class BattleView {
       this.activeAoeWarnings.delete(id);
       this.aoeWarningPool.push(mark);
     }
+    this.selectedUnitId = null;
+    this.pickUnits.length = 0;
+    if (this.attackRangeMark.group.parent) this.scene.remove(this.attackRangeMark.group);
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
@@ -511,6 +582,9 @@ export class BattleView {
       this.aoeWarningPool.push(mark);
     }
     this.activeAoeWarnings.clear();
+    this.selectedUnitId = null;
+    this.pickUnits.length = 0;
+    if (this.attackRangeMark.group.parent) this.scene.remove(this.attackRangeMark.group);
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
