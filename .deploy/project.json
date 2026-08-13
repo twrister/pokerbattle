@@ -1,0 +1,17 @@
+{
+  "name": "poker-battle",
+  "type": "node",
+  "build": ["node scripts/build-prod.mjs"],
+  "upload": ["dist", "dist-server"],
+  "startCommand": "/usr/local/bin/node /opt/projects/poker-battle/app/dist-server/server.cjs --prod",
+  "healthPath": "/health",
+  "env": {
+    "NODE_ENV": "production",
+    "HOST": "0.0.0.0"
+  },
+  "basePathInject": {
+    "env": "VITE_PUBLIC_BASE",
+    "valueFrom": "route"
+  },
+  "proxyMode": "strip-prefix"
+}

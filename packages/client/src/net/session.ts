@@ -438,7 +438,12 @@ export function createLobbyPresence(): LobbyPresenceHandle {
   };
 }
 
-/** 开发服与正式预览均走同源 /ws（由 Vite 代理到权威服）。 */
+/**
+ * 同源 /ws：开发服由 Vite 代理；生产环境页面挂在 /poker-battle/ 时须带上 Vite base。
+ * 服务端路由仍在 /ws，由 nginx strip-prefix 去掉对外前缀后再转发。
+ */
 function buildWsUrl(): string {
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const base = String(import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  return `${proto}://${location.host}${base}/ws`;
 }

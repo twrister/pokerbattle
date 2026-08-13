@@ -1,5 +1,11 @@
 node_modules/
 dist/
+dist-server/
+dist-ops/
+.deploy/release.tar.gz
+.deploy/ops.env
+.deploy/ops.hdr
+.env.deploy
 *.tsbuildinfo
 .DS_Store
 .vite/

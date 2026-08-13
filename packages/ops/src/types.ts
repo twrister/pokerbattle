@@ -64,7 +64,7 @@ export interface ManagedProcessInfo {
 }
 
 /** 客户端/权威服等可快速打开的服务入口。 */
-export type OpsServiceId = 'game' | 'clientDev' | 'clientOfficial';
+export type OpsServiceId = 'game' | 'clientDev' | 'clientOfficial' | 'gamePublic';
 
 export interface OpsServiceEntry {
   id: OpsServiceId;
@@ -77,6 +77,20 @@ export interface OpsServiceEntry {
   process: ManagedProcessInfo;
   /** 正式服：最近一次 dist/index.html 构建时间；其他服务为 null。 */
   distBuiltAt: number | null;
+  /** 线上公开 URL；有值时前端不再拼 host:port。 */
+  publicUrl: string | null;
+  /** 仅提供打开入口，不展示本机启停/重新部署按钮。 */
+  openOnly: boolean;
+}
+
+/** 运维站「pnpm deploy」进度，供仪表盘展示。 */
+export interface OpsDeployInfo {
+  running: boolean;
+  available: boolean;
+  command: string;
+  lastError: string | null;
+  lastFinishedAt: number | null;
+  lastOk: boolean | null;
 }
 
 /** 运维站聚合给前端的总状态。 */
@@ -88,6 +102,8 @@ export interface OpsDashboardStatus {
     uptimeMs: number;
     /** 本机局域网 IPv4；前端拼服务入口，避免把 localhost 复制给其他设备。 */
     lanIps: string[];
+    /** 线上 systemd 模式为 true，前端隐藏无鉴权横幅。 */
+    production: boolean;
   };
   process: ManagedProcessInfo;
   game: GameServerStatus | null;
@@ -95,4 +111,6 @@ export interface OpsDashboardStatus {
   message: string | null;
   /** 开发服 / 正式服入口状态。 */
   services: OpsServiceEntry[];
+  /** 本机/线上发布任务状态。 */
+  deploy: OpsDeployInfo;
 }

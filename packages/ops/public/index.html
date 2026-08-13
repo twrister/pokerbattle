@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PokerBattle 运维站</title>
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <div class="page">
       <header class="header">
         <div>
           <h1>PokerBattle 运维站</h1>
-          <p class="subtitle">监测游戏服与房间活跃状态 · 独立端口 9091</p>
+          <p id="ops-subtitle" class="subtitle">监测游戏服与房间活跃状态 · 独立端口 9091</p>
         </div>
         <div class="trust-banner" title="当前未启用登录鉴权">
           仅限受信局域网使用 · 无鉴权
@@ -21,7 +21,7 @@
       <section class="panel">
         <div class="section-head">
           <h2>快速入口</h2>
-          <span class="hint">开发服 :9081 · 正式服 :9080</span>
+          <span id="entry-hint" class="hint">开发服 :9081 · 正式服 :9080</span>
         </div>
         <div id="service-entries" class="service-grid">
           <div class="empty">加载服务入口…</div>
@@ -46,6 +46,17 @@
           <button id="btn-restart" type="button" class="secondary">重启</button>
         </div>
         <div id="message" class="message" hidden></div>
+      </section>
+
+      <section class="panel controls">
+        <div class="section-head">
+          <h2>发布到服务器</h2>
+          <span id="deploy-hint" class="hint">本机执行 pnpm deploy；线上从工作区构建并重启</span>
+        </div>
+        <div class="button-row">
+          <button id="btn-deploy" type="button">pnpm deploy</button>
+        </div>
+        <div id="deploy-state" class="message" hidden></div>
       </section>
 
       <section class="metrics">
@@ -104,6 +115,6 @@
         · 游戏服状态接口：<span id="game-reachable">—</span>
       </footer>
     </div>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>

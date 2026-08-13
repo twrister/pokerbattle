@@ -1,7 +1,7 @@
 import { readDistInfo } from './distInfo.js';
 import { fetchGameStatus } from './gameStatus.js';
-import type { ProcessManager } from './processManager.js';
-import type { OpsDashboardStatus, OpsServiceEntry, OpsServiceId } from './types.js';
+import type { ServiceController } from './serviceController.js';
+import type { OpsDashboardStatus, OpsDeployInfo, OpsServiceEntry, OpsServiceId } from './types.js';
 
 export interface ServiceDescriptor {
   id: OpsServiceId;
@@ -9,9 +9,13 @@ export interface ServiceDescriptor {
   port: number;
   path: string;
   description: string;
-  manager: ProcessManager;
+  manager: ServiceController;
   /** 正式服：指向 packages/client/dist/index.html，用于展示构建时间。 */
   distIndexPath?: string;
+  publicUrl?: string | null;
+  openOnly?: boolean;
+  /** 覆盖 dist 时间，例如线上 deploy.meta.json 的 deployedAt。 */
+  builtAt?: number | null;
 }
 
 export interface BuildDashboardStatusOptions {
@@ -19,10 +23,12 @@ export interface BuildDashboardStatusOptions {
   opsPort: number;
   opsStartedAt: number;
   gameBaseUrl: string;
-  processManager: ProcessManager;
+  processManager: ServiceController;
+  production?: boolean;
   services: ServiceDescriptor[];
   /** 本机局域网 IPv4；缺省为空，由调用方探测后注入。 */
   lanIps?: string[];
+  deploy?: OpsDeployInfo;
 }
 
 /**
@@ -58,12 +64,21 @@ export async function buildDashboardStatus(
       startedAt: options.opsStartedAt,
       uptimeMs: Date.now() - options.opsStartedAt,
       lanIps: options.lanIps ?? [],
+      production: Boolean(options.production),
     },
     process: processInfo,
     game: gameResult.status,
     gameReachable: gameResult.reachable,
     message,
     services,
+    deploy: options.deploy ?? {
+      running: false,
+      available: true,
+      command: 'pnpm deploy',
+      lastError: null,
+      lastFinishedAt: null,
+      lastOk: null,
+    },
   };
 }
 
@@ -72,9 +87,12 @@ async function toServiceEntry(service: ServiceDescriptor): Promise<OpsServiceEnt
   await service.manager.refreshFromPort();
   const process = service.manager.getInfo();
   const reachable = await service.manager.isReachable();
-  const distBuiltAt = service.distIndexPath
-    ? (await readDistInfo(service.distIndexPath)).builtAt
-    : null;
+  const distBuiltAt =
+    service.builtAt !== undefined
+      ? service.builtAt
+      : service.distIndexPath
+        ? (await readDistInfo(service.distIndexPath)).builtAt
+        : null;
   return {
     id: service.id,
     label: service.label,
@@ -84,5 +102,7 @@ async function toServiceEntry(service: ServiceDescriptor): Promise<OpsServiceEnt
     reachable,
     process,
     distBuiltAt,
+    publicUrl: service.publicUrl ?? null,
+    openOnly: Boolean(service.openOnly),
   };
 }

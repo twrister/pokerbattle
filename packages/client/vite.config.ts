@@ -134,7 +134,15 @@ const wsProxy = {
   '/ws': { target: 'ws://localhost:9090', ws: true },
 } as const;
 
+/** 部署到子路径时由 VITE_PUBLIC_BASE 注入（如 /poker-battle），本地开发保持根路径。 */
+function resolvePublicBase(): string {
+  const raw = process.env.VITE_PUBLIC_BASE?.trim();
+  if (!raw) return '/';
+  return raw.endsWith('/') ? raw : `${raw}/`;
+}
+
 export default defineConfig({
+  base: resolvePublicBase(),
   plugins: [unitConfigWritePlugin(), cardFormationWritePlugin()],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {

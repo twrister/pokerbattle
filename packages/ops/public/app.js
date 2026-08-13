@@ -19,9 +19,16 @@ const els = {
   btnStart: document.getElementById('btn-start'),
   btnStop: document.getElementById('btn-stop'),
   btnRestart: document.getElementById('btn-restart'),
+  btnDeploy: document.getElementById('btn-deploy'),
+  deployState: document.getElementById('deploy-state'),
+  deployHint: document.getElementById('deploy-hint'),
+  subtitle: document.getElementById('ops-subtitle'),
+  entryHint: document.getElementById('entry-hint'),
+  trustBanner: document.querySelector('.trust-banner'),
 };
 
 let busy = false;
+let deployBusy = false;
 let busyServiceId = null;
 let pollTimer = null;
 let latestServices = [];
@@ -30,13 +37,27 @@ let latestOps = null;
 /** 最近一次成功复制的链接与时间，用于轮询重绘后保留按钮反馈。 */
 let lastCopied = { url: '', at: 0 };
 
+/** 相对当前页面目录解析 API/静态资源，兼容 /poker-battle-ops/ 子路径。 */
+function resolveAppUrl(rel) {
+  const path = String(rel ?? '').replace(/^\//, '');
+  const dir = location.pathname.endsWith('/')
+    ? location.pathname
+    : location.pathname.replace(/[^/]+$/, '');
+  return `${location.origin}${dir}${path}`;
+}
+
 /** 拉取聚合状态并刷新 UI。 */
 async function refreshStatus() {
   try {
-    const response = await fetch('/api/status', { cache: 'no-store' });
+    const response = await fetch(resolveAppUrl('api/status'), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (response.status === 401) throw new Error('需要登录');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     data.ops = data.ops ?? {};
+    applyProductionChrome(data.ops);
     // 旧运维进程没有 lanIps 字段时，改读静态清单，避免入口继续显示 localhost
     if (!Array.isArray(data.ops.lanIps) || data.ops.lanIps.length === 0) {
       data.ops.lanIps = await fetchLanIpsFallback();
@@ -49,10 +70,22 @@ async function refreshStatus() {
   }
 }
 
+/** 线上隐藏无鉴权提示，并改入口说明。 */
+function applyProductionChrome(ops) {
+  if (!ops?.production) return;
+  if (els.trustBanner) els.trustBanner.hidden = true;
+  if (els.subtitle) els.subtitle.textContent = '监测线上游戏服与房间 · systemd 托管';
+  if (els.entryHint) els.entryHint.textContent = '游戏正式服 · 本页可 pnpm deploy';
+  if (els.deployHint) els.deployHint.textContent = '服务器工作区构建后覆盖运行包，并重启游戏与运维站';
+}
+
 /** 读取 public/lan-ips.json；运维站未重启时接口没有局域网 IP。 */
 async function fetchLanIpsFallback() {
   try {
-    const response = await fetch('/lan-ips.json', { cache: 'no-store' });
+    const response = await fetch(resolveAppUrl('lan-ips.json'), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
     if (!response.ok) return [];
     const body = await response.json();
     return Array.isArray(body?.lanIps) ? body.lanIps : [];
@@ -93,6 +126,7 @@ function renderStatus(data) {
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
   updateButtons(state, process);
+  renderDeploy(data.deploy);
 }
 
 /** 渲染开发服/正式服快速入口卡片。 */
@@ -107,29 +141,39 @@ function renderServices(services) {
     .map((service) => {
       const state = service.process?.state ?? 'stopped';
       const display = resolveDisplayState(service.process, service.reachable);
-      const url = `http://${host}:${service.port}${service.path || '/'}`;
+      const url = service.publicUrl || `http://${host}:${service.port}${service.path || '/'}`;
       const copied = isRecentlyCopied(url);
-      const canOpen = Boolean(service.reachable);
+      const canOpen = Boolean(service.publicUrl) || Boolean(service.reachable);
       const busyThis = busy && busyServiceId === service.id;
       const external = Boolean(service.process?.externalConflict) || display.key === 'external';
       const transitioning =
         state === 'starting' || state === 'stopping' || state === 'building' || busyThis;
+      const openOnly = Boolean(service.openOnly);
       const startDisabled = transitioning || state === 'running' || external;
       // 外部进程不由本站托管，禁止停止；无 pid 的 stopped 同样不可停
       const stopDisabled = transitioning || external || !service.process?.pid;
       const isOfficial = service.id === 'clientOfficial';
-      const redeployDisabled = transitioning || external;
-      const distLine = isOfficial
-        ? `<div class="dist-meta">dist：${
+      const showDist = isOfficial || service.distBuiltAt != null;
+      const distLine = showDist
+        ? `<div class="dist-meta">${openOnly ? '部署' : 'dist'}：${
             service.distBuiltAt != null ? escapeHtml(formatTime(service.distBuiltAt)) : '尚未构建'
           }</div>`
         : '';
-      const redeployBtn = isOfficial
-        ? `<button type="button" class="secondary" data-action="redeploy" data-id="${escapeHtml(service.id)}" ${redeployDisabled ? 'disabled' : ''}>重新部署</button>`
-        : '';
+      const title = service.publicUrl
+        ? escapeHtml(service.label)
+        : `${escapeHtml(service.label)} · :${service.port}`;
+      const controlButtons = openOnly
+        ? ''
+        : `<button type="button" data-action="start" data-id="${escapeHtml(service.id)}" ${startDisabled ? 'disabled' : ''}>启动</button>
+          <button type="button" class="danger" data-action="stop" data-id="${escapeHtml(service.id)}" ${stopDisabled ? 'disabled' : ''}>停止</button>
+          ${
+            isOfficial
+              ? `<button type="button" class="secondary" data-action="redeploy" data-id="${escapeHtml(service.id)}" ${transitioning || external ? 'disabled' : ''}>重新部署</button>`
+              : ''
+          }`;
       return `<article class="service-card" data-id="${escapeHtml(service.id)}">
         <div class="title-row">
-          <h3>${escapeHtml(service.label)} · :${service.port}</h3>
+          <h3>${title}</h3>
           <div class="state-pill state-${escapeHtml(display.key)}">${escapeHtml(display.label)}</div>
         </div>
         <p class="desc">${escapeHtml(service.description || '')}</p>
@@ -141,9 +185,7 @@ function renderServices(services) {
         <div class="reach ${service.reachable ? 'ok' : ''}">${service.reachable ? '端口可达' : '端口未监听'}</div>
         <div class="button-row">
           <a class="open-link ${canOpen ? '' : 'disabled'}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">打开</a>
-          <button type="button" data-action="start" data-id="${escapeHtml(service.id)}" ${startDisabled ? 'disabled' : ''}>启动</button>
-          <button type="button" class="danger" data-action="stop" data-id="${escapeHtml(service.id)}" ${stopDisabled ? 'disabled' : ''}>停止</button>
-          ${redeployBtn}
+          ${controlButtons}
         </div>
       </article>`;
     })
@@ -227,6 +269,66 @@ function updateButtons(state, process = {}) {
   els.btnRestart.disabled = disabled || external || !process.pid;
 }
 
+/** 展示 pnpm deploy 进度；线上重启运维站后靠 /api/status.deploy 恢复结果。 */
+function renderDeploy(deploy) {
+  if (!els.btnDeploy || !els.deployState) return;
+  const info = deploy ?? {};
+  const running = Boolean(info.running);
+  if (running) deployBusy = true;
+  if (deployBusy && !running && info.lastOk != null) deployBusy = false;
+  els.btnDeploy.disabled = running || deployBusy || info.available === false;
+  if (running) {
+    showDeployMessage('正在执行 pnpm deploy…', true);
+    return;
+  }
+  if (info.available === false) {
+    showDeployMessage('工作区未就绪，请先在开发机执行一次 pnpm deploy 以上传源码', false);
+    return;
+  }
+  if (info.lastOk === true) {
+    const when = info.lastFinishedAt ? `（${formatTime(info.lastFinishedAt)}）` : '';
+    showDeployMessage(`pnpm deploy 已完成${when}`, true);
+    return;
+  }
+  if (info.lastOk === false) {
+    showDeployMessage(info.lastError || 'pnpm deploy 失败', false);
+    return;
+  }
+  if (!deployBusy) hideDeployMessage();
+}
+
+function showDeployMessage(text, info) {
+  els.deployState.hidden = false;
+  els.deployState.textContent = text;
+  els.deployState.classList.toggle('info', Boolean(info));
+}
+
+function hideDeployMessage() {
+  els.deployState.hidden = true;
+  els.deployState.textContent = '';
+  els.deployState.classList.remove('info');
+}
+
+/** 触发发布后继续轮询；线上重启可能导致本次 POST 被掐断。 */
+async function invokeDeploy() {
+  deployBusy = true;
+  if (els.btnDeploy) els.btnDeploy.disabled = true;
+  showDeployMessage('已开始 pnpm deploy…', true);
+  try {
+    const response = await fetch(resolveAppUrl('api/deploy'), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    const result = await response.json().catch(() => ({}));
+    const text = result.message || (response.ok ? '已开始 pnpm deploy' : `启动失败（HTTP ${response.status}）`);
+    showDeployMessage(text, response.ok);
+    if (!response.ok) deployBusy = false;
+  } catch {
+    showDeployMessage('发布进行中，运维站可能短暂重启…', true);
+  }
+  await refreshStatus();
+}
+
 /** 调用启停接口，期间禁用按钮避免重复点击。 */
 async function invokeControl(path, serviceId = null) {
   busy = true;
@@ -235,7 +337,10 @@ async function invokeControl(path, serviceId = null) {
   renderServices(latestServices);
   showMessage('操作执行中…', true);
   try {
-    const response = await fetch(path, { method: 'POST' });
+    const response = await fetch(resolveAppUrl(path), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
     const result = await response.json().catch(() => ({}));
     const text = result.message || (response.ok ? '操作成功' : `操作失败（HTTP ${response.status}）`);
     showMessage(text, response.ok);
@@ -344,9 +449,10 @@ async function copyUrl(url) {
   }
 }
 
-els.btnStart.addEventListener('click', () => invokeControl('/api/server/start'));
-els.btnStop.addEventListener('click', () => invokeControl('/api/server/stop'));
-els.btnRestart.addEventListener('click', () => invokeControl('/api/server/restart'));
+els.btnStart.addEventListener('click', () => invokeControl('api/server/start'));
+els.btnStop.addEventListener('click', () => invokeControl('api/server/stop'));
+els.btnRestart.addEventListener('click', () => invokeControl('api/server/restart'));
+els.btnDeploy?.addEventListener('click', () => void invokeDeploy());
 
 els.serviceEntries.addEventListener('click', (event) => {
   const target = event.target;
@@ -360,12 +466,12 @@ els.serviceEntries.addEventListener('click', (event) => {
   }
   const id = target.getAttribute('data-id');
   if (!id) return;
-  void invokeControl(`/api/services/${id}/${action}`, id);
+  void invokeControl(`api/services/${id}/${action}`, id);
 });
 
 await refreshStatus();
 pollTimer = setInterval(() => {
-  if (!busy) void refreshStatus();
+  if (!busy || deployBusy) void refreshStatus();
 }, POLL_MS);
 
 window.addEventListener('beforeunload', () => {

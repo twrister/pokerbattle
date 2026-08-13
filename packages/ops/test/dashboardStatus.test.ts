@@ -71,6 +71,11 @@ describe('buildDashboardStatus', () => {
     expect(status.services[0]?.reachable).toBe(false);
     expect(status.services[0]?.distBuiltAt).toBeNull();
     expect(status.ops.lanIps).toEqual([]);
+    expect(status.deploy).toMatchObject({
+      running: false,
+      available: true,
+      command: 'pnpm deploy',
+    });
   });
 
   it('returns room data when process running and status reachable', async () => {
