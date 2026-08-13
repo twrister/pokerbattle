@@ -4,6 +4,7 @@ import {
   getFormationBuildingTypeId,
   getFuseBombTypeId,
   isFuseBombFormation,
+  isFuseBombTypeId,
   isBuildingOnlyFormation,
   resolveCardFormation,
   resolveFormationSpawnsFx,
@@ -22,6 +23,15 @@ export function applyCommands(world: World, commands: readonly Command[]): void 
       case CommandKind.Spawn:
         // 建筑只能走 PlaceBuilding，避免绕过占格校验
         if (isBuildingConfig(getUnitConfig(command.typeId))) break;
+        // 引信炸弹与出牌一致：主堡抛物线投放，不生成地面单位
+        if (isFuseBombTypeId(command.typeId)) {
+          if (command.typeId === 'small_bomb') {
+            world.spawnSmallBomb(command.faction, command.x, command.y);
+          } else {
+            world.spawnGiantBomb(command.faction, command.x, command.y);
+          }
+          break;
+        }
         world.spawnUnit(command.faction, command.typeId, command.x, command.y);
         break;
       case CommandKind.PlaceBuilding:

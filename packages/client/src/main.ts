@@ -14,11 +14,13 @@ import {
   getFuseBombTypeId,
   getUnitConfig,
   halfCourtSafeAnchor,
+  halfCourtYRange,
   isBuildingConfig,
   isBuildingInsideHalfCourt,
   isBuildingOnlyFormation,
   isDeployAnchorInsideHalfCourt,
   isFuseBombFormation,
+  isFuseBombTypeId,
   toFloat,
   playFormationCommand,
   snapBuildingCenter,
@@ -50,6 +52,7 @@ import {
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
 import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
+import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
 import { createBattleAnnounce } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
@@ -83,6 +86,8 @@ const playerProfile = createPlayerProfileService();
 let screens: ScreenController;
 /** 大厅选择只影响下一场单机，避免在 UI 路由中扩散难度状态。 */
 let selectedSoloDifficulty: SoloDifficulty = 'hard';
+/** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置；正常人机必须保持 false。 */
+let selectedSoloDebugSpawn = false;
 /** 进入 versus 前暂存入房参数，因 ScreenController 不携带 payload。 */
 let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
 /**
@@ -117,6 +122,13 @@ const mainMenu = createMainMenu({
   },
   onStartSolo: (difficulty) => {
     selectedSoloDifficulty = difficulty;
+    selectedSoloDebugSpawn = false;
+    screens.show('solo');
+  },
+  onStartSoloDebug: () => {
+    if (!IS_DEV_SERVER) return;
+    selectedSoloDifficulty = 'hard';
+    selectedSoloDebugSpawn = true;
     screens.show('solo');
   },
   onStartVersus: (request) => {
@@ -181,9 +193,11 @@ type BattleMode = 'sandbox' | 'solo';
 /** 启动一轮战斗会话；离开时释放本局监听与循环，场景与配置面板保留。 */
 function enterBattleSession(mode: BattleMode): () => void {
   const isSolo = mode === 'solo';
+  const debugSpawn = isSolo && selectedSoloDebugSpawn && IS_DEV_SERVER;
 
   container.classList.toggle('is-solo', isSolo);
   hud.classList.toggle('is-solo', isSolo);
+  hud.classList.toggle('is-solo-debug', debugSpawn);
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
   if (isSolo) {
@@ -222,6 +236,7 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
+  let disableDebugUnitDrag = (): void => {};
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
   let aoePreview: AoePlacementHandle | null = null;
@@ -367,7 +382,65 @@ function enterBattleSession(mode: BattleMode): () => void {
     return true;
   };
 
-  const handPanel = isSolo
+  /** 调试单兵种自动落点：半场中央，与阵型按钮内松开一致。 */
+  const debugSafeAnchor = (): { x: number; y: number } | null => {
+    const { minY, maxY } = halfCourtYRange(Faction.Blue);
+    const x = ARENA_W / 2;
+    const y = (minY + maxY) / 2;
+    if (!isDeployAnchorInsideHalfCourt(x, y, Faction.Blue)) return null;
+    return { x, y };
+  };
+
+  /** 调试放兵落点校验：普通兵走蓝方半场；引信炸弹与出牌相同，必须拖到场内。 */
+  const canDebugSpawnAt = (
+    typeId: UnitTypeId,
+    point: { clientX: number; clientY: number } | null,
+  ): boolean => {
+    if (isFuseBombTypeId(typeId)) {
+      if (!point) return false;
+      const anchor = screenToSim(
+        sceneContext.renderer.domElement,
+        sceneContext.camera,
+        sceneContext.groundPlane,
+        point.clientX,
+        point.clientY,
+      );
+      return Boolean(anchor && anchor.x >= 0 && anchor.x <= ARENA_W && anchor.y >= 0 && anchor.y <= ARENA_H);
+    }
+    const anchor = point
+      ? screenToSim(
+          sceneContext.renderer.domElement,
+          sceneContext.camera,
+          sceneContext.groundPlane,
+          point.clientX,
+          point.clientY,
+        )
+      : debugSafeAnchor();
+    if (!anchor) return false;
+    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
+  };
+
+  /** 调试模式出兵：普通兵 Spawn 到半场；炸弹同样走 Spawn，sim 内展开为抛物线投放。 */
+  const requestDebugSpawn = (
+    typeId: UnitTypeId,
+    point: { clientX: number; clientY: number } | null,
+  ): boolean => {
+    if (!canDebugSpawnAt(typeId, point)) return false;
+    const anchor = point
+      ? screenToSim(
+          sceneContext.renderer.domElement,
+          sceneContext.camera,
+          sceneContext.groundPlane,
+          point.clientX,
+          point.clientY,
+        )
+      : debugSafeAnchor();
+    if (!anchor) return false;
+    loop.enqueue(spawnCommand(Faction.Blue, typeId, fromFloat(anchor.x), fromFloat(anchor.y)));
+    return true;
+  };
+
+  const handPanel = isSolo && !debugSpawn
     ? createHandPanel({
         deck: loop.match!.decks[Faction.Blue],
         externalDraw: true,
@@ -442,15 +515,18 @@ function enterBattleSession(mode: BattleMode): () => void {
   const panel = createPanel({
     loop,
     onClear: clearBattlefield,
-    enableSpawnControls: !isSolo,
+    enableSpawnControls: !isSolo || debugSpawn,
     enableRuntimeControls: runtimeControlsEnabled,
     onRandomPk: runtimeControlsEnabled
       ? () => spawnRandomPk(loop, clearBattlefield)
       : undefined,
-    onBuildingModeChange: (typeId) => {
-      if (typeId) bindBuildingPlacement(typeId);
-      else bindUnitPlacement();
-    },
+    ...(debugSpawn ? { lockFaction: Faction.Blue } : {}),
+    onBuildingModeChange: debugSpawn
+      ? undefined
+      : (typeId) => {
+          if (typeId) bindBuildingPlacement(typeId);
+          else bindUnitPlacement();
+        },
     ...(isSolo
       ? IS_DEV_SERVER
         ? {
@@ -482,6 +558,40 @@ function enterBattleSession(mode: BattleMode): () => void {
   if (IS_DEV_SERVER) openUnitStatsButton?.addEventListener('click', openUnitStatsOverlay);
 
   if (!isSolo && !panel.buildingType) bindUnitPlacement();
+  if (debugSpawn) {
+    const unitGroup = document.querySelector<HTMLElement>('#unit-group');
+    if (!unitGroup) throw new Error('调试模式缺少兵种栏');
+    const drag = enableDebugUnitDrag({
+      unitGroup,
+      onPickUnit: (typeId) => panel.selectUnit(typeId),
+      canDropAt: canDebugSpawnAt,
+      onRequestSpawn: requestDebugSpawn,
+      onDragStart: (typeId) => {
+        if (isFuseBombTypeId(typeId)) {
+          stopPlaceableHighlight();
+          stopAoePreview();
+          aoePreview = enableAoePlacement({
+            domElement: sceneContext.renderer.domElement,
+            camera: sceneContext.camera,
+            groundPlane: sceneContext.groundPlane,
+            scene: sceneContext.scene,
+            radius: fuseBombTypePreviewRadius(typeId),
+          });
+          return;
+        }
+        stopAoePreview();
+        startPlaceableHighlight();
+      },
+      onDragMove: (typeId, clientX, clientY) => {
+        if (isFuseBombTypeId(typeId)) aoePreview?.syncPointer(clientX, clientY);
+      },
+      onDragEnd: () => {
+        stopPlaceableHighlight();
+        stopAoePreview();
+      },
+    });
+    disableDebugUnitDrag = () => drag.dispose();
+  }
 
   const returnToMenu = (): void => {
     unitStatsPage.hide();
@@ -511,8 +621,10 @@ function enterBattleSession(mode: BattleMode): () => void {
       battleAnnounce.tick(loop.match!);
       if (loop.match!.result && !resultShown) {
         resultShown = true;
-        // 单机仅在权威结算时记一笔；中途返回不写档案
-        recordLocalBattle(loop.match!.result, Faction.Blue, 'solo');
+        // 调试模式不写档案，避免污染正常人机战绩
+        if (!debugSpawn) {
+          recordLocalBattle(loop.match!.result, Faction.Blue, 'solo');
+        }
         battleResult.show(loop.match!.result, Faction.Blue);
       }
     }
@@ -533,11 +645,12 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleAnnounce.reset();
     battleResult.hide();
     container.classList.add('is-hidden');
-    hud.classList.remove('is-solo');
+    hud.classList.remove('is-solo', 'is-solo-debug');
     container.classList.remove('is-solo');
     backButton.removeEventListener('click', returnToMenu);
     disableUnitPlacement();
     disableBuildingPlacementFn();
+    disableDebugUnitDrag();
     stopSoloBuildingPreview();
     stopPlaceableHighlight();
     stopAoePreview();
@@ -1062,11 +1175,15 @@ function recordLocalBattle(
 }
 
 /** 引信炸弹拖拽预览半径：读取兵种 aoeRadius，缺省回落 8。 */
+function fuseBombTypePreviewRadius(typeId: 'giant_bomb' | 'small_bomb'): number {
+  const attack = getUnitConfig(typeId).attack;
+  return attack.kind === 'projectile_aoe' ? toFloat(attack.aoeRadius) : 8;
+}
+
 function fuseBombPreviewRadius(formation: CardFormation): number {
   const typeId = getFuseBombTypeId(formation);
   if (!typeId) return 8;
-  const attack = getUnitConfig(typeId).attack;
-  return attack.kind === 'projectile_aoe' ? toFloat(attack.aoeRadius) : 8;
+  return fuseBombTypePreviewRadius(typeId);
 }
 
 function spawnBrawl(target: SimLoop): void {

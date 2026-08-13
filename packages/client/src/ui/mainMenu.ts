@@ -13,6 +13,8 @@ export interface VersusJoinRequest {
 export interface MainMenuOptions {
   onStartSandbox: () => void;
   onStartSolo: (difficulty: SoloDifficulty) => void;
+  /** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置。 */
+  onStartSoloDebug: () => void;
   onStartVersus: (request: VersusJoinRequest) => void;
   /** 匹配等待中取消：编排层应离开 versus 并断连。 */
   onCancelVersus: () => void;
@@ -45,6 +47,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
   const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
+  const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
   const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
   const onlineRoomButton = required<HTMLButtonElement>('#btn-online-room', root);
   const onlineRoomPanel = required<HTMLElement>('#online-room-panel', root);
@@ -197,6 +200,16 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     closeModeDialogs();
     options.onStartSolo('hard');
   };
+  /** 开发服进入调试放兵；正式服仅提示不可进入。 */
+  const startSoloDebug = (): void => {
+    closeModeDialogs();
+    if (!IS_DEV_SERVER) {
+      status.textContent = '正式服不可进入调试模式，请使用开发服';
+      status.classList.add('is-visible');
+      return;
+    }
+    options.onStartSoloDebug();
+  };
   /** 关弹层后发起快速匹配，等待态与主动创建房间相同（大厅状态 + 取消）。 */
   const startOnlineQuick = (): void => {
     closeModeDialogs();
@@ -330,6 +343,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
   soloAiButton.addEventListener('click', startSoloAi);
+  soloDebugButton.addEventListener('click', startSoloDebug);
   onlineQuickButton.addEventListener('click', startOnlineQuick);
   onlineRoomButton.addEventListener('click', toggleRoomPanel);
   onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
@@ -388,6 +402,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
       soloAiButton.removeEventListener('click', startSoloAi);
+      soloDebugButton.removeEventListener('click', startSoloDebug);
       onlineQuickButton.removeEventListener('click', startOnlineQuick);
       onlineRoomButton.removeEventListener('click', toggleRoomPanel);
       onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);

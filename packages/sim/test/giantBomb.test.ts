@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findFormationById, isGiantBombFormation } from '../src/config/cardFormations.js';
+import { spawnCommand } from '../src/commands.js';
 import { Faction } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
@@ -51,5 +52,15 @@ describe('巨型炸弹', () => {
     }
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(world.explosionEffects).toHaveLength(0);
+  });
+
+  it('Spawn 指令对巨型炸弹走主堡抛物线投放，不生成地面单位', () => {
+    const world = new World(1);
+    world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+    world.step([spawnCommand(Faction.Blue, 'giant_bomb', fromFloat(9), fromFloat(15))]);
+    expect(world.units.some((unit) => unit.typeId === 'giant_bomb')).toBe(false);
+    expect(world.projectiles).toHaveLength(1);
+    expect(world.projectiles[0]?.fuseBombKind).toBe('giant_bomb');
+    expect(world.projectiles[0]?.visual).toBe('bomb');
   });
 });

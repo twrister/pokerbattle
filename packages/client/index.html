@@ -1292,6 +1292,26 @@
         display: none;
       }
 
+      /* 调试模式：底部换成选兵栏，锁定己方、不提供建造 */
+      #hud.is-solo.is-solo-debug #panel-bottom-dock {
+        display: flex;
+      }
+
+      #hud.is-solo.is-solo-debug #panel-building,
+      #hud.is-solo.is-solo-debug #panel-spawn > div:has(#faction-group) {
+        display: none;
+      }
+
+      /* 与阵型按钮一致：拖拽上场，避免移动端把拖动手势当成滚动 */
+      #hud.is-solo.is-solo-debug #unit-group {
+        touch-action: none;
+      }
+
+      #hud.is-solo.is-solo-debug #unit-group button {
+        cursor: grab;
+        touch-action: none;
+      }
+
       #hud.is-solo #panel-stats,
       #hud.is-solo #panel-controls {
         top: max(16px, env(safe-area-inset-top));
@@ -3124,6 +3144,10 @@
               <button id="btn-solo-ai" class="mode-option mode-option-ready" type="button">
                 人机对战
                 <small>预判手牌，主动攻守</small>
+              </button>
+              <button id="btn-solo-debug" class="mode-option mode-option-ready dev-only" type="button">
+                调试模式
+                <small>任意单兵种，拖到半场放置</small>
               </button>
               <button class="mode-option mode-option-soon" type="button" data-placeholder="关卡挑战">
                 关卡挑战

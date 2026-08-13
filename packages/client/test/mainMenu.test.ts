@@ -37,6 +37,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
   return {
     onStartSandbox: vi.fn(),
     onStartSolo: vi.fn(),
+    onStartSoloDebug: vi.fn(),
     onStartVersus: vi.fn(),
     onCancelVersus: vi.fn(),
     onOpenDeckConfig: vi.fn(),
@@ -65,6 +66,7 @@ function mountMainMenuDom(): void {
       <button id="btn-deck"></button>
       <button id="btn-codex"></button>
       <button id="btn-solo-ai"></button>
+      <button id="btn-solo-debug"></button>
       <button id="btn-online-quick"></button>
       <button id="btn-online-room"></button>
       <div id="online-room-panel" class="is-hidden">
@@ -160,12 +162,38 @@ describe('大厅玩家档案展示', () => {
 
   it('人机对战以 hard 难度启动单机', () => {
     const onStartSolo = vi.fn();
-    createMainMenu(menuOptions({ onStartSolo }));
+    const onStartSoloDebug = vi.fn();
+    createMainMenu(menuOptions({ onStartSolo, onStartSoloDebug }));
 
     document.querySelector<HTMLButtonElement>('#btn-solo-ai')!.click();
 
     expect(onStartSolo).toHaveBeenCalledTimes(1);
     expect(onStartSolo).toHaveBeenCalledWith('hard');
+    expect(onStartSoloDebug).not.toHaveBeenCalled();
+  });
+
+  it('开发服点击调试模式进入，且不走正常人机入口', () => {
+    const onStartSolo = vi.fn();
+    const onStartSoloDebug = vi.fn();
+    createMainMenu(menuOptions({ onStartSolo, onStartSoloDebug }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo-debug')!.click();
+
+    expect(onStartSoloDebug).toHaveBeenCalledTimes(1);
+    expect(onStartSolo).not.toHaveBeenCalled();
+  });
+
+  it('正式服点击调试模式仅提示不可进入', () => {
+    envState.isDev = false;
+    const onStartSoloDebug = vi.fn();
+    createMainMenu(menuOptions({ onStartSoloDebug }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo-debug')!.click();
+
+    expect(onStartSoloDebug).not.toHaveBeenCalled();
+    const status = document.querySelector('#lobby-status')!;
+    expect(status.classList.contains('is-visible')).toBe(true);
+    expect(status.textContent).toContain('正式服不可进入调试模式');
   });
 
   it('开发服点击模拟沙盒会进入，正式服仅提示不可进入', () => {

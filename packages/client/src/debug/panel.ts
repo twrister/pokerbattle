@@ -28,6 +28,8 @@ export interface PanelOptions {
   onClear: () => void;
   /** 是否启用沙盒的阵营、兵种选择和对应快捷键。 */
   enableSpawnControls?: boolean;
+  /** 锁定放兵阵营时不绑 Q/E 与建造，避免调试模式误放到对方。 */
+  lockFaction?: Faction;
   /** 是否启用暂停/单步/倍速/重新开局等运行控制（正式服单机关闭）。 */
   enableRuntimeControls?: boolean;
   /** 沙盒专用的快速开团预设；单机模式不提供。 */
@@ -72,6 +74,8 @@ export interface PanelHandle {
   readonly unitType: UnitTypeId;
   /** 当前建造中的建筑类型；null 表示未在建造模式 */
   readonly buildingType: UnitTypeId | null;
+  /** 高亮当前兵种按钮；调试拖拽按下时同步选中。 */
+  selectUnit: (typeId: UnitTypeId) => void;
   updateStats: (fps: number) => void;
   /** 配置面板改了兵种显示名后刷新底部按钮文案 */
   refreshUnitLabels: () => void;
@@ -84,8 +88,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const { loop } = options;
   const spawnControlsEnabled = options.enableSpawnControls ?? true;
   const runtimeControlsEnabled = options.enableRuntimeControls ?? true;
+  const lockedFaction = options.lockFaction;
+  const factionSwitchEnabled = spawnControlsEnabled && lockedFaction === undefined;
 
-  let faction: Faction = Faction.Blue;
+  let faction: Faction = lockedFaction ?? Faction.Blue;
   let unitType: UnitTypeId = MOBILE_UNIT_TYPE_IDS[0]!;
   let buildingType: UnitTypeId | null = null;
   let speedIndex = 0;
@@ -216,10 +222,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
         break;
       }
       case 'KeyQ':
-        if (spawnControlsEnabled) selectFaction(Faction.Blue);
+        if (factionSwitchEnabled) selectFaction(Faction.Blue);
         break;
       case 'KeyE':
-        if (spawnControlsEnabled) selectFaction(Faction.Red);
+        if (factionSwitchEnabled) selectFaction(Faction.Red);
         break;
       case 'Space':
         if (!runtimeControlsEnabled) break;
@@ -312,7 +318,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   };
   const onBuildingCancel = (): void => setBuildingType(null);
 
-  if (spawnControlsEnabled) {
+  if (factionSwitchEnabled) {
     factionGroup.addEventListener('click', selectFactionFromButton);
     buildingGroup.addEventListener('click', onBuildingGroupClick);
     buildingCancelButton.addEventListener('click', onBuildingCancel);
@@ -367,6 +373,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
     get buildingType() {
       return buildingType;
     },
+    selectUnit,
     updateStats(fps: number) {
       const now = performance.now();
       if (now - lastStatsAt < STATS_REFRESH_MS) return;
@@ -386,7 +393,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
     },
     dispose() {
       toggleButton.removeEventListener('click', toggleCollapsed);
-      if (spawnControlsEnabled) {
+      if (factionSwitchEnabled) {
         factionGroup.removeEventListener('click', selectFactionFromButton);
         buildingGroup.removeEventListener('click', onBuildingGroupClick);
         buildingCancelButton.removeEventListener('click', onBuildingCancel);
