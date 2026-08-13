@@ -58,7 +58,7 @@ describe('小炸弹', () => {
     expect(smallBomb.hp).toBe(bombHp);
   });
 
-  it('从己方主堡抛出，落地后按 attackInterval 闪烁再伤害半径内敌军单位与建筑', () => {
+  it('从己方主堡抛出，落地当帧伤害半径内敌军单位与建筑', () => {
     const world = new World(1);
     const blueBase = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
     // aoeRadius=3.5：落点 (9,15) 内圈单位应受伤，外侧不受伤
@@ -74,19 +74,13 @@ describe('小炸弹', () => {
     expect(projectile.pos).toEqual(blueBase.pos);
     expect(projectile.visual).toBe('bomb');
     expect(projectile.fuseBombKind).toBe('small_bomb');
-    // small_bomb 配置 attackInterval=10
-    expect(projectile.fuseTicks).toBe(10);
+    const flying = takeSnapshot(world).projectiles[0]!;
+    expect(flying.impactX).toBeCloseTo(9, 3);
+    expect(flying.impactY).toBeCloseTo(15, 3);
+    expect(flying.aoeRadius).toBeCloseTo(2, 3);
 
-    for (let i = 0; i < 100 && !projectile.landed; i += 1) updateProjectiles(world);
-    expect(projectile.landed).toBe(true);
-    expect(takeSnapshot(world).projectiles[0]).toMatchObject({
-      landed: true,
-      fuseBombKind: 'small_bomb',
-    });
-
-    for (let i = 0; i < 9; i += 1) updateProjectiles(world);
-    expect(ally.hp).toBe(hp.get(ally.id));
-    updateProjectiles(world);
+    for (let i = 0; i < 100 && !projectile.dead; i += 1) updateProjectiles(world);
+    expect(projectile.dead).toBe(true);
 
     // 己方单位与建筑不受伤
     expect(ally.hp).toBe(hp.get(ally.id));
@@ -95,7 +89,8 @@ describe('小炸弹', () => {
       expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(600, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));
-    expect(world.explosionEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
   });
 
   it('四条小炸弹伤害仍为配置固定值 600', () => {

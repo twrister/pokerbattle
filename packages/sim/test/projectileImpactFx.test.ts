@@ -69,7 +69,7 @@ describe('弹道命中爆炸特效', () => {
     expect(world.explosionEffects).toHaveLength(0);
   });
 
-  it('龙 AOE 命中不生成爆炸序列帧也不回退脉冲环', () => {
+  it('龙 AOE 命中播放 explode1 序列帧，不回退脉冲环', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
     const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
@@ -85,9 +85,10 @@ describe('弹道命中爆炸特效', () => {
       aoeRadius,
     );
 
-    expect(projectile.impactFx).toBe('explode2');
+    expect(projectile.impactFx).toBe('explosion');
     flyUntilImpact(world, projectile.id);
-    expect(world.explosionEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
     expect(world.aoePulseEffects).toHaveLength(0);
   });
 

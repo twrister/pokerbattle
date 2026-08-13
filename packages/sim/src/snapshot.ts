@@ -50,6 +50,11 @@ export interface ProjectileSnapshot {
   landed: boolean;
   /** 引信炸弹种类；客户端据此缩放弹体（巨型更大、小炸弹次之）。 */
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null;
+  /** 弹着点：引信炸弹/龙/战车为发射锁定点；追踪弹为当前瞄准点。 */
+  impactX: number;
+  impactY: number;
+  /** 范围弹/炸弹爆炸半径；单体弹为 0。 */
+  aoeRadius: number;
 }
 
 /** 女王单体治疗落在受疗单位上的反馈效果。 */
@@ -137,6 +142,9 @@ export function takeSnapshot(world: World): Snapshot {
       visual: p.visual,
       landed: p.landed,
       fuseBombKind: p.fuseBombKind,
+      impactX: toFloat(p.impactPos.x),
+      impactY: toFloat(p.impactPos.y),
+      aoeRadius: toFloat(p.aoeRadius),
     });
   }
 

@@ -3,7 +3,7 @@ import { distSq, lengthOf } from '../math/vec2.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { isBuildingConfig } from '../config/units.js';
 import type { ExplosionEffect } from '../entity/effect.js';
-import { isAlive, type Faction } from '../entity/unit.js';
+import { isAlive, type Faction, type Unit } from '../entity/unit.js';
 import type { Projectile } from '../entity/projectile.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
@@ -12,21 +12,21 @@ import { distSqToBuildingFootprint } from './combatRange.js';
 const MIN_SINGLE_IMPACT_RADIUS = fromFloat(0.8);
 
 /**
- * 弹道命中 / 引信弹爆炸序列帧总开关。
- * false 时不生成爆炸特效；单位死亡与炸弹兵自爆不受影响。
+ * 弓箭/女王等弹道命中爆炸序列帧总开关。
+ * false 时不生成 explode2/4 命中特效；explode1（战车/龙/小炸弹）与巨型炸弹、死亡、自爆不受影响。
  */
 const PROJECTILE_EXPLOSION_FX_ENABLED = false;
 
 /**
  * 将弹道落地反馈映射为爆炸序列帧 kind；脉冲或不启用时返回 null。
- * Explode2/4 打在非建筑上统一改 Blood3，打建筑仍用原爆炸帧。
+ * explosion 固定走 explode1；Explode2/4 打在非建筑上统一改 Blood3，打建筑仍用原爆炸帧。
  */
 function explosionKindFromImpact(
   impactFx: Projectile['impactFx'],
   hitBuilding: boolean,
 ): ExplosionEffect['kind'] | null {
-  if (!PROJECTILE_EXPLOSION_FX_ENABLED) return null;
   if (impactFx === 'explosion') return 'normal';
+  if (!PROJECTILE_EXPLOSION_FX_ENABLED) return null;
   if (impactFx === 'explode2' || impactFx === 'explode4') {
     return hitBuilding ? impactFx : 'blood3';
   }
@@ -38,31 +38,23 @@ function explosionKindFromImpact(
 const neighbors: number[] = [];
 
 /**
- * 追踪弹推进。
+ * 弹道推进。
  *
- * MVP 里弹道必中：只要目标还活着就一路追过去，飞到就结算。
- * 之后要做可闪避的直线弹，只需把「每帧重新朝目标」改成发射时固定方向。
+ * 追踪弹（homing）必中：目标存活就每帧更新落点并飞过去。
+ * 非追踪弹（龙/战车）落点在发射时锁定，目标走开则打空。
  */
 export function updateProjectiles(world: World): void {
   for (const projectile of world.projectiles) {
     if (projectile.dead) continue;
 
-    if (projectile.landed) {
-      projectile.fuseTicks -= 1;
-      if (projectile.fuseTicks <= 0) {
-        resolveFuseBomb(world, projectile);
-        projectile.dead = true;
-      }
-      continue;
-    }
-
     const target = world.getUnit(projectile.targetId);
-    if (!projectile.fuseBombKind && isAlive(target)) {
+    if (!projectile.fuseBombKind && projectile.homing && isAlive(target)) {
+      // 仅追踪弹每帧把落点同步到目标当前位置
       projectile.impactPos.x = target.pos.x;
       projectile.impactPos.y = target.pos.y;
       projectile.targetRadius = target.config.radius;
-    } else if (projectile.aoeRadius <= 0) {
-      // 普通追踪弹保持原行为：目标途中死亡后直接消失，不转火。
+    } else if (projectile.homing && projectile.aoeRadius <= 0 && !isAlive(target)) {
+      // 追踪单体：目标途中死亡后直接消失，不转火。
       projectile.dead = true;
       continue;
     }
@@ -76,8 +68,9 @@ export function updateProjectiles(world: World): void {
     if (gap <= step + projectile.targetRadius) {
       projectile.height = projectile.endHeight;
       if (projectile.fuseBombKind) {
-        // fuseTicks 已在投放时按单位 attackInterval 写入，落地后只开始倒计时
-        projectile.landed = true;
+        // 大小炸弹落地即爆，不再等待 attackInterval 引信
+        resolveFuseBomb(world, projectile);
+        projectile.dead = true;
         continue;
       }
       // 主目标是否建筑决定 Explode↔Blood；目标已死时按配置足迹判断
@@ -93,18 +86,8 @@ export function updateProjectiles(world: World): void {
           projectile.impactFx,
           hitBuilding,
         );
-      } else if (target) {
-        target.hp -= projectile.damage;
-        // 单体弹道也按发射者配置播命中爆炸（箭/女王/大小王等）
-        const kind = explosionKindFromImpact(projectile.impactFx, hitBuilding);
-        if (kind) {
-          world.spawnExplosionEffect(
-            projectile.impactPos.x,
-            projectile.impactPos.y,
-            max(projectile.targetRadius, MIN_SINGLE_IMPACT_RADIUS),
-            kind,
-          );
-        }
+      } else {
+        resolveSingleImpact(world, projectile, target, hitBuilding);
       }
       projectile.dead = true;
       continue;
@@ -117,7 +100,36 @@ export function updateProjectiles(world: World): void {
   }
 }
 
-/** 引信炸弹落地结束后，对半径内敌军单位和建筑造成伤害（不伤己方）。 */
+/**
+ * 单体弹落地：追踪弹按 targetId 直伤；非追踪弹仅当目标仍在锁定点碰撞圈内才命中。
+ * miss 时仍在落点播爆炸（龙打空视觉落地）。
+ */
+function resolveSingleImpact(
+  world: World,
+  projectile: Projectile,
+  target: Unit | undefined,
+  hitBuilding: boolean,
+): void {
+  const inLockRadius =
+    isAlive(target) &&
+    distSq(projectile.impactPos.x, projectile.impactPos.y, target.pos.x, target.pos.y)
+      <= mul(projectile.targetRadius, projectile.targetRadius);
+  const hits = projectile.homing ? !!target : inLockRadius;
+  if (hits && target) target.hp -= projectile.damage;
+  // 追踪弹仅在打到目标时播特效；非追踪弹无论命中都在锁定点落地
+  if (!hits && projectile.homing) return;
+  const kind = explosionKindFromImpact(projectile.impactFx, hitBuilding);
+  if (kind) {
+    world.spawnExplosionEffect(
+      projectile.impactPos.x,
+      projectile.impactPos.y,
+      max(projectile.targetRadius, MIN_SINGLE_IMPACT_RADIUS),
+      kind,
+    );
+  }
+}
+
+/** 引信炸弹落地当帧对半径内敌军单位和建筑造成伤害（不伤己方）。 */
 function resolveFuseBomb(world: World, projectile: Projectile): void {
   const radiusSq = mul(projectile.aoeRadius, projectile.aoeRadius);
   for (const unit of world.units) {
@@ -129,8 +141,7 @@ function resolveFuseBomb(world: World, projectile: Projectile): void {
     unit.hp -= projectile.damage;
     unit.aoeHitFxLeft = 2;
   }
-  // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列（可由总开关关闭）
-  if (!PROJECTILE_EXPLOSION_FX_ENABLED) return;
+  // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列，不走弹道命中特效开关
   const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
   world.spawnExplosionEffect(
     projectile.impactPos.x,

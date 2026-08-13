@@ -85,7 +85,8 @@ describe('战车', () => {
     expect(toFloat(hp.get(splash.id)! - splash.hp)).toBeCloseTo(120, 3);
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(ally.hp).toBe(hp.get(ally.id));
-    expect(world.explosionEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
     expect(world.aoePulseEffects).toHaveLength(0);
   });
 
@@ -134,5 +135,56 @@ describe('战车', () => {
     const snap = takeSnapshot(world);
     expect(snap.projectiles).toHaveLength(1);
     expect(snap.projectiles[0]!.visual).toBe('arrow');
+  });
+
+  it('发射后落点锁定，目标走开则打空且溅射仍打原落点', () => {
+    const world = new World(1);
+    const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
+    const splash = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(11.2), fromFloat(10));
+    const targetHp = target.hp;
+    const splashHp = splash.hp;
+    const projectile = world.spawnProjectile(
+      chariot,
+      target,
+      chariot.stats.damage,
+      fromFloat(9),
+      fromFloat(1.5),
+    );
+    expect(projectile.homing).toBe(false);
+    const lockX = projectile.impactPos.x;
+    const lockY = projectile.impactPos.y;
+
+    target.pos.x = fromFloat(10);
+    target.pos.y = fromFloat(20);
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(projectile.impactPos.x).toBe(lockX);
+    expect(projectile.impactPos.y).toBe(lockY);
+    expect(target.hp).toBe(targetHp);
+    expect(splash.hp).toBeLessThan(splashHp);
+    expect(world.explosionEffects).toHaveLength(1);
+  });
+
+  it('弓箭手弹道仍追踪移动目标', () => {
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const targetHp = target.hp;
+    const projectile = world.spawnProjectile(archer, target, archer.stats.damage, fromFloat(9));
+    expect(projectile.homing).toBe(true);
+
+    target.pos.x = fromFloat(9);
+    target.pos.y = fromFloat(16);
+    updateProjectiles(world);
+
+    expect(toFloat(projectile.impactPos.x)).toBeCloseTo(9, 3);
+    expect(toFloat(projectile.impactPos.y)).toBeCloseTo(16, 3);
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(target.hp).toBeLessThan(targetHp);
+    expect(projectile.dead).toBe(true);
   });
 });

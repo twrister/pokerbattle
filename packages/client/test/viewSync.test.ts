@@ -211,4 +211,61 @@ describe('渲染同步', () => {
     expect(billboard?.position.y).toBeLessThan(AIR_UNIT_HOVER_HEIGHT + 0.1);
     unitView.dispose();
   });
+
+  it('炸弹飞行期间在落点显示预警圈，落地后回收', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+    // 用红方投放，确认预警圈不按本机阵营过滤
+    const projectile = world.spawnGiantBomb(Faction.Red, fromFloat(9), fromFloat(15));
+    const flying = takeSnapshot(world);
+    expect(flying.projectiles[0]?.fuseBombKind).toBe('giant_bomb');
+
+    view.render(flying, flying, 1, camera);
+    const warning = scene.children.find((child) => child.name === 'aoe-ground-mark');
+    expect(warning).toBeDefined();
+    expect(warning?.position.x).toBeCloseTo(toSceneX(9), 5);
+    expect(warning?.position.z).toBeCloseTo(toSceneZ(15), 5);
+
+    for (let i = 0; i < 100 && !projectile.dead; i += 1) world.step();
+    const after = takeSnapshot(world);
+    view.render(flying, after, 1, camera);
+    expect(scene.children.some((child) => child.name === 'aoe-ground-mark')).toBe(false);
+  });
+
+  it('战车与巨龙的范围弹在落点显示预警圈', () => {
+    for (const typeId of ['ranged_chariot', 'dragon'] as const) {
+      const scene = new THREE.Scene();
+      const view = new BattleView(scene);
+      const world = new World(1);
+      const shooter = world.spawnUnit(Faction.Blue, typeId, fromFloat(5), fromFloat(10));
+      const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
+      const aoeRadius =
+        shooter.config.attack.kind === 'projectile_aoe'
+          ? shooter.config.attack.aoeRadius
+          : fromFloat(0);
+      world.spawnProjectile(shooter, target, shooter.stats.damage, fromFloat(9), aoeRadius);
+      const snap = takeSnapshot(world);
+      expect(snap.projectiles[0]!.aoeRadius).toBeGreaterThan(0);
+
+      view.render(snap, snap, 1, camera);
+      const warning = scene.children.find((child) => child.name === 'aoe-ground-mark');
+      expect(warning, typeId).toBeDefined();
+      expect(warning?.position.x).toBeCloseTo(toSceneX(12), 5);
+      expect(warning?.position.z).toBeCloseTo(toSceneZ(10), 5);
+    }
+  });
+
+  it('普通箭矢不显示爆炸范围预警圈', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    world.spawnProjectile(archer, target, archer.stats.damage, fromFloat(9));
+    const snap = takeSnapshot(world);
+    view.render(snap, snap, 1, camera);
+    expect(scene.children.some((child) => child.name === 'aoe-ground-mark')).toBe(false);
+  });
 });

@@ -1,4 +1,4 @@
-import { type Fx, floorToInt, fromFloat, toFloat } from './math/fixed.js';
+import { type Fx, fromFloat, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
@@ -250,14 +250,14 @@ export class World {
       || from.config.id === 'building_tower'
       || from.config.id === 'building_tower_advanced'
       || from.config.id === 'building_base';
-    // 箭系 Explode4；女王/龙/大小王 Explode2；战车普通爆炸；其它 AOE 仍用脉冲环
+    // 箭系 Explode4；女王/大小王 Explode2；战车与龙用 explode1；其它 AOE 仍用脉冲环
     const isExplode2 =
       from.config.id === 'hero_queen'
-      || from.config.id === 'dragon'
       || from.config.id === 'hero_mage'
       || from.config.id === 'hero_archmage';
+    const usesExplode1 = isBomb || from.config.id === 'dragon';
     const arcApex = isBomb ? BOMB_ARC_APEX : 0;
-    const impactFx: ProjectileImpactFx = isBomb
+    const impactFx: ProjectileImpactFx = usesExplode1
       ? 'explosion'
       : isArrow
         ? 'explode4'
@@ -265,6 +265,8 @@ export class World {
           ? 'explode2'
           : 'pulse';
     const visual: ProjectileVisual = isBomb ? 'bomb' : isArrow ? 'arrow' : 'orb';
+    // 龙/战车发射时锁定落点，飞行中不再追踪；弓箭等仍必中跟随
+    const homing = from.config.id !== 'dragon' && from.config.id !== 'ranged_chariot';
     const projectile = createProjectile(
       this.nextEntityId++,
       from.faction,
@@ -283,6 +285,8 @@ export class World {
       arcApex,
       impactFx,
       visual,
+      null,
+      homing,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -358,8 +362,6 @@ export class World {
       'bomb',
       typeId,
     );
-    // 落地引信时长走单位攻击间隔，便于在配置表调爆炸节奏
-    projectile.fuseTicks = Math.max(0, floorToInt(config.attackInterval));
     this.projectiles.push(projectile);
     return projectile;
   }
@@ -540,6 +542,7 @@ export class World {
       h = mix(h, projectile.fuseTicks);
       h = mix(h, projectile.landed ? 1 : 0);
       h = mix(h, projectile.fuseBombKind === 'giant_bomb' ? 2 : projectile.fuseBombKind === 'small_bomb' ? 1 : 0);
+      h = mix(h, projectile.homing ? 1 : 0);
     }
     for (const effect of this.healEffects) {
       h = mix(h, effect.id);

@@ -88,7 +88,8 @@ describe('飞行巨龙', () => {
     expect(target.aoeHitFxLeft).toBeGreaterThan(0);
     expect(splash.aoeHitFxLeft).toBeGreaterThan(0);
     expect(world.aoePulseEffects).toHaveLength(0);
-    expect(world.explosionEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
   });
 
   it('主目标提前死亡后仍飞向最后位置并触发爆炸', () => {
@@ -111,7 +112,8 @@ describe('飞行巨龙', () => {
 
     expect(splash.hp).toBeLessThan(splashHp);
     expect(projectile.dead).toBe(true);
-    expect(world.explosionEffects).toHaveLength(0);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
   });
 
   it('近战不能锁定或命中空中单位', () => {
@@ -252,5 +254,61 @@ describe('飞行巨龙', () => {
     expect(toFloat(airHp - airTarget.hp)).toBeCloseTo(80, 3);
     expect(splash.hp).toBe(splashHp);
     expect(world.aoePulseEffects).toHaveLength(0);
+  });
+
+  it('发射后落点锁定，目标走开则打空且溅射仍打原落点', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(10));
+    const splash = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(11.5), fromFloat(10));
+    const targetHp = target.hp;
+    const splashHp = splash.hp;
+    const projectile = world.spawnProjectile(
+      dragon,
+      target,
+      dragon.stats.damage,
+      fromFloat(9),
+      fromFloat(2),
+    );
+    expect(projectile.homing).toBe(false);
+    const lockX = projectile.impactPos.x;
+    const lockY = projectile.impactPos.y;
+
+    // 飞出爆炸半径后落点不得跟随
+    target.pos.x = fromFloat(10);
+    target.pos.y = fromFloat(20);
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(projectile.impactPos.x).toBe(lockX);
+    expect(projectile.impactPos.y).toBe(lockY);
+    expect(target.hp).toBe(targetHp);
+    expect(splash.hp).toBeLessThan(splashHp);
+    expect(world.explosionEffects).toHaveLength(1);
+  });
+
+  it('对空单体在目标飞离锁定点后 miss', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const airTarget = world.spawnUnit(Faction.Red, 'dragon', fromFloat(9), fromFloat(11.5));
+    const airHp = airTarget.hp;
+    const projectile = world.spawnProjectile(
+      dragon,
+      airTarget,
+      dragon.stats.damage,
+      fromFloat(9),
+      fromFloat(0),
+    );
+    expect(projectile.homing).toBe(false);
+
+    airTarget.pos.x = fromFloat(9);
+    airTarget.pos.y = fromFloat(20);
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(airTarget.hp).toBe(airHp);
+    expect(projectile.dead).toBe(true);
+    expect(world.explosionEffects).toHaveLength(1);
+    expect(world.explosionEffects[0]?.kind).toBe('normal');
   });
 });

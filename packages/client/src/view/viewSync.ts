@@ -5,6 +5,7 @@ import { UnitView, viewKey } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
+import { AoeGroundMark } from './aoeGroundMark.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -146,6 +147,8 @@ export class BattleView {
   private readonly aoePulsePool: AoePulseEffectView[] = [];
   private readonly activeExplosions = new Map<number, ExplosionEffectView>();
   private readonly explosionPool: ExplosionEffectView[] = [];
+  private readonly activeAoeWarnings = new Map<number, AoeGroundMark>();
+  private readonly aoeWarningPool: AoeGroundMark[] = [];
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -158,6 +161,7 @@ export class BattleView {
   render(prev: Snapshot, curr: Snapshot, alpha: number, camera: THREE.Camera): void {
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
+    this.renderAoeImpactWarnings(prev, curr, alpha);
     this.renderProjectiles(prev, curr, alpha, camera);
     this.renderHealEffects(curr);
     this.renderAoePulses(curr);
@@ -256,6 +260,36 @@ export class BattleView {
       this.scene.remove(view.group);
       this.activeAoePulses.delete(id);
       this.aoePulsePool.push(view);
+    }
+  }
+
+  /**
+   * 带爆炸范围的弹道在落点画预警圈，样式与出牌预瞄圈相同。
+   * 数据来自快照，双方客户端都会画；龙/战车圈固定在发射锁定点，弓箭等追踪弹仍随目标插值。
+   */
+  private renderAoeImpactWarnings(prev: Snapshot, curr: Snapshot, alpha: number): void {
+    this.seen.clear();
+    for (const projectile of curr.projectiles) {
+      if (projectile.aoeRadius <= 0) continue;
+      this.seen.add(projectile.id);
+      let mark = this.activeAoeWarnings.get(projectile.id);
+      if (!mark) {
+        mark = this.aoeWarningPool.pop() ?? new AoeGroundMark();
+        this.activeAoeWarnings.set(projectile.id, mark);
+        this.scene.add(mark.group);
+      }
+      const from = prev.projectiles.find((item) => item.id === projectile.id) ?? projectile;
+      mark.update(
+        toSceneX(lerp(from.impactX, projectile.impactX, alpha)),
+        toSceneZ(lerp(from.impactY, projectile.impactY, alpha)),
+        projectile.aoeRadius,
+      );
+    }
+    for (const [id, mark] of this.activeAoeWarnings) {
+      if (this.seen.has(id)) continue;
+      this.scene.remove(mark.group);
+      this.activeAoeWarnings.delete(id);
+      this.aoeWarningPool.push(mark);
     }
   }
 
@@ -428,6 +462,11 @@ export class BattleView {
       view.reset();
       this.explosionPool.push(view);
     }
+    for (const [id, mark] of this.activeAoeWarnings) {
+      this.scene.remove(mark.group);
+      this.activeAoeWarnings.delete(id);
+      this.aoeWarningPool.push(mark);
+    }
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
@@ -466,6 +505,12 @@ export class BattleView {
       this.explosionPool.push(view);
     }
     this.activeExplosions.clear();
+    for (const [id, mark] of this.activeAoeWarnings) {
+      this.scene.remove(mark.group);
+      this.activeAoeWarnings.delete(id);
+      this.aoeWarningPool.push(mark);
+    }
+    this.activeAoeWarnings.clear();
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }

@@ -9,8 +9,9 @@ export type ProjectileImpactFx = 'pulse' | 'explosion' | 'explode2' | 'explode4'
 export type ProjectileVisual = 'orb' | 'bomb' | 'arrow';
 
 /**
- * 远程单位发射的追踪弹。
- * MVP 里是「必中」的追踪弹：只要目标还活着就一直飞向它，飞到就结算伤害。
+ * 远程单位发射的弹道。
+ * homing 为 true 时是必中追踪弹：目标存活就每帧飞向它。
+ * homing 为 false（龙/战车）时落点在发射瞬间锁定，飞行中不再跟随。
  * 抛物线通过 arcApex 叠加二次高度；溅射由 aoeRadius 驱动。
  */
 export interface Projectile {
@@ -18,7 +19,9 @@ export interface Projectile {
   readonly faction: Faction;
   pos: Vec2;
   targetId: number;
-  /** 目标最后一次有效位置；范围弹在目标提前死亡后仍飞向这里。 */
+  /**
+   * 弹着点。追踪弹跟随目标；非追踪弹/范围弹在发射时锁定，目标死亡后仍飞向这里。
+   */
   impactPos: Vec2;
   /** 命中判定沿用发射时目标碰撞圈，目标移除后也能稳定落地。 */
   targetRadius: Fx;
@@ -45,17 +48,21 @@ export interface Projectile {
   /** 飞行速度，单位/秒 */
   speed: Fx;
   /**
-   * 引信炸弹等待引爆的剩余逻辑帧（投放时取自单位 attackInterval）。
-   * 落地前为完整引信；落地后每 tick 递减；0 且未落地表示无需引信。
+   * 历史落地引信剩余帧；大小炸弹改为落地即爆后保持 0。
    */
   fuseTicks: number;
-  /** 已抵达固定落点，渲染层据此显示落地闪烁。 */
+  /** 已抵达固定落点；落地即爆时不会置为 true。 */
   landed: boolean;
   /**
    * 主堡投放的引信炸弹种类；非 null 时固定落点、不追踪单位，
-   * 落地后按 fuseTicks 引爆并结算仅伤敌军的 AOE。
+   * 落地当帧引爆并结算仅伤敌军的 AOE。
    */
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null;
+  /**
+   * 是否每帧把落点同步到目标。
+   * false 时（龙/战车）发射瞬间锁定 impactPos，目标可走开打空。
+   */
+  homing: boolean;
   dead: boolean;
 }
 
@@ -78,6 +85,7 @@ export function createProjectile(
   impactFx: ProjectileImpactFx = 'pulse',
   visual: ProjectileVisual = 'orb',
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null = null,
+  homing = true,
 ): Projectile {
   return {
     id,
@@ -99,6 +107,7 @@ export function createProjectile(
     fuseTicks: 0,
     landed: false,
     fuseBombKind,
+    homing,
     dead: false,
   };
 }
