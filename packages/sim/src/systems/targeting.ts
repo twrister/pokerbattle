@@ -33,7 +33,7 @@ export function updateTargeting(world: World): void {
 
     const current = world.getUnit(unit.targetId);
     // 敌军粘性：已能出手则咬住；够不着时按空/地规则决定是否打断
-    // 不可打目标（如炸弹）立即放弃，避免粘性卡住
+    // 不可打目标（如投放炸弹）立即放弃，避免粘性卡住
     if (isAlive(current) && current.faction !== unit.faction && canAttackTarget(unit, current)) {
       if (isWithinAttackReach(unit, current)) continue;
 
@@ -175,7 +175,7 @@ function hasEnemyBuildingInSight(world: World, unit: Unit, sightSq: Fx): boolean
 
 /**
  * 远距索敌候选：必须能打到对方；有敌方建筑在视野时，额外只保留建筑或能威胁到自己的单位。
- * 威胁用 canThreatenTarget（忽略不可锁定），使炸弹兵与骷髅兵在推家过滤下选敌一致。
+ * 威胁用 canThreatenTarget（忽略投放炸弹的不可锁定），使炸弹兵与骷髅兵在推家过滤下选敌一致。
  */
 function isEnemyTargetCandidate(unit: Unit, other: Unit, buildingInSight: boolean): boolean {
   if (!canAttackTarget(unit, other)) return false;

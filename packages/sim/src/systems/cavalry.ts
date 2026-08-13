@@ -87,7 +87,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
     if (other.config.movementLayer === 'air') continue;
-    // 炸弹类单位不可被冲刺锁定命中
+    // 投放炸弹不可被冲刺锁定命中
     if (isUntargetableBomb(other)) continue;
     if (unit.chargeHits.includes(other.id)) continue;
 
@@ -129,7 +129,7 @@ function hasEnemyBodyContact(world: World, unit: Unit): boolean {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
-    // 飞行单位与炸弹不参与冲刺体碰判定
+    // 飞行单位与投放炸弹不参与冲刺体碰判定
     if (other.config.movementLayer === 'air') continue;
     if (isUntargetableBomb(other)) continue;
 

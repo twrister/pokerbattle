@@ -20,14 +20,14 @@ export function distSqToBuildingFootprint(px: Fx, py: Fx, building: Unit): Fx {
   return distSq(px, py, closestX, closestY);
 }
 
-/** 投放炸弹与炸弹兵：不可被索敌锁定，也不吃普攻/近战范围结算。 */
+/** 投放炸弹：不可被索敌锁定，也不吃普攻/近战范围结算。炸弹兵可被正常锁定。 */
 export function isUntargetableBomb(unit: Unit): boolean {
   const id = unit.typeId;
-  return id === 'giant_bomb' || id === 'small_bomb' || id === 'summoned_bomber';
+  return id === 'giant_bomb' || id === 'small_bomb';
 }
 
 /**
- * 攻击层规则：近战/近战范围打不到空中；炸弹类单位不可锁定；远程默认可打地/空。
+ * 攻击层规则：近战/近战范围打不到空中；投放炸弹不可锁定；远程默认可打地/空。
  * 索敌与战斗结算共用，避免规则漂移。
  */
 export function canAttackTarget(attacker: Unit, target: Unit): boolean {
@@ -37,7 +37,7 @@ export function canAttackTarget(attacker: Unit, target: Unit): boolean {
 
 /**
  * 推家威胁判定：只看攻击层，忽略目标「不可锁定」。
- * 炸弹兵自身不可被锁定，若用 canAttackTarget 反查会永远判无威胁，视野有建筑时只会推家。
+ * 投放炸弹自身不可被锁定，若用 canAttackTarget 反查会永远判无威胁。
  */
 export function canThreatenTarget(attacker: Unit, target: Unit): boolean {
   const kind = attacker.config.attack.kind;

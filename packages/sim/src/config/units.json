@@ -168,7 +168,7 @@
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
-    "aoeRadius": 2.5,
+    "aoeRadius": 2,
     "levels": {
       "1": {
         "radius": 0.8,
@@ -530,7 +530,7 @@
     "movementLayer": "air",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
-    "aoeRadius": 2.5,
+    "aoeRadius": 2,
     "levels": {
       "1": {
         "radius": 0.8,
@@ -616,7 +616,7 @@
         "radius": 0.3,
         "bodyScale": 0.6,
         "mass": 2,
-        "maxHp": 150,
+        "maxHp": 200,
         "damage": 100,
         "attackInterval": 20,
         "attackWindup": 7,

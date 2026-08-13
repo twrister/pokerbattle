@@ -5,22 +5,23 @@ import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
 describe('炸弹兵自爆', () => {
-  it('敌军不能锁定或普攻命中炸弹兵', () => {
+  it('敌军可以锁定并普攻命中炸弹兵', () => {
     const world = new World(1);
     const melee = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(8));
-    // 比地面兵更近，若可锁定会优先咬炸弹兵
-    const bomber = world.spawnUnit(Faction.Red, 'summoned_bomber', fromFloat(9), fromFloat(12));
+    // 比地面兵更近，可锁定时应优先咬炸弹兵
+    const bomber = world.spawnUnit(Faction.Red, 'summoned_bomber', fromFloat(9), fromFloat(9));
     const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(14));
     melee.retargetIn = 0;
-    // 冻住炸弹兵，避免其主动贴脸自爆干扰断言
+    // 冻住炸弹兵，避免其主动贴脸自爆抢在普攻前引爆
     bomber.stats.moveSpeed = 0;
     ground.stats.damage = 0;
     const bomberHp = bomber.hp;
 
-    for (let i = 0; i < 20; i++) world.step();
+    world.step();
+    expect(melee.targetId).toBe(bomber.id);
 
-    expect(melee.targetId).toBe(ground.id);
-    expect(bomber.hp).toBe(bomberHp);
+    for (let i = 0; i < 20; i++) world.step();
+    expect(bomber.hp).toBeLessThan(bomberHp);
   });
 
   it('视野有敌方建筑时仍优先锁更近的地面兵，与骷髅兵一致', () => {
