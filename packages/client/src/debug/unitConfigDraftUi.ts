@@ -34,7 +34,7 @@ export const NUMERIC_FIELDS: ReadonlyArray<{
   { key: 'moveSpeed', label: '移速', step: '0.1', hint: '单位/秒' },
   { key: 'sightRange', label: '索敌', step: '1' },
   { key: 'projectileSpeed', label: '弹速', step: '0.5', hint: '仅远程' },
-  { key: 'aoeRadius', label: '范围半径', step: '0.1', hint: '仅范围弹道' },
+  { key: 'aoeRadius', label: '爆炸范围', step: '0.1', hint: '仅范围弹道' },
 ];
 
 /** 技能配置块键；与 UnitConfigDraft 可选技能字段一一对应。 */
@@ -145,6 +145,11 @@ export const POST_MOVE_NUMERIC_KEYS = ['radius', 'bodyScale'] as const satisfies
 
 /** 紧挨体型后展示的字段（固定窄列）。 */
 export const PRE_ATTACK_NUMERIC_KEYS = ['attackWindup'] as const satisfies ReadonlyArray<
+  keyof UnitConfigDraft
+>;
+
+/** 紧挨攻击方式后展示的落点爆炸范围（仅 projectile_aoe 可编辑）。 */
+export const AOE_NUMERIC_KEYS = ['aoeRadius'] as const satisfies ReadonlyArray<
   keyof UnitConfigDraft
 >;
 

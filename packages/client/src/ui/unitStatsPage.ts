@@ -7,6 +7,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import {
+  AOE_NUMERIC_KEYS,
   NUMERIC_FIELDS,
   POST_MOVE_NUMERIC_KEYS,
   PRE_ATTACK_NUMERIC_KEYS,
@@ -196,6 +197,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     for (const key of PRE_ATTACK_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
     appendHead('DPS', 'dps');
     appendHead('攻击方式', 'attackKind');
+    for (const key of AOE_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
     appendHead('移动层', 'movementLayer');
     appendHead('更多', 'more');
     appendHead('技能', 'skill');
@@ -257,6 +259,9 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     row.appendChild(dpsCell);
 
     row.appendChild(makeAttackKindCell(typeId, level, levelDraft.attackKind));
+    for (const key of AOE_NUMERIC_KEYS) {
+      row.appendChild(makeAoeRadiusCell(typeId, level, levelDraft, key, maxima));
+    }
     row.appendChild(makeMovementLayerCell(typeId, level, levelDraft.movementLayer));
     row.appendChild(makeMoreCell(typeId, level, levelDraft));
     row.appendChild(makeSkillCell(typeId, level, levelDraft));
@@ -358,6 +363,43 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     return cell;
   }
 
+  /** 落点范围弹才可编辑爆炸范围；其它攻击方式显示破折号。 */
+  function makeAoeRadiusCell(
+    typeId: UnitTypeId,
+    level: number,
+    levelDraft: UnitLevelConfigDraft,
+    key: (typeof AOE_NUMERIC_KEYS)[number],
+    maxima: Record<OverviewBarKey, number>,
+  ): HTMLTableCellElement {
+    const cell = document.createElement('td');
+    cell.dataset.field = key;
+    if (levelDraft.attackKind !== 'projectile_aoe') {
+      cell.textContent = '—';
+      return cell;
+    }
+    const meta = NUMERIC_FIELDS.find((field) => field.key === key);
+    const value = levelDraft[key];
+    if (typeof value !== 'number' || !meta) {
+      cell.textContent = '—';
+      return cell;
+    }
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = meta.step;
+    input.dataset.unit = typeId;
+    input.dataset.level = String(level);
+    input.dataset.field = key;
+    input.value = formatDraftNumber(value);
+    input.setAttribute('aria-label', meta.label);
+    input.addEventListener('change', () => {
+      readControlsIntoDrafts(panelRoot, drafts);
+      if (tab === 'overview') renderOverview();
+    });
+    const ratio = value / Math.max(maxima[key], 1e-6);
+    cell.appendChild(makeValueWithBar(input, ratio));
+    return cell;
+  }
+
   function makeMovementLayerCell(
     typeId: UnitTypeId,
     level: number,
@@ -400,6 +442,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       ...PRIMARY_NUMERIC_KEYS,
       ...POST_MOVE_NUMERIC_KEYS,
       ...PRE_ATTACK_NUMERIC_KEYS,
+      ...AOE_NUMERIC_KEYS,
     ]);
     const secondary = NUMERIC_FIELDS.filter((field) => !primaryOrPinned.has(field.key));
     for (const field of secondary) {
@@ -410,7 +453,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       ) {
         continue;
       }
-      if (field.key === 'aoeRadius' && levelDraft.attackKind !== 'projectile_aoe') continue;
       const value = levelDraft[field.key as keyof UnitLevelConfigDraft];
       if (typeof value !== 'number') continue;
       const label = document.createElement('label');
@@ -812,11 +854,12 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   };
 }
 
-/** 总览表相对条可用的字段：战斗对比键 + 半径/体型/前摇原值。 */
+/** 总览表相对条可用的字段：战斗对比键 + 半径/体型/前摇/爆炸范围原值。 */
 type OverviewBarKey =
   | CompareStatKey
   | (typeof POST_MOVE_NUMERIC_KEYS)[number]
-  | (typeof PRE_ATTACK_NUMERIC_KEYS)[number];
+  | (typeof PRE_ATTACK_NUMERIC_KEYS)[number]
+  | (typeof AOE_NUMERIC_KEYS)[number];
 
 function fieldLabel(key: keyof UnitConfigDraft): string {
   return NUMERIC_FIELDS.find((field) => field.key === key)?.label ?? String(key);
@@ -889,7 +932,7 @@ function computeCompareMaxima(
   return maxima;
 }
 
-/** 总览表相对条上限：战斗对比键 + 半径/体型/前摇原值。 */
+/** 总览表相对条上限：战斗对比键 + 半径/体型/前摇/爆炸范围原值。 */
 function computeOverviewMaxima(
   catalog: readonly UnitCatalogEntry[],
   drafts: UnitDraftMap,
@@ -900,12 +943,17 @@ function computeOverviewMaxima(
     radius: 0,
     bodyScale: 0,
     attackWindup: 0,
+    aoeRadius: 0,
   };
   for (const entry of catalog) {
     const level = selectedLevels.get(entry.typeId) ?? 1;
     const levelDraft = getLevelDraft(drafts[entry.typeId], level);
     for (const key of [...POST_MOVE_NUMERIC_KEYS, ...PRE_ATTACK_NUMERIC_KEYS]) {
       maxima[key] = Math.max(maxima[key], levelDraft[key]);
+    }
+    // 仅统计落点范围弹的爆炸范围，避免近战兵种的 0 拉低相对条
+    if (levelDraft.attackKind === 'projectile_aoe') {
+      maxima.aoeRadius = Math.max(maxima.aoeRadius, levelDraft.aoeRadius);
     }
   }
   return maxima;

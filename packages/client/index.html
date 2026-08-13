@@ -2843,6 +2843,22 @@
         max-width: 88px;
       }
 
+      /* 爆炸范围列：落点范围弹可编辑，其它兵种显示破折号 */
+      .unit-stats-table th[data-field='aoeRadius'],
+      .unit-stats-table td[data-field='aoeRadius'] {
+        width: 100px;
+        min-width: 100px;
+        max-width: 100px;
+        box-sizing: border-box;
+      }
+
+      .unit-stats-table td[data-field='aoeRadius'] .unit-stats-value,
+      .unit-stats-table td[data-field='aoeRadius'] input {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+
       .unit-stats-value {
         display: grid;
         gap: 4px;

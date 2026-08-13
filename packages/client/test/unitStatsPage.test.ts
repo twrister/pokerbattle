@@ -41,7 +41,22 @@ describe('单位参数页', () => {
       'attackWindup',
       'dps',
     ]);
+    expect(headFields).toContain('aoeRadius');
     expect(headFields).toContain('skill');
+    expect(
+      document.querySelector<HTMLInputElement>(
+        'input[data-unit="dragon"][data-field="aoeRadius"]',
+      ),
+    ).toBeTruthy();
+    const gruntAoe = document.querySelector<HTMLTableCellElement>(
+      'tr[data-unit="melee_grunt"] td[data-field="aoeRadius"]',
+    );
+    expect(gruntAoe?.textContent).toBe('—');
+    expect(
+      document.querySelector(
+        'tr[data-unit="melee_grunt"] input[data-field="aoeRadius"]',
+      ),
+    ).toBeNull();
     expect(
       document.querySelector<HTMLInputElement>('input[data-unit="melee_grunt"][data-field="maxHp"]')
         ?.value,
