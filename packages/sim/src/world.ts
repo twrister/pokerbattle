@@ -29,6 +29,7 @@ import {
   type HealEffect,
 } from './entity/effect.js';
 import { Faction, type Unit, createUnit } from './entity/unit.js';
+import { evictionDeltaOutOfAabb } from './nav/buildingEvict.js';
 import {
   buildingCellRange,
   isBuildingRectInsideArena,
@@ -148,6 +149,8 @@ export class World {
     );
     // 按 id 打散首次索敌时机；锁定后不周期重选（换火见 targeting）
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
+    // 生成前挤出已有建筑，避免靠墙落点当帧卡在占地内
+    this.evictUnitFromBuildings(unit);
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
     this.markUnitGridDirty();
@@ -218,47 +221,42 @@ export class World {
   }
 
   /**
-   * 放置瞬间把压在占地内的地面单位沿最短轴推出（矩形边 + 半径）。
+   * 放置瞬间把压在占地内的地面单位挤出（墙感知，避免贴边被 clamp 顶回）。
    * 空中单位不受影响；后续帧由 separation 的 AABB 解叠维持。
    */
   private evictUnitsFromBuilding(building: Unit): void {
-    const half = fromFloat(building.config.footprint / 2);
-    const minX = building.pos.x - half;
-    const maxX = building.pos.x + half;
-    const minY = building.pos.y - half;
-    const maxY = building.pos.y + half;
-
+    const aabb = buildingAabb(building);
     for (const unit of this.units) {
       if (unit.dead || unit.id === building.id) continue;
-      if (isBuildingConfig(unit.config)) continue;
-      if (unit.config.movementLayer === 'air') continue;
-
-      const r = unit.config.radius;
-      const left = minX - r;
-      const right = maxX + r;
-      const bottom = minY - r;
-      const top = maxY + r;
-      if (unit.pos.x <= left || unit.pos.x >= right || unit.pos.y <= bottom || unit.pos.y >= top) {
-        continue;
-      }
-
-      const distLeft = unit.pos.x - left;
-      const distRight = right - unit.pos.x;
-      const distBottom = unit.pos.y - bottom;
-      const distTop = top - unit.pos.y;
-      // 四向距离用整数比较保证确定性；等距时优先左右再上下
-      if (distLeft <= distRight && distLeft <= distBottom && distLeft <= distTop) {
-        unit.pos.x = left;
-      } else if (distRight <= distBottom && distRight <= distTop) {
-        unit.pos.x = right;
-      } else if (distBottom <= distTop) {
-        unit.pos.y = bottom;
-      } else {
-        unit.pos.y = top;
-      }
-      unit.pos.x = clampToArena(unit.pos.x, ARENA_WIDTH, unit.config.radius);
-      unit.pos.y = clampToArena(unit.pos.y, ARENA_HEIGHT, unit.config.radius);
+      this.applyBuildingEviction(unit, aabb.minX, aabb.minY, aabb.maxX, aabb.maxY);
     }
+  }
+
+  /** 地面单位生成时对场上每座建筑做一次墙感知挤出。 */
+  private evictUnitFromBuildings(unit: Unit): void {
+    for (const building of this.units) {
+      if (building.dead || !isBuildingConfig(building.config)) continue;
+      const aabb = buildingAabb(building);
+      this.applyBuildingEviction(unit, aabb.minX, aabb.minY, aabb.maxX, aabb.maxY);
+    }
+  }
+
+  /** 把单位圆沿开口侧推出建筑 AABB，结果夹回场地。 */
+  private applyBuildingEviction(unit: Unit, minX: Fx, minY: Fx, maxX: Fx, maxY: Fx): void {
+    if (isBuildingConfig(unit.config)) return;
+    if (unit.config.movementLayer === 'air') return;
+    const delta = evictionDeltaOutOfAabb(
+      unit.pos.x,
+      unit.pos.y,
+      unit.config.radius,
+      minX,
+      minY,
+      maxX,
+      maxY,
+    );
+    if (delta.dx === 0 && delta.dy === 0) return;
+    unit.pos.x = clampToArena(unit.pos.x + delta.dx, ARENA_WIDTH, unit.config.radius);
+    unit.pos.y = clampToArena(unit.pos.y + delta.dy, ARENA_HEIGHT, unit.config.radius);
   }
 
   spawnProjectile(from: Unit, target: Unit, damage: Fx, speed: Fx, aoeRadius: Fx = 0): Projectile {
@@ -612,6 +610,17 @@ export class World {
     }
     return h >>> 0;
   }
+}
+
+/** 建筑方形占地（中心 ± footprint/2），与分离/射程几何一致。 */
+function buildingAabb(building: Unit): { minX: Fx; minY: Fx; maxX: Fx; maxY: Fx } {
+  const half = fromFloat(building.config.footprint / 2);
+  return {
+    minX: building.pos.x - half,
+    minY: building.pos.y - half,
+    maxX: building.pos.x + half,
+    maxY: building.pos.y + half,
+  };
 }
 
 /** FNV-1a，逐字节混入一个 32 位整数 */

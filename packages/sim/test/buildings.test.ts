@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import { ARENA_HEIGHT, ARENA_WIDTH } from '../src/config/arena.js';
 import { getUnitConfig } from '../src/config/units.js';
-import { Faction, UnitState } from '../src/entity/unit.js';
+import { Faction, UnitState, type Unit } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { buildingCellRange, snapBuildingCenter } from '../src/nav/buildingGrid.js';
 import { CommandKind, placeBuildingCommand } from '../src/commands.js';
 import { World } from '../src/world.js';
+
+/** 圆心是否严格落在建筑方形占地内部（贴边不算）。 */
+function isCenterInsideFootprint(unit: Unit, building: Unit): boolean {
+  const half = building.config.footprint / 2;
+  const x = toFloat(unit.pos.x);
+  const y = toFloat(unit.pos.y);
+  const bx = toFloat(building.pos.x);
+  const by = toFloat(building.pos.y);
+  return x > bx - half && x < bx + half && y > by - half && y < by + half;
+}
+
+/** 圆心是否仍在场地 margin（半径）内，未被推出界外。 */
+function isInsideArenaMargin(unit: Unit): boolean {
+  const r = toFloat(unit.config.radius);
+  const x = toFloat(unit.pos.x);
+  const y = toFloat(unit.pos.y);
+  return x >= r && x <= toFloat(ARENA_WIDTH) - r && y >= r && y <= toFloat(ARENA_HEIGHT) - r;
+}
 
 describe('建筑系统', () => {
   it('偶数足迹吸附到格线交点，奇数吸附到格心', () => {
@@ -200,6 +219,47 @@ describe('建筑系统', () => {
     );
     expect(tower).not.toBeNull();
     expect(tower!.config.id).toBe('building_tower_triple');
+  });
+
+  it('贴底边主堡靠墙内侧生成时立刻挤出占地', () => {
+    const world = new World(1);
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
+    const spots: ReadonlyArray<readonly [number, number]> = [
+      [9, 0.5],
+      [8, 1],
+    ];
+    for (const [x, y] of spots) {
+      const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(x), fromFloat(y));
+      expect(isCenterInsideFootprint(unit, base), `spawn (${x},${y}) should leave footprint`).toBe(
+        false,
+      );
+      expect(isInsideArenaMargin(unit)).toBe(true);
+    }
+  });
+
+  it('贴底边主堡靠墙生成后步进仍不回到占地内', () => {
+    const world = new World(1);
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
+    const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(0.5));
+    for (let i = 0; i < 40; i++) world.step();
+    expect(isCenterInsideFootprint(unit, base)).toBe(false);
+    expect(isInsideArenaMargin(unit)).toBe(true);
+  });
+
+  it('贴左墙箭塔靠墙内侧生成时挤向开口侧', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(1), fromFloat(10))!;
+    const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(0.5), fromFloat(10));
+    expect(isCenterInsideFootprint(unit, tower)).toBe(false);
+    expect(isInsideArenaMargin(unit)).toBe(true);
+  });
+
+  it('建筑盖到贴墙单位时按开口侧挤出', () => {
+    const world = new World(1);
+    const unit = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(0.5));
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2))!;
+    expect(isCenterInsideFootprint(unit, base)).toBe(false);
+    expect(isInsideArenaMargin(unit)).toBe(true);
   });
 
   it('基地在射程内以投射物攻击敌军（同 1 级箭塔）', () => {

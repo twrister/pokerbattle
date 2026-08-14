@@ -2,6 +2,7 @@ import { type Fx, ONE, div, fromFloat, mul, sqrt } from '../math/fixed.js';
 import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
+import { evictionDeltaOutOfAabb } from '../nav/buildingEvict.js';
 import {
   ATTACK_PUSH_DEEP_RATIO,
   ATTACK_PUSH_SCALE,
@@ -178,21 +179,11 @@ function pushUnitOutOfAabb(unit: Unit, minX: Fx, minY: Fx, maxX: Fx, maxY: Fx): 
   const r = unit.config.radius;
   const gapSq = mul(dx, dx) + mul(dy, dy);
 
-  // 圆心在矩形内部：沿最短轴推出
+  // 圆心在矩形内部：墙感知挤出，避免贴边最短轴被场地边界顶回
   if (dx === 0 && dy === 0 && cx >= minX && cx <= maxX && cy >= minY && cy <= maxY) {
-    const distLeft = cx - minX;
-    const distRight = maxX - cx;
-    const distBottom = cy - minY;
-    const distTop = maxY - cy;
-    if (distLeft <= distRight && distLeft <= distBottom && distLeft <= distTop) {
-      unit.push.x += minX - r - cx;
-    } else if (distRight <= distBottom && distRight <= distTop) {
-      unit.push.x += maxX + r - cx;
-    } else if (distBottom <= distTop) {
-      unit.push.y += minY - r - cy;
-    } else {
-      unit.push.y += maxY + r - cy;
-    }
+    const delta = evictionDeltaOutOfAabb(cx, cy, r, minX, minY, maxX, maxY);
+    unit.push.x += delta.dx;
+    unit.push.y += delta.dy;
     return;
   }
 
