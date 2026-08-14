@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   AIR_UNIT_HOVER_HEIGHT,
   BODY_SCALE_REFERENCE,
-  CASTLE_PROTECT_HP,
+  CASTLE_PROTECT_HP_RATIO,
   Faction,
   UNIT_CONFIGS,
   UNIT_LEVELS_ENABLED,
@@ -364,8 +364,7 @@ export class UnitView {
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
     if (typeId === 'building_base') {
-      const maxHp = toFloat(config.maxHp);
-      this.protectRatio = maxHp > 0 ? Math.max(0, Math.min(1, CASTLE_PROTECT_HP / maxHp)) : 0;
+      this.protectRatio = CASTLE_PROTECT_HP_RATIO;
       // 略高于血条，与 HUD 刻度一样上下探出，避免被前景条盖住
       this.protectMark = new THREE.Mesh(
         new THREE.PlaneGeometry(0.06, barHeight + 0.1),

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   AIR_UNIT_HOVER_HEIGHT,
-  CASTLE_PROTECT_HP,
+  CASTLE_PROTECT_HP_RATIO,
   Faction,
   UNIT_CONFIGS,
   UnitState,
@@ -164,8 +164,7 @@ describe('渲染同步', () => {
     expect(mark).toBeInstanceOf(THREE.Mesh);
     expect(grunt.group.getObjectByName('hp-protect-mark')).toBeUndefined();
 
-    const maxHp = toFloat(UNIT_CONFIGS.building_base.maxHp);
-    const ratio = CASTLE_PROTECT_HP / maxHp;
+    const ratio = CASTLE_PROTECT_HP_RATIO;
     const barWidth = Math.max(1.2, UNIT_CONFIGS.building_base.footprint * 0.85);
     expect(mark?.position.x).toBeCloseTo((ratio - 0.5) * barWidth, 5);
 

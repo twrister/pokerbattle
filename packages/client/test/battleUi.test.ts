@@ -73,7 +73,7 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-opp-hand')?.childElementCount).toBe(
       match.decks[Faction.Red].hand.length,
     );
-    expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('style')).toContain('40%');
+    expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('style')).toContain('50%');
     expect(document.querySelector('#battle-self-track')?.classList.contains('is-protect')).toBe(false);
   });
 

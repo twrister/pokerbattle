@@ -17,6 +17,7 @@ import {
   TICK_RATE,
   claimCastlePackCommand,
   fromFloat,
+  toFloat,
 } from '../src/index.js';
 
 describe('MatchState.clear', () => {
@@ -155,7 +156,7 @@ describe('MatchState 对局规则', () => {
 });
 
 describe('MatchState 城堡保护卡包', () => {
-  it('主堡血量低于保护线时掉落卡包，领取后无视上限补 3 张', () => {
+  it('主堡血量低于半血保护线时掉落卡包，领取后无视上限补 5 张', () => {
     const match = createMatch();
     const before = match.decks[Faction.Blue].hand.length;
     castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 1);
@@ -163,7 +164,8 @@ describe('MatchState 城堡保护卡包', () => {
     match.step();
     expect(match.getCastlePackState(Faction.Blue)).toBe('pending');
     expect(match.getCastlePackState(Faction.Red)).toBe('none');
-    expect(match.getCastleProtectHp()).toBe(CASTLE_PROTECT_HP);
+    expect(match.getCastleProtectHp(Faction.Blue)).toBe(CASTLE_PROTECT_HP);
+    expect(CASTLE_PROTECT_HP).toBe(toFloat(match.getCastleMaxHp(Faction.Blue)) * 0.5);
 
     match.step([claimCastlePackCommand(Faction.Blue)]);
     expect(match.getCastlePackState(Faction.Blue)).toBe('claimed');

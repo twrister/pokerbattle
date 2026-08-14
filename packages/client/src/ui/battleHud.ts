@@ -130,7 +130,7 @@ function updateCastle(
 ): void {
   const hp = toFloat(match.getCastleHp(faction));
   const maxHp = toFloat(match.getCastleMaxHp(faction));
-  const protectHp = match.getCastleProtectHp();
+  const protectHp = match.getCastleProtectHp(faction);
   const text = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
   const width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
   const markLeft = `${maxHp > 0 ? Math.max(0, Math.min(100, (protectHp / maxHp) * 100)) : 0}%`;

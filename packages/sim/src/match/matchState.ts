@@ -51,10 +51,12 @@ export const MATCH_END_TICKS = DEFAULT_PHASE_DURATION_TICKS * 3;
 export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
 export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
-/** 主堡生命低于该值时触发保护卡包。 */
-export const CASTLE_PROTECT_HP = 2000;
+/** 主堡生命低于最大生命的该比例时触发保护卡包。 */
+export const CASTLE_PROTECT_HP_RATIO = 0.5;
+/** 默认主堡配置下的保护线（显示血量），供测试与静态刻度对齐。 */
+export const CASTLE_PROTECT_HP = toFloat(UNIT_CONFIGS.building_base.maxHp) * CASTLE_PROTECT_HP_RATIO;
 /** 领取保护卡包时无视上限抽取的张数。 */
-export const CASTLE_PROTECT_CARDS = 3;
+export const CASTLE_PROTECT_CARDS = 5;
 /** 每方每局卡包生命周期：未触发 / 待领取 / 已领取。 */
 export type CastlePackState = 'none' | 'pending' | 'claimed';
 
@@ -272,9 +274,9 @@ export class MatchState {
     return id ? (this.world.getUnit(id)?.config.maxHp ?? UNIT_CONFIGS.building_base.maxHp) : 0;
   }
 
-  /** 主堡保护触发线（显示血量），供 HUD 刻度对齐。 */
-  getCastleProtectHp(): number {
-    return CASTLE_PROTECT_HP;
+  /** 主堡保护触发线（显示血量），按该方主堡最大生命的一半计算。 */
+  getCastleProtectHp(faction: Faction = Faction.Blue): number {
+    return toFloat(this.getCastleMaxHp(faction)) * CASTLE_PROTECT_HP_RATIO;
   }
 
   /** 指定阵营本局保护卡包状态。 */
@@ -461,10 +463,10 @@ export class MatchState {
     return 4;
   }
 
-  /** 主堡仍存活且血量低于保护线时，每方每局只升到 pending 一次。 */
+  /** 主堡仍存活且血量低于半血保护线时，每方每局只升到 pending 一次。 */
   private maybeTriggerCastlePack(faction: Faction, hp: number): void {
     if (this.getCastlePackState(faction) !== 'none') return;
-    if (toFloat(hp) >= CASTLE_PROTECT_HP) return;
+    if (toFloat(hp) >= this.getCastleProtectHp(faction)) return;
     this.setCastlePackState(faction, 'pending');
   }
 
