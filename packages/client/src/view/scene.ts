@@ -39,6 +39,16 @@ export const SOLO_VIEW_BOTTOM_EXTRA_MAX = 15;
 const SOLO_TOP_DOWN_ANGLE_DEG = 89.5;
 /** lookAt 之后从矩阵取画面竖直方向，避免误用 Object3D.up（那只是 lookAt 的参考轴）。 */
 const _cameraScreenUp = new THREE.Vector3();
+/** 地面盒总厚度，略大于河面下沉，侧面不会露出河挂在地图底下。 */
+const ARENA_GROUND_THICKNESS = 0.65;
+/** 河面相对地面顶下沉半格。 */
+const ARENA_RIVER_DROP = 0.5;
+/** 河水自身厚度。 */
+const ARENA_RIVER_THICKNESS = 0.15;
+/** 桥板厚度。 */
+const ARENA_BRIDGE_THICKNESS = 0.15;
+/** 桥面略高于地面，避免与网格/单位阴影 z-fighting。 */
+const ARENA_BRIDGE_DECK_Y = 0.02;
 
 export interface SceneContext {
   renderer: THREE.WebGLRenderer;
@@ -178,10 +188,10 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
 
   const arenaRoot = new THREE.Group();
   scene.add(arenaRoot);
-  let halfCourtLine: THREE.Line;
+  let sandboxMarkers: THREE.Group;
   let arenaTerrain: THREE.Group;
-  ({ halfCourtLine, arenaTerrain } = mountArenaVisuals(arenaRoot, arenaVisualFromDraft(initial)));
-  setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
+  ({ sandboxMarkers, arenaTerrain } = mountArenaVisuals(arenaRoot, arenaVisualFromDraft(initial)));
+  setArenaTerrainVisibility(mode, sandboxMarkers, arenaTerrain);
 
   const resize = (): void => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -217,7 +227,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
     scene.background = new THREE.Color(hexColorToNumber(draft.colors.background));
     applySunShadowSpan(sun, ARENA_W, ARENA_H);
     clearGroup(arenaRoot);
-    ({ halfCourtLine, arenaTerrain } = mountArenaVisuals(arenaRoot, arenaVisualFromDraft(draft)));
+    ({ sandboxMarkers, arenaTerrain } = mountArenaVisuals(arenaRoot, arenaVisualFromDraft(draft)));
     controls?.dispose();
     controls = null;
     ({ camera, controls } = createCamera(
@@ -230,7 +240,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
       viewFaction,
       soloCameraOffsetY,
     ));
-    setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
+    setArenaTerrainVisibility(mode, sandboxMarkers, arenaTerrain);
     resize();
   };
 
@@ -265,7 +275,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
         viewFaction,
         soloCameraOffsetY,
       ));
-      setArenaTerrainVisibility(mode, halfCourtLine, arenaTerrain);
+      setArenaTerrainVisibility(mode, sandboxMarkers, arenaTerrain);
       resize();
     },
     getSoloCameraAngle() {
@@ -574,50 +584,126 @@ function resizeCamera(
 function mountArenaVisuals(
   root: THREE.Group,
   layout: ArenaVisualLayout,
-): { halfCourtLine: THREE.Line; arenaTerrain: THREE.Group } {
+): { sandboxMarkers: THREE.Group; arenaTerrain: THREE.Group } {
   root.add(createArenaGround(layout));
   root.add(createArenaGrid(layout));
   root.add(createArenaBorder(layout));
-  const halfCourtLine = createHalfCourtLine(layout);
+  const sandboxMarkers = createSandboxMarkers(layout);
   const arenaTerrain = createArenaTerrain(layout);
-  root.add(halfCourtLine);
+  root.add(sandboxMarkers);
   root.add(arenaTerrain);
-  return { halfCourtLine, arenaTerrain };
+  return { sandboxMarkers, arenaTerrain };
 }
 
 /** 供配置页预览复用的整场地视觉；默认显示河桥而不是沙盒中线。 */
 export function createArenaVisualGroup(layout: ArenaVisualLayout, showRiver = true): THREE.Group {
   const root = new THREE.Group();
-  const { halfCourtLine, arenaTerrain } = mountArenaVisuals(root, layout);
-  halfCourtLine.visible = !showRiver;
+  const { sandboxMarkers, arenaTerrain } = mountArenaVisuals(root, layout);
+  sandboxMarkers.visible = !showRiver;
   arenaTerrain.visible = showRiver;
   return root;
 }
 
-function createArenaGround(layout: ArenaVisualLayout): THREE.Mesh {
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(layout.width, layout.height),
-    new THREE.MeshStandardMaterial({
-      color: hexColorToNumber(layout.colors.ground),
-      roughness: 0.95,
-      metalness: 0,
-    }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  return ground;
+/** layout 的 sim Y → scene Z；预览可能与全局 ARENA_H 不同，不能用 coords.toSceneZ。 */
+function layoutToSceneZ(layout: ArenaVisualLayout, simY: number): number {
+  return layout.height / 2 - simY;
 }
 
-/** 一格一线的参考网格。GridHelper 只能画正方形，所以自己拼。 */
+/** 河道在 scene Z 上的范围，minZ 靠红方、maxZ 靠蓝方。 */
+function riverSceneZBand(layout: ArenaVisualLayout): {
+  minZ: number;
+  maxZ: number;
+  centerZ: number;
+  depth: number;
+} {
+  const depth = layout.riverMaxY - layout.riverMinY;
+  const minZ = layoutToSceneZ(layout, layout.riverMaxY);
+  const maxZ = layoutToSceneZ(layout, layout.riverMinY);
+  return { minZ, maxZ, centerZ: (minZ + maxZ) / 2, depth };
+}
+
+/** 顶面贴齐 topY 的竖直盒子，便于地面/河/桥共用。 */
+function createVolumeBox(
+  width: number,
+  thickness: number,
+  depth: number,
+  material: THREE.Material,
+  topY: number,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, depth), material);
+  mesh.position.y = topY - thickness / 2;
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  return mesh;
+}
+
+function createGroundMaterial(layout: ArenaVisualLayout): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: hexColorToNumber(layout.colors.ground),
+    roughness: 0.95,
+    metalness: 0,
+  });
+}
+
+/** 两侧半场地面盒，中间留出河槽。 */
+function createArenaGround(layout: ArenaVisualLayout): THREE.Group {
+  const group = new THREE.Group();
+  const material = createGroundMaterial(layout);
+  const river = riverSceneZBand(layout);
+  const halfH = layout.height / 2;
+
+  const blueDepth = halfH - river.maxZ;
+  if (blueDepth > 0) {
+    const blue = createVolumeBox(layout.width, ARENA_GROUND_THICKNESS, blueDepth, material, 0);
+    blue.position.z = (halfH + river.maxZ) / 2;
+    group.add(blue);
+  }
+
+  const redDepth = river.minZ + halfH;
+  if (redDepth > 0) {
+    const red = createVolumeBox(layout.width, ARENA_GROUND_THICKNESS, redDepth, material, 0);
+    red.position.z = (-halfH + river.minZ) / 2;
+    group.add(red);
+  }
+
+  return group;
+}
+
+/** 沙盒用中线 + 河道缺口的地面色填充，对局时整组隐藏以露出河槽。 */
+function createSandboxMarkers(layout: ArenaVisualLayout): THREE.Group {
+  const group = new THREE.Group();
+  group.add(createHalfCourtLine(layout));
+  const river = riverSceneZBand(layout);
+  if (river.depth > 0) {
+    const fill = createVolumeBox(
+      layout.width,
+      ARENA_GROUND_THICKNESS,
+      river.depth,
+      createGroundMaterial(layout),
+      0,
+    );
+    fill.position.z = river.centerZ;
+    group.add(fill);
+  }
+  return group;
+}
+
+/** 一格一线的参考网格。河道带内不画，避免线悬在河槽上。 */
 function createArenaGrid(layout: ArenaVisualLayout): THREE.LineSegments {
   const halfW = layout.width / 2;
   const halfH = layout.height / 2;
+  const river = riverSceneZBand(layout);
   const points: number[] = [];
+  const y = 0.01;
   for (let x = 1; x < layout.width; x++) {
-    points.push(x - halfW, 0.01, -halfH, x - halfW, 0.01, halfH);
+    const sx = x - halfW;
+    if (river.minZ > -halfH) points.push(sx, y, -halfH, sx, y, river.minZ);
+    if (river.maxZ < halfH) points.push(sx, y, river.maxZ, sx, y, halfH);
   }
   for (let z = 1; z < layout.height; z++) {
-    points.push(-halfW, 0.01, z - halfH, halfW, 0.01, z - halfH);
+    const sz = z - halfH;
+    if (sz > river.minZ && sz < river.maxZ) continue;
+    points.push(-halfW, y, sz, halfW, y, sz);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
@@ -662,19 +748,20 @@ function createHalfCourtLine(layout: ArenaVisualLayout): THREE.Line {
 /** 单机/联机对局的中线河道与双桥；沙盒保留原有空场地中线。 */
 function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
   const terrain = new THREE.Group();
-  const riverHeight = layout.riverMaxY - layout.riverMinY;
-  const river = new THREE.Mesh(
-    new THREE.PlaneGeometry(layout.width, riverHeight),
+  const river = riverSceneZBand(layout);
+  const riverMesh = createVolumeBox(
+    layout.width,
+    ARENA_RIVER_THICKNESS,
+    river.depth,
     new THREE.MeshStandardMaterial({
       color: hexColorToNumber(layout.colors.river),
       roughness: 0.72,
       metalness: 0.08,
     }),
+    -ARENA_RIVER_DROP,
   );
-  river.rotation.x = -Math.PI / 2;
-  river.position.set(0, 0.025, layout.height / 2 - (layout.riverMinY + riverHeight / 2));
-  river.receiveShadow = true;
-  terrain.add(river);
+  riverMesh.position.z = river.centerZ;
+  terrain.add(riverMesh);
 
   const bridgeMaterial = new THREE.MeshStandardMaterial({
     color: hexColorToNumber(layout.colors.bridge),
@@ -682,17 +769,16 @@ function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
     metalness: 0,
   });
   for (const bridge of layout.bridges) {
-    const bridgeDeck = new THREE.Mesh(
-      new THREE.PlaneGeometry(bridge.maxX - bridge.minX, riverHeight),
+    const bridgeWidth = bridge.maxX - bridge.minX;
+    const bridgeDeck = createVolumeBox(
+      bridgeWidth,
+      ARENA_BRIDGE_THICKNESS,
+      river.depth,
       bridgeMaterial,
+      ARENA_BRIDGE_DECK_Y,
     );
-    bridgeDeck.rotation.x = -Math.PI / 2;
-    bridgeDeck.position.set(
-      bridge.minX + (bridge.maxX - bridge.minX) / 2 - layout.width / 2,
-      0.028,
-      layout.height / 2 - (layout.riverMinY + riverHeight / 2),
-    );
-    bridgeDeck.receiveShadow = true;
+    bridgeDeck.position.x = bridge.minX + bridgeWidth / 2 - layout.width / 2;
+    bridgeDeck.position.z = river.centerZ;
     terrain.add(bridgeDeck);
   }
   return terrain;
@@ -701,11 +787,11 @@ function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
 /** 按场景模式切换对局河桥与沙盒中线，避免沙盒地形发生变化。 */
 function setArenaTerrainVisibility(
   mode: SceneMode,
-  halfCourtLine: THREE.Line,
+  sandboxMarkers: THREE.Group,
   arenaTerrain: THREE.Group,
 ): void {
   const isSolo = mode === 'solo';
-  halfCourtLine.visible = !isSolo;
+  sandboxMarkers.visible = !isSolo;
   arenaTerrain.visible = isSolo;
 }
 
