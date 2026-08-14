@@ -2,6 +2,7 @@ import {
   Faction,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  isArcherTowerId,
   isBuildingConfig,
   type UnitTypeId,
 } from '@pb/sim';
@@ -21,6 +22,16 @@ const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
 const STATS_REFRESH_MS = 150;
 /** 沙盒可出兵的非建筑兵种（建筑走独立建造面板） */
 const MOBILE_UNIT_TYPE_IDS = UNIT_TYPE_IDS.filter((id) => !isBuildingConfig(UNIT_CONFIGS[id]));
+/** 调试选兵栏额外挂上的三种箭塔，与兵种同一套拖放释放。 */
+const DEBUG_ARCHER_TOWER_IDS = UNIT_TYPE_IDS.filter(isArcherTowerId);
+
+/** 调试/沙盒选兵栏兵种；调试模式附带三种箭塔，不含基地。 */
+export function debugSpawnUnitTypeIds(includeArcherTowers: boolean): UnitTypeId[] {
+  return includeArcherTowers
+    ? [...MOBILE_UNIT_TYPE_IDS, ...DEBUG_ARCHER_TOWER_IDS]
+    : [...MOBILE_UNIT_TYPE_IDS];
+}
+
 /** 运行控制折叠状态本地记忆键 */
 const COLLAPSE_KEY = 'pb.runtimeControls.collapsed';
 /** 「已保存」提示停留时长 */
@@ -33,6 +44,8 @@ export interface PanelOptions {
   enableSpawnControls?: boolean;
   /** 锁定放兵阵营时不绑 Q/E 与建造，避免调试模式误放到对方。 */
   lockFaction?: Faction;
+  /** 选兵栏是否附带三种箭塔（调试放兵）。 */
+  includeArcherTowers?: boolean;
   /** 是否启用暂停/单步/倍速/重新开局等运行控制（正式服单机关闭）。 */
   enableRuntimeControls?: boolean;
   /** 沙盒专用的快速开团预设；单机模式不提供。 */
@@ -83,9 +96,10 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const runtimeControlsEnabled = options.enableRuntimeControls ?? true;
   const lockedFaction = options.lockFaction;
   const factionSwitchEnabled = spawnControlsEnabled && lockedFaction === undefined;
+  const spawnTypeIds = debugSpawnUnitTypeIds(options.includeArcherTowers === true);
 
   let faction: Faction = lockedFaction ?? Faction.Blue;
-  let unitType: UnitTypeId = MOBILE_UNIT_TYPE_IDS[0]!;
+  let unitType: UnitTypeId = spawnTypeIds[0]!;
   let buildingType: UnitTypeId | null = null;
   let speedIndex = 0;
   let lastStatsAt = 0;
@@ -141,8 +155,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const fpsOut = required<HTMLElement>('#stat-fps');
 
   if (spawnControlsEnabled) {
-    // 兵种按钮只列可移动单位；建筑走独立建造面板
-    for (const typeId of MOBILE_UNIT_TYPE_IDS) {
+    // 兵种按钮列可移动单位；调试模式额外挂三种箭塔
+    for (const typeId of spawnTypeIds) {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.unit = typeId;
@@ -245,7 +259,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
       case 'Digit9': {
         if (!spawnControlsEnabled) break;
         const index = Number(event.code.slice(5)) - 1;
-        const next = MOBILE_UNIT_TYPE_IDS[index];
+        const next = spawnTypeIds[index];
         if (next) selectUnit(next);
         break;
       }

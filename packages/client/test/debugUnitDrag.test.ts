@@ -13,6 +13,9 @@ describe('调试模式单兵种拖拽上场', () => {
             <button type="button" data-unit="melee_grunt">民兵</button>
             <button type="button" data-unit="ranged_archer">弓手</button>
             <button type="button" data-unit="giant_bomb">巨型炸弹</button>
+            <button type="button" data-unit="building_tower">箭塔</button>
+            <button type="button" data-unit="building_tower_advanced">双射手箭塔</button>
+            <button type="button" data-unit="building_tower_triple">三射手箭塔</button>
           </div>
         </div>
       </div>
@@ -234,6 +237,36 @@ describe('调试模式单兵种拖拽上场', () => {
 
     handle.dispose();
   });
+
+  it('三种箭塔拖到战场松开时带上落点坐标', () => {
+    const onRequestSpawn = vi.fn(() => true);
+    const handle = enableDebugUnitDrag({
+      unitGroup: unitGroup(),
+      onPickUnit: vi.fn(),
+      canDropAt: () => true,
+      onRequestSpawn,
+      onDragStart: vi.fn(),
+      onDragEnd: vi.fn(),
+    });
+
+    const canvas = document.querySelector('#battle-canvas')!;
+    dropOn(canvas, towerButton('building_tower'), 60, 200, 300);
+    dropOn(canvas, towerButton('building_tower_advanced'), 61, 180, 280);
+    dropOn(canvas, towerButton('building_tower_triple'), 62, 160, 260);
+
+    expect(onRequestSpawn).toHaveBeenCalledTimes(3);
+    expect(onRequestSpawn).toHaveBeenNthCalledWith(1, 'building_tower', { clientX: 200, clientY: 300 });
+    expect(onRequestSpawn).toHaveBeenNthCalledWith(2, 'building_tower_advanced', {
+      clientX: 180,
+      clientY: 280,
+    });
+    expect(onRequestSpawn).toHaveBeenNthCalledWith(3, 'building_tower_triple', {
+      clientX: 160,
+      clientY: 260,
+    });
+
+    handle.dispose();
+  });
 });
 
 function unitGroup(): HTMLElement {
@@ -246,6 +279,10 @@ function gruntButton(): HTMLButtonElement {
 
 function bombButton(): HTMLButtonElement {
   return document.querySelector('button[data-unit="giant_bomb"]')!;
+}
+
+function towerButton(typeId: string): HTMLButtonElement {
+  return document.querySelector(`button[data-unit="${typeId}"]`)!;
 }
 
 function buttonRect(): DOMRect {

@@ -13,7 +13,9 @@ import {
   getFuseBombTypeId,
   getUnitConfig,
   halfCourtSafeAnchor,
+  halfCourtSafeBuildingAnchor,
   halfCourtYRange,
+  isArcherTowerId,
   isBuildingConfig,
   isBuildingInsideHalfCourt,
   isBuildingOnlyFormation,
@@ -22,6 +24,7 @@ import {
   isFuseBombTypeId,
   toFloat,
   claimCastlePackCommand,
+  placeBuildingCommand,
   playFormationCommand,
   snapBuildingCenter,
   spawnCommand,
@@ -36,6 +39,7 @@ import { SimLoop } from './loop.js';
 import { createPanel } from './debug/panel.js';
 import { IS_DEV_SERVER } from './env.js';
 import {
+  collectPlaceableBuildingCenters,
   enableBuildingPlacement,
   type BuildingPlacementHandle,
 } from './input/buildingPlacement.js';
@@ -455,11 +459,48 @@ function enterBattleSession(mode: BattleMode): () => void {
     return { x, y };
   };
 
+  /** 调试箭塔自动落点：半场中央附近最近的可放吸附格。 */
+  const debugSafeBuildingAnchor = (typeId: UnitTypeId): { x: number; y: number } | null => {
+    const centers = collectPlaceableBuildingCenters(loop.world, typeId, true);
+    if (centers.length === 0) return null;
+    const preferred = halfCourtSafeBuildingAnchor(UNIT_CONFIGS[typeId].footprint, Faction.Blue);
+    const tx = preferred?.x ?? ARENA_W / 2;
+    const ty = preferred?.y ?? 8;
+    return centers.reduce((best, center) => {
+      const bestDist = (best.x - tx) ** 2 + (best.y - ty) ** 2;
+      const dist = (center.x - tx) ** 2 + (center.y - ty) ** 2;
+      return dist < bestDist ? center : best;
+    });
+  };
+
+  /** 调试箭塔落点：拖到场内则吸附校验；按钮内松开走半场最近可放格。 */
+  const resolveDebugBuildingAnchor = (
+    typeId: UnitTypeId,
+    point: { clientX: number; clientY: number } | null,
+  ): { x: number; y: number } | null => {
+    if (!point) return debugSafeBuildingAnchor(typeId);
+    const raw = screenToSim(
+      sceneContext.renderer.domElement,
+      sceneContext.camera,
+      sceneContext.groundPlane,
+      point.clientX,
+      point.clientY,
+    );
+    if (!raw) return null;
+    const footprint = UNIT_CONFIGS[typeId].footprint;
+    const cx = snapBuildingCenter(raw.x, footprint);
+    const cy = snapBuildingCenter(raw.y, footprint);
+    if (!isBuildingInsideBlueHalf(cx, cy, footprint)) return null;
+    if (!loop.world.canPlaceBuilding(typeId, fromFloat(cx), fromFloat(cy))) return null;
+    return { x: cx, y: cy };
+  };
+
   /** 调试放兵落点校验：普通兵走蓝方半场；引信炸弹与出牌相同，必须拖到场内。 */
   const canDebugSpawnAt = (
     typeId: UnitTypeId,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
+    if (isArcherTowerId(typeId)) return resolveDebugBuildingAnchor(typeId, point) !== null;
     if (isFuseBombTypeId(typeId)) {
       if (!point) return false;
       const anchor = screenToSim(
@@ -484,12 +525,20 @@ function enterBattleSession(mode: BattleMode): () => void {
     return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
   };
 
-  /** 调试模式出兵：普通兵 Spawn 到半场；炸弹同样走 Spawn，sim 内展开为抛物线投放。 */
+  /** 调试模式出兵：普通兵 Spawn 到半场；炸弹走抛物线；箭塔走 PlaceBuilding。 */
   const requestDebugSpawn = (
     typeId: UnitTypeId,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
     if (!canDebugSpawnAt(typeId, point)) return false;
+    if (isArcherTowerId(typeId)) {
+      const buildingAnchor = resolveDebugBuildingAnchor(typeId, point);
+      if (!buildingAnchor) return false;
+      loop.enqueue(
+        placeBuildingCommand(Faction.Blue, typeId, fromFloat(buildingAnchor.x), fromFloat(buildingAnchor.y)),
+      );
+      return true;
+    }
     const anchor = point
       ? screenToSim(
           sceneContext.renderer.domElement,
@@ -601,7 +650,7 @@ function enterBattleSession(mode: BattleMode): () => void {
           battleView.replayCastlePack();
         }
       : undefined,
-    ...(debugSpawn ? { lockFaction: Faction.Blue } : {}),
+    ...(debugSpawn ? { lockFaction: Faction.Blue, includeArcherTowers: true } : {}),
     onBuildingModeChange: debugSpawn
       ? undefined
       : (typeId) => {
@@ -651,6 +700,7 @@ function enterBattleSession(mode: BattleMode): () => void {
       onDragStart: (typeId) => {
         if (isFuseBombTypeId(typeId)) {
           stopPlaceableHighlight();
+          stopSoloBuildingPreview();
           stopAoePreview();
           aoePreview = enableAoePlacement({
             domElement: sceneContext.renderer.domElement,
@@ -661,15 +711,36 @@ function enterBattleSession(mode: BattleMode): () => void {
           });
           return;
         }
+        if (isArcherTowerId(typeId)) {
+          stopPlaceableHighlight();
+          stopAoePreview();
+          stopSoloBuildingPreview();
+          soloBuildingPreview = enableBuildingPlacement({
+            domElement: sceneContext.renderer.domElement,
+            camera: sceneContext.camera,
+            groundPlane: sceneContext.groundPlane,
+            scene: sceneContext.scene,
+            world: loop.world,
+            getFaction: () => Faction.Blue,
+            getTypeId: () => typeId,
+            blueHalfOnly: true,
+            listenInput: false,
+            onPlace: () => {},
+          });
+          return;
+        }
         stopAoePreview();
+        stopSoloBuildingPreview();
         startPlaceableHighlight();
       },
       onDragMove: (typeId, clientX, clientY) => {
         if (isFuseBombTypeId(typeId)) aoePreview?.syncPointer(clientX, clientY);
+        if (isArcherTowerId(typeId)) soloBuildingPreview?.syncPointer(clientX, clientY);
       },
       onDragEnd: () => {
         stopPlaceableHighlight();
         stopAoePreview();
+        stopSoloBuildingPreview();
       },
     });
     disableDebugUnitDrag = () => drag.dispose();
