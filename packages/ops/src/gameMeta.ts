@@ -5,6 +5,10 @@ export interface GameDeployMeta {
   port: number;
   route: string;
   deployedAt: string | null;
+  /** 大厅展示用 semver；旧 meta 没有该字段。 */
+  version: string | null;
+  /** 上次打进 workspace 的源码哈希；用于部署时判断是否 +1。 */
+  contentHash: string | null;
 }
 
 /**
@@ -20,6 +24,8 @@ export function readGameMeta(filePath: string): GameDeployMeta | null {
       port,
       route: typeof raw.route === 'string' ? raw.route : '',
       deployedAt: typeof raw.deployedAt === 'string' ? raw.deployedAt : null,
+      version: typeof raw.version === 'string' ? raw.version : null,
+      contentHash: typeof raw.contentHash === 'string' ? raw.contentHash : null,
     };
   } catch {
     return null;

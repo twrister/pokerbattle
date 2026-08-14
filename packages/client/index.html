@@ -872,6 +872,17 @@
         letter-spacing: 0.12em;
       }
 
+      #lobby-version {
+        position: absolute;
+        left: calc(52 * var(--hu));
+        bottom: max(env(safe-area-inset-bottom), calc(16 * var(--hu)));
+        z-index: 1;
+        color: #536272;
+        font-size: calc(11 * var(--hu));
+        letter-spacing: 0.08em;
+        pointer-events: none;
+      }
+
       @media (max-aspect-ratio: 1 / 1) {
         .lobby-shell {
           width: 100%;
@@ -3444,6 +3455,7 @@
             <span class="nav-tag">MVP</span>
           </button>
         </nav>
+        <div id="lobby-version" aria-label="游戏版本">v0.1.0</div>
 
         <div id="mode-solo-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="mode-solo-title">
           <button class="mode-dialog-backdrop" type="button" aria-label="关闭单机模式选择" data-mode-close></button>

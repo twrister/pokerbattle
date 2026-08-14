@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hashSourceTree, nextReleaseVersion, readPackageVersion } from './releaseVersion.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAME_APP = process.env.GAME_APP || '/opt/projects/poker-battle/app';
@@ -92,10 +93,37 @@ function copyDir(src, dest) {
   fs.cpSync(src, dest, { recursive: true });
 }
 
+/** 读取线上 deploy.meta.json；缺文件或坏 JSON 时返回 null，按首次部署处理。 */
+function readLocalGameMeta(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** 写回 version / contentHash / deployedAt，保留 port 等已有字段。 */
+function writeReleaseMeta(filePath, previous, release) {
+  const meta = previous && typeof previous === 'object' ? { ...previous } : {};
+  meta.version = release.version;
+  meta.contentHash = release.contentHash;
+  meta.deployedAt = new Date().toISOString();
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, `${JSON.stringify(meta, null, 2)}\n`);
+  } catch {
+    /* 元数据写失败不阻断重启 */
+  }
+}
+
 ensurePnpm();
 const pnpm = resolveTool('pnpm') || 'pnpm';
+const previousMeta = readLocalGameMeta(GAME_META);
+const contentHash = hashSourceTree(root);
+const version = nextReleaseVersion(previousMeta, contentHash, readPackageVersion(root));
+console.log(`[apply-on-server] version=${version} hash=${contentHash.slice(0, 12)}`);
 run(pnpm, ['install', '--frozen-lockfile']);
-run(pnpm, ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE });
+run(pnpm, ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE, VITE_APP_VERSION: version });
 
 const dist = path.join(root, 'dist');
 const distServer = path.join(root, 'dist-server');
@@ -120,15 +148,7 @@ for (const name of fs.readdirSync(OPS_APP)) {
 }
 copyDir(distOps, OPS_APP);
 
-if (fs.existsSync(GAME_META)) {
-  try {
-    const meta = JSON.parse(fs.readFileSync(GAME_META, 'utf8'));
-    meta.deployedAt = new Date().toISOString();
-    fs.writeFileSync(GAME_META, `${JSON.stringify(meta, null, 2)}\n`);
-  } catch {
-    /* 元数据写失败不阻断重启 */
-  }
-}
+writeReleaseMeta(GAME_META, previousMeta, { version, contentHash });
 
 if (process.env.SKIP_SYSTEMD === '1') {
   console.log('[apply-on-server] skip systemd restart');

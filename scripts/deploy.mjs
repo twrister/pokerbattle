@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'ssh2';
+import { hashSourceTree, nextReleaseVersion, readPackageVersion } from './releaseVersion.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const project = JSON.parse(fs.readFileSync(path.join(root, '.deploy/project.json'), 'utf8'));
@@ -55,17 +56,23 @@ async function main() {
   console.log(`[deploy] project=${NAME} host=${HOST} route=${ROUTE}/`);
   console.log(`[deploy] ops=${OPS_NAME} route=${OPS_ROUTE}/`);
 
-  process.env.VITE_PUBLIC_BASE = ROUTE;
-  runLocal('pnpm', ['run', 'build:prod']);
-  packRelease();
-
   const conn = await connectSsh();
   try {
     await bootstrapServer(conn);
+    const previous = await readRemoteReleaseMeta(conn);
+    const contentHash = hashSourceTree(root);
+    const version = nextReleaseVersion(previous, contentHash, readPackageVersion(root));
+    console.log(`[deploy] version=${version} hash=${contentHash.slice(0, 12)}`);
+
+    process.env.VITE_PUBLIC_BASE = ROUTE;
+    process.env.VITE_APP_VERSION = version;
+    runLocal('pnpm', ['run', 'build:prod']);
+    packRelease();
+
     const game = await allocatePort(conn, NAME, ROUTE);
     const ops = await allocatePort(conn, OPS_NAME, OPS_ROUTE, [game.port]);
     await uploadRelease(conn);
-    await writeSystemd(conn, game.port);
+    await writeSystemd(conn, game.port, { version, contentHash });
     await writeNginx(conn, game.port);
     await writeRegistry(conn, {
       name: NAME,
@@ -214,6 +221,21 @@ function connectSsh() {
       readyTimeout: 30_000,
     });
   });
+}
+
+/** 读取线上上次发布的 version / contentHash；文件不存在或坏 JSON 时按首次部署处理。 */
+async function readRemoteReleaseMeta(conn) {
+  try {
+    const stdout = await exec(
+      conn,
+      `if [ -f ${REMOTE_ROOT}/deploy.meta.json ]; then cat ${REMOTE_ROOT}/deploy.meta.json; fi`,
+    );
+    const text = String(stdout || '').trim();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function exec(conn, command) {
@@ -408,7 +430,7 @@ test -f ${WORKSPACE_REMOTE}/scripts/apply-on-server.mjs`,
   });
 }
 
-async function writeSystemd(conn, port) {
+async function writeSystemd(conn, port, release = {}) {
   const extraEnv = Object.entries(project.env || {})
     .map(([key, value]) => `Environment=${key}=${value}`)
     .join('\n');
@@ -437,6 +459,8 @@ WantedBy=multi-user.target
       port,
       route: ROUTE,
       startCommand: project.startCommand,
+      version: release.version ?? readPackageVersion(root),
+      contentHash: release.contentHash ?? '',
       deployedAt: new Date().toISOString(),
     },
     null,

@@ -203,8 +203,26 @@ function resolvePublicBase(): string {
   return raw.endsWith('/') ? raw : `${raw}/`;
 }
 
+/** 部署脚本传入 VITE_APP_VERSION；本地开发回落根 package.json。 */
+function resolveAppVersion(): string {
+  const fromEnv = process.env.VITE_APP_VERSION?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(clientDir, '../../package.json'), 'utf8')) as {
+      version?: unknown;
+    };
+    if (typeof pkg.version === 'string' && pkg.version.trim()) return pkg.version.trim();
+  } catch {
+    /* 回落默认种子 */
+  }
+  return '0.1.0';
+}
+
 export default defineConfig({
   base: resolvePublicBase(),
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(resolveAppVersion()),
+  },
   plugins: [unitConfigWritePlugin(), cardFormationWritePlugin(), arenaConfigWritePlugin()],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {

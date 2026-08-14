@@ -6,7 +6,7 @@ import {
 import { isDefaultDisplayName } from '../account/id.js';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
-import { IS_DEV_SERVER } from '../env.js';
+import { APP_VERSION, formatLobbyVersion, IS_DEV_SERVER } from '../env.js';
 
 const RENAME_TITLE_DEFAULT = '玩家名称';
 const RENAME_TITLE_FIRST_PLAY = '请先设置玩家名称';
@@ -83,6 +83,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const playerName = required<HTMLElement>('#player-name', root);
   const playerLevel = required<HTMLElement>('#player-level', root);
   const status = required<HTMLElement>('#lobby-status', root);
+  const versionLabel = required<HTMLElement>('#lobby-version', root);
   const placeholderButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-placeholder]'),
   );
@@ -495,6 +496,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   }
 
   refreshProfile();
+  versionLabel.textContent = formatLobbyVersion(APP_VERSION);
 
   return {
     show() {

@@ -11,6 +11,8 @@ vi.mock('../src/env.js', () => ({
   get IS_DEV_SERVER() {
     return envState.isDev;
   },
+  APP_VERSION: '0.1.0',
+  formatLobbyVersion: (version: string) => `v${version.trim().replace(/^v/i, '') || '0.0.0'}`,
 }));
 
 vi.mock('../src/net/session.js', () => ({
@@ -91,6 +93,7 @@ function mountMainMenuDom(): void {
         <div id="lobby-status"></div>
         <button id="btn-lobby-room-cancel" class="is-hidden" type="button">取消</button>
       </div>
+      <div id="lobby-version"></div>
       <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
         <button data-mode-close></button>
       </div>
@@ -134,6 +137,7 @@ describe('大厅玩家档案展示', () => {
     expect(document.querySelector('#player-name')?.textContent).toBe('测试玩家');
     expect(document.querySelector('#player-level')?.textContent).toBe('等级 04');
     expect(document.querySelector('#player-avatar')?.textContent).toBe('测试');
+    expect(document.querySelector('#lobby-version')?.textContent).toBe('v0.1.0');
   });
 
   it('改名成功后刷新展示，失败时显示错误', () => {
