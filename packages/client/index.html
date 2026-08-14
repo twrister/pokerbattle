@@ -195,6 +195,12 @@
         transform: none;
       }
 
+      /* 改名收起时点亮左上角卡片，暗示关闭后仍可从这里打开 */
+      #btn-player-profile.is-rename-anchor {
+        background: rgba(153, 207, 237, 0.12);
+        box-shadow: 0 0 0 calc(2 * var(--hu)) rgba(153, 207, 237, 0.45);
+      }
+
       .rename-form {
         display: grid;
         gap: calc(12 * var(--hu));
@@ -436,6 +442,65 @@
 
       .mode-dialog.is-hidden {
         display: none;
+      }
+
+      /* 量位置时先隐形，避免展开前闪一帧居中面板 */
+      #rename-dialog.is-preparing .mode-dialog-panel,
+      #rename-dialog.is-preparing .mode-dialog-backdrop {
+        opacity: 0;
+      }
+
+      #rename-dialog .mode-dialog-panel {
+        --rename-from-x: 0px;
+        --rename-from-y: 0px;
+      }
+
+      #rename-dialog.is-opening .mode-dialog-backdrop {
+        animation: rename-backdrop-in 220ms ease-out;
+      }
+
+      #rename-dialog.is-closing .mode-dialog-backdrop {
+        animation: rename-backdrop-out 180ms ease-in;
+      }
+
+      #rename-dialog.is-opening .mode-dialog-panel {
+        animation: rename-from-profile 220ms ease-out;
+      }
+
+      #rename-dialog.is-closing .mode-dialog-panel {
+        animation: rename-to-profile 180ms ease-in;
+      }
+
+      @keyframes rename-from-profile {
+        from {
+          transform: translate(var(--rename-from-x), var(--rename-from-y)) scale(0.12);
+          opacity: 0;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+
+      @keyframes rename-to-profile {
+        from {
+          transform: none;
+          opacity: 1;
+        }
+        to {
+          transform: translate(var(--rename-from-x), var(--rename-from-y)) scale(0.12);
+          opacity: 0;
+        }
+      }
+
+      @keyframes rename-backdrop-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      @keyframes rename-backdrop-out {
+        from { opacity: 1; }
+        to { opacity: 0; }
       }
 
       .mode-dialog-backdrop {

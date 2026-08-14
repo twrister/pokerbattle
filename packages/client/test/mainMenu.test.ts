@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FIRST_PLAY_RENAME_PROMPTED_KEY } from '../src/account/firstPlayRename.js';
+import { defaultDisplayName } from '../src/account/id.js';
 import type { PlayerProfile } from '../src/account/types.js';
 import { createMainMenu } from '../src/ui/mainMenu.js';
 
@@ -51,6 +53,13 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
   };
 }
 
+/** jsdom 不会播 CSS 动画，手动派发 animationend 以走完收起。 */
+function finishRenameCloseAnim(): void {
+  document
+    .querySelector('#rename-dialog .mode-dialog-panel')!
+    .dispatchEvent(new Event('animationend'));
+}
+
 /** 大厅 DOM fixture，含联机房间面板与大厅取消按钮。 */
 function mountMainMenuDom(): void {
   document.body.innerHTML = `
@@ -92,12 +101,15 @@ function mountMainMenuDom(): void {
       </div>
       <div id="rename-dialog" class="is-hidden" aria-hidden="true">
         <button data-rename-close></button>
-        <form id="rename-form">
-          <input id="rename-input" />
-          <div id="rename-error"></div>
-          <button id="btn-rename-cancel" type="button" data-rename-close>取消</button>
-          <button id="btn-rename-confirm" type="submit">保存</button>
-        </form>
+        <div class="mode-dialog-panel">
+          <h2 id="rename-title">玩家名称</h2>
+          <form id="rename-form">
+            <input id="rename-input" />
+            <div id="rename-error"></div>
+            <button id="btn-rename-cancel" type="button" data-rename-close>取消</button>
+            <button id="btn-rename-confirm" type="submit">保存</button>
+          </form>
+        </div>
       </div>
     </main>
   `;
@@ -106,6 +118,7 @@ function mountMainMenuDom(): void {
 describe('大厅玩家档案展示', () => {
   beforeEach(() => {
     envState.isDev = true;
+    localStorage.removeItem(FIRST_PLAY_RENAME_PROMPTED_KEY);
     mountMainMenuDom();
   });
 
@@ -152,6 +165,7 @@ describe('大厅玩家档案展示', () => {
     );
     expect(onRename).toHaveBeenCalledWith('新玩家');
     expect(document.querySelector('#player-name')?.textContent).toBe('新玩家');
+    finishRenameCloseAnim();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
 
     profile = buildProfile({ displayName: '外部刷新', level: 9, exp: 3 });
@@ -297,5 +311,155 @@ describe('大厅玩家档案展示', () => {
     expect(onCancelVersus).toHaveBeenCalledTimes(1);
     expect(cancelButton.classList.contains('is-hidden')).toBe(true);
     expect(status.classList.contains('is-visible')).toBe(false);
+  });
+
+  it('默认名首次点单机只出改名弹窗，不出模式弹窗', () => {
+    const profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    createMainMenu(menuOptions({ getProfile: () => profile }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#rename-title')?.textContent).toBe('请先设置玩家名称');
+  });
+
+  it('默认名取消改名后再点开局不再主动弹，直接进模式', () => {
+    const profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    createMainMenu(menuOptions({ getProfile: () => profile }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-rename-cancel')!.click();
+    finishRenameCloseAnim();
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('已主动提示过则默认名点单机直接打开模式弹窗', () => {
+    localStorage.setItem(FIRST_PLAY_RENAME_PROMPTED_KEY, '1');
+    const profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    createMainMenu(menuOptions({ getProfile: () => profile }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('默认名点单机后改名成功，收起后再打开单机模式', () => {
+    let profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    const onRename = vi.fn((name: string) => {
+      profile = { ...profile, displayName: name.trim() };
+    });
+    createMainMenu(
+      menuOptions({
+        getProfile: () => profile,
+        onRename,
+      }),
+    );
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    const input = document.querySelector<HTMLInputElement>('#rename-input')!;
+    input.value = '新玩家';
+    document.querySelector<HTMLFormElement>('#rename-form')!.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+    expect(onRename).toHaveBeenCalledWith('新玩家');
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-closing')).toBe(true);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(true);
+
+    finishRenameCloseAnim();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('默认名点单机后取消改名则留在大厅', () => {
+    const profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    createMainMenu(menuOptions({ getProfile: () => profile }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-rename-cancel')!.click();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-closing')).toBe(true);
+    expect(document.querySelector('#btn-player-profile')?.classList.contains('is-rename-anchor')).toBe(
+      true,
+    );
+
+    finishRenameCloseAnim();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#btn-player-profile')?.classList.contains('is-rename-anchor')).toBe(
+      false,
+    );
+  });
+
+  it('已自定义名点单机直接打开单机弹窗', () => {
+    createMainMenu(menuOptions());
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('改名弹窗从玩家卡片展开，关闭时先收起再隐藏', () => {
+    const profileButton = document.querySelector<HTMLButtonElement>('#btn-player-profile')!;
+    const renamePanel = document.querySelector<HTMLElement>('#rename-dialog .mode-dialog-panel')!;
+    profileButton.getBoundingClientRect = () =>
+      ({
+        x: 10,
+        y: 20,
+        left: 10,
+        top: 20,
+        width: 80,
+        height: 40,
+        right: 90,
+        bottom: 60,
+        toJSON() {
+          return {};
+        },
+      }) as DOMRect;
+    renamePanel.getBoundingClientRect = () =>
+      ({
+        x: 100,
+        y: 200,
+        left: 100,
+        top: 200,
+        width: 200,
+        height: 160,
+        right: 300,
+        bottom: 360,
+        toJSON() {
+          return {};
+        },
+      }) as DOMRect;
+
+    createMainMenu(menuOptions());
+    profileButton.click();
+
+    const dialog = document.querySelector('#rename-dialog')!;
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    expect(dialog.classList.contains('is-opening')).toBe(true);
+    expect(renamePanel.style.getPropertyValue('--rename-from-x')).toBe('-150px');
+    expect(renamePanel.style.getPropertyValue('--rename-from-y')).toBe('-240px');
+    expect(document.querySelector('#rename-title')?.textContent).toBe('玩家名称');
+
+    document.querySelector<HTMLButtonElement>('#btn-rename-cancel')!.click();
+    expect(dialog.classList.contains('is-closing')).toBe(true);
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    expect(profileButton.classList.contains('is-rename-anchor')).toBe(true);
+
+    finishRenameCloseAnim();
+    expect(dialog.classList.contains('is-hidden')).toBe(true);
+    expect(dialog.classList.contains('is-closing')).toBe(false);
+    expect(profileButton.classList.contains('is-rename-anchor')).toBe(false);
   });
 });

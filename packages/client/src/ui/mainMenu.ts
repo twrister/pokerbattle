@@ -1,7 +1,17 @@
 import { normalizeRoomId, normalizeRoomName, type JoinMode, type RoomListEntry } from '@pb/net';
+import {
+  hasPromptedFirstPlayRename,
+  markFirstPlayRenamePrompted,
+} from '../account/firstPlayRename.js';
+import { isDefaultDisplayName } from '../account/id.js';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
 import { IS_DEV_SERVER } from '../env.js';
+
+const RENAME_TITLE_DEFAULT = '玩家名称';
+const RENAME_TITLE_FIRST_PLAY = '请先设置玩家名称';
+/** 略长于收起动画，避免 animationend 丢失时弹层卡在半透明。 */
+const RENAME_CLOSE_ANIM_MS = 280;
 
 /** 大厅发起联机时的入房参数。 */
 export interface VersusJoinRequest {
@@ -63,6 +73,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
   const onlineDialogTitle = required<HTMLElement>('#mode-online-title', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
+  const renamePanel = required<HTMLElement>('.mode-dialog-panel', renameDialog);
+  const renameTitle = required<HTMLElement>('#rename-title', renameDialog);
   const renameForm = required<HTMLFormElement>('#rename-form', root);
   const renameInput = required<HTMLInputElement>('#rename-input', root);
   const renameError = required<HTMLElement>('#rename-error', root);
@@ -82,6 +94,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   );
 
   let roomListRequestId = 0;
+  /** 默认名点开局时记下目标模式，改名成功并收起后再打开。 */
+  let pendingPlayAction: (() => void) | null = null;
+  /** 主动改名只弹一次；刷新后仍认本地旗标。 */
+  let firstPlayRenamePrompted = hasPromptedFirstPlayRename();
+  /** 递增以作废进行中的收起回调，避免切屏后误开模式弹窗。 */
+  let renameAnimGeneration = 0;
 
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
@@ -90,11 +108,76 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     hideRoomPanel();
   };
 
-  /** 关闭改名弹层并清空错误提示。 */
-  const closeRenameDialog = (): void => {
+  /** 仍是建档默认名则拦截开局，引导先改名。 */
+  const usesDefaultName = (): boolean => isDefaultDisplayName(options.getProfile());
+
+  const invalidateRenameAnim = (): void => {
+    renameAnimGeneration += 1;
+  };
+
+  /** 真正隐藏改名弹层并还原标题，供动画结束或整页切走调用。 */
+  const finishHideRenameDialog = (): void => {
+    renameDialog.classList.remove('is-opening', 'is-closing', 'is-preparing');
     hideDialog(renameDialog);
     renameError.textContent = '';
     renameError.classList.remove('is-visible');
+    renameTitle.textContent = RENAME_TITLE_DEFAULT;
+    profileButton.classList.remove('is-rename-anchor');
+  };
+
+  /** 整页切走或切到其他弹层时立刻关掉，不等收起动画。 */
+  const hideRenameDialogInstant = (): void => {
+    pendingPlayAction = null;
+    invalidateRenameAnim();
+    finishHideRenameDialog();
+  };
+
+  /** 用玩家卡片中心相对面板中心的偏移驱动展开/收起轨迹。 */
+  const syncRenameOrigin = (): void => {
+    const card = profileButton.getBoundingClientRect();
+    const panel = renamePanel.getBoundingClientRect();
+    const fromX = card.left + card.width / 2 - (panel.left + panel.width / 2);
+    const fromY = card.top + card.height / 2 - (panel.top + panel.height / 2);
+    renamePanel.style.setProperty('--rename-from-x', `${fromX}px`);
+    renamePanel.style.setProperty('--rename-from-y', `${fromY}px`);
+  };
+
+  const waitForRenamePanelAnimation = (onDone: () => void): void => {
+    const generation = ++renameAnimGeneration;
+    const finish = (): void => {
+      if (generation !== renameAnimGeneration) return;
+      invalidateRenameAnim();
+      renamePanel.removeEventListener('animationend', onAnimationEnd);
+      window.clearTimeout(timer);
+      onDone();
+    };
+    const onAnimationEnd = (event: AnimationEvent): void => {
+      if (event.target !== renamePanel) return;
+      finish();
+    };
+    renamePanel.addEventListener('animationend', onAnimationEnd);
+    const timer = window.setTimeout(finish, RENAME_CLOSE_ANIM_MS);
+  };
+
+  /** 往玩家卡片收起后再隐藏，让用户看见改名入口在左上角。 */
+  const closeRenameDialog = (onClosed?: () => void): void => {
+    if (renameDialog.classList.contains('is-hidden')) {
+      finishHideRenameDialog();
+      onClosed?.();
+      return;
+    }
+    renameDialog.classList.remove('is-opening', 'is-preparing');
+    renameDialog.classList.add('is-closing');
+    profileButton.classList.add('is-rename-anchor');
+    waitForRenamePanelAnimation(() => {
+      finishHideRenameDialog();
+      onClosed?.();
+    });
+  };
+
+  const dismissRenameDialog = (): void => {
+    pendingPlayAction = null;
+    closeRenameDialog();
   };
 
   /** 收起房间视图，恢复快速匹配/房间入口。 */
@@ -158,33 +241,64 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     status.textContent = `${button.dataset.placeholder ?? '该功能'}正在筹备中`;
     status.classList.add('is-visible');
     closeModeDialogs();
-    closeRenameDialog();
+    hideRenameDialogInstant();
   };
 
   const openSoloDialog = (): void => {
-    closeRenameDialog();
+    hideRenameDialogInstant();
     hideDialog(onlineDialog);
     hideRoomPanel();
     showDialog(soloDialog);
   };
 
   const openOnlineDialog = (): void => {
-    closeRenameDialog();
+    hideRenameDialogInstant();
     hideDialog(soloDialog);
     hideRoomPanel();
     showDialog(onlineDialog);
   };
 
-  const openRenameDialog = (): void => {
+  /** 从玩家卡片展开改名弹层；首次开局引导换标题。 */
+  const openRenameDialog = (firstPlay = false): void => {
     closeModeDialogs();
     const profile = options.getProfile();
     renameInput.value = profile.displayName;
     renameError.textContent = '';
     renameError.classList.remove('is-visible');
-    showDialog(renameDialog);
+    renameTitle.textContent = firstPlay ? RENAME_TITLE_FIRST_PLAY : RENAME_TITLE_DEFAULT;
+    invalidateRenameAnim();
+    renameDialog.classList.remove('is-opening', 'is-closing', 'is-hidden');
+    renameDialog.classList.add('is-preparing');
+    renameDialog.setAttribute('aria-hidden', 'false');
+    profileButton.classList.remove('is-rename-anchor');
+    void renamePanel.offsetWidth;
+    syncRenameOrigin();
+    renameDialog.classList.remove('is-preparing');
+    void renamePanel.offsetWidth;
+    renameDialog.classList.add('is-opening');
     renameInput.focus();
     renameInput.select();
   };
+
+  const openRenameFromProfile = (): void => {
+    pendingPlayAction = null;
+    openRenameDialog(false);
+  };
+
+  /** 未自定义名且尚未主动提示过时先改名；之后不再拦截开局。 */
+  const requestPlayDialog = (openMode: () => void): void => {
+    if (usesDefaultName() && !firstPlayRenamePrompted) {
+      firstPlayRenamePrompted = true;
+      markFirstPlayRenamePrompted();
+      pendingPlayAction = openMode;
+      openRenameDialog(true);
+      return;
+    }
+    openMode();
+  };
+
+  const requestSoloDialog = (): void => requestPlayDialog(openSoloDialog);
+  const requestOnlineDialog = (): void => requestPlayDialog(openOnlineDialog);
 
   /** 开发服进入沙盒；正式服仅提示不可进入，入口仍保留。 */
   const startSandbox = (): void => {
@@ -330,15 +444,21 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     try {
       options.onRename(renameInput.value);
       refreshProfile();
-      closeRenameDialog();
+      const next = pendingPlayAction;
+      pendingPlayAction = null;
+      closeRenameDialog(() => {
+        if (next && !usesDefaultName()) {
+          next();
+        }
+      });
     } catch (error) {
       renameError.textContent = error instanceof Error ? error.message : String(error);
       renameError.classList.add('is-visible');
     }
   };
 
-  soloButton.addEventListener('click', openSoloDialog);
-  matchButton.addEventListener('click', openOnlineDialog);
+  soloButton.addEventListener('click', requestSoloDialog);
+  matchButton.addEventListener('click', requestOnlineDialog);
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
@@ -362,7 +482,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       startOnlineCreate();
     }
   });
-  profileButton.addEventListener('click', openRenameDialog);
+  profileButton.addEventListener('click', openRenameFromProfile);
   renameForm.addEventListener('submit', submitRename);
   for (const button of placeholderButtons) {
     button.addEventListener('click', showPlaceholder);
@@ -371,7 +491,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     button.addEventListener('click', handleModeClose);
   }
   for (const button of renameCloseButtons) {
-    button.addEventListener('click', closeRenameDialog);
+    button.addEventListener('click', dismissRenameDialog);
   }
 
   refreshProfile();
@@ -383,7 +503,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       status.classList.remove('is-visible');
       setRoomWaitingCancelVisible(false);
       closeModeDialogs();
-      closeRenameDialog();
+      hideRenameDialogInstant();
       refreshProfile();
     },
     hide() {
@@ -391,13 +511,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       root.setAttribute('aria-hidden', 'true');
       setRoomWaitingCancelVisible(false);
       closeModeDialogs();
-      closeRenameDialog();
+      hideRenameDialogInstant();
     },
     refreshProfile,
     setRoomWaitingCancelVisible,
     dispose() {
-      soloButton.removeEventListener('click', openSoloDialog);
-      matchButton.removeEventListener('click', openOnlineDialog);
+      soloButton.removeEventListener('click', requestSoloDialog);
+      matchButton.removeEventListener('click', requestOnlineDialog);
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
@@ -409,7 +529,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
       onlineRoomRefreshButton.removeEventListener('click', refreshRoomList);
       lobbyRoomCancelButton.removeEventListener('click', cancelLobbyRoomWaiting);
-      profileButton.removeEventListener('click', openRenameDialog);
+      profileButton.removeEventListener('click', openRenameFromProfile);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {
         button.removeEventListener('click', showPlaceholder);
@@ -418,7 +538,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
         button.removeEventListener('click', handleModeClose);
       }
       for (const button of renameCloseButtons) {
-        button.removeEventListener('click', closeRenameDialog);
+        button.removeEventListener('click', dismissRenameDialog);
       }
     },
   };

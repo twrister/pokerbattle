@@ -5,8 +5,13 @@ import {
   PLAYER_PROFILE_CORRUPT_BACKUP_KEY,
   PLAYER_PROFILE_SCHEMA_VERSION,
   PLAYER_PROFILE_STORAGE_KEY,
+  FIRST_PLAY_RENAME_PROMPTED_KEY,
   createLocalPlayerProfileStore,
   createPlayerProfileService,
+  defaultDisplayName,
+  hasPromptedFirstPlayRename,
+  isDefaultDisplayName,
+  markFirstPlayRenamePrompted,
   sanitizeProfile,
   type PlayerProfile,
   type PlayerProfileStore,
@@ -159,5 +164,28 @@ describe('玩家档案服务', () => {
       deviceAccountId: saved.deviceAccountId,
       displayName: '仓库测试',
     });
+  });
+
+  it('默认名与自定义名可区分', () => {
+    const deviceAccountId = 'abcd-efgh';
+    expect(
+      isDefaultDisplayName({
+        deviceAccountId,
+        displayName: defaultDisplayName(deviceAccountId),
+      }),
+    ).toBe(true);
+    expect(
+      isDefaultDisplayName({
+        deviceAccountId,
+        displayName: '指挥官',
+      }),
+    ).toBe(false);
+  });
+
+  it('首次开局改名提示旗标可读写', () => {
+    expect(hasPromptedFirstPlayRename()).toBe(false);
+    markFirstPlayRenamePrompted();
+    expect(hasPromptedFirstPlayRename()).toBe(true);
+    expect(localStorage.getItem(FIRST_PLAY_RENAME_PROMPTED_KEY)).toBe('1');
   });
 });

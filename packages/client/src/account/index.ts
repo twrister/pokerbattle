@@ -1,4 +1,9 @@
-export { createAccountId, defaultDisplayName } from './id.js';
+export {
+  FIRST_PLAY_RENAME_PROMPTED_KEY,
+  hasPromptedFirstPlayRename,
+  markFirstPlayRenamePrompted,
+} from './firstPlayRename.js';
+export { createAccountId, defaultDisplayName, isDefaultDisplayName } from './id.js';
 export { battleInputFromMatchResult } from './matchRecord.js';
 export {
   createDefaultProfile,
