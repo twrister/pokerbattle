@@ -277,6 +277,12 @@ function renderDeploy(deploy) {
   if (running) deployBusy = true;
   if (deployBusy && !running && info.lastOk != null) deployBusy = false;
   els.btnDeploy.disabled = running || deployBusy || info.available === false;
+  // 旧运维进程没有 /api/status.deploy，发布会 404；提示必须可见，不能被 hideDeployMessage 清掉
+  if (deploy == null) {
+    els.btnDeploy.disabled = false;
+    showDeployMessage('当前运维进程过旧，请重启 pnpm ops 后再发布', false);
+    return;
+  }
   if (running) {
     showDeployMessage('正在执行 pnpm deploy…', true);
     return;
