@@ -20,7 +20,7 @@ describe('单机扑克牌堆', () => {
     expect(cardImageUrl(cards.find((card) => card.id === 'joker-red')!)).toBe('cards/Joker_2.png');
   });
 
-  it('抽牌离开有限牌堆且不能突破九张手牌上限', () => {
+  it('抽牌离开有限牌堆且不能突破手牌上限', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const drawn = deck.drawMany(20);
 
@@ -28,6 +28,15 @@ describe('单机扑克牌堆', () => {
     expect(deck.hand).toHaveLength(MAX_HAND_SIZE);
     expect(deck.availableCount).toBe(54 - MAX_HAND_SIZE);
     expect(new Set(drawn.map((card) => card.id))).toHaveLength(MAX_HAND_SIZE);
+    expect(deck.draw()).toBeUndefined();
+  });
+
+  it('可下调抽牌上限且不丢已有手牌', () => {
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    deck.drawMany(6);
+    deck.setMaxHandSize(4);
+
+    expect(deck.hand).toHaveLength(6);
     expect(deck.draw()).toBeUndefined();
   });
 

@@ -62,6 +62,8 @@ export interface HandPanelOptions {
    * 未提供时回退到面板本地 drawIntervalMs（仅本地墙钟抽牌路径）。
    */
   getDrawIntervalMs?: () => number;
+  /** 当前阶段手牌上限；未提供时回退到 MAX_HAND_SIZE。 */
+  getMaxHandSize?: () => number;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
   /**
@@ -736,10 +738,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /** 同步牌堆补牌进度；满手时以持续晃动替代倒计时，避免误导玩家仍会抽牌。 */
   function syncStatus(): void {
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
-    // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认 3s 夹断 6s 倒计时。
+    // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认夹断倒计时。
     const intervalMs = Math.max(options.getDrawIntervalMs?.() ?? drawIntervalMs, 1);
+    const maxHandSize = Math.max(1, options.getMaxHandSize?.() ?? MAX_HAND_SIZE);
     const handCount = deck.hand.length;
-    const isFull = handCount >= MAX_HAND_SIZE;
+    const isFull = handCount >= maxHandSize;
     const isEmpty = deck.availableCount === 0;
     // 剩余时间从 1 递减到 0，供牌堆由顶向下收缩黑色遮罩；满手保持满遮罩，空堆则无遮罩。
     const progress = isFull
@@ -756,8 +759,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     );
     // 张数与满手提示共用一条：未满只报 x/x，满手加「已满」并改提示色。
     handCountLabel.textContent = isFull
-      ? `手牌已满 ${handCount} / ${MAX_HAND_SIZE}`
-      : `${handCount} / ${MAX_HAND_SIZE}`;
+      ? `手牌已满 ${handCount} / ${maxHandSize}`
+      : `${handCount} / ${maxHandSize}`;
     handCountLabel.classList.toggle('is-full', isFull);
   }
 
@@ -773,7 +776,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
         syncStatus();
         return;
       }
-      if (playing || deck.hand.length >= MAX_HAND_SIZE) {
+      if (playing || deck.hand.length >= (options.getMaxHandSize?.() ?? MAX_HAND_SIZE)) {
         syncStatus();
         return;
       }

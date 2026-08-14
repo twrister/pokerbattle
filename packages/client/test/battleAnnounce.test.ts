@@ -3,8 +3,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DOUBLE_SPEED_START_TICKS,
+  FINAL_START_TICKS,
+  MATCH_END_TICKS,
   MatchState,
-  NORMAL_PHASE_TICKS,
   TICK_RATE,
 } from '@pb/sim';
 import { createBattleAnnounce } from '../src/ui/battleAnnounce.js';
@@ -51,42 +52,53 @@ describe('对局文字提示', () => {
 
     while (match.world.tick < DOUBLE_SPEED_START_TICKS) match.step();
     announce.tick(match);
-    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('倍速发牌');
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('倍速阶段');
 
     announce.tick(match);
-    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('倍速发牌');
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('倍速阶段');
   });
 
-  it('进入加时弹出加时阶段', () => {
+  it('进入决胜弹出决胜阶段', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
     const announce = createBattleAnnounce();
     announce.tick(match);
 
-    while (match.world.tick < NORMAL_PHASE_TICKS) match.step();
+    while (match.world.tick < FINAL_START_TICKS) match.step();
     announce.tick(match);
 
-    expect(match.phase).toBe('overtime');
-    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('加时阶段');
+    expect(match.phase).toBe('final');
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('决胜阶段');
   });
 
-  it('最后 10 秒逐秒弹出数字', () => {
+  it('常规与倍速最后 10 秒不弹数字倒计时', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
     const announce = createBattleAnnounce();
     announce.tick(match);
 
-    // 先越过倍速边沿并消化阶段文案，再测截止前倒计时
-    while (match.world.tick < DOUBLE_SPEED_START_TICKS) match.step();
+    const targetTick = DOUBLE_SPEED_START_TICKS - TICK_RATE * 10;
+    while (match.world.tick < targetTick) match.step();
     announce.tick(match);
-    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('倍速发牌');
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('摧毁对方城堡');
+  });
 
-    const targetTick = NORMAL_PHASE_TICKS - TICK_RATE * 10;
+  it('决胜最后 10 秒逐秒弹出数字', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const announce = createBattleAnnounce();
+    announce.tick(match);
+
+    while (match.world.tick < FINAL_START_TICKS) match.step();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('决胜阶段');
+
+    const targetTick = MATCH_END_TICKS - TICK_RATE * 10;
     while (match.world.tick < targetTick) match.step();
     announce.tick(match);
     expect(document.querySelector('#battle-announce-text')?.textContent).toBe('10');
 
-    while (match.world.tick < NORMAL_PHASE_TICKS - TICK_RATE * 9) match.step();
+    while (match.world.tick < MATCH_END_TICKS - TICK_RATE * 9) match.step();
     announce.tick(match);
     expect(document.querySelector('#battle-announce-text')?.textContent).toBe('9');
   });

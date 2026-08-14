@@ -1,13 +1,4 @@
-import {
-  Faction,
-  MAX_HAND_SIZE,
-  NORMAL_PHASE_TICKS,
-  OVERTIME_END_TICKS,
-  TICK_RATE,
-  opposingFaction,
-  toFloat,
-  type MatchState,
-} from '@pb/sim';
+import { Faction, opposingFaction, TICK_RATE, toFloat, type MatchState } from '@pb/sim';
 import { matchPhaseLabel } from './matchPhaseLabel.js';
 
 export interface BattleHudContext {
@@ -62,15 +53,11 @@ export function createBattleHud(): BattleHudHandle {
       const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
       phaseLabel.textContent = phaseText;
 
-      // 加时前后分别倒计到 3:00 / 4:00；提前结算仍按常规剩余时间展示
-      const overtime =
-        match.phase === 'overtime' || (match.result?.endTick ?? 0) > NORMAL_PHASE_TICKS;
-      const deadline = overtime ? OVERTIME_END_TICKS : NORMAL_PHASE_TICKS;
-      const remainingTicks = Math.max(0, deadline - match.world.tick);
-      timerLabel.textContent = overtime ? '加时剩余：' : '剩余时间：';
+      const remainingTicks = Math.max(0, match.getPhaseDeadlineTick() - match.world.tick);
+      timerLabel.textContent = match.phase === 'final' ? '决胜剩余：' : '剩余时间：';
       timer.textContent = formatTicks(remainingTicks);
 
-      syncOpponentHand(oppHand, match.decks[opp].hand.length);
+      syncOpponentHand(oppHand, match.decks[opp].hand.length, match.getMaxHandSize());
     },
   };
 }
@@ -88,8 +75,8 @@ function updateCastle(
 }
 
 /** 用缩小牌背数量表示对手手牌数，不展示正面。 */
-function syncOpponentHand(container: HTMLElement, count: number): void {
-  const clamped = Math.max(0, Math.min(MAX_HAND_SIZE, count | 0));
+function syncOpponentHand(container: HTMLElement, count: number, maxHandSize: number): void {
+  const clamped = Math.max(0, Math.min(maxHandSize, count | 0));
   const current = container.childElementCount;
   if (current === clamped) return;
   if (current > clamped) {

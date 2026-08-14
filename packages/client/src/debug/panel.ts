@@ -8,9 +8,12 @@ import {
 import type { SimLoop } from '../loop.js';
 import {
   clampDrawIntervalSeconds,
-  saveRuntimeDefaults,
-  type RuntimeDefaults,
-} from './runtimeDefaults.js';
+  clampPhaseSeconds,
+  defaultMatchRulesView,
+  sanitizeMatchRulesView,
+  type MatchRulesView,
+} from './matchRulesView.js';
+import { saveRuntimeDefaults } from './runtimeDefaults.js';
 
 /** 可切换的倍速档位 */
 const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
@@ -48,22 +51,10 @@ export interface PanelOptions {
     initial: number;
     onChange: (value: number) => void;
   };
-  /** 单机三阶段发牌间隔；传入后允许在运行时立即调整。 */
-  soloDrawIntervals?: {
-    initial: Pick<
-      RuntimeDefaults,
-      | 'normalDrawIntervalSeconds'
-      | 'doubleSpeedDrawIntervalSeconds'
-      | 'overtimeDrawIntervalSeconds'
-    >;
-    onChange: (
-      intervals: Pick<
-        RuntimeDefaults,
-        | 'normalDrawIntervalSeconds'
-        | 'doubleSpeedDrawIntervalSeconds'
-        | 'overtimeDrawIntervalSeconds'
-      >,
-    ) => void;
+  /** 单机对局节奏；传入后允许在运行时立即调整当前局。 */
+  soloMatchRules?: {
+    initial?: MatchRulesView;
+    onChange: (rules: MatchRulesView) => void;
   };
 }
 
@@ -117,9 +108,28 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
   const bottomExtraInput = required<HTMLInputElement>('#solo-view-bottom-extra');
   const bottomExtraValue = required<HTMLElement>('#solo-view-bottom-extra-value');
+  const initialHandSizeInput = required<HTMLInputElement>('#solo-initial-hand-size');
+  const normalPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-normal');
+  const doubleSpeedPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-double');
+  const finalPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-final');
   const normalDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-normal');
   const doubleSpeedDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-double');
-  const overtimeDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-overtime');
+  const finalDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-final');
+  const normalHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-normal');
+  const doubleSpeedHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-double');
+  const finalHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-final');
+  const matchRuleInputs = [
+    initialHandSizeInput,
+    normalPhaseDurationInput,
+    doubleSpeedPhaseDurationInput,
+    finalPhaseDurationInput,
+    normalDrawIntervalInput,
+    doubleSpeedDrawIntervalInput,
+    finalDrawIntervalInput,
+    normalHandLimitInput,
+    doubleSpeedHandLimitInput,
+    finalHandLimitInput,
+  ];
 
   const tickOut = required<HTMLElement>('#stat-tick');
   const unitsOut = required<HTMLElement>('#stat-units');
@@ -138,6 +148,21 @@ export function createPanel(options: PanelOptions): PanelHandle {
       unitGroup.appendChild(button);
     }
   }
+
+  /** 把 sim 默认或传入初值填进数字框。 */
+  const fillMatchRuleInputs = (view: MatchRulesView): void => {
+    const next = sanitizeMatchRulesView(view);
+    initialHandSizeInput.value = String(next.initialHandSize);
+    normalPhaseDurationInput.value = String(next.normalPhaseSeconds);
+    doubleSpeedPhaseDurationInput.value = String(next.doubleSpeedPhaseSeconds);
+    finalPhaseDurationInput.value = String(next.finalPhaseSeconds);
+    normalDrawIntervalInput.value = String(next.normalDrawIntervalSeconds);
+    doubleSpeedDrawIntervalInput.value = String(next.doubleSpeedDrawIntervalSeconds);
+    finalDrawIntervalInput.value = String(next.finalDrawIntervalSeconds);
+    normalHandLimitInput.value = String(next.normalHandLimit);
+    doubleSpeedHandLimitInput.value = String(next.doubleSpeedHandLimit);
+    finalHandLimitInput.value = String(next.finalHandLimit);
+  };
 
   function selectFaction(next: Faction): void {
     faction = next;
@@ -261,48 +286,47 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloViewBottomExtra?.onChange(value);
   };
 
-  /** 读取三阶段发牌间隔；任一非法则返回 null，避免半成品写入 MatchState。 */
-  const readDrawIntervals = (): {
-    normalDrawIntervalSeconds: number;
-    doubleSpeedDrawIntervalSeconds: number;
-    overtimeDrawIntervalSeconds: number;
-  } | null => {
-    const normalDrawIntervalSeconds = Number(normalDrawIntervalInput.value);
-    const doubleSpeedDrawIntervalSeconds = Number(doubleSpeedDrawIntervalInput.value);
-    const overtimeDrawIntervalSeconds = Number(overtimeDrawIntervalInput.value);
-    if (
-      !Number.isFinite(normalDrawIntervalSeconds) ||
-      !Number.isFinite(doubleSpeedDrawIntervalSeconds) ||
-      !Number.isFinite(overtimeDrawIntervalSeconds) ||
-      normalDrawIntervalSeconds < 0.25 ||
-      doubleSpeedDrawIntervalSeconds < 0.25 ||
-      overtimeDrawIntervalSeconds < 0.25
-    ) {
-      return null;
-    }
-    return {
-      normalDrawIntervalSeconds: clampDrawIntervalSeconds(normalDrawIntervalSeconds),
-      doubleSpeedDrawIntervalSeconds: clampDrawIntervalSeconds(doubleSpeedDrawIntervalSeconds),
-      overtimeDrawIntervalSeconds: clampDrawIntervalSeconds(overtimeDrawIntervalSeconds),
+  /** 读取对局节奏控件；任一非法则返回 null，避免半成品写入 MatchState。 */
+  const readMatchRules = (): MatchRulesView | null => {
+    const raw = {
+      initialHandSize: Number(initialHandSizeInput.value),
+      normalPhaseSeconds: Number(normalPhaseDurationInput.value),
+      doubleSpeedPhaseSeconds: Number(doubleSpeedPhaseDurationInput.value),
+      finalPhaseSeconds: Number(finalPhaseDurationInput.value),
+      normalDrawIntervalSeconds: Number(normalDrawIntervalInput.value),
+      doubleSpeedDrawIntervalSeconds: Number(doubleSpeedDrawIntervalInput.value),
+      finalDrawIntervalSeconds: Number(finalDrawIntervalInput.value),
+      normalHandLimit: Number(normalHandLimitInput.value),
+      doubleSpeedHandLimit: Number(doubleSpeedHandLimitInput.value),
+      finalHandLimit: Number(finalHandLimitInput.value),
     };
+    if (Object.values(raw).some((value) => !Number.isFinite(value) || value <= 0)) return null;
+    return sanitizeMatchRulesView({
+      ...raw,
+      normalPhaseSeconds: clampPhaseSeconds(raw.normalPhaseSeconds),
+      doubleSpeedPhaseSeconds: clampPhaseSeconds(raw.doubleSpeedPhaseSeconds),
+      finalPhaseSeconds: clampPhaseSeconds(raw.finalPhaseSeconds),
+      normalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.normalDrawIntervalSeconds),
+      doubleSpeedDrawIntervalSeconds: clampDrawIntervalSeconds(raw.doubleSpeedDrawIntervalSeconds),
+      finalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.finalDrawIntervalSeconds),
+    });
   };
 
-  /** 校验数字框后再写回 MatchState，避免编辑中的空值把计时器改成无效状态。 */
-  const onDrawIntervalInput = (): void => {
-    const intervals = readDrawIntervals();
-    if (!intervals) return;
-    options.soloDrawIntervals?.onChange(intervals);
+  /** 校验数字框后再写回当前局，避免编辑中的空值把计时器改成无效状态。 */
+  const onMatchRulesInput = (): void => {
+    const rules = readMatchRules();
+    if (!rules) return;
+    options.soloMatchRules?.onChange(rules);
   };
 
-  /** 把当前滑条/数字框写入本地默认，供下次进局与刷新后沿用。 */
+  /** 把当前镜头滑条写入本地默认；对局节奏不持久化，以免单机与联机分叉。 */
   const onSaveDefaults = (): void => {
     const cameraAngle = Number(cameraAngleInput.value);
     const viewBottomExtra = Number(bottomExtraInput.value);
-    const drawIntervals = readDrawIntervals();
-    if (!Number.isFinite(cameraAngle) || !Number.isFinite(viewBottomExtra) || !drawIntervals) {
+    if (!Number.isFinite(cameraAngle) || !Number.isFinite(viewBottomExtra)) {
       return;
     }
-    saveRuntimeDefaults({ cameraAngle, viewBottomExtra, ...drawIntervals });
+    saveRuntimeDefaults({ cameraAngle, viewBottomExtra });
     saveDefaultsButton.textContent = '已保存';
     window.clearTimeout(saveDefaultsTimer);
     saveDefaultsTimer = window.setTimeout(() => {
@@ -342,19 +366,13 @@ export function createPanel(options: PanelOptions): PanelHandle {
       bottomExtraValue.textContent = Number(bottomExtraInput.value).toFixed(1);
       bottomExtraInput.addEventListener('input', onBottomExtraInput);
     }
-    if (options.soloDrawIntervals) {
-      normalDrawIntervalInput.value = String(options.soloDrawIntervals.initial.normalDrawIntervalSeconds);
-      doubleSpeedDrawIntervalInput.value = String(
-        options.soloDrawIntervals.initial.doubleSpeedDrawIntervalSeconds,
-      );
-      overtimeDrawIntervalInput.value = String(
-        options.soloDrawIntervals.initial.overtimeDrawIntervalSeconds,
-      );
-      normalDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
-      doubleSpeedDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
-      overtimeDrawIntervalInput.addEventListener('input', onDrawIntervalInput);
+    if (options.soloMatchRules) {
+      fillMatchRuleInputs(options.soloMatchRules.initial ?? defaultMatchRulesView());
+      for (const input of matchRuleInputs) {
+        input.addEventListener('input', onMatchRulesInput);
+      }
     }
-    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawIntervals) {
+    if (options.soloCameraAngle || options.soloViewBottomExtra) {
       saveDefaultsButton.addEventListener('click', onSaveDefaults);
     }
   }
@@ -417,12 +435,12 @@ export function createPanel(options: PanelOptions): PanelHandle {
         if (options.soloViewBottomExtra) {
           bottomExtraInput.removeEventListener('input', onBottomExtraInput);
         }
-        if (options.soloDrawIntervals) {
-          normalDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
-          doubleSpeedDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
-          overtimeDrawIntervalInput.removeEventListener('input', onDrawIntervalInput);
+        if (options.soloMatchRules) {
+          for (const input of matchRuleInputs) {
+            input.removeEventListener('input', onMatchRulesInput);
+          }
         }
-        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloDrawIntervals) {
+        if (options.soloCameraAngle || options.soloViewBottomExtra) {
           saveDefaultsButton.removeEventListener('click', onSaveDefaults);
         }
         window.clearTimeout(saveDefaultsTimer);

@@ -3,12 +3,17 @@ import { Faction } from '../src/entity/unit.js';
 import {
   DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
   DOUBLE_SPEED_START_TICKS,
+  FINAL_DRAW_INTERVAL_TICKS,
+  FINAL_START_TICKS,
+  HAND_LIMIT_DOUBLE_SPEED,
+  HAND_LIMIT_FINAL,
+  HAND_LIMIT_NORMAL,
+  INITIAL_HAND_SIZE,
+  MATCH_END_TICKS,
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
-  NORMAL_PHASE_TICKS,
-  OVERTIME_DRAW_INTERVAL_TICKS,
-  OVERTIME_END_TICKS,
-} from '../src/match/matchState.js';
+  TICK_RATE,
+} from '../src/index.js';
 
 describe('MatchState.clear', () => {
   it('清空后保留牌堆实例引用，并重新发初始手牌', () => {
@@ -25,25 +30,31 @@ describe('MatchState.clear', () => {
     // 单机 HandPanel 绑的是同一 deck；换实例会导致校验手牌 id 永远对不上
     expect(match.decks[Faction.Blue]).toBe(blueDeck);
     expect(match.decks[Faction.Red]).toBe(redDeck);
-    expect(blueDeck.hand).toHaveLength(3);
-    expect(redDeck.hand).toHaveLength(3);
+    expect(blueDeck.hand).toHaveLength(INITIAL_HAND_SIZE);
+    expect(redDeck.hand).toHaveLength(INITIAL_HAND_SIZE);
   });
 });
 
 describe('MatchState 对局规则', () => {
-  it('按阶段重置下一张牌倒计时', () => {
+  it('按阶段重置下一张牌倒计时，且不在倍速结束时结算', () => {
     const match = createMatch();
     expect(match.getDrawIntervalTicks()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.decks[Faction.Blue].hand).toHaveLength(INITIAL_HAND_SIZE);
+    expect(match.getMaxHandSize()).toBe(HAND_LIMIT_NORMAL);
 
     stepTo(match, DOUBLE_SPEED_START_TICKS);
     expect(match.phase).toBe('double_speed');
-    expect(match.getTicksUntilDraw()).toBe(60);
+    expect(match.result).toBeNull();
+    expect(match.getTicksUntilDraw()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
     expect(match.getDrawIntervalTicks()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
+    expect(match.getMaxHandSize()).toBe(HAND_LIMIT_DOUBLE_SPEED);
 
-    stepTo(match, NORMAL_PHASE_TICKS);
-    expect(match.phase).toBe('overtime');
-    expect(match.getTicksUntilDraw()).toBe(40);
-    expect(match.getDrawIntervalTicks()).toBe(OVERTIME_DRAW_INTERVAL_TICKS);
+    stepTo(match, FINAL_START_TICKS);
+    expect(match.phase).toBe('final');
+    expect(match.result).toBeNull();
+    expect(match.getTicksUntilDraw()).toBe(FINAL_DRAW_INTERVAL_TICKS);
+    expect(match.getDrawIntervalTicks()).toBe(FINAL_DRAW_INTERVAL_TICKS);
+    expect(match.getMaxHandSize()).toBe(HAND_LIMIT_FINAL);
   });
 
   it('可覆盖三阶段发牌间隔并夹住当前倒计时', () => {
@@ -53,7 +64,7 @@ describe('MatchState 对局规则', () => {
     match.setDrawIntervals({
       normalTicks: 20,
       doubleSpeedTicks: 10,
-      overtimeTicks: 8,
+      finalTicks: 8,
     });
     expect(match.getDrawIntervalTicks()).toBe(20);
     expect(match.getTicksUntilDraw()).toBe(20);
@@ -62,7 +73,7 @@ describe('MatchState 对局规则', () => {
     expect(match.getDrawIntervalTicks()).toBe(10);
     expect(match.getTicksUntilDraw()).toBe(10);
 
-    stepTo(match, NORMAL_PHASE_TICKS);
+    stepTo(match, FINAL_START_TICKS);
     expect(match.getDrawIntervalTicks()).toBe(8);
     expect(match.getTicksUntilDraw()).toBe(8);
   });
@@ -93,21 +104,49 @@ describe('MatchState 对局规则', () => {
     expect(match.result).toMatchObject({ winner: null, reason: 'simultaneous_destroyed' });
   });
 
-  it('三分钟基地血量不同则高血量方获胜', () => {
+  it('倍速结束时血量不同也不结算，决胜到点才比血', () => {
     const match = createMatch();
     castle(match, Faction.Red).hp -= 1;
 
-    stepTo(match, NORMAL_PHASE_TICKS);
+    stepTo(match, FINAL_START_TICKS);
+    expect(match.phase).toBe('final');
+    expect(match.result).toBeNull();
 
+    stepTo(match, MATCH_END_TICKS);
     expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
   });
 
-  it('加时赛结束时血量相同则平局', () => {
+  it('决胜结束时血量相同则平局', () => {
     const match = createMatch();
 
-    stepTo(match, OVERTIME_END_TICKS);
+    stepTo(match, MATCH_END_TICKS);
 
     expect(match.result).toMatchObject({ winner: null, reason: 'time_limit' });
+  });
+
+  it('可覆盖阶段时长、手牌上限和起手张数', () => {
+    const match = createMatch();
+    match.setPhaseDurations({
+      normalTicks: TICK_RATE * 2,
+      doubleSpeedTicks: TICK_RATE * 2,
+      finalTicks: TICK_RATE * 2,
+    });
+    match.setHandLimits({ normal: 5, doubleSpeed: 6, final: 7 });
+    match.setInitialHandSize(2);
+
+    expect(match.decks[Faction.Blue].hand).toHaveLength(2);
+    expect(match.getMaxHandSize()).toBe(5);
+
+    stepTo(match, TICK_RATE * 2);
+    expect(match.phase).toBe('double_speed');
+    expect(match.getMaxHandSize()).toBe(6);
+
+    stepTo(match, TICK_RATE * 4);
+    expect(match.phase).toBe('final');
+    expect(match.getMaxHandSize()).toBe(7);
+
+    stepTo(match, TICK_RATE * 6);
+    expect(match.result?.reason).toBe('time_limit');
   });
 });
 

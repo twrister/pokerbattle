@@ -1,10 +1,4 @@
-import {
-  NORMAL_PHASE_TICKS,
-  OVERTIME_END_TICKS,
-  TICK_RATE,
-  type MatchPhase,
-  type MatchState,
-} from '@pb/sim';
+import { TICK_RATE, type MatchPhase, type MatchState } from '@pb/sim';
 import { matchPhaseLabel } from './matchPhaseLabel.js';
 
 export interface BattleAnnounceHandle {
@@ -76,17 +70,21 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
         const label = match.phase === 'normal' ? OPENING_ANNOUNCE : matchPhaseLabel(match.phase);
         if (label) show(label, { holdMs: PHASE_HOLD_MS });
         lastPhase = match.phase;
-        // 阶段刚切换时不叠倒数，避免与「加时阶段」等同 tick 抢显
-        if (match.phase === 'overtime' || match.phase === 'double_speed') {
+        // 阶段刚切换时不叠倒数，避免与「决胜阶段」等同 tick 抢显
+        if (match.phase === 'final' || match.phase === 'double_speed') {
           lastCountdownSec = null;
         }
         return;
       }
 
       if (match.phase === 'ended' || match.result) return;
+      // 只有决胜最后 10 秒才弹数字倒计时
+      if (match.phase !== 'final') {
+        lastCountdownSec = null;
+        return;
+      }
 
-      const deadline = match.phase === 'overtime' ? OVERTIME_END_TICKS : NORMAL_PHASE_TICKS;
-      const remainingTicks = Math.max(0, deadline - match.world.tick);
+      const remainingTicks = Math.max(0, match.getPhaseDeadlineTick() - match.world.tick);
       const seconds = Math.ceil(remainingTicks / TICK_RATE);
       if (seconds >= 1 && seconds <= 10) {
         if (seconds !== lastCountdownSec) {

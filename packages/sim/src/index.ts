@@ -123,10 +123,14 @@ export {
 
 export {
   FRESH_CARD_WEIGHT,
+  HAND_LIMIT_DOUBLE_SPEED,
+  HAND_LIMIT_FINAL,
+  HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
   PokerDeck,
   RETURNED_CARD_WEIGHT,
+  clampHandSize,
   compareCardsByStrength,
   createPokerCards,
   getPokerCardById,
@@ -165,18 +169,23 @@ export {
   type HandCategoryOddsSweepResult,
 } from './cards/handCategoryOdds.js';
 export {
+  DEFAULT_PHASE_DURATION_SECONDS,
+  DEFAULT_PHASE_DURATION_TICKS,
   DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
-  DOUBLE_SPEED_PHASE_TICKS,
   DOUBLE_SPEED_START_TICKS,
+  FINAL_DRAW_INTERVAL_TICKS,
+  FINAL_START_TICKS,
+  MATCH_END_TICKS,
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
-  NORMAL_PHASE_TICKS,
-  OVERTIME_DRAW_INTERVAL_TICKS,
-  OVERTIME_END_TICKS,
+  defaultMatchRules,
   type MatchDrawIntervals,
   type MatchEndReason,
+  type MatchHandLimits,
   type MatchPhase,
+  type MatchPhaseDurations,
   type MatchResult,
+  type MatchRules,
 } from './match/matchState.js';
 export { SoloBotController, type SoloDifficulty } from './match/soloBot.js';
 

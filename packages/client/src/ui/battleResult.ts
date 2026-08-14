@@ -84,7 +84,7 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
 function resultDetail(result: MatchResult): string {
   if (result.reason === 'base_destroyed') return '基地被摧毁，对局提前结束。';
   if (result.reason === 'simultaneous_destroyed') return '双方基地同时被摧毁。';
-  return result.winner === null ? '加时赛结束，双方基地血量相同。' : '时间结束，基地血量更高的一方获胜。';
+  return result.winner === null ? '时间结束，双方基地血量相同。' : '时间结束，基地血量更高的一方获胜。';
 }
 
 /** 按本地视角填一侧名字、残血和胜负高亮。 */

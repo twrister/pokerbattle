@@ -6,9 +6,9 @@ export function matchPhaseLabel(phase: MatchPhase): string {
     case 'normal':
       return '常规阶段';
     case 'double_speed':
-      return '倍速发牌';
-    case 'overtime':
-      return '加时阶段';
+      return '倍速阶段';
+    case 'final':
+      return '决胜阶段';
     case 'ended':
       return '';
     default:

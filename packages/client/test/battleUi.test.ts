@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DOUBLE_SPEED_START_TICKS,
   Faction,
+  FINAL_START_TICKS,
   MatchState,
-  NORMAL_PHASE_TICKS,
   opposingFaction,
 } from '@pb/sim';
 import { createBattleHud } from '../src/ui/battleHud.js';
@@ -59,7 +59,7 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
     expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('3:00');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
     expect(document.querySelector('#battle-opp-hand')?.childElementCount).toBe(
       match.decks[Faction.Red].hand.length,
     );
@@ -85,10 +85,10 @@ describe('对局 HUD 与结算弹窗', () => {
     );
   });
 
-  it('进入加时后切换阶段与倒计时文案', () => {
+  it('进入决胜后切换阶段与倒计时文案', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
-    while (match.world.tick < NORMAL_PHASE_TICKS) match.step();
+    while (match.world.tick < FINAL_START_TICKS) match.step();
     const hud = createBattleHud();
     hud.setContext({
       localFaction: Faction.Blue,
@@ -98,10 +98,10 @@ describe('对局 HUD 与结算弹窗', () => {
 
     hud.update(match);
 
-    expect(match.phase).toBe('overtime');
-    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('加时阶段');
-    expect(document.querySelector('#battle-timer-label')?.textContent).toBe('加时剩余：');
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('1:00');
+    expect(match.phase).toBe('final');
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('决胜阶段');
+    expect(document.querySelector('#battle-timer-label')?.textContent).toBe('决胜剩余：');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
   });
 
   it('倍速阶段展示对应阶段名', () => {
@@ -117,7 +117,7 @@ describe('对局 HUD 与结算弹窗', () => {
     hud.update(match);
 
     expect(match.phase).toBe('double_speed');
-    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('倍速发牌');
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('倍速阶段');
   });
 
   it('按本地阵营展示胜负结果', () => {

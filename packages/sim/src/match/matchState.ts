@@ -1,4 +1,12 @@
-import { createPokerCards, INITIAL_HAND_SIZE, PokerDeck } from '../cards/deck.js';
+import {
+  clampHandSize,
+  createPokerCards,
+  HAND_LIMIT_DOUBLE_SPEED,
+  HAND_LIMIT_FINAL,
+  HAND_LIMIT_NORMAL,
+  INITIAL_HAND_SIZE,
+  PokerDeck,
+} from '../cards/deck.js';
 import { detectHandCategories } from '../cards/handCategory.js';
 import {
   type Command,
@@ -22,7 +30,7 @@ import { fromFloat, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
 
 /** 对局的三个可发牌阶段。 */
-export type MatchPhase = 'normal' | 'double_speed' | 'overtime' | 'ended';
+export type MatchPhase = 'normal' | 'double_speed' | 'final' | 'ended';
 /** 结算原因由 sim 产出，UI 和联机协议只负责展示与转发。 */
 export type MatchEndReason = 'base_destroyed' | 'time_limit' | 'simultaneous_destroyed';
 export interface MatchResult {
@@ -31,23 +39,68 @@ export interface MatchResult {
   endTick: number;
 }
 
-/** 2:00 进入倍速发牌。 */
-export const DOUBLE_SPEED_START_TICKS = TICK_RATE * 120;
-/** 3:00 常规阶段结束；血量相同则进加时。 */
-export const NORMAL_PHASE_TICKS = TICK_RATE * 180;
-/** 4:00 加时结束。 */
-export const OVERTIME_END_TICKS = TICK_RATE * 240;
-/** @deprecated 使用 DOUBLE_SPEED_START_TICKS；保留别名兼容既有引用。 */
-export const DOUBLE_SPEED_PHASE_TICKS = DOUBLE_SPEED_START_TICKS;
-export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 6;
+/** 每个阶段默认 2 分钟。 */
+export const DEFAULT_PHASE_DURATION_SECONDS = 120;
+export const DEFAULT_PHASE_DURATION_TICKS = TICK_RATE * DEFAULT_PHASE_DURATION_SECONDS;
+/** 默认 2:00 进入倍速阶段。 */
+export const DOUBLE_SPEED_START_TICKS = DEFAULT_PHASE_DURATION_TICKS;
+/** 默认 4:00 进入决胜阶段。 */
+export const FINAL_START_TICKS = DEFAULT_PHASE_DURATION_TICKS * 2;
+/** 默认 6:00 决胜结束。 */
+export const MATCH_END_TICKS = DEFAULT_PHASE_DURATION_TICKS * 3;
+export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
-export const OVERTIME_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
+export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
 
-/** 三阶段补牌周期；单机调试可覆盖，联机保持默认常量。 */
+/** 三阶段补牌周期。 */
 export interface MatchDrawIntervals {
   normalTicks: number;
   doubleSpeedTicks: number;
-  overtimeTicks: number;
+  finalTicks: number;
+}
+
+/** 三阶段持续时长。 */
+export interface MatchPhaseDurations {
+  normalTicks: number;
+  doubleSpeedTicks: number;
+  finalTicks: number;
+}
+
+/** 三阶段手牌上限。 */
+export interface MatchHandLimits {
+  normal: number;
+  doubleSpeed: number;
+  final: number;
+}
+
+/** 单机与联机共用的对局节奏；构造时落到 MatchState。 */
+export interface MatchRules {
+  initialHandSize: number;
+  phaseDurations: MatchPhaseDurations;
+  drawIntervals: MatchDrawIntervals;
+  handLimits: MatchHandLimits;
+}
+
+/** 内置默认节奏，单机/联机/服务端都从这里起步。 */
+export function defaultMatchRules(): MatchRules {
+  return {
+    initialHandSize: INITIAL_HAND_SIZE,
+    phaseDurations: {
+      normalTicks: DEFAULT_PHASE_DURATION_TICKS,
+      doubleSpeedTicks: DEFAULT_PHASE_DURATION_TICKS,
+      finalTicks: DEFAULT_PHASE_DURATION_TICKS,
+    },
+    drawIntervals: {
+      normalTicks: NORMAL_DRAW_INTERVAL_TICKS,
+      doubleSpeedTicks: DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
+      finalTicks: FINAL_DRAW_INTERVAL_TICKS,
+    },
+    handLimits: {
+      normal: HAND_LIMIT_NORMAL,
+      doubleSpeed: HAND_LIMIT_DOUBLE_SPEED,
+      final: HAND_LIMIT_FINAL,
+    },
+  };
 }
 
 /**
@@ -61,9 +114,16 @@ export class MatchState {
   result: MatchResult | null = null;
   private blueCastleId: number | null = null;
   private redCastleId: number | null = null;
+  private initialHandSize = INITIAL_HAND_SIZE;
+  private normalPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
+  private doubleSpeedPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
+  private finalPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
   private normalDrawIntervalTicks = NORMAL_DRAW_INTERVAL_TICKS;
   private doubleSpeedDrawIntervalTicks = DOUBLE_SPEED_DRAW_INTERVAL_TICKS;
-  private overtimeDrawIntervalTicks = OVERTIME_DRAW_INTERVAL_TICKS;
+  private finalDrawIntervalTicks = FINAL_DRAW_INTERVAL_TICKS;
+  private normalHandLimit = HAND_LIMIT_NORMAL;
+  private doubleSpeedHandLimit = HAND_LIMIT_DOUBLE_SPEED;
+  private finalHandLimit = HAND_LIMIT_FINAL;
   private nextDrawTick = NORMAL_DRAW_INTERVAL_TICKS;
 
   constructor(seed = 1) {
@@ -74,8 +134,7 @@ export class MatchState {
       [Faction.Blue]: new PokerDeck(createPokerCards(), this.world.rng),
       [Faction.Red]: new PokerDeck(createPokerCards(), this.world.rng),
     };
-    this.decks[Faction.Blue].drawMany(INITIAL_HAND_SIZE);
-    this.decks[Faction.Red].drawMany(INITIAL_HAND_SIZE);
+    this.dealStartingHands();
   }
 
   /**
@@ -128,9 +187,16 @@ export class MatchState {
     h = mix(h, this.blueCastleId ?? 0);
     h = mix(h, this.redCastleId ?? 0);
     h = mix(h, this.nextDrawTick);
+    h = mix(h, this.initialHandSize);
+    h = mix(h, this.normalPhaseTicks);
+    h = mix(h, this.doubleSpeedPhaseTicks);
+    h = mix(h, this.finalPhaseTicks);
     h = mix(h, this.normalDrawIntervalTicks);
     h = mix(h, this.doubleSpeedDrawIntervalTicks);
-    h = mix(h, this.overtimeDrawIntervalTicks);
+    h = mix(h, this.finalDrawIntervalTicks);
+    h = mix(h, this.normalHandLimit);
+    h = mix(h, this.doubleSpeedHandLimit);
+    h = mix(h, this.finalHandLimit);
     return h >>> 0;
   }
 
@@ -141,13 +207,12 @@ export class MatchState {
     // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象
     this.decks[Faction.Blue].reset();
     this.decks[Faction.Red].reset();
-    this.decks[Faction.Blue].drawMany(INITIAL_HAND_SIZE);
-    this.decks[Faction.Red].drawMany(INITIAL_HAND_SIZE);
     this.phase = 'normal';
     this.result = null;
     this.blueCastleId = null;
     this.redCastleId = null;
-    // 保留调试覆盖的发牌间隔，只重置本局倒计时
+    this.dealStartingHands();
+    // 保留调试覆盖的节奏参数，只重置本局倒计时
     this.nextDrawTick = this.normalDrawIntervalTicks;
   }
 
@@ -197,19 +262,55 @@ export class MatchState {
     return this.drawIntervalTicks();
   }
 
+  /** 当前阶段手牌上限，供 HUD / 手牌面板展示。 */
+  getMaxHandSize(): number {
+    return this.currentHandLimit();
+  }
+
+  /** 当前阶段结束 tick，供 HUD 倒计时；已结束则停在结算帧。 */
+  getPhaseDeadlineTick(): number {
+    if (this.phase === 'ended' || this.result) return this.result?.endTick ?? this.matchEndTick();
+    if (this.phase === 'double_speed') return this.finalStartTick();
+    if (this.phase === 'final') return this.matchEndTick();
+    return this.doubleSpeedStartTick();
+  }
+
   /**
-   * 覆盖三阶段发牌间隔（单机调试用）。
+   * 覆盖三阶段发牌间隔（调试用）。
    * 缩短周期时夹住剩余倒计时，避免遮罩进度超过 100%。
    */
   setDrawIntervals(intervals: MatchDrawIntervals): void {
-    this.normalDrawIntervalTicks = Math.max(1, Math.floor(intervals.normalTicks));
-    this.doubleSpeedDrawIntervalTicks = Math.max(1, Math.floor(intervals.doubleSpeedTicks));
-    this.overtimeDrawIntervalTicks = Math.max(1, Math.floor(intervals.overtimeTicks));
-    if (this.result) return;
-    const remaining = this.nextDrawTick - this.world.tick;
-    const interval = this.drawIntervalTicks();
-    if (remaining > interval) {
-      this.nextDrawTick = this.world.tick + interval;
+    this.normalDrawIntervalTicks = clampPositiveTicks(intervals.normalTicks);
+    this.doubleSpeedDrawIntervalTicks = clampPositiveTicks(intervals.doubleSpeedTicks);
+    this.finalDrawIntervalTicks = clampPositiveTicks(intervals.finalTicks);
+    this.clampDrawCountdown();
+  }
+
+  /** 覆盖三阶段时长；边界从 tick 0 重算，下一帧按 >= 切换。 */
+  setPhaseDurations(durations: MatchPhaseDurations): void {
+    this.normalPhaseTicks = clampPositiveTicks(durations.normalTicks);
+    this.doubleSpeedPhaseTicks = clampPositiveTicks(durations.doubleSpeedTicks);
+    this.finalPhaseTicks = clampPositiveTicks(durations.finalTicks);
+  }
+
+  /** 覆盖三阶段手牌上限，立即同步到双方牌堆。 */
+  setHandLimits(limits: MatchHandLimits): void {
+    this.normalHandLimit = clampHandSize(limits.normal);
+    this.doubleSpeedHandLimit = clampHandSize(limits.doubleSpeed);
+    this.finalHandLimit = clampHandSize(limits.final);
+    this.syncHandLimits();
+  }
+
+  /**
+   * 覆盖起手张数。开局尚未推进时重发，避免调试改数后仍拿着旧的 4 张。
+   */
+  setInitialHandSize(size: number): void {
+    this.initialHandSize = clampHandSize(size);
+    if (this.world.tick === 0 && !this.result) {
+      this.decks[Faction.Blue].reset();
+      this.decks[Faction.Red].reset();
+      this.dealStartingHands();
+      this.nextDrawTick = this.normalDrawIntervalTicks;
     }
   }
 
@@ -231,26 +332,22 @@ export class MatchState {
       return;
     }
 
-    if (this.world.tick === NORMAL_PHASE_TICKS) {
-      const winner = compareHp(blueHp, redHp);
-      if (winner !== null) {
-        this.finish(winner, 'time_limit');
-        return;
-      }
-      this.phase = 'overtime';
-      this.nextDrawTick = this.world.tick + this.overtimeDrawIntervalTicks;
-      return;
+    if (this.phase === 'normal' && this.world.tick >= this.doubleSpeedStartTick()) {
+      this.enterPhase('double_speed');
     }
-
-    if (this.world.tick === OVERTIME_END_TICKS) {
+    if (this.phase === 'double_speed' && this.world.tick >= this.finalStartTick()) {
+      this.enterPhase('final');
+    }
+    if (this.phase === 'final' && this.world.tick >= this.matchEndTick()) {
       this.finish(compareHp(blueHp, redHp), 'time_limit');
-      return;
     }
+  }
 
-    if (this.world.tick === DOUBLE_SPEED_START_TICKS) {
-      this.phase = 'double_speed';
-      this.nextDrawTick = this.world.tick + this.doubleSpeedDrawIntervalTicks;
-    }
+  /** 切阶段：同步手牌上限，并从当前 tick 重新计下一次补牌。 */
+  private enterPhase(phase: 'double_speed' | 'final'): void {
+    this.phase = phase;
+    this.syncHandLimits();
+    this.nextDrawTick = this.world.tick + this.drawIntervalTicks();
   }
 
   /** 记录不可逆结算结果并冻结后续逻辑帧。 */
@@ -263,13 +360,52 @@ export class MatchState {
   private drawIntervalTicks(): number {
     if (this.phase === 'normal') return this.normalDrawIntervalTicks;
     if (this.phase === 'double_speed') return this.doubleSpeedDrawIntervalTicks;
-    return this.overtimeDrawIntervalTicks;
+    return this.finalDrawIntervalTicks;
+  }
+
+  private currentHandLimit(): number {
+    if (this.phase === 'double_speed') return this.doubleSpeedHandLimit;
+    if (this.phase === 'final' || this.phase === 'ended') return this.finalHandLimit;
+    return this.normalHandLimit;
+  }
+
+  private syncHandLimits(): void {
+    const max = this.currentHandLimit();
+    this.decks[Faction.Blue].setMaxHandSize(max);
+    this.decks[Faction.Red].setMaxHandSize(max);
+  }
+
+  private dealStartingHands(): void {
+    this.syncHandLimits();
+    this.decks[Faction.Blue].drawMany(this.initialHandSize);
+    this.decks[Faction.Red].drawMany(this.initialHandSize);
+  }
+
+  private clampDrawCountdown(): void {
+    if (this.result) return;
+    const remaining = this.nextDrawTick - this.world.tick;
+    const interval = this.drawIntervalTicks();
+    if (remaining > interval) {
+      this.nextDrawTick = this.world.tick + interval;
+    }
+  }
+
+  private doubleSpeedStartTick(): number {
+    return this.normalPhaseTicks;
+  }
+
+  private finalStartTick(): number {
+    return this.normalPhaseTicks + this.doubleSpeedPhaseTicks;
+  }
+
+  private matchEndTick(): number {
+    return this.normalPhaseTicks + this.doubleSpeedPhaseTicks + this.finalPhaseTicks;
   }
 
   private phaseCode(): number {
     if (this.phase === 'normal') return 1;
     if (this.phase === 'double_speed') return 2;
-    if (this.phase === 'overtime') return 3;
+    if (this.phase === 'final') return 3;
     return 4;
   }
 
@@ -309,6 +445,11 @@ export class MatchState {
     // 与白色部署区高亮一致：只校验锚点，阵型贴边溢出仍可放置
     return isDeployAnchorInsideHalfCourt(anchorX, anchorY, cmd.faction);
   }
+}
+
+function clampPositiveTicks(ticks: number): number {
+  if (!Number.isFinite(ticks)) return 1;
+  return Math.max(1, Math.floor(ticks));
 }
 
 function compareHp(blueHp: number, redHp: number): Faction | null {

@@ -1,7 +1,20 @@
 import { Rng } from '../math/rng.js';
 
-export const INITIAL_HAND_SIZE = 3;
-export const MAX_HAND_SIZE = 9;
+export const INITIAL_HAND_SIZE = 4;
+/** 局内绝对手牌上限，等于决胜阶段默认上限。 */
+export const MAX_HAND_SIZE = 11;
+/** 常规阶段默认手牌上限。 */
+export const HAND_LIMIT_NORMAL = 9;
+/** 倍速阶段默认手牌上限。 */
+export const HAND_LIMIT_DOUBLE_SPEED = 10;
+/** 决胜阶段默认手牌上限。 */
+export const HAND_LIMIT_FINAL = 11;
+
+/** 把张数夹到局内合法区间，供 MatchState 与运行控制共用。 */
+export function clampHandSize(size: number): number {
+  if (!Number.isFinite(size)) return INITIAL_HAND_SIZE;
+  return Math.max(1, Math.min(MAX_HAND_SIZE, Math.floor(size)));
+}
 /** 新牌权重（整数）；与 RETURNED 比约为 4:1，对应旧版 1 : 0.25。 */
 export const FRESH_CARD_WEIGHT = 4;
 /** 打出回收后的权重，降低立刻重抽概率。 */
@@ -112,6 +125,8 @@ export function getCardStrength(card: PlayingCard): number {
 export class PokerDeck {
   private readonly available = new Map<string, AvailableCard>();
   private readonly cardsInHand = new Map<string, PlayingCard>();
+  /** 当前可持有张数；阶段切换时由 MatchState 改写，下调不丢已有手牌。 */
+  private currentMaxHandSize = MAX_HAND_SIZE;
 
   constructor(
     cards: readonly PlayingCard[] = createPokerCards(),
@@ -120,6 +135,16 @@ export class PokerDeck {
     for (const card of cards) {
       this.available.set(card.id, { card, weight: FRESH_CARD_WEIGHT });
     }
+  }
+
+  /** 当前抽牌上限；满手后 draw 直接返回。 */
+  get maxHandSize(): number {
+    return this.currentMaxHandSize;
+  }
+
+  /** 更新抽牌上限，不丢已有手牌。 */
+  setMaxHandSize(size: number): void {
+    this.currentMaxHandSize = clampHandSize(size);
   }
 
   get hand(): readonly PlayingCard[] {
@@ -137,7 +162,7 @@ export class PokerDeck {
 
   /** 按当前整数权重抽一张；抽出的牌离开牌堆直到被打出后回收。 */
   draw(): PlayingCard | undefined {
-    if (this.cardsInHand.size >= MAX_HAND_SIZE || this.available.size === 0) return undefined;
+    if (this.cardsInHand.size >= this.currentMaxHandSize || this.available.size === 0) return undefined;
 
     // 按 id 排序再抽，避免 Map 迭代顺序造成跨端分叉
     const entries = [...this.available.values()].sort((a, b) => (a.card.id < b.card.id ? -1 : 1));
@@ -202,6 +227,7 @@ export class PokerDeck {
   /** 牌堆+手牌指纹，供 MatchState 对账。 */
   hash(): number {
     let h = 0x811c9dc5;
+    h = mix(h, this.currentMaxHandSize);
     h = mix(h, this.cardsInHand.size);
     const handIds = [...this.cardsInHand.keys()].sort();
     for (const id of handIds) h = mixString(h, id);

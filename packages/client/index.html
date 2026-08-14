@@ -914,10 +914,10 @@
         gap: 10px;
       }
 
-      /* 单机镜头俯仰角 / 下方留白 / 三阶段发牌间隔；沙盒不展示 */
+      /* 单机镜头俯仰角 / 下方留白 / 对局节奏；沙盒不展示 */
       #solo-camera-angle-row,
       #solo-view-bottom-extra-row,
-      #solo-draw-intervals {
+      #solo-match-rules {
         display: none;
       }
 
@@ -929,14 +929,14 @@
         align-items: center;
       }
 
-      #hud.is-solo #solo-draw-intervals {
+      #hud.is-solo #solo-match-rules {
         display: grid;
-        gap: 6px;
+        gap: 10px;
       }
 
       #solo-camera-angle-row label,
       #solo-view-bottom-extra-row label,
-      #solo-draw-intervals label {
+      #solo-match-rules label {
         color: var(--text-dim);
         white-space: nowrap;
       }
@@ -955,14 +955,19 @@
         cursor: pointer;
       }
 
-      #solo-draw-intervals label {
+      #solo-match-rules .solo-match-rules-group {
+        display: grid;
+        gap: 6px;
+      }
+
+      #solo-match-rules label {
         display: grid;
         grid-template-columns: auto 70px;
         gap: 8px;
         align-items: center;
       }
 
-      #solo-draw-intervals input {
+      #solo-match-rules input {
         width: 100%;
         padding: 4px 6px;
         border: 1px solid var(--panel-border);
@@ -3703,7 +3708,7 @@
           <div class="battle-center">
             <span id="battle-phase-label">常规阶段</span>
             <span id="battle-timer-label">剩余时间：</span>
-            <strong id="battle-timer">3:00</strong>
+            <strong id="battle-timer">2:00</strong>
           </div>
           <div class="battle-opp-side">
             <div class="battle-castle battle-castle-opp">
@@ -3794,40 +3799,125 @@
               value="8"
             />
           </div>
-          <div id="solo-draw-intervals">
-            <label for="solo-draw-interval-normal">
-              常规发牌
-              <input
-                id="solo-draw-interval-normal"
-                type="number"
-                min="0.25"
-                max="60"
-                step="0.25"
-                value="6"
-              />
-            </label>
-            <label for="solo-draw-interval-double">
-              倍速发牌
-              <input
-                id="solo-draw-interval-double"
-                type="number"
-                min="0.25"
-                max="60"
-                step="0.25"
-                value="3"
-              />
-            </label>
-            <label for="solo-draw-interval-overtime">
-              加时发牌
-              <input
-                id="solo-draw-interval-overtime"
-                type="number"
-                min="0.25"
-                max="60"
-                step="0.25"
-                value="2"
-              />
-            </label>
+          <div id="solo-match-rules">
+            <div class="solo-match-rules-group">
+              <label for="solo-initial-hand-size">
+                起手张数
+                <input
+                  id="solo-initial-hand-size"
+                  type="number"
+                  min="1"
+                  max="11"
+                  step="1"
+                  value="4"
+                />
+              </label>
+            </div>
+            <div class="solo-match-rules-group">
+              <label for="solo-phase-duration-normal">
+                常规时长
+                <input
+                  id="solo-phase-duration-normal"
+                  type="number"
+                  min="10"
+                  max="600"
+                  step="10"
+                  value="120"
+                />
+              </label>
+              <label for="solo-phase-duration-double">
+                倍速时长
+                <input
+                  id="solo-phase-duration-double"
+                  type="number"
+                  min="10"
+                  max="600"
+                  step="10"
+                  value="120"
+                />
+              </label>
+              <label for="solo-phase-duration-final">
+                决胜时长
+                <input
+                  id="solo-phase-duration-final"
+                  type="number"
+                  min="10"
+                  max="600"
+                  step="10"
+                  value="120"
+                />
+              </label>
+            </div>
+            <div class="solo-match-rules-group">
+              <label for="solo-draw-interval-normal">
+                常规发牌
+                <input
+                  id="solo-draw-interval-normal"
+                  type="number"
+                  min="0.25"
+                  max="60"
+                  step="0.25"
+                  value="5"
+                />
+              </label>
+              <label for="solo-draw-interval-double">
+                倍速发牌
+                <input
+                  id="solo-draw-interval-double"
+                  type="number"
+                  min="0.25"
+                  max="60"
+                  step="0.25"
+                  value="3"
+                />
+              </label>
+              <label for="solo-draw-interval-final">
+                决胜发牌
+                <input
+                  id="solo-draw-interval-final"
+                  type="number"
+                  min="0.25"
+                  max="60"
+                  step="0.25"
+                  value="2"
+                />
+              </label>
+            </div>
+            <div class="solo-match-rules-group">
+              <label for="solo-hand-limit-normal">
+                常规上限
+                <input
+                  id="solo-hand-limit-normal"
+                  type="number"
+                  min="1"
+                  max="11"
+                  step="1"
+                  value="9"
+                />
+              </label>
+              <label for="solo-hand-limit-double">
+                倍速上限
+                <input
+                  id="solo-hand-limit-double"
+                  type="number"
+                  min="1"
+                  max="11"
+                  step="1"
+                  value="10"
+                />
+              </label>
+              <label for="solo-hand-limit-final">
+                决胜上限
+                <input
+                  id="solo-hand-limit-final"
+                  type="number"
+                  min="1"
+                  max="11"
+                  step="1"
+                  value="11"
+                />
+              </label>
+            </div>
           </div>
           <div class="btn-row" id="controls-defaults-row">
             <button id="btn-controls-save-defaults" type="button">保存为默认</button>

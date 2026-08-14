@@ -15,55 +15,24 @@ describe('运行控制默认参数', () => {
     expect(loadRuntimeDefaults()).toEqual(builtInRuntimeDefaults());
   });
 
-  it('保存后再次加载沿用发牌间隔，镜头仍读场景配置', () => {
+  it('保存后仍返回场景镜头默认，不对局节奏做本地覆盖', () => {
     saveRuntimeDefaults({
       cameraAngle: 60,
       viewBottomExtra: 10,
-      normalDrawIntervalSeconds: 5,
-      doubleSpeedDrawIntervalSeconds: 2.5,
-      overtimeDrawIntervalSeconds: 1,
     });
-    expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: builtInRuntimeDefaults().cameraAngle,
-      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
-      normalDrawIntervalSeconds: 5,
-      doubleSpeedDrawIntervalSeconds: 2.5,
-      overtimeDrawIntervalSeconds: 1,
-    });
+    expect(loadRuntimeDefaults()).toEqual(builtInRuntimeDefaults());
   });
 
-  it('非法发牌间隔会被夹紧或回落，镜头不受 localStorage 脏数据影响', () => {
-    saveRuntimeDefaults({
-      cameraAngle: 999,
-      viewBottomExtra: -3,
-      normalDrawIntervalSeconds: 0,
-      doubleSpeedDrawIntervalSeconds: 999,
-      overtimeDrawIntervalSeconds: Number.NaN,
-    });
-    expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: builtInRuntimeDefaults().cameraAngle,
-      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
-      normalDrawIntervalSeconds: 0.25,
-      doubleSpeedDrawIntervalSeconds: 60,
-      overtimeDrawIntervalSeconds: builtInRuntimeDefaults().overtimeDrawIntervalSeconds,
-    });
-  });
-
-  it('旧版单一发牌间隔字段会被忽略并回落三阶段默认', () => {
+  it('旧版发牌间隔字段会被忽略', () => {
     localStorage.setItem(
       'pb.runtimeControls.defaults',
       JSON.stringify({
         cameraAngle: 45,
         viewBottomExtra: 8,
-        drawIntervalSeconds: 5,
+        normalDrawIntervalSeconds: 5,
+        overtimeDrawIntervalSeconds: 1,
       }),
     );
-    expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: builtInRuntimeDefaults().cameraAngle,
-      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
-      normalDrawIntervalSeconds: 6,
-      doubleSpeedDrawIntervalSeconds: 3,
-      overtimeDrawIntervalSeconds: 2,
-    });
+    expect(loadRuntimeDefaults()).toEqual(builtInRuntimeDefaults());
   });
 });
