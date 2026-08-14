@@ -35,6 +35,30 @@ export interface OpsRoomSummary {
   connectedPlayers: number;
 }
 
+/** 在线玩家当前所在位置。 */
+export type OpsPlayerLocation = 'lobby' | 'room';
+
+/** 运维站在线玩家行：当前连接 + 历史战绩。 */
+export interface OpsPlayerRecord {
+  playerId: string;
+  displayName: string;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
+  firstSeenAt: number;
+  lastPlayedAt: number;
+  location: OpsPlayerLocation;
+  roomId: string | null;
+  roomName: string | null;
+}
+
+/** 游戏服在线玩家只读接口载荷。 */
+export interface OpsPlayersStatus {
+  ok: true;
+  players: OpsPlayerRecord[];
+}
+
 /** 游戏服只读状态接口载荷。 */
 export interface OpsServerStatus {
   ok: true;
@@ -48,4 +72,6 @@ export interface OpsServerStatus {
   lobbyPlayers: number;
   summary: OpsRoomSummary;
   rooms: OpsRoomSnapshot[];
+  /** 已建立 WS 且上报了设备 ID 的玩家，与 connectionCount 同源，避免运维站再拉一次。 */
+  players: OpsPlayerRecord[];
 }

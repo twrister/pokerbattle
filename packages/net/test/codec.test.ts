@@ -31,6 +31,7 @@ describe('协议编解码', () => {
       mode: 'create',
       roomId: '',
       name: 'Alice',
+      playerId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
       roomName: 'Alice的房间',
     });
     expect(decodeClientMessage(join)).toEqual({
@@ -38,14 +39,19 @@ describe('协议编解码', () => {
       mode: 'create',
       roomId: '',
       name: 'Alice',
+      playerId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
       roomName: 'Alice的房间',
     });
 
     const listRooms = encodeMessage({ type: 'listRooms' });
     expect(decodeClientMessage(listRooms)).toEqual({ type: 'listRooms' });
 
-    const lobby = encodeMessage({ type: 'lobby' });
-    expect(decodeClientMessage(lobby)).toEqual({ type: 'lobby' });
+    const lobby = encodeMessage({ type: 'lobby', name: 'Alice', playerId: 'device-1' });
+    expect(decodeClientMessage(lobby)).toEqual({
+      type: 'lobby',
+      name: 'Alice',
+      playerId: 'device-1',
+    });
 
     const rejoin = encodeMessage({
       type: 'rejoin',

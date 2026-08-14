@@ -65,6 +65,7 @@ describe('buildDashboardStatus', () => {
 
     expect(status.gameReachable).toBe(false);
     expect(status.game).toBeNull();
+    expect(status.players).toEqual([]);
     expect(status.message).toBeTruthy();
     expect(String(status.message).includes('\u672a\u542f\u52a8')).toBe(true);
     expect(status.services).toHaveLength(1);
@@ -81,40 +82,80 @@ describe('buildDashboardStatus', () => {
   it('returns room data when process running and status reachable', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/ops/players')) {
+          return {
+            ok: true,
+            json: async () => ({
+              ok: true,
+              players: [
+                {
+                  playerId: 'device-aaa',
+                  displayName: '甲',
+                  matches: 2,
+                  wins: 1,
+                  losses: 1,
+                  winRate: 0.5,
+                  firstSeenAt: 1,
+                  lastPlayedAt: 2,
+                  location: 'lobby',
+                  roomId: null,
+                  roomName: null,
+                },
+              ],
+            }),
+          };
+        }
+        return {
           ok: true,
-          startedAt: 1,
-          uptimeMs: 10,
-          host: '0.0.0.0',
-          port: 9090,
-          connectionCount: 2,
-          lobbyPlayers: 1,
-          summary: {
-            roomCount: 1,
-            waitingRooms: 0,
-            playingRooms: 1,
-            endedRooms: 0,
-            seatedPlayers: 2,
-            connectedPlayers: 2,
-          },
-          rooms: [
-            {
-              roomId: '001',
-              roomName: 'test',
-              phase: 'playing',
-              serverTick: 12,
-              playerCount: 2,
-              connectedCount: 2,
-              maxPlayers: 2,
-              seats: [],
-              createdAt: 1,
-              lastActiveAt: 2,
+          json: async () => ({
+            ok: true,
+            startedAt: 1,
+            uptimeMs: 10,
+            host: '0.0.0.0',
+            port: 9090,
+            connectionCount: 2,
+            lobbyPlayers: 1,
+            summary: {
+              roomCount: 1,
+              waitingRooms: 0,
+              playingRooms: 1,
+              endedRooms: 0,
+              seatedPlayers: 2,
+              connectedPlayers: 2,
             },
-          ],
-        }),
-      })),
+            rooms: [
+              {
+                roomId: '001',
+                roomName: 'test',
+                phase: 'playing',
+                serverTick: 12,
+                playerCount: 2,
+                connectedCount: 2,
+                maxPlayers: 2,
+                seats: [],
+                createdAt: 1,
+                lastActiveAt: 2,
+              },
+            ],
+            players: [
+              {
+                playerId: 'device-aaa',
+                displayName: '甲',
+                matches: 2,
+                wins: 1,
+                losses: 1,
+                winRate: 0.5,
+                firstSeenAt: 1,
+                lastPlayedAt: 2,
+                location: 'lobby',
+                roomId: null,
+                roomName: null,
+              },
+            ],
+          }),
+        };
+      }),
     );
 
     const status = await buildDashboardStatus({
@@ -155,6 +196,15 @@ describe('buildDashboardStatus', () => {
     expect(status.gameReachable).toBe(true);
     expect(status.game?.summary.playingRooms).toBe(1);
     expect(status.game?.lobbyPlayers).toBe(1);
+    expect(status.players).toEqual([
+      expect.objectContaining({
+        playerId: 'device-aaa',
+        displayName: '甲',
+        matches: 2,
+        winRate: 0.5,
+        location: 'lobby',
+      }),
+    ]);
     expect(status.message).toBeNull();
     expect(status.services[0]?.reachable).toBe(true);
     expect(status.services[0]?.id).toBe('clientOfficial');

@@ -12,6 +12,7 @@ import { MatchState, TICK_RATE, type Command, type Faction } from '@pb/sim';
 import { randomBytes } from 'node:crypto';
 import type { RawData, WebSocket } from 'ws';
 import type { OpsRoomPhase, OpsRoomSnapshot } from './opsTypes.js';
+import { resolveDecisiveMatch, type OnlinePresence } from './playerStatsStore.js';
 import { factionForSeat, validateSeatCommand } from './validate.js';
 
 const STEP_MS = 1000 / TICK_RATE;
@@ -22,6 +23,8 @@ const MAX_PLAYERS = 2;
 interface Seat {
   ws: WebSocket | null;
   name: string;
+  /** 设备档案 ID；旧客户端未上报时为 null，本席不记服务端战绩。 */
+  playerId: string | null;
   faction: Faction;
   seat: number;
   /** 不可预测令牌，仅本席重连可用。 */
@@ -38,6 +41,14 @@ export interface MatchRoomOptions {
   roomName: string;
   /** 房间变空或对局因超时结束并清场后回调，供管理器回收。 */
   onDispose?: (roomId: string) => void;
+  /** 入座且带有 playerId 时登记昵称。 */
+  onPlayerJoin?: (playerId: string, name: string) => void;
+  /** 对局分出胜负且双方都有 playerId 时记账。 */
+  onDecisiveMatch?: (
+    winnerId: string,
+    loserId: string,
+    names: { winner: string; loser: string },
+  ) => void;
 }
 
 /**
@@ -48,6 +59,12 @@ export class MatchRoom {
   readonly roomId: string;
   readonly roomName: string;
   private readonly onDispose?: (roomId: string) => void;
+  private readonly onPlayerJoin?: (playerId: string, name: string) => void;
+  private readonly onDecisiveMatch?: (
+    winnerId: string,
+    loserId: string,
+    names: { winner: string; loser: string },
+  ) => void;
   private readonly seats: Array<Seat | null> = [null, null];
   private match: MatchState | null = null;
   private seed = 0;
@@ -72,6 +89,8 @@ export class MatchRoom {
     this.roomId = options.roomId;
     this.roomName = options.roomName;
     this.onDispose = options.onDispose;
+    this.onPlayerJoin = options.onPlayerJoin;
+    this.onDecisiveMatch = options.onDecisiveMatch;
   }
 
   /** 未开局且仍有空座时可加入。 */
@@ -97,6 +116,19 @@ export class MatchRoom {
       playerCount: this.playerCount,
       maxPlayers: MAX_PLAYERS,
     };
+  }
+
+  /** 当前仍连着的席位，供运维站在线名单（不含断线保留席）。 */
+  listOnlinePlayers(): OnlinePresence[] {
+    return this.seats
+      .filter((seat): seat is Seat => seat !== null && seat.connected)
+      .map((seat) => ({
+        playerId: seat.playerId,
+        name: seat.name,
+        location: 'room',
+        roomId: this.roomId,
+        roomName: this.roomName,
+      }));
   }
 
   /**
@@ -127,7 +159,7 @@ export class MatchRoom {
   }
 
   /** 处理新连接的 join；成功返回 true，满员/已开局返回 false。 */
-  handleJoin(ws: WebSocket, name: string): boolean {
+  handleJoin(ws: WebSocket, name: string, playerId: string | null = null): boolean {
     if (this.disposed || this.started) return false;
     const seatIndex = this.seats.findIndex((seat) => seat === null);
     if (seatIndex < 0) return false;
@@ -136,6 +168,7 @@ export class MatchRoom {
     const seat: Seat = {
       ws,
       name,
+      playerId,
       faction,
       seat: seatIndex,
       reconnectToken: createReconnectToken(),
@@ -147,6 +180,7 @@ export class MatchRoom {
     this.seats[seatIndex] = seat;
     this.touchActive();
     this.bindSocket(seat);
+    if (playerId) this.onPlayerJoin?.(playerId, name);
 
     if (this.seats[0] && this.seats[1] && !this.started) {
       this.beginMatch();
@@ -154,6 +188,13 @@ export class MatchRoom {
       this.sendWelcome(seat, 0);
     }
     return true;
+  }
+
+  /** 重连前按令牌取席位身份，供 WS 在线表按设备 ID 登记。 */
+  identityForReconnect(token: string): { playerId: string | null; name: string } | null {
+    const seat = this.seats.find((entry) => entry?.reconnectToken === token) ?? null;
+    if (!seat) return null;
+    return { playerId: seat.playerId, name: seat.name };
   }
 
   /**
@@ -241,6 +282,7 @@ export class MatchRoom {
         winner: this.match.result.winner,
         reason: this.match.result.reason,
       });
+      this.recordDecisiveMatchIfNeeded();
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
       this.scheduled.clear();
@@ -487,6 +529,14 @@ export class MatchRoom {
   private send(ws: WebSocket | null, message: ServerMessage): void {
     if (!ws || ws.readyState !== ws.OPEN) return;
     ws.send(encodeMessage(message));
+  }
+
+  /** 仅在权威结算且一方获胜、双方都有设备 ID 时写战绩；ended 保证每局一次。 */
+  private recordDecisiveMatchIfNeeded(): void {
+    const winner = this.match?.result?.winner ?? null;
+    const sides = resolveDecisiveMatch(this.seats, winner);
+    if (!sides) return;
+    this.onDecisiveMatch?.(sides.winnerId, sides.loserId, sides.names);
   }
 
   /** 将私有状态映射为运维阶段枚举。 */

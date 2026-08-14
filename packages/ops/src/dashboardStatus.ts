@@ -1,5 +1,5 @@
 import { readDistInfo } from './distInfo.js';
-import { fetchGameStatus } from './gameStatus.js';
+import { fetchGamePlayers, fetchGameStatus } from './gameStatus.js';
 import type { ServiceController } from './serviceController.js';
 import type { OpsDashboardStatus, OpsDeployInfo, OpsServiceEntry, OpsServiceId } from './types.js';
 
@@ -39,7 +39,10 @@ export async function buildDashboardStatus(
 ): Promise<OpsDashboardStatus> {
   await options.processManager.refreshFromPort();
   const processInfo = options.processManager.getInfo();
-  const gameResult = await fetchGameStatus(options.gameBaseUrl);
+  const [gameResult, playersResult] = await Promise.all([
+    fetchGameStatus(options.gameBaseUrl),
+    fetchGamePlayers(options.gameBaseUrl),
+  ]);
   const services = await Promise.all(options.services.map((service) => toServiceEntry(service)));
 
   let message: string | null = null;
@@ -69,6 +72,11 @@ export async function buildDashboardStatus(
     process: processInfo,
     game: gameResult.status,
     gameReachable: gameResult.reachable,
+    players: gameResult.reachable
+      ? (Array.isArray(gameResult.status?.players)
+          ? gameResult.status.players
+          : playersResult.players)
+      : [],
     message,
     services,
     deploy: options.deploy ?? {

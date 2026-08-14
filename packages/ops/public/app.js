@@ -12,6 +12,8 @@ const els = {
   metricOnline: document.getElementById('metric-online'),
   metricLobby: document.getElementById('metric-lobby'),
   roomTbody: document.getElementById('room-tbody'),
+  playerTbody: document.getElementById('player-tbody'),
+  playerHint: document.getElementById('player-hint'),
   refreshHint: document.getElementById('refresh-hint'),
   opsUptime: document.getElementById('ops-uptime'),
   gameReachable: document.getElementById('game-reachable'),
@@ -125,6 +127,9 @@ function renderStatus(data) {
   latestServices = Array.isArray(data.services) ? data.services : [];
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
+  renderPlayers(
+    data.gameReachable ? (data.players ?? data.game?.players ?? []) : [],
+  );
   updateButtons(state, process);
   renderDeploy(data.deploy);
 }
@@ -258,6 +263,50 @@ function renderRooms(rooms) {
       </tr>`;
     })
     .join('');
+}
+
+/** 渲染当前在线玩家；场次/胜率来自服务端历史，位置来自大厅或房间。 */
+function renderPlayers(players) {
+  const rows = Array.isArray(players) ? players : [];
+  if (els.playerHint) {
+    els.playerHint.textContent = rows.length
+      ? `已建立 WS 连接 ${rows.length} 人`
+      : '当前没有已建立 WS 的玩家';
+  }
+  if (!els.playerTbody) return;
+  if (rows.length === 0) {
+    els.playerTbody.innerHTML = '<tr><td colspan="7" class="empty">当前没有已建立 WS 的玩家</td></tr>';
+    return;
+  }
+  els.playerTbody.innerHTML = rows
+    .map((player) => {
+      const matches = Number(player.matches) || 0;
+      const winRate =
+        matches > 0 && typeof player.winRate === 'number'
+          ? `${(player.winRate * 100).toFixed(1)}%`
+          : '—';
+      return `<tr>
+        <td>${escapeHtml(player.displayName)}</td>
+        <td>${escapeHtml(formatPlayerLocation(player))}</td>
+        <td class="muted">${escapeHtml(player.playerId || '—')}</td>
+        <td>${matches}</td>
+        <td>${Number(player.wins) || 0}</td>
+        <td>${Number(player.losses) || 0}</td>
+        <td>${winRate}</td>
+      </tr>`;
+    })
+    .join('');
+}
+
+/** 大厅或「房号 房间名」，方便运维对照房间表。 */
+function formatPlayerLocation(player) {
+  if (player.location === 'room') {
+    const roomId = String(player.roomId ?? '').trim();
+    const roomName = String(player.roomName ?? '').trim();
+    if (roomId && roomName) return `${roomId} ${roomName}`;
+    return roomId || roomName || '房间';
+  }
+  return '大厅';
 }
 
 function updateButtons(state, process = {}) {

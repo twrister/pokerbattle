@@ -97,7 +97,13 @@ let appLobbyPresence: LobbyPresenceHandle | null = null;
 
 /** 确保未入房玩家登记为大厅；幂等。 */
 function ensureAppLobbyPresence(): LobbyPresenceHandle {
-  if (!appLobbyPresence) appLobbyPresence = createLobbyPresence();
+  if (!appLobbyPresence) {
+    const profile = playerProfile.getProfile();
+    appLobbyPresence = createLobbyPresence({
+      name: profile.displayName,
+      playerId: profile.deviceAccountId,
+    });
+  }
   return appLobbyPresence;
 }
 
@@ -140,6 +146,11 @@ const mainMenu = createMainMenu({
   getProfile: () => playerProfile.getProfile(),
   onRename: (displayName) => {
     playerProfile.setDisplayName(displayName);
+    // 大厅连接已带旧名，重连一次让运维站立刻看到新名字。
+    if (appLobbyPresence) {
+      stopAppLobbyPresence();
+      ensureAppLobbyPresence();
+    }
   },
   listRooms: () => ensureAppLobbyPresence().listRooms(),
 });
@@ -755,6 +766,7 @@ function enterVersus(): () => void {
 
   const connecting = connectVersusSession({
     name: playerProfile.getProfile().displayName,
+    playerId: playerProfile.getProfile().deviceAccountId,
     mode: joinRequest.mode,
     roomId: joinRequest.roomId,
     roomName: joinRequest.roomName,

@@ -94,6 +94,24 @@ describe('connectVersusSession', () => {
     close();
   });
 
+  it('join 会带上 playerId', async () => {
+    const { done, close } = connectVersusSession({
+      mode: 'quick',
+      name: 'Tester',
+      playerId: 'device-abc-001',
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({
+      type: 'join',
+      mode: 'quick',
+      name: 'Tester',
+      playerId: 'device-abc-001',
+    });
+    close();
+    await expect(done).rejects.toThrow('已取消匹配');
+  });
+
   it('创建房间会带上 roomName', async () => {
     const { done, close } = connectVersusSession({
       mode: 'create',

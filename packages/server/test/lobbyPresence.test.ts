@@ -29,4 +29,11 @@ describe('LobbyPresence', () => {
     lobby.remove(b);
     expect(lobby.size).toBe(0);
   });
+
+  it('登记名字与设备 ID，供在线名单导出', () => {
+    const lobby = new LobbyPresence();
+    const a = new FakeWebSocket() as never;
+    lobby.add(a, { name: '甲', playerId: 'device-aaa' });
+    expect(lobby.listOnline()).toEqual([{ name: '甲', playerId: 'device-aaa' }]);
+  });
 });

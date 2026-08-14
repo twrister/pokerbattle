@@ -30,6 +30,21 @@ export interface OpsRoomSummary {
   connectedPlayers: number;
 }
 
+/** 游戏服 /ops/players 中的在线玩家行。 */
+export interface OpsPlayerRecord {
+  playerId: string;
+  displayName: string;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
+  firstSeenAt: number;
+  lastPlayedAt: number;
+  location: 'lobby' | 'room';
+  roomId: string | null;
+  roomName: string | null;
+}
+
 /** 游戏服 /ops/status 成功响应。 */
 export interface GameServerStatus {
   ok: true;
@@ -42,6 +57,8 @@ export interface GameServerStatus {
   lobbyPlayers: number;
   summary: OpsRoomSummary;
   rooms: OpsRoomSnapshot[];
+  /** 已建立 WS 的玩家；旧游戏服可能没有该字段。 */
+  players?: OpsPlayerRecord[];
 }
 
 /** 运维托管的游戏服进程状态。 */
@@ -108,6 +125,8 @@ export interface OpsDashboardStatus {
   process: ManagedProcessInfo;
   game: GameServerStatus | null;
   gameReachable: boolean;
+  /** 游戏服不可达或旧版本无 /ops/players 时为空数组。 */
+  players: OpsPlayerRecord[];
   message: string | null;
   /** 开发服 / 正式服入口状态。 */
   services: OpsServiceEntry[];

@@ -110,6 +110,33 @@
         </div>
       </section>
 
+      <section class="panel">
+        <div class="section-head">
+          <h2>在线玩家信息</h2>
+          <span id="player-hint" class="hint">已建立 WS 连接的玩家</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>名字</th>
+                <th>位置</th>
+                <th>设备 ID</th>
+                <th>场次</th>
+                <th>胜</th>
+                <th>负</th>
+                <th>胜率</th>
+              </tr>
+            </thead>
+            <tbody id="player-tbody">
+              <tr>
+                <td colspan="7" class="empty">当前没有在线玩家</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <footer class="footer">
         运维进程 uptime：<span id="ops-uptime">—</span>
         · 游戏服状态接口：<span id="game-reachable">—</span>

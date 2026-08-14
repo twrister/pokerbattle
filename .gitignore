@@ -11,3 +11,4 @@ dist-ops/
 .vite/
 .history/
 packages/ops/public/lan-ips.json
+packages/server/data/

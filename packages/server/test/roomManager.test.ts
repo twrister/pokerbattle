@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { decodeServerMessage, encodeMessage, type ServerMessage } from '@pb/net';
+import { PlayerStatsStore } from '../src/playerStatsStore.js';
 import { RoomManager } from '../src/roomManager.js';
 import { MatchRoom } from '../src/room.js';
 
@@ -83,6 +87,35 @@ describe('RoomManager 多房间', () => {
     expect(a.messages().some((m) => m.type === 'start')).toBe(true);
     expect(b.messages().some((m) => m.type === 'start')).toBe(true);
     manager.dispose();
+  });
+
+  it('join 带 playerId 时登记玩家，未带则跳过', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-room-stats-'));
+    const store = new PlayerStatsStore({ filePath: path.join(dir, 'player-stats.json') });
+    const manager = new RoomManager({ playerStats: store });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: '有档',
+      playerId: 'device-aaa',
+    });
+    manager.join(b as never, { type: 'join', mode: 'quick', roomId: '', name: '无档' });
+
+    expect(store.listPlayers()).toEqual([
+      expect.objectContaining({ playerId: 'device-aaa', displayName: '有档', matches: 0 }),
+    ]);
+    expect(manager.listOnlinePlayers()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ playerId: 'device-aaa', name: '有档', location: 'room' }),
+        expect.objectContaining({ playerId: null, name: '无档', location: 'room' }),
+      ]),
+    );
+    manager.dispose();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('加入不存在的房间会失败，不会隐式建房', () => {

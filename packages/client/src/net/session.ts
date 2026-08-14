@@ -23,6 +23,8 @@ export interface VersusSession {
 
 export interface ConnectVersusOptions {
   name?: string;
+  /** 设备档案 ID，供服务端按设备记账；缺省则服务端跳过该席。 */
+  playerId?: string;
   /** 加入模式；默认 quick。 */
   mode?: JoinMode;
   /** 已有房间号；mode=room 时必填。 */
@@ -60,6 +62,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
   const joinRoomId = options.roomId ?? '';
   const joinRoomName = options.roomName ?? '';
   const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
+  const playerId = options.playerId?.trim() ?? '';
 
   /** 开局后指向会话 close；匹配期由外层 close 直接断连。 */
   let sessionClose: (() => void) | null = null;
@@ -165,6 +168,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
               mode,
               roomId: joinRoomId,
               name: playerName,
+              ...(playerId ? { playerId } : {}),
               ...(mode === 'create' && joinRoomName ? { roomName: joinRoomName } : {}),
             }),
           );
@@ -336,7 +340,7 @@ export interface LobbyPresenceHandle {
  * 建立大厅 presence：连上后发 lobby；dispose 前保持连接。
  * 口径由应用层决定：未入联机房间即登记（可覆盖卡组/图鉴/单机等页面）。
  */
-export function createLobbyPresence(): LobbyPresenceHandle {
+export function createLobbyPresence(options: { name?: string; playerId?: string } = {}): LobbyPresenceHandle {
   let disposed = false;
   let ws: WebSocket | null = null;
   let openWaiters: Array<{ resolve: (socket: WebSocket) => void; reject: (error: Error) => void }> =
@@ -380,7 +384,15 @@ export function createLobbyPresence(): LobbyPresenceHandle {
 
   socket.addEventListener('open', () => {
     if (disposed || ws !== socket) return;
-    socket.send(encodeMessage({ type: 'lobby' }));
+    const playerName = options.name?.trim() ?? '';
+    const playerId = options.playerId?.trim() ?? '';
+    socket.send(
+      encodeMessage({
+        type: 'lobby',
+        ...(playerName ? { name: playerName } : {}),
+        ...(playerId ? { playerId } : {}),
+      }),
+    );
     resolveOpenWaiters(socket);
   });
   socket.addEventListener('error', () => {

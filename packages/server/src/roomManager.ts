@@ -11,12 +11,20 @@ import {
 import { randomInt } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { OpsRoomSnapshot, OpsRoomSummary } from './opsTypes.js';
+import { normalizePlayerId, type OnlinePresence, type PlayerStatsStore } from './playerStatsStore.js';
 import { MatchRoom } from './room.js';
+
+export interface RoomManagerOptions {
+  playerStats?: PlayerStatsStore;
+}
 
 export interface RoomActionResult {
   ok: boolean;
   room?: MatchRoom;
   error?: ErrorMessage;
+  /** 入座/重连成功后的设备 ID，供 WS 在线表登记。 */
+  playerId?: string | null;
+  name?: string;
 }
 
 /**
@@ -24,6 +32,11 @@ export interface RoomActionResult {
  */
 export class RoomManager {
   private readonly rooms = new Map<string, MatchRoom>();
+  private readonly playerStats?: PlayerStatsStore;
+
+  constructor(options: RoomManagerOptions = {}) {
+    this.playerStats = options.playerStats;
+  }
 
   /** 当前存活房间数，便于运维日志。 */
   get size(): number {
@@ -34,14 +47,19 @@ export class RoomManager {
   join(ws: WebSocket, message: JoinMessage): RoomActionResult {
     const mode = message.mode === 'quick' ? 'quick' : message.mode === 'create' ? 'create' : 'room';
     const name = (message.name || 'player').trim() || 'player';
+    const playerId = normalizePlayerId(message.playerId);
 
-    if (mode === 'quick') {
-      return this.joinQuick(ws, name);
+    const result =
+      mode === 'quick'
+        ? this.joinQuick(ws, name, playerId)
+        : mode === 'create'
+          ? this.createCustom(ws, name, playerId, message.roomName)
+          : this.joinCustom(ws, message.roomId ?? '', name, playerId);
+    if (result.ok) {
+      result.playerId = playerId;
+      result.name = name;
     }
-    if (mode === 'create') {
-      return this.createCustom(ws, name, message.roomName);
-    }
-    return this.joinCustom(ws, message.roomId ?? '', name);
+    return result;
   }
 
   /** 处理首条 rejoin：按房号找到房间并校验令牌。 */
@@ -54,11 +72,12 @@ export class RoomManager {
     if (!room) {
       return fail('rejoin_failed', '房间已结束，无法重连');
     }
+    const identity = room.identityForReconnect(message.token ?? '');
     const ok = room.handleRejoin(ws, message.token ?? '', message.lastTick ?? 0);
     if (!ok) {
       return fail('rejoin_failed', '重连失败，席位已释放或令牌无效');
     }
-    return { ok: true, room };
+    return { ok: true, room, playerId: identity?.playerId ?? null, name: identity?.name };
   }
 
   /** 列出当前可加入的等待中房间。 */
@@ -67,6 +86,15 @@ export class RoomManager {
     for (const room of this.rooms.values()) {
       if (!room.canJoin) continue;
       result.push(room.toListEntry());
+    }
+    return result;
+  }
+
+  /** 各房间当前在线席位，供运维站在线名单。 */
+  listOnlinePlayers(): OnlinePresence[] {
+    const result: OnlinePresence[] = [];
+    for (const room of this.rooms.values()) {
+      result.push(...room.listOnlinePlayers());
     }
     return result;
   }
@@ -110,10 +138,10 @@ export class RoomManager {
   }
 
   /** 快速匹配优先填入已有未开局房间，避免无谓新建。 */
-  private joinQuick(ws: WebSocket, name: string): RoomActionResult {
+  private joinQuick(ws: WebSocket, name: string, playerId: string | null): RoomActionResult {
     for (const room of this.rooms.values()) {
       if (!room.canJoin) continue;
-      if (room.handleJoin(ws, name)) {
+      if (room.handleJoin(ws, name, playerId)) {
         return { ok: true, room };
       }
     }
@@ -122,7 +150,7 @@ export class RoomManager {
       return fail('room_full', '房间号已满，请稍后再试');
     }
     const room = this.createRoom(roomId, defaultRoomName(name));
-    if (!room.handleJoin(ws, name)) {
+    if (!room.handleJoin(ws, name, playerId)) {
       room.dispose();
       return fail('room_full', '暂时无法加入匹配');
     }
@@ -130,14 +158,19 @@ export class RoomManager {
   }
 
   /** 创建自定义房间：服务端分配三位房号。 */
-  private createCustom(ws: WebSocket, name: string, rawRoomName?: string): RoomActionResult {
+  private createCustom(
+    ws: WebSocket,
+    name: string,
+    playerId: string | null,
+    rawRoomName?: string,
+  ): RoomActionResult {
     const roomId = this.nextNumericRoomId();
     if (!roomId) {
       return fail('room_full', '房间号已满，请稍后再试');
     }
     const roomName = normalizeRoomName(rawRoomName ?? '') ?? defaultRoomName(name);
     const room = this.createRoom(roomId, roomName);
-    if (!room.handleJoin(ws, name)) {
+    if (!room.handleJoin(ws, name, playerId)) {
       room.dispose();
       return fail('room_full', '暂时无法创建房间');
     }
@@ -145,7 +178,12 @@ export class RoomManager {
   }
 
   /** 加入已有自定义房间；不存在则报错，不再隐式建房。 */
-  private joinCustom(ws: WebSocket, rawRoomId: string, name: string): RoomActionResult {
+  private joinCustom(
+    ws: WebSocket,
+    rawRoomId: string,
+    name: string,
+    playerId: string | null,
+  ): RoomActionResult {
     const roomId = normalizeRoomId(rawRoomId);
     if (!roomId) {
       return fail('invalid_room', '房间号须为 3 位数字');
@@ -162,7 +200,7 @@ export class RoomManager {
       return fail('room_full', '房间已满');
     }
 
-    if (!room.handleJoin(ws, name)) {
+    if (!room.handleJoin(ws, name, playerId)) {
       return fail('room_full', '房间已满');
     }
     return { ok: true, room };
@@ -177,6 +215,9 @@ export class RoomManager {
         const current = this.rooms.get(id);
         if (current === room) this.rooms.delete(id);
       },
+      onPlayerJoin: (playerId, name) => this.playerStats?.upsertPlayer(playerId, name),
+      onDecisiveMatch: (winnerId, loserId, names) =>
+        this.playerStats?.recordDecisiveMatch(winnerId, loserId, names),
     });
     this.rooms.set(roomId, room);
     return room;

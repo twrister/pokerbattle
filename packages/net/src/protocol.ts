@@ -44,6 +44,8 @@ export interface JoinMessage {
   /** quick/create 时可为空；room 模式必须是合法房号。 */
   roomId: string;
   name: string;
+  /** 客户端设备档案 ID；缺省则服务端不记该席战绩。 */
+  playerId?: string;
   mode?: JoinMode;
   /** create 时可带；空则由服务端按玩家名生成默认房间名。 */
   roomName?: string;
@@ -65,6 +67,10 @@ export interface ListRoomsMessage {
 /** C→S：登记大厅 presence（停在主菜单、尚未入房）。 */
 export interface LobbyMessage {
   type: 'lobby';
+  /** 展示名，供运维站列出大厅在线玩家。 */
+  name?: string;
+  /** 设备档案 ID；缺省则运维站仍能看到连接，但不挂战绩。 */
+  playerId?: string;
 }
 
 /** C→S：上报某一逻辑 tick 的输入（通常为当前可见 tick + inputDelay）。 */

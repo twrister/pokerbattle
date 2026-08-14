@@ -2,10 +2,12 @@ import { decodeClientMessage, encodeMessage } from '@pb/net';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { WebSocketServer } from 'ws';
-import type { OpsServerStatus } from './opsTypes.js';
+import { WebSocketServer, type WebSocket } from 'ws';
+import type { OpsPlayersStatus, OpsServerStatus } from './opsTypes.js';
 import { LobbyPresence } from './lobbyPresence.js';
+import { mergeOnlinePlayers, normalizePlayerId, PlayerStatsStore } from './playerStatsStore.js';
 import { RoomManager, sendRoomError } from './roomManager.js';
+import { WsPlayerRegistry } from './wsPlayerRegistry.js';
 import { serveStatic } from './staticServer.js';
 
 const PORT = Number(process.env.PORT) || 9090;
@@ -17,10 +19,17 @@ const IS_PROD = process.argv.includes('--prod') || process.env.NODE_ENV === 'pro
 /** systemd WorkingDirectory 为 app/，生产静态资源在 app/dist。 */
 const DIST_DIR = process.env.DIST_DIR || path.resolve(process.cwd(), 'dist');
 
+/** 联机战绩落盘；发布只覆盖 dist，data/ 会保留。 */
+const PLAYER_STATS_PATH =
+  process.env.PLAYER_STATS_PATH || path.resolve(process.cwd(), 'data', 'player-stats.json');
+const playerStats = new PlayerStatsStore({ filePath: PLAYER_STATS_PATH });
+
 /** 本地联机：多房间并行，支持快速匹配与自定义房号，以及短时断线重连。 */
-const rooms = new RoomManager();
+const rooms = new RoomManager({ playerStats });
 /** 未入联机房的大厅 presence，与房间席位分开计数。 */
 const lobby = new LobbyPresence();
+/** 已建立 WS 且上报了设备 ID 的玩家，运维站按此列表。 */
+const connectedPlayers = new WsPlayerRegistry();
 
 /**
  * 用 HTTP 承载 WS：/health、/ops/status；生产环境同时提供前端静态资源。
@@ -39,6 +48,10 @@ const httpServer = http.createServer((req, res) => {
     writeJson(res, 200, buildOpsStatus());
     return;
   }
+  if (isRead && pathname === '/ops/players') {
+    writeJson(res, 200, buildOpsPlayers());
+    return;
+  }
   if (IS_PROD && isRead) {
     serveStatic(res, DIST_DIR, pathname);
     return;
@@ -53,6 +66,7 @@ wss.on('connection', (ws) => {
   let handshaked = false;
   ws.on('close', () => {
     lobby.remove(ws);
+    connectedPlayers.unbind(ws);
   });
   ws.on('message', (data) => {
     const text = typeof data === 'string' ? data : data.toString();
@@ -69,7 +83,10 @@ wss.on('connection', (ws) => {
 
     // 大厅 presence：可与 listRooms 共用连接，入房前计入 lobbyPlayers
     if (message.type === 'lobby') {
-      if (!handshaked) lobby.add(ws);
+      if (!handshaked) {
+        lobby.add(ws, { name: message.name, playerId: message.playerId });
+        bindConnectedPlayer(ws, message.playerId, message.name);
+      }
       return;
     }
 
@@ -82,7 +99,9 @@ wss.on('connection', (ws) => {
       if (!result.ok && result.error) {
         sendRoomError(ws, result.error);
         ws.close(4000, result.error.code);
+        return;
       }
+      bindConnectedPlayer(ws, result.playerId, result.name ?? message.name);
       return;
     }
 
@@ -93,7 +112,9 @@ wss.on('connection', (ws) => {
       if (!result.ok && result.error) {
         sendRoomError(ws, result.error);
         ws.close(4001, result.error.code);
+        return;
       }
+      bindConnectedPlayer(ws, result.playerId, result.name);
     }
   });
 });
@@ -101,6 +122,7 @@ wss.on('connection', (ws) => {
 httpServer.listen(PORT, HOST, () => {
   console.log(`[pb-server] ws://${HOST === '0.0.0.0' ? '0.0.0.0' : HOST}:${PORT}  (multi-room + reconnect)`);
   console.log(`[pb-server] ops status: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/ops/status`);
+  console.log(`[pb-server] player stats: ${PLAYER_STATS_PATH}`);
   const lanIps = listLanIPv4();
   if (lanIps.length === 0) {
     console.log('[pb-server] 未检测到局域网 IPv4；本机请用 http://localhost:9080/');
@@ -127,7 +149,39 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-/** 组装运维状态载荷，连接数取自当前 WS 客户端集合。 */
+/** 把已识别设备 ID 的 WS 记入在线表，并刷新档案昵称。 */
+function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined, name?: string): void {
+  const id = normalizePlayerId(playerId);
+  if (!id) return;
+  const displayName = name ?? 'player';
+  connectedPlayers.bind(ws, id, displayName);
+  playerStats.upsertPlayer(id, displayName);
+}
+
+/** 只返回已建立 WS 且有设备 ID 的玩家；位置用房间席位补充。 */
+function buildOpsPlayers(): OpsPlayersStatus {
+  const roomById = new Map(
+    rooms
+      .listOnlinePlayers()
+      .filter((entry) => entry.playerId)
+      .map((entry) => [entry.playerId as string, entry]),
+  );
+  const online = connectedPlayers.list().map((entry) => {
+    const seated = roomById.get(entry.playerId);
+    return (
+      seated ?? {
+        playerId: entry.playerId,
+        name: entry.name,
+        location: 'lobby' as const,
+        roomId: null,
+        roomName: null,
+      }
+    );
+  });
+  return { ok: true, players: mergeOnlinePlayers(online, playerStats) };
+}
+
+/** 组装运维状态载荷，连接数与在线玩家名单同源，避免列表接口漏拉。 */
 function buildOpsStatus(): OpsServerStatus {
   return {
     ok: true,
@@ -139,6 +193,7 @@ function buildOpsStatus(): OpsServerStatus {
     lobbyPlayers: lobby.size,
     summary: rooms.summarizeOps(),
     rooms: rooms.listOpsSnapshots(),
+    players: buildOpsPlayers().players,
   };
 }
 
