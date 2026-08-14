@@ -6,11 +6,10 @@ const els = {
   processStarted: document.getElementById('process-started'),
   processUptime: document.getElementById('process-uptime'),
   message: document.getElementById('message'),
-  metricConnections: document.getElementById('metric-connections'),
+  metricOnlinePlayers: document.getElementById('metric-online-players'),
   metricRooms: document.getElementById('metric-rooms'),
   metricPlaying: document.getElementById('metric-playing'),
-  metricOnline: document.getElementById('metric-online'),
-  metricLobby: document.getElementById('metric-lobby'),
+  metricMatchPlayers: document.getElementById('metric-match-players'),
   roomTbody: document.getElementById('room-tbody'),
   playerTbody: document.getElementById('player-tbody'),
   playerHint: document.getElementById('player-hint'),
@@ -108,11 +107,15 @@ function renderStatus(data) {
   els.processUptime.textContent = formatDuration(process.uptimeMs);
 
   const summary = data.game?.summary;
-  els.metricConnections.textContent = data.gameReachable ? String(data.game?.connectionCount ?? 0) : '—';
+  const playerRows = data.gameReachable ? (data.players ?? data.game?.players ?? []) : [];
+  const onlineCount = playerRows.filter((player) => player.location && player.location !== 'offline').length;
+  const matchPlayers = (data.game?.rooms ?? [])
+    .filter((room) => room.phase === 'playing')
+    .reduce((n, room) => n + (room.connectedCount ?? 0), 0);
+  els.metricOnlinePlayers.textContent = data.gameReachable ? String(onlineCount) : '—';
   els.metricRooms.textContent = data.gameReachable ? String(summary?.roomCount ?? 0) : '—';
   els.metricPlaying.textContent = data.gameReachable ? String(summary?.playingRooms ?? 0) : '—';
-  els.metricOnline.textContent = data.gameReachable ? String(summary?.connectedPlayers ?? 0) : '—';
-  els.metricLobby.textContent = data.gameReachable ? String(data.game?.lobbyPlayers ?? 0) : '—';
+  els.metricMatchPlayers.textContent = data.gameReachable ? String(matchPlayers) : '—';
 
   els.opsUptime.textContent = formatDuration(data.ops?.uptimeMs);
   els.gameReachable.textContent = data.gameReachable ? '可达' : '不可达';
@@ -127,9 +130,7 @@ function renderStatus(data) {
   latestServices = Array.isArray(data.services) ? data.services : [];
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
-  renderPlayers(
-    data.gameReachable ? (data.players ?? data.game?.players ?? []) : [],
-  );
+  renderPlayers(playerRows);
   updateButtons(state, process);
   renderDeploy(data.deploy);
 }
@@ -265,17 +266,18 @@ function renderRooms(rooms) {
     .join('');
 }
 
-/** 渲染当前在线玩家；场次/胜率来自服务端历史，位置来自大厅或房间。 */
+/** 渲染全部玩家；场次/胜率来自服务端历史，位置来自大厅、房间或离线。 */
 function renderPlayers(players) {
   const rows = Array.isArray(players) ? players : [];
+  const onlineCount = rows.filter((player) => player.location && player.location !== 'offline').length;
   if (els.playerHint) {
     els.playerHint.textContent = rows.length
-      ? `已建立 WS 连接 ${rows.length} 人`
-      : '当前没有已建立 WS 的玩家';
+      ? `共 ${rows.length} 人 · 在线 ${onlineCount} 人`
+      : '暂无玩家数据';
   }
   if (!els.playerTbody) return;
   if (rows.length === 0) {
-    els.playerTbody.innerHTML = '<tr><td colspan="7" class="empty">当前没有已建立 WS 的玩家</td></tr>';
+    els.playerTbody.innerHTML = '<tr><td colspan="8" class="empty">暂无玩家数据</td></tr>';
     return;
   }
   els.playerTbody.innerHTML = rows
@@ -293,13 +295,15 @@ function renderPlayers(players) {
         <td>${Number(player.wins) || 0}</td>
         <td>${Number(player.losses) || 0}</td>
         <td>${winRate}</td>
+        <td>${escapeHtml(formatLastOnline(player))}</td>
       </tr>`;
     })
     .join('');
 }
 
-/** 大厅或「房号 房间名」，方便运维对照房间表。 */
+/** 大厅、「房号 房间名」或离线，方便运维对照房间表。 */
 function formatPlayerLocation(player) {
+  if (player.location === 'offline') return '离线';
   if (player.location === 'room') {
     const roomId = String(player.roomId ?? '').trim();
     const roomName = String(player.roomName ?? '').trim();
@@ -307,6 +311,12 @@ function formatPlayerLocation(player) {
     return roomId || roomName || '房间';
   }
   return '大厅';
+}
+
+/** 当前在线直接标「在线」，离线用相对时间。 */
+function formatLastOnline(player) {
+  if (player.location && player.location !== 'offline') return '在线';
+  return formatRelative(player.lastOnlineAt);
 }
 
 function updateButtons(state, process = {}) {

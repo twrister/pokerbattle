@@ -60,7 +60,7 @@ export async function fetchGameStatus(
 }
 
 /**
- * 拉取游戏服在线玩家；旧服无此接口或失败时返回空列表，不影响房间监控。
+ * 拉取游戏服玩家名单；旧服无此接口或失败时返回空列表，不影响房间监控。
  */
 export async function fetchGamePlayers(
   baseUrl: string,
@@ -116,7 +116,13 @@ function sanitizePlayers(rows: unknown[]): OpsPlayerRecord[] {
       winRate: typeof item.winRate === 'number' ? item.winRate : null,
       firstSeenAt: typeof item.firstSeenAt === 'number' ? item.firstSeenAt : 0,
       lastPlayedAt: typeof item.lastPlayedAt === 'number' ? item.lastPlayedAt : 0,
-      location: item.location === 'room' ? 'room' : 'lobby',
+      lastOnlineAt:
+        typeof item.lastOnlineAt === 'number'
+          ? item.lastOnlineAt
+          : typeof item.lastPlayedAt === 'number'
+            ? item.lastPlayedAt
+            : 0,
+      location: item.location === 'room' ? 'room' : item.location === 'offline' ? 'offline' : 'lobby',
       roomId: typeof item.roomId === 'string' ? item.roomId : null,
       roomName: typeof item.roomName === 'string' ? item.roomName : null,
     });

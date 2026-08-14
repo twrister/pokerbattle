@@ -96,7 +96,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   let roomListRequestId = 0;
   /** 默认名点开局时记下目标模式，改名成功并收起后再打开。 */
   let pendingPlayAction: (() => void) | null = null;
-  /** 主动改名只弹一次；刷新后仍认本地旗标。 */
+  /** 主动改名本会话只弹一次；关页后再进仍会引导。 */
   let firstPlayRenamePrompted = hasPromptedFirstPlayRename();
   /** 递增以作废进行中的收起回调，避免切屏后误开模式弹窗。 */
   let renameAnimGeneration = 0;
@@ -285,7 +285,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     openRenameDialog(false);
   };
 
-  /** 未自定义名且尚未主动提示过时先改名；之后不再拦截开局。 */
+  /** 未自定义名且本会话尚未主动提示过时先改名；之后不再拦截开局。 */
   const requestPlayDialog = (openMode: () => void): void => {
     if (usesDefaultName() && !firstPlayRenamePrompted) {
       firstPlayRenamePrompted = true;

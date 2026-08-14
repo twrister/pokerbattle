@@ -5,7 +5,7 @@ import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { OpsPlayersStatus, OpsServerStatus } from './opsTypes.js';
 import { LobbyPresence } from './lobbyPresence.js';
-import { mergeOnlinePlayers, normalizePlayerId, PlayerStatsStore } from './playerStatsStore.js';
+import { listAllOpsPlayers, normalizePlayerId, PlayerStatsStore } from './playerStatsStore.js';
 import { RoomManager, sendRoomError } from './roomManager.js';
 import { WsPlayerRegistry } from './wsPlayerRegistry.js';
 import { serveStatic } from './staticServer.js';
@@ -66,7 +66,8 @@ wss.on('connection', (ws) => {
   let handshaked = false;
   ws.on('close', () => {
     lobby.remove(ws);
-    connectedPlayers.unbind(ws);
+    const offlineId = connectedPlayers.unbind(ws);
+    if (offlineId) playerStats.touchLastOnline(offlineId);
   });
   ws.on('message', (data) => {
     const text = typeof data === 'string' ? data : data.toString();
@@ -158,7 +159,7 @@ function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined,
   playerStats.upsertPlayer(id, displayName);
 }
 
-/** 只返回已建立 WS 且有设备 ID 的玩家；位置用房间席位补充。 */
+/** 返回全部历史玩家；在线位置用房间席位补充，离线标 offline。 */
 function buildOpsPlayers(): OpsPlayersStatus {
   const roomById = new Map(
     rooms
@@ -178,7 +179,7 @@ function buildOpsPlayers(): OpsPlayersStatus {
       }
     );
   });
-  return { ok: true, players: mergeOnlinePlayers(online, playerStats) };
+  return { ok: true, players: listAllOpsPlayers(online, playerStats) };
 }
 
 /** 组装运维状态载荷，连接数与在线玩家名单同源，避免列表接口漏拉。 */

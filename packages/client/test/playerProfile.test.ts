@@ -20,6 +20,7 @@ import {
 describe('玩家档案服务', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it('首次启动静默建档，再次加载保持同一设备 ID', () => {
@@ -182,10 +183,11 @@ describe('玩家档案服务', () => {
     ).toBe(false);
   });
 
-  it('首次开局改名提示旗标可读写', () => {
+  it('首次开局改名提示旗标只写会话，不落本地持久化', () => {
     expect(hasPromptedFirstPlayRename()).toBe(false);
     markFirstPlayRenamePrompted();
     expect(hasPromptedFirstPlayRename()).toBe(true);
-    expect(localStorage.getItem(FIRST_PLAY_RENAME_PROMPTED_KEY)).toBe('1');
+    expect(sessionStorage.getItem(FIRST_PLAY_RENAME_PROMPTED_KEY)).toBe('1');
+    expect(localStorage.getItem(FIRST_PLAY_RENAME_PROMPTED_KEY)).toBeNull();
   });
 });

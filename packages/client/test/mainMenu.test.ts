@@ -118,6 +118,7 @@ function mountMainMenuDom(): void {
 describe('大厅玩家档案展示', () => {
   beforeEach(() => {
     envState.isDev = true;
+    sessionStorage.removeItem(FIRST_PLAY_RENAME_PROMPTED_KEY);
     localStorage.removeItem(FIRST_PLAY_RENAME_PROMPTED_KEY);
     mountMainMenuDom();
   });
@@ -340,8 +341,8 @@ describe('大厅玩家档案展示', () => {
     expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(false);
   });
 
-  it('已主动提示过则默认名点单机直接打开模式弹窗', () => {
-    localStorage.setItem(FIRST_PLAY_RENAME_PROMPTED_KEY, '1');
+  it('本会话已主动提示过则默认名点单机直接打开模式弹窗', () => {
+    sessionStorage.setItem(FIRST_PLAY_RENAME_PROMPTED_KEY, '1');
     const profile = buildProfile({
       displayName: defaultDisplayName('device-ui'),
     });
@@ -350,6 +351,19 @@ describe('大厅玩家档案展示', () => {
     document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
     expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('仅有旧本地旗标时新会话仍会提示改名', () => {
+    localStorage.setItem(FIRST_PLAY_RENAME_PROMPTED_KEY, '1');
+    const profile = buildProfile({
+      displayName: defaultDisplayName('device-ui'),
+    });
+    createMainMenu(menuOptions({ getProfile: () => profile }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
+    expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#mode-solo-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#rename-title')?.textContent).toBe('请先设置玩家名称');
   });
 
   it('默认名点单机后改名成功，收起后再打开单机模式', () => {

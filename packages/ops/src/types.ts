@@ -30,7 +30,7 @@ export interface OpsRoomSummary {
   connectedPlayers: number;
 }
 
-/** 游戏服 /ops/players 中的在线玩家行。 */
+/** 游戏服 /ops/players 中的玩家行（含离线档案）。 */
 export interface OpsPlayerRecord {
   playerId: string;
   displayName: string;
@@ -40,7 +40,8 @@ export interface OpsPlayerRecord {
   winRate: number | null;
   firstSeenAt: number;
   lastPlayedAt: number;
-  location: 'lobby' | 'room';
+  lastOnlineAt: number;
+  location: 'lobby' | 'room' | 'offline';
   roomId: string | null;
   roomName: string | null;
 }
@@ -125,7 +126,7 @@ export interface OpsDashboardStatus {
   process: ManagedProcessInfo;
   game: GameServerStatus | null;
   gameReachable: boolean;
-  /** 游戏服不可达或旧版本无 /ops/players 时为空数组。 */
+  /** 全部历史玩家（含离线）；游戏服不可达或旧版本无 /ops/players 时为空数组。 */
   players: OpsPlayerRecord[];
   message: string | null;
   /** 开发服 / 正式服入口状态。 */

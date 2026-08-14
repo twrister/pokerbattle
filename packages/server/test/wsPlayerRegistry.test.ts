@@ -13,11 +13,19 @@ describe('WsPlayerRegistry', () => {
     registry.bind(room, 'device-aaa', '新名');
     expect(registry.list()).toEqual([{ playerId: 'device-aaa', name: '新名' }]);
 
-    registry.unbind(lobby);
+    expect(registry.unbind(lobby)).toBeNull();
     expect(registry.list()).toEqual([{ playerId: 'device-aaa', name: '新名' }]);
 
-    registry.unbind(room);
+    expect(registry.unbind(room)).toBe('device-aaa');
     expect(registry.list()).toEqual([]);
+  });
+
+  it('最后一条连接断开时 unbind 返回设备 ID', () => {
+    const registry = new WsPlayerRegistry();
+    const ws = new FakeWebSocket() as never;
+    registry.bind(ws, 'device-bbb', '乙');
+    expect(registry.unbind(ws)).toBe('device-bbb');
+    expect(registry.unbind(ws)).toBeNull();
   });
 
   it('忽略空设备 ID', () => {

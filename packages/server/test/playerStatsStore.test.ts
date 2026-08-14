@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Faction } from '@pb/sim';
 import {
   PlayerStatsStore,
-  mergeOnlinePlayers,
+  listAllOpsPlayers,
   normalizePlayerId,
   resolveDecisiveMatch,
 } from '../src/playerStatsStore.js';
@@ -112,10 +112,28 @@ describe('PlayerStatsStore', () => {
     expect(store.listPlayers()).toEqual([]);
   });
 
-  it('在线名单按设备 ID 去重，并忽略未带 ID 的连接', () => {
-    const store = tempStore();
-    store.recordDecisiveMatch('online-1', 'offline-1', { winner: '在线', loser: '离线' });
-    const rows = mergeOnlinePlayers(
+  it('重连刷新 lastOnlineAt，断线再写离开时刻', () => {
+    let now = 1_000;
+    const store = tempStore(() => now);
+    store.upsertPlayer('player-a', '甲');
+    expect(store.lookup('player-a')?.lastOnlineAt).toBe(1_000);
+    now = 2_000;
+    store.upsertPlayer('player-a', '甲');
+    expect(store.lookup('player-a')?.lastOnlineAt).toBe(2_000);
+    now = 3_000;
+    store.touchLastOnline('player-a');
+    expect(store.lookup('player-a')?.lastOnlineAt).toBe(3_000);
+  });
+
+  it('全量名单含离线，在线优先并按上次在线降序', () => {
+    let now = 100;
+    const store = tempStore(() => now);
+    store.upsertPlayer('offline-old', '旧离线');
+    now = 200;
+    store.upsertPlayer('offline-new', '新离线');
+    now = 50;
+    store.upsertPlayer('online-1', '在线');
+    const rows = listAllOpsPlayers(
       [
         { playerId: 'online-1', name: '在线', location: 'lobby', roomId: null, roomName: null },
         { playerId: 'online-1', name: '在线', location: 'room', roomId: '042', roomName: '对局房' },
@@ -123,17 +141,43 @@ describe('PlayerStatsStore', () => {
       ],
       store,
     );
-    expect(rows).toEqual([
-      expect.objectContaining({
-        playerId: 'online-1',
-        displayName: '在线',
-        matches: 1,
-        wins: 1,
-        location: 'room',
-        roomId: '042',
-        roomName: '对局房',
+    expect(rows.map((row) => row.playerId)).toEqual(['online-1', 'offline-new', 'offline-old']);
+    expect(rows[0]).toMatchObject({
+      displayName: '在线',
+      location: 'room',
+      roomId: '042',
+      roomName: '对局房',
+    });
+    expect(rows[1]).toMatchObject({ location: 'offline', lastOnlineAt: 200 });
+    expect(rows[2]).toMatchObject({ location: 'offline', lastOnlineAt: 100 });
+  });
+
+  it('旧档缺 lastOnlineAt 时回退 lastPlayedAt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        players: [
+          {
+            playerId: 'legacy-1',
+            displayName: '旧档',
+            matches: 0,
+            wins: 0,
+            losses: 0,
+            firstSeenAt: 10,
+            lastPlayedAt: 20,
+          },
+        ],
       }),
-    ]);
+    );
+    const store = new PlayerStatsStore({ filePath, now: () => 99 });
+    expect(store.lookup('legacy-1')).toMatchObject({
+      lastPlayedAt: 20,
+      lastOnlineAt: 20,
+    });
   });
 
   it('落盘后新实例能恢复战绩', () => {

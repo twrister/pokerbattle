@@ -18,6 +18,8 @@ export interface PlayerStatsRecord {
   losses: number;
   firstSeenAt: number;
   lastPlayedAt: number;
+  /** 最近一次入厅/入房或最后一条 WS 断开的时间。 */
+  lastOnlineAt: number;
 }
 
 /** 运维接口行：在落盘字段上附加胜率。 */
@@ -35,9 +37,9 @@ export interface OnlinePresence {
   roomName: string | null;
 }
 
-/** 运维在线玩家行：当前连接位置 + 历史战绩。 */
+/** 运维玩家行：当前连接位置或离线 + 历史战绩。 */
 export interface OnlinePlayerView extends OpsPlayerRecord {
-  location: 'lobby' | 'room';
+  location: 'lobby' | 'room' | 'offline';
   roomId: string | null;
   roomName: string | null;
 }
@@ -105,7 +107,7 @@ export class PlayerStatsStore {
     this.load();
   }
 
-  /** 入座时登记/刷新昵称；无场次的玩家也会出现在运维表。 */
+  /** 入厅/入房时登记昵称并刷新上次在线；无场次的玩家也会出现在运维表。 */
   upsertPlayer(playerId: string, name: string): void {
     const id = normalizePlayerId(playerId);
     if (!id) return;
@@ -121,12 +123,21 @@ export class PlayerStatsStore {
         losses: 0,
         firstSeenAt: now,
         lastPlayedAt: now,
+        lastOnlineAt: now,
       });
-    } else if (existing.displayName !== displayName) {
-      this.players.set(id, { ...existing, displayName });
     } else {
-      return;
+      this.players.set(id, { ...existing, displayName, lastOnlineAt: now });
     }
+    this.persist();
+  }
+
+  /** 设备最后一条 WS 断开时写入离开时刻，供运维表按上次在线排序。 */
+  touchLastOnline(playerId: string): void {
+    const id = normalizePlayerId(playerId);
+    if (!id) return;
+    const existing = this.players.get(id);
+    if (!existing) return;
+    this.players.set(id, { ...existing, lastOnlineAt: this.now() });
     this.persist();
   }
 
@@ -185,6 +196,7 @@ export class PlayerStatsStore {
       losses: 0,
       firstSeenAt: now,
       lastPlayedAt: now,
+      lastOnlineAt: now,
     });
   }
 
@@ -258,6 +270,8 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
   if (wins + losses > matches) return null;
   const firstSeenAt = readPositiveInt(row.firstSeenAt);
   const lastPlayedAt = Math.max(readPositiveInt(row.lastPlayedAt), firstSeenAt);
+  // 旧档没有 lastOnlineAt 时回退到对局/首次见到时间，避免排序落到 0。
+  const lastOnlineAt = Math.max(readPositiveInt(row.lastOnlineAt), lastPlayedAt);
   return {
     playerId,
     displayName: normalizeDisplayName(row.displayName),
@@ -266,6 +280,7 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
     losses,
     firstSeenAt,
     lastPlayedAt,
+    lastOnlineAt,
   };
 }
 
@@ -275,9 +290,10 @@ function readNonNegativeInt(value: unknown): number {
 }
 
 /**
- * 只输出已带设备 ID 的在线玩家：同一 ID 只留一行，房间席位优先于大厅。
+ * 输出全部历史档案，叠加上线位置；同一 ID 只留一行，房间席位优先于大厅。
+ * 排序：当前在线优先，再按上次在线时间降序。
  */
-export function mergeOnlinePlayers(
+export function listAllOpsPlayers(
   presences: readonly OnlinePresence[],
   store: PlayerStatsStore,
 ): OnlinePlayerView[] {
@@ -291,28 +307,46 @@ export function mergeOnlinePlayers(
     }
   }
 
-  return [...byKey.values()]
-    .map((presence) => {
-      const stats = presence.playerId ? store.lookup(presence.playerId) : null;
-      const matches = stats?.matches ?? 0;
-      return {
-        playerId: presence.playerId ?? '',
-        displayName: normalizeDisplayName(presence.name),
-        matches,
-        wins: stats?.wins ?? 0,
-        losses: stats?.losses ?? 0,
-        winRate: matches > 0 && stats ? stats.wins / matches : null,
-        firstSeenAt: stats?.firstSeenAt ?? 0,
-        lastPlayedAt: stats?.lastPlayedAt ?? 0,
-        location: presence.location,
-        roomId: presence.roomId,
-        roomName: presence.roomName,
-      };
-    })
-    .sort((a, b) => {
-      if (a.location !== b.location) return a.location === 'room' ? -1 : 1;
-      return a.displayName.localeCompare(b.displayName, 'zh');
+  const seen = new Set<string>();
+  const rows: OnlinePlayerView[] = [];
+  for (const record of store.listPlayers()) {
+    seen.add(record.playerId);
+    const presence = byKey.get(record.playerId);
+    rows.push({
+      ...record,
+      displayName: presence ? normalizeDisplayName(presence.name) : record.displayName,
+      location: presence?.location ?? 'offline',
+      roomId: presence?.roomId ?? null,
+      roomName: presence?.roomName ?? null,
     });
+  }
+
+  // 刚连上、档案尚未落盘的在线连接也要出现，避免运维表漏人。
+  for (const [playerId, presence] of byKey) {
+    if (seen.has(playerId)) continue;
+    rows.push({
+      playerId,
+      displayName: normalizeDisplayName(presence.name),
+      matches: 0,
+      wins: 0,
+      losses: 0,
+      winRate: null,
+      firstSeenAt: 0,
+      lastPlayedAt: 0,
+      lastOnlineAt: 0,
+      location: presence.location,
+      roomId: presence.roomId,
+      roomName: presence.roomName,
+    });
+  }
+
+  return rows.sort((a, b) => {
+    const aOnline = a.location !== 'offline';
+    const bOnline = b.location !== 'offline';
+    if (aOnline !== bOnline) return aOnline ? -1 : 1;
+    if (b.lastOnlineAt !== a.lastOnlineAt) return b.lastOnlineAt - a.lastOnlineAt;
+    return a.displayName.localeCompare(b.displayName, 'zh');
+  });
 }
 
 function readPositiveInt(value: unknown): number {

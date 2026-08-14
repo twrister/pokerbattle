@@ -1,8 +1,8 @@
-/** 首次开局改名只主动提示一次，与档案 schema 解耦。 */
+/** 本次登录改名只主动提示一次，关页后再进仍会引导。 */
 export const FIRST_PLAY_RENAME_PROMPTED_KEY = 'pb.rename.firstPlayPrompted.v1';
 
-/** 读本地旗标；读失败视为未提示，避免误伤首次引导。 */
-export function hasPromptedFirstPlayRename(storage: Storage = localStorage): boolean {
+/** 读会话旗标；读失败视为未提示，避免误伤当次引导。 */
+export function hasPromptedFirstPlayRename(storage: Storage = sessionStorage): boolean {
   try {
     return storage.getItem(FIRST_PLAY_RENAME_PROMPTED_KEY) === '1';
   } catch {
@@ -10,8 +10,8 @@ export function hasPromptedFirstPlayRename(storage: Storage = localStorage): boo
   }
 }
 
-/** 记下已主动提示；写失败由调用方内存旗标兜底，本会话不再弹。 */
-export function markFirstPlayRenamePrompted(storage: Storage = localStorage): void {
+/** 记下本会话已主动提示；写失败由调用方内存旗标兜底。 */
+export function markFirstPlayRenamePrompted(storage: Storage = sessionStorage): void {
   try {
     storage.setItem(FIRST_PLAY_RENAME_PROMPTED_KEY, '1');
   } catch {
