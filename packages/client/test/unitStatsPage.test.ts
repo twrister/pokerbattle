@@ -32,7 +32,7 @@ describe('单位参数页', () => {
     page.show();
 
     const rows = document.querySelectorAll('.unit-stats-table tbody tr');
-    expect(rows.length).toBe(18);
+    expect(rows.length).toBe(19);
     expect(document.querySelector('.unit-stats-table')?.textContent).toContain('DPS');
     const headFields = Array.from(
       document.querySelectorAll<HTMLTableCellElement>('.unit-stats-table thead th'),

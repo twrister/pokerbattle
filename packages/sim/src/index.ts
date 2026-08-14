@@ -63,6 +63,7 @@ export {
   getUnitConfig,
   getUnitLevels,
   canBuildingAttack,
+  isArcherTowerId,
   isBuildingConfig,
   recomputeMaxUnitRadius,
   resetUnitConfigsToDefault,

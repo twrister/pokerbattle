@@ -19,7 +19,8 @@ export type UnitTypeId =
   | 'summoned_bomber'
   | 'building_base'
   | 'building_tower'
-  | 'building_tower_advanced';
+  | 'building_tower_advanced'
+  | 'building_tower_triple';
 
 export type MovementLayer = 'ground' | 'air';
 
@@ -416,6 +417,13 @@ export function isBuildingConfig(config: UnitConfig): boolean {
 /** 有攻击参数的建筑才参与索敌/出手；无伤害或无射程的建筑仍跳过 */
 export function canBuildingAttack(config: UnitConfig): boolean {
   return isBuildingConfig(config) && config.damage > 0 && config.range > 0;
+}
+
+/** 三座箭塔共用塔顶弹道高度与箭矢视觉；基地单独判断 */
+export function isArcherTowerId(id: UnitTypeId): boolean {
+  return id === 'building_tower'
+    || id === 'building_tower_advanced'
+    || id === 'building_tower_triple';
 }
 
 /** 校验并返回按数字升序排列的等级，等级必须为正整数。 */

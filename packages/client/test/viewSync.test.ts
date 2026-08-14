@@ -206,6 +206,8 @@ describe('渲染同步', () => {
     expect(SPRITE_DEFS.building_tower?.frontUrlRed).toBe('buildings/tower_red.png');
     expect(SPRITE_DEFS.building_tower_advanced?.frontUrl).toBe('buildings/tower.png');
     expect(SPRITE_DEFS.building_tower_advanced?.frontUrlRed).toBe('buildings/tower_red.png');
+    expect(SPRITE_DEFS.building_tower_triple?.frontUrl).toBe('buildings/tower.png');
+    expect(SPRITE_DEFS.building_tower_triple?.frontUrlRed).toBe('buildings/tower_red.png');
   });
 
   it('建筑贴图底边随镜头近端翻转（蓝 +Z / 红 -Z）', () => {

@@ -20,10 +20,10 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(14);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(19);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
-    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 13\.333/);
+    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 5%/);
     expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
 
     /** 页签每次渲染会重建，点击前需重新查询。 */
@@ -38,17 +38,17 @@ describe('兵种图鉴页', () => {
     expect(categoryNamed('全部兵种')?.classList.contains('is-active')).toBe(true);
 
     categoryNamed('单兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(8);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(9);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['民兵', '弓手', '卫士', '女王', '国王', '皇家骑士', '法师', '大法师']);
+    ).toEqual(['民兵', '弓手', '卫士', '石头人', '女王', '国王', '皇家骑士', '法师', '大法师']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(4);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(8);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['战车', '巨型炸弹', '巨龙', '防御塔']);
+    ).toEqual(['战车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
 
     categoryNamed('召唤物')?.click();

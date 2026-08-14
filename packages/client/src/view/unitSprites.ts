@@ -162,6 +162,16 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 177 / 222,
     sourceFacing: 1,
   },
+  // 三射手箭塔同样复用塔体贴图；三人立绘由 garrison 排布
+  building_tower_triple: {
+    frontUrl: 'buildings/tower.png',
+    backUrl: 'buildings/tower.png',
+    frontUrlRed: 'buildings/tower_red.png',
+    backUrlRed: 'buildings/tower_red.png',
+    heightMul: 1,
+    aspect: 177 / 222,
+    sourceFacing: 1,
+  },
 };
 
 /** 所有精灵共用的面片：单位尺寸、底边锚定在 y=0（脚踩地面），靠 scale 放大 */

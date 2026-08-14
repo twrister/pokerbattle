@@ -6,6 +6,7 @@ import {
   MAX_UNIT_RADIUS,
   type UnitTypeId,
   getUnitConfig,
+  isArcherTowerId,
   isBuildingConfig,
 } from './config/units.js';
 import {
@@ -234,9 +235,7 @@ export class World {
     const startHeight =
       from.config.movementLayer === 'air'
         ? AIR_PROJECTILE_HEIGHT
-        : from.config.id === 'building_tower'
-          || from.config.id === 'building_tower_advanced'
-          || from.config.id === 'building_base'
+        : isArcherTowerId(from.config.id) || from.config.id === 'building_base'
           ? TOWER_PROJECTILE_HEIGHT
           : GROUND_PROJECTILE_HEIGHT;
     const endHeight = target.config.movementLayer === 'air' ? AIR_PROJECTILE_HEIGHT : 0;
@@ -247,8 +246,7 @@ export class World {
     const isBomb = from.config.id === 'ranged_chariot';
     const isArrow =
       from.config.id === 'ranged_archer'
-      || from.config.id === 'building_tower'
-      || from.config.id === 'building_tower_advanced'
+      || isArcherTowerId(from.config.id)
       || from.config.id === 'building_base';
     // 箭系 Explode4；女王/大小王 Explode2；战车与龙用 explode1；其它 AOE 仍用脉冲环
     const isExplode2 =

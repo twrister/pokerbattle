@@ -180,6 +180,28 @@ describe('建筑系统', () => {
     expect(tower!.config.id).toBe('building_tower_advanced');
   });
 
+  it('三射手箭塔数值高于双射手箭塔且可放置', () => {
+    const triple = getUnitConfig('building_tower_triple');
+    const advanced = getUnitConfig('building_tower_advanced');
+    expect(triple.name).toBe('三射手箭塔');
+    expect(toFloat(triple.maxHp)).toBe(2100);
+    expect(toFloat(triple.damage)).toBe(140);
+    expect(toFloat(triple.attackInterval)).toBe(8);
+    expect(toFloat(triple.maxHp)).toBeGreaterThan(toFloat(advanced.maxHp));
+    expect(toFloat(triple.damage)).toBeGreaterThan(toFloat(advanced.damage));
+    expect(toFloat(triple.attackInterval)).toBeLessThan(toFloat(advanced.attackInterval));
+
+    const world = new World(1);
+    const tower = world.spawnBuilding(
+      Faction.Blue,
+      'building_tower_triple',
+      fromFloat(8),
+      fromFloat(10),
+    );
+    expect(tower).not.toBeNull();
+    expect(tower!.config.id).toBe('building_tower_triple');
+  });
+
   it('基地在射程内以投射物攻击敌军（同 1 级箭塔）', () => {
     const world = new World(1);
     // 基地占地 4，中心 (9,16)；敌军放在射程内正西

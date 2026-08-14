@@ -22,6 +22,7 @@ const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'building_base',
   'building_tower',
   'building_tower_advanced',
+  'building_tower_triple',
 ]);
 
 /**
@@ -45,6 +46,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'building_base',
   'building_tower',
   'building_tower_advanced',
+  'building_tower_triple',
   'summoned_skeleton',
   'summoned_bomber',
 ];

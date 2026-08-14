@@ -6,6 +6,7 @@ import {
   UNIT_CONFIGS,
   UNIT_LEVELS_ENABLED,
   UnitState,
+  isArcherTowerId,
   type UnitTypeId,
   toFloat,
 } from '@pb/sim';
@@ -51,7 +52,7 @@ export class UnitView {
   private readonly isBuilding: boolean;
   /** 防御塔塔顶弓手纯表现（非独立单位）。 */
   private readonly hasTowerGarrison: boolean;
-  /** 塔顶弓手数：普通塔 1、高级塔 2。 */
+  /** 塔顶弓手数：普通塔 1、双射手 2、三射手 3。 */
   private readonly garrisonCount: number;
   /** 炸弹兵：引信期间播闪烁警示，不挂 Teleport 施法特效。 */
   private readonly isDetonator: boolean;
@@ -71,10 +72,11 @@ export class UnitView {
   private readonly spriteMaterials: SpriteMaterials | null = null;
   /** 共享模板材质；贴图异步就绪后只改模板的 visible，克隆体每帧同步 */
   private readonly sharedSpriteMaterials: SpriteMaterials | null = null;
-  /** 塔顶弓手精灵（仅防御塔；高级塔为左右各一） */
+  /** 塔顶弓手精灵（普通塔 1 人、双射手 2 人、三射手 3 人） */
   private readonly garrisonSprites: THREE.Mesh[] = [];
-  /** 各弓手相对塔中心的屏幕 X 锚点 */
+  /** 各弓手相对塔中心的屏幕 X / Y 锚点（三人塔前排更低、后排抬高） */
   private readonly garrisonBaseXs: number[] = [];
+  private readonly garrisonBaseYs: number[] = [];
   private readonly garrisonMaterials: SpriteMaterials | null = null;
   private readonly sharedGarrisonMaterials: SpriteMaterials | null = null;
   private readonly garrisonSize: number = 0;
@@ -142,10 +144,12 @@ export class UnitView {
     const config = UNIT_CONFIGS[typeId];
     this.isAir = config.movementLayer === 'air';
     this.isBuilding = config.footprint > 0;
-    this.hasTowerGarrison =
-      typeId === 'building_tower' || typeId === 'building_tower_advanced';
-    // 高级箭塔塔顶挂两名弓手立绘，普通塔一名
-    this.garrisonCount = typeId === 'building_tower_advanced' ? 2 : this.hasTowerGarrison ? 1 : 0;
+    this.hasTowerGarrison = isArcherTowerId(typeId);
+    // 普通塔 1 人、双射手 2 人、三射手 3 人；仅客户端立绘，逻辑仍是单塔
+    this.garrisonCount =
+      typeId === 'building_tower_triple' ? 3
+        : typeId === 'building_tower_advanced' ? 2
+          : this.hasTowerGarrison ? 1 : 0;
     this.isDetonator = !!config.detonate;
     // 碰撞圈用真实半径；显示半径 = 民兵基准 × 体型，与碰撞完全解耦
     const radius = toFloat(config.radius);
@@ -199,20 +203,33 @@ export class UnitView {
         this.garrisonWidth = this.garrisonSize * archerDef.aspect;
         this.garrisonSourceFacing = archerDef.sourceFacing;
         this.garrisonBaseY = this.spriteSize * 0.62;
-        // 双弓手左右错开；单弓手居中
-        const sideGap = this.spriteWidth * 0.22;
+        // 1 居中、2 左右；三人前 1 后 2，后排略收间距并抬高，避免挤出塔顶
+        const sideGap = this.spriteWidth * (this.garrisonCount >= 3 ? 0.18 : 0.22);
+        const backRowLift = this.garrisonCount >= 3 ? this.garrisonSize * 0.18 : 0;
         for (let i = 0; i < this.garrisonCount; i++) {
-          const baseX =
-            this.garrisonCount === 1 ? 0 : (i === 0 ? -sideGap : sideGap);
+          let baseX = (i - (this.garrisonCount - 1) / 2) * sideGap;
+          let baseY = this.garrisonBaseY;
+          let renderOrder = 1;
+          if (this.garrisonCount === 3) {
+            if (i === 0) {
+              // 前排居中，压在后排之上
+              baseX = 0;
+              renderOrder = 2;
+            } else {
+              baseX = i === 1 ? -sideGap : sideGap;
+              baseY = this.garrisonBaseY + backRowLift;
+            }
+          }
           const mesh = new THREE.Mesh(SPRITE_GEOMETRY, this.garrisonMaterials.front);
           mesh.scale.set(this.garrisonWidth, this.garrisonSize, 1);
-          mesh.position.set(baseX, this.garrisonBaseY, 0);
-          mesh.renderOrder = 1;
+          mesh.position.set(baseX, baseY, 0);
+          mesh.renderOrder = renderOrder;
           this.billboard.add(mesh);
           this.garrisonSprites.push(mesh);
           this.garrisonBaseXs.push(baseX);
+          this.garrisonBaseYs.push(baseY);
         }
-        topY = Math.max(topY, this.garrisonBaseY + this.garrisonSize);
+        topY = Math.max(topY, ...this.garrisonBaseYs.map((y) => y + this.garrisonSize));
       }
 
       this.group.add(this.billboard);
@@ -601,14 +618,14 @@ export class UnitView {
     );
   }
 
-  /** 塔顶弓手攻击/待机姿势；脚底锚在 garrisonBaseY，多弓手保留各自 baseX。 */
+  /** 塔顶弓手攻击/待机姿势；脚底锚在各自 baseY，多弓手保留各自 baseX。 */
   private applyGarrisonPose(state: UnitState, attacking: boolean, timeSec: number): void {
     for (let i = 0; i < this.garrisonSprites.length; i++) {
       this.applyPoseToSprite(
         this.garrisonSprites[i]!,
         this.garrisonSize,
         this.garrisonWidth,
-        this.garrisonBaseY,
+        this.garrisonBaseYs[i] ?? this.garrisonBaseY,
         state,
         attacking,
         timeSec,
