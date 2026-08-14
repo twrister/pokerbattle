@@ -18,7 +18,6 @@ import {
   type CardFormationDrafts,
   type CardRank,
   type FormationDraft,
-  type FormationLevelRule,
   type FormationMatchRule,
   type HandCategory,
   type UnitTypeId,
@@ -194,7 +193,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   }
 
   /**
-   * 编辑方案元数据：名称、牌面匹配、等级、站位 rows、间距与缩略图放大。
+   * 编辑方案元数据：名称、牌面匹配、站位 rows、间距与缩略图放大。
    * 全部牌型的兵种搭配都以本页配置为准。
    */
   function renderEditor(): void {
@@ -210,7 +209,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     rule.className = 'deck-rows';
     rule.innerHTML = `
       <div class="deck-section-title">规则说明</div>
-      <p>${HAND_CATEGORY_NAMES[category]}的兵种站位、牌面匹配与等级均以本页配置为准。</p>
+      <p>${HAND_CATEGORY_NAMES[category]}的兵种站位与牌面匹配均以本页配置为准。</p>
     `;
     editor.appendChild(rule);
 
@@ -226,7 +225,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     );
 
     editor.appendChild(renderMatchEditor(draft));
-    editor.appendChild(renderLevelEditor(draft));
     editor.appendChild(renderRowsEditor(draft));
 
     // 单建筑阵型不需要间距；普通阵型才显示
@@ -354,74 +352,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
-  /** 等级规则编辑：固定 / 按数字牌点数 / 数字与人头分档。 */
-  function renderLevelEditor(draft: FormationDraft): HTMLElement {
-    const section = document.createElement('section');
-    section.className = 'deck-rows';
-    const title = document.createElement('div');
-    title.className = 'deck-section-title';
-    title.textContent = '等级规则';
-    section.appendChild(title);
-
-    const kindRow = document.createElement('label');
-    kindRow.className = 'deck-field';
-    kindRow.textContent = '规则类型';
-    const kindSelect = document.createElement('select');
-    const kindOptions: Array<{ value: FormationLevelRule['kind']; label: string }> = [
-      { value: 'fixed', label: '固定等级' },
-      { value: 'byNumberRank', label: '按数字牌点数' },
-      { value: 'numberOrFace', label: '数字/人头分档' },
-    ];
-    for (const option of kindOptions) {
-      const el = document.createElement('option');
-      el.value = option.value;
-      el.textContent = option.label;
-      if (option.value === draft.level.kind) el.selected = true;
-      kindSelect.appendChild(el);
-    }
-    kindSelect.addEventListener('change', () => {
-      const kind = kindSelect.value as FormationLevelRule['kind'];
-      if (kind === 'fixed') draft.level = { kind: 'fixed', value: 1 };
-      else if (kind === 'byNumberRank') draft.level = { kind: 'byNumberRank', offset: 0 };
-      else draft.level = { kind: 'numberOrFace', number: 1, face: 2 };
-      if (IS_DEV_SERVER) renderEditor();
-      refreshPreview();
-    });
-    kindRow.appendChild(kindSelect);
-    section.appendChild(kindRow);
-
-    if (draft.level.kind === 'fixed') {
-      section.appendChild(
-        numberInput('固定等级', draft.level.value, 1, (value) => {
-          draft.level = { kind: 'fixed', value: Math.max(1, Math.floor(value)) };
-          refreshPreview();
-        }),
-      );
-    } else if (draft.level.kind === 'byNumberRank') {
-      section.appendChild(
-        numberInput('点数偏移', draft.level.offset, 1, (value) => {
-          draft.level = { kind: 'byNumberRank', offset: Math.floor(value) };
-          refreshPreview();
-        }),
-      );
-    } else {
-      section.append(
-        numberInput('数字牌等级', draft.level.number, 1, (value) => {
-          const face = draft.level.kind === 'numberOrFace' ? draft.level.face : 2;
-          draft.level = { kind: 'numberOrFace', number: Math.max(1, Math.floor(value)), face };
-          refreshPreview();
-        }),
-        numberInput('人头牌等级', draft.level.face, 1, (value) => {
-          const number = draft.level.kind === 'numberOrFace' ? draft.level.number : 1;
-          draft.level = { kind: 'numberOrFace', number, face: Math.max(1, Math.floor(value)) };
-          refreshPreview();
-        }),
-      );
-    }
-
-    return section;
-  }
-
   /** 单张站位编辑：增删排/单位，下拉选择兵种。 */
   function renderRowsEditor(draft: FormationDraft): HTMLElement {
     const section = document.createElement('section');
@@ -517,7 +447,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       id: `${category}_custom_${number}`,
       name: `${HAND_CATEGORY_NAMES[category]}阵型 ${number}`,
       match: { kind: 'any' },
-      level: { kind: 'fixed', value: 1 },
       rows: [[DEFAULT_MOBILE_TYPE_ID]],
       colSpacing: 1.2,
       rowSpacing: 1.4,

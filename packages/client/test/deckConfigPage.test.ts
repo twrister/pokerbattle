@@ -87,7 +87,7 @@ describe('卡组阵型配置页', () => {
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('站位配置');
     expect(titles).toContain('牌面匹配');
-    expect(titles).toContain('等级规则');
+    expect(titles).not.toContain('等级规则');
 
     const select = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select');
     expect(select).not.toBeNull();

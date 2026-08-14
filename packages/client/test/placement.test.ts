@@ -28,7 +28,6 @@ function squadFormation(): ReturnType<typeof createCardFormation> {
     id: 'test_squad',
     name: '测试方阵',
     match: { kind: 'any' },
-    level: { kind: 'fixed', value: 1 },
     rows: [
       ['melee_grunt', 'melee_grunt'],
       ['ranged_archer', 'ranged_archer'],
@@ -70,7 +69,6 @@ describe('蓝方阵型落点校验', () => {
       id: 'test_oversized',
       name: '超宽阵',
       match: { kind: 'any' },
-      level: { kind: 'fixed', value: 1 },
       rows: [['melee_grunt', 'melee_grunt', 'melee_grunt']],
       colSpacing: 40,
       rowSpacing: 2,
@@ -85,7 +83,6 @@ describe('蓝方阵型落点校验', () => {
       id: 'test_tower',
       name: '防御塔',
       match: { kind: 'any' },
-      level: { kind: 'fixed', value: 1 },
       rows: [['building_tower']],
     });
     const anchor = blueHalfSafeAnchor(tower)!;

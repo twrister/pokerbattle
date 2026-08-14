@@ -100,12 +100,6 @@ export type FormationMatchRule =
   | { kind: 'ranks'; ranks: CardRank[] }
   | { kind: 'joker'; joker: 'black' | 'red' };
 
-/** 出兵等级：fixed 固定；byNumberRank 按最大数字牌点数-1+offset；numberOrFace 区分数字/人头。 */
-export type FormationLevelRule =
-  | { kind: 'fixed'; value: number }
-  | { kind: 'byNumberRank'; offset: number }
-  | { kind: 'numberOrFace'; number: number; face: number };
-
 /** 一条「牌型 → 兵种搭配」配置，含可配置前后站位。 */
 export interface CardFormation {
   id: string;
@@ -113,8 +107,6 @@ export interface CardFormation {
   category: HandCategory;
   /** 哪些牌面可使用本搭配。 */
   match: FormationMatchRule;
-  /** 出兵等级推导规则。 */
-  level: FormationLevelRule;
   /** rows[0] = 前排，rows[n] = 更靠后；每行从左到右。 */
   rows: UnitTypeId[][];
   /** 展开后的落位列表，与 rows 一一对应。 */
@@ -143,7 +135,6 @@ export interface FormationDraft {
   id: string;
   name: string;
   match: FormationMatchRule;
-  level: FormationLevelRule;
   rows: UnitTypeId[][];
   colSpacing?: number;
   rowSpacing?: number;
@@ -189,13 +180,6 @@ function cloneMatchRule(match: FormationMatchRule): FormationMatchRule {
   return { kind: match.kind };
 }
 
-/** 深拷贝等级规则。 */
-function cloneLevelRule(level: FormationLevelRule): FormationLevelRule {
-  if (level.kind === 'fixed') return { kind: 'fixed', value: level.value };
-  if (level.kind === 'byNumberRank') return { kind: 'byNumberRank', offset: level.offset };
-  return { kind: 'numberOrFace', number: level.number, face: level.face };
-}
-
 /** 从 JSON 加载并回填 category / slots / units。 */
 function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory, CardFormation[]> {
   const out = {} as Record<HandCategory, CardFormation[]>;
@@ -209,7 +193,6 @@ function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory,
         name: entry.name,
         category,
         match: cloneMatchRule(entry.match),
-        level: cloneLevelRule(entry.level),
         rows,
         slots,
         units: unitsFromSlots(slots),
@@ -237,7 +220,6 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
     name: draft.name,
     category,
     match: cloneMatchRule(draft.match),
-    level: cloneLevelRule(draft.level),
     rows,
     slots,
     units: unitsFromSlots(slots),
@@ -255,18 +237,18 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
 
 /**
  * 将静态方案模板按实际牌面展开为可出兵阵型。
- * 全部牌型均以配置的 match / level / rows 为准；不适用的方案返回 null。
+ * 全部牌型均以配置的 match / rows 为准；不适用的方案返回 null。
  */
 export function resolveCardFormation(
   formation: CardFormation,
   cards: readonly PlayingCard[],
 ): CardFormation | null {
-  const mappedRows = resolveMappedRows(formation.rows, formation.match, formation.level, cards);
+  const mappedRows = resolveMappedRows(formation.rows, formation.match, cards);
   if (!mappedRows) return null;
   return formationFromMappedRows(formation, mappedRows);
 }
 
-/** 将包含等级的规则结果转换为阵型运行时结构。 */
+/** 将规则展开结果转换为阵型运行时结构。 */
 function formationFromMappedRows(
   source: CardFormation,
   mappedRows: readonly (readonly MappedFormationUnit[])[],
@@ -292,7 +274,6 @@ function cloneDrafts(source: CardFormationDrafts): CardFormationDrafts {
       id: entry.id,
       name: entry.name,
       match: cloneMatchRule(entry.match),
-      level: cloneLevelRule(entry.level),
       rows: entry.rows.map((row) => [...row]),
       ...(entry.colSpacing === undefined ? {} : { colSpacing: entry.colSpacing }),
       ...(entry.rowSpacing === undefined ? {} : { rowSpacing: entry.rowSpacing }),
@@ -310,7 +291,6 @@ export function dumpCardFormationDrafts(): CardFormationDrafts {
       id: formation.id,
       name: formation.name,
       match: cloneMatchRule(formation.match),
-      level: cloneLevelRule(formation.level),
       rows: formation.rows.map((row) => [...row]),
       colSpacing: formation.colSpacing,
       rowSpacing: formation.rowSpacing,
@@ -355,30 +335,6 @@ function validateMatchRule(id: string, match: FormationMatchRule | undefined): s
   }
 }
 
-/** 校验等级规则；缺字段或非法数值时返回错误文案。 */
-function validateLevelRule(id: string, level: FormationLevelRule | undefined): string | null {
-  if (!level || typeof level !== 'object') return `阵型「${id}」缺少等级配置`;
-  switch (level.kind) {
-    case 'fixed':
-      if (!Number.isFinite(level.value) || level.value < 1) {
-        return `阵型「${id}」固定等级必须 ≥ 1`;
-      }
-      return null;
-    case 'byNumberRank':
-      if (!Number.isFinite(level.offset)) {
-        return `阵型「${id}」数字牌等级偏移无效`;
-      }
-      return null;
-    case 'numberOrFace':
-      if (!Number.isFinite(level.number) || level.number < 1 || !Number.isFinite(level.face) || level.face < 1) {
-        return `阵型「${id}」数字/人头等级必须 ≥ 1`;
-      }
-      return null;
-    default:
-      return `阵型「${id}」等级规则类型无效`;
-  }
-}
-
 /** 在写入运行时前完整校验草稿，避免半套配置影响对局。 */
 export function validateCardFormationDrafts(drafts: CardFormationDrafts): string | null {
   if (!drafts || typeof drafts !== 'object' || Array.isArray(drafts)) return '配置必须是对象';
@@ -396,8 +352,6 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
       if (!formation.name?.trim()) return `阵型「${id}」名称不能为空`;
       const matchError = validateMatchRule(id, formation.match);
       if (matchError) return matchError;
-      const levelError = validateLevelRule(id, formation.level);
-      if (levelError) return levelError;
       if (!Array.isArray(formation.rows) || formation.rows.length === 0) {
         return `阵型「${id}」至少需要一排兵种`;
       }

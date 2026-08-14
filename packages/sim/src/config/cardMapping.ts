@@ -1,8 +1,7 @@
 import { getCardStrength, getPokerCardById, type CardRank, type PlayingCard } from '../cards/deck.js';
 import { fromFloat, type Fx } from '../math/fixed.js';
-import { UNIT_CONFIGS, UNIT_LEVELS_ENABLED, type UnitTypeId } from './units.js';
+import { UNIT_CONFIGS, type UnitTypeId } from './units.js';
 import type {
-  FormationLevelRule,
   FormationMatchRule,
   HandCategory,
 } from './cardFormations.js';
@@ -29,7 +28,7 @@ export const FORMATION_MATCH_RANKS: readonly CardRank[] = [
   'K',
 ] as const;
 
-/** 规则阵型中的单个出兵位，等级随实际出牌点数推导。 */
+/** 规则阵型中的单个出兵位；等级由展开逻辑统一赋 1。 */
 export interface MappedFormationUnit {
   typeId: UnitTypeId;
   level: number;
@@ -38,11 +37,6 @@ export interface MappedFormationUnit {
 /** 判断点数是否走民兵/弓手的 1～9 级阶梯。 */
 function isNumberRank(card: PlayingCard): boolean {
   return !card.joker && ['2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(card.rank);
-}
-
-/** 数字牌 2-10 对应 1-9 级。 */
-function numberRankLevel(card: PlayingCard): number {
-  return Number(card.rank) - 1;
 }
 
 /** 获取组合中牌力最大的牌；规则牌型保证 cards 非空。 */
@@ -70,38 +64,18 @@ export function cardsMatchRule(cards: readonly PlayingCard[], match: FormationMa
   }
 }
 
-/** 按配置的等级规则推导出兵等级（未过等级开关钳制）。 */
-export function resolveUnitLevel(cards: readonly PlayingCard[], level: FormationLevelRule): number {
-  const top = strongestCard(cards);
-  switch (level.kind) {
-    case 'fixed':
-      return level.value;
-    case 'byNumberRank':
-      return numberRankLevel(top) + level.offset;
-    case 'numberOrFace':
-      return isNumberRank(top) ? level.number : level.face;
-  }
-}
-
-/** 等级关闭时把推算结果钳到 1 级，保留上方公式便于重新启用。 */
-function applyLevelGate(units: MappedFormationUnit[]): MappedFormationUnit[] {
-  if (UNIT_LEVELS_ENABLED) return units;
-  return units.map((unit) => (unit.level === 1 ? unit : { ...unit, level: 1 }));
-}
-
 /**
- * 校验牌面匹配后，按配置 rows 展开站位并赋等级（不重排）。
+ * 校验牌面匹配后，按配置 rows 展开站位。
+ * 阵型不再单独配等级规则，出兵统一 1 级。
  * 不适用时返回 null，调用方不应向玩家展示。
  */
 export function resolveMappedRows(
   rows: readonly (readonly UnitTypeId[])[],
   match: FormationMatchRule,
-  level: FormationLevelRule,
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[][] | null {
   if (!cardsMatchRule(cards, match)) return null;
-  const unitLevel = resolveUnitLevel(cards, level);
-  return rows.map((row) => applyLevelGate(row.map((typeId) => ({ typeId, level: unitLevel }))));
+  return rows.map((row) => row.map((typeId) => ({ typeId, level: 1 })));
 }
 
 /** 按攻击类型将近战排在前、远程排在后，每排最多三名以控制阵型宽度。 */

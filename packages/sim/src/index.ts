@@ -77,7 +77,6 @@ export {
   type CardFormation,
   type CardFormationDrafts,
   type FormationDraft,
-  type FormationLevelRule,
   type FormationMatchRule,
   type FormationSlot,
   type FormationSpawnPoint,
@@ -129,7 +128,6 @@ export {
   getPreviewCardsForFormation,
   layoutMappedUnits,
   resolveMappedRows,
-  resolveUnitLevel,
   type MappedFormationUnit,
 } from './config/cardMapping.js';
 export {

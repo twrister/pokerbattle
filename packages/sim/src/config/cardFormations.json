@@ -6,10 +6,6 @@
       "match": {
         "kind": "numbers"
       },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 0
-      },
       "rows": [
         [
           "melee_grunt"
@@ -24,10 +20,6 @@
       "name": "单弓手",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 0
       },
       "rows": [
         [
@@ -47,10 +39,6 @@
           "J"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "melee_guard"
@@ -68,10 +56,6 @@
         "ranks": [
           "Q"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 1
       },
       "rows": [
         [
@@ -91,10 +75,6 @@
           "K"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "hero_king"
@@ -113,10 +93,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "melee_cavalry"
@@ -133,10 +109,6 @@
         "kind": "joker",
         "joker": "black"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "hero_mage"
@@ -152,10 +124,6 @@
       "match": {
         "kind": "joker",
         "joker": "red"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 1
       },
       "rows": [
         [
@@ -174,10 +142,6 @@
       "match": {
         "kind": "numbers"
       },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 1
-      },
       "rows": [
         [
           "melee_grunt",
@@ -194,10 +158,6 @@
       "name": "弓手",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 1
       },
       "rows": [
         [
@@ -218,10 +178,6 @@
         "ranks": [
           "J"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [
@@ -245,10 +201,6 @@
           "Q"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_grunt"
@@ -270,10 +222,6 @@
         "ranks": [
           "K"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [
@@ -297,10 +245,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_cavalry",
@@ -321,10 +265,6 @@
       "name": "数字三顺",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 0
       },
       "rows": [
         [
@@ -351,10 +291,6 @@
           "3"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_cavalry",
@@ -379,10 +315,6 @@
           "10",
           "J"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [
@@ -409,10 +341,6 @@
           "Q"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_grunt",
@@ -437,10 +365,6 @@
           "Q",
           "K"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [
@@ -467,10 +391,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "hero_king",
@@ -493,10 +413,6 @@
       "match": {
         "kind": "numbers"
       },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 1
-      },
       "rows": [
         [
           "melee_grunt",
@@ -518,10 +434,6 @@
       "name": "弓手",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 1
       },
       "rows": [
         [
@@ -548,10 +460,6 @@
           "J"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
       "rows": [
         [
           "melee_guard",
@@ -576,10 +484,6 @@
         "ranks": [
           "Q"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 3
       },
       "rows": [
         [
@@ -606,10 +510,6 @@
           "K"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
       "rows": [
         [
           "hero_king",
@@ -635,10 +535,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
       "rows": [
         [
           "melee_cavalry",
@@ -661,10 +557,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "small_bomb"
@@ -681,10 +573,6 @@
       "name": "数字连对",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 2
       },
       "rows": [
         [
@@ -714,10 +602,6 @@
           "2"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 4
-      },
       "rows": [
         [
           "melee_grunt",
@@ -745,10 +629,6 @@
           "10",
           "J"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 4
       },
       "rows": [
         [
@@ -778,10 +658,6 @@
           "Q"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 4
-      },
       "rows": [
         [
           "melee_grunt",
@@ -809,10 +685,6 @@
           "Q",
           "K"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 4
       },
       "rows": [
         [
@@ -842,10 +714,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 4
-      },
       "rows": [
         [
           "hero_king",
@@ -871,10 +739,6 @@
       "name": "数字五顺",
       "match": {
         "kind": "numbers"
-      },
-      "level": {
-        "kind": "byNumberRank",
-        "offset": 0
       },
       "rows": [
         [
@@ -907,10 +771,6 @@
           "5"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_grunt",
@@ -939,10 +799,6 @@
           "Q",
           "K"
         ]
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [
@@ -973,10 +829,6 @@
           "A"
         ]
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "melee_guard",
@@ -999,10 +851,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "building_tower"
@@ -1017,10 +865,6 @@
       "name": "战车",
       "match": {
         "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 1
       },
       "rows": [
         [
@@ -1039,10 +883,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "building_tower_advanced"
@@ -1058,10 +898,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "dragon"
@@ -1076,10 +912,6 @@
       "name": "石头人",
       "match": {
         "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 1
       },
       "rows": [
         [
@@ -1098,10 +930,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 2
-      },
       "rows": [
         [
           "building_tower_advanced"
@@ -1117,10 +945,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 1
-      },
       "rows": [
         [
           "dragon"
@@ -1135,10 +959,6 @@
       "name": "石头人",
       "match": {
         "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 1
       },
       "rows": [
         [
@@ -1157,10 +977,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
       "rows": [
         [
           "giant_bomb"
@@ -1177,11 +993,6 @@
       "name": "巨型炸弹",
       "match": {
         "kind": "any"
-      },
-      "level": {
-        "kind": "numberOrFace",
-        "number": 1,
-        "face": 2
       },
       "rows": [
         [
@@ -1200,10 +1011,6 @@
       "match": {
         "kind": "any"
       },
-      "level": {
-        "kind": "fixed",
-        "value": 3
-      },
       "rows": [
         [
           "melee_golem",
@@ -1219,10 +1026,6 @@
       "name": "巨龙",
       "match": {
         "kind": "any"
-      },
-      "level": {
-        "kind": "fixed",
-        "value": 2
       },
       "rows": [
         [

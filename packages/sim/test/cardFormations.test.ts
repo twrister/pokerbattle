@@ -3,7 +3,6 @@ import {
   CARD_FORMATIONS,
   Faction,
   HAND_CATEGORY_ORDER,
-  UNIT_LEVELS_ENABLED,
   applyCardFormationDrafts,
   dumpCardFormationDrafts,
   getFormationBuildingTypeId,
@@ -281,7 +280,6 @@ describe('牌型兵种阵型配置', () => {
         id: 'straight3_number',
         name: '自定义数字三顺',
         match: { kind: 'numbers' },
-        level: { kind: 'byNumberRank', offset: 0 },
         rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -376,7 +374,6 @@ describe('牌型兵种阵型配置', () => {
         id: 'straight5_number',
         name: '自定义数字五顺',
         match: { kind: 'numbers' },
-        level: { kind: 'byNumberRank', offset: 0 },
         rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -386,7 +383,6 @@ describe('牌型兵种阵型配置', () => {
         id: 'straight5_tower',
         name: '箭塔',
         match: { kind: 'any' },
-        level: { kind: 'fixed', value: 1 },
         rows: [['building_tower']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -461,7 +457,6 @@ describe('牌型兵种阵型配置', () => {
         id: 'two_pair_number',
         name: '自定义数字连对',
         match: { kind: 'numbers' },
-        level: { kind: 'byNumberRank', offset: 2 },
         rows: [['ranged_archer', 'ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt', 'melee_grunt']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -471,7 +466,6 @@ describe('牌型兵种阵型配置', () => {
         id: 'two_pair_QK',
         name: '自定义 Q-K 连对',
         match: { kind: 'ranks', ranks: ['Q', 'K'] },
-        level: { kind: 'fixed', value: 4 },
         rows: [['hero_king'], ['hero_queen', 'hero_queen', 'hero_queen']],
         colSpacing: 1.2,
         rowSpacing: 1.4,
@@ -496,27 +490,6 @@ describe('牌型兵种阵型配置', () => {
       expect(faceFormation.rows).toEqual([['hero_king'], ['hero_queen', 'hero_queen', 'hero_queen']]);
     } finally {
       resetCardFormationsToDefault();
-    }
-  });
-
-  it.skipIf(!UNIT_LEVELS_ENABLED)('等级开启时按牌面推导多级数值', () => {
-    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
-    const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
-      getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id)!;
-
-    expect(formationFor(['single'], ['10-spades'], 'single_grunt').units).toEqual([
-      { typeId: 'melee_grunt', level: 9, count: 1 },
-    ]);
-    expect(formationFor(['pair'], ['10-spades', '10-hearts'], 'pair_grunt').units).toEqual([
-      { typeId: 'melee_grunt', level: 10, count: 2 },
-    ]);
-    for (const [rank, level] of [
-      ['3', 2],
-      ['5', 4],
-      ['10', 9],
-    ] as const) {
-      const single = formationFor(['single'], [`${rank}-spades`], 'single_grunt');
-      expect(single.slots.every((slot) => slot.level === level)).toBe(true);
     }
   });
 
@@ -596,14 +569,10 @@ describe('牌型兵种阵型配置', () => {
     resetCardFormationsToDefault();
   });
 
-  it('缺少 match 或 level 的草稿被严格拒绝', () => {
+  it('缺少 match 的草稿被严格拒绝', () => {
     const missingMatch = dumpCardFormationDrafts();
     delete (missingMatch.single[0] as { match?: unknown }).match;
     expect(validateCardFormationDrafts(missingMatch)).toContain('缺少牌面匹配配置');
-
-    const missingLevel = dumpCardFormationDrafts();
-    delete (missingLevel.single[0] as { level?: unknown }).level;
-    expect(validateCardFormationDrafts(missingLevel)).toContain('缺少等级配置');
 
     const badRanks = dumpCardFormationDrafts();
     badRanks.single[0]!.match = { kind: 'ranks', ranks: [] };
