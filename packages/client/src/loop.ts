@@ -47,7 +47,7 @@ export class SimLoop {
       this.world = new World(seed);
     }
     this.curr = takeSnapshot(this.world);
-    this.prev = this.curr;
+    this.prev = takeSnapshot(this.world);
   }
 
   /** 指令先入队，等到下一个逻辑帧统一执行——联网后这里换成「等服务器确认的帧」 */
@@ -88,8 +88,9 @@ export class SimLoop {
     if (this.match) this.match.step(this.pending);
     else this.world.step(this.pending);
     this.pending.length = 0;
+    const reuse = this.prev;
     this.prev = this.curr;
-    this.curr = takeSnapshot(this.world);
+    this.curr = takeSnapshot(this.world, reuse);
   }
 
   /** 当前处于两个逻辑帧之间的比例，渲染插值用 */
@@ -107,7 +108,7 @@ export class SimLoop {
     }
     this.pending.length = 0;
     this.accumulator = 0;
-    this.curr = takeSnapshot(this.world);
-    this.prev = this.curr;
+    this.curr = takeSnapshot(this.world, this.curr);
+    this.prev = takeSnapshot(this.world, this.prev);
   }
 }

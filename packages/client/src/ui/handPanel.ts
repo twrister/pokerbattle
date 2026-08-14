@@ -177,6 +177,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
    * 发牌与 syncSelection 只走 refreshStatus，不会冲掉这里的文案。
    */
   let actionStatus: string | null = null;
+  let lastHandCountText = '';
+  let lastHandFull = false;
+  let lastPileFull = false;
+  let lastPileEmpty = false;
+  let lastPileLabel = '';
 
   root.classList.add('is-active');
   // MatchState 已发过初始手牌时不要再抽，否则两端牌面会分叉
@@ -785,17 +790,31 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
         ? 0
         : Math.min(Math.max(ms, 0), intervalMs) / intervalMs;
     drawPile.style.setProperty('--draw-progress', `${progress * 100}%`);
-    drawPile.classList.toggle('is-full', isFull);
-    drawPile.classList.toggle('is-empty', isEmpty);
-    drawPile.setAttribute(
-      'aria-label',
-      isFull ? '手牌已满，牌堆等待出牌' : isEmpty ? '牌堆已空' : '牌堆正在准备补牌',
-    );
+    if (lastPileFull !== isFull) {
+      drawPile.classList.toggle('is-full', isFull);
+      lastPileFull = isFull;
+    }
+    if (lastPileEmpty !== isEmpty) {
+      drawPile.classList.toggle('is-empty', isEmpty);
+      lastPileEmpty = isEmpty;
+    }
+    const pileLabel = isFull ? '手牌已满，牌堆等待出牌' : isEmpty ? '牌堆已空' : '牌堆正在准备补牌';
+    if (lastPileLabel !== pileLabel) {
+      drawPile.setAttribute('aria-label', pileLabel);
+      lastPileLabel = pileLabel;
+    }
     // 张数与满手提示共用一条：未满只报 x/x，满手加「已满」并改提示色。
-    handCountLabel.textContent = isFull
+    const countText = isFull
       ? `手牌已满 ${handCount} / ${maxHandSize}`
       : `${handCount} / ${maxHandSize}`;
-    handCountLabel.classList.toggle('is-full', isFull);
+    if (lastHandCountText !== countText) {
+      handCountLabel.textContent = countText;
+      lastHandCountText = countText;
+    }
+    if (lastHandFull !== isFull) {
+      handCountLabel.classList.toggle('is-full', isFull);
+      lastHandFull = isFull;
+    }
   }
 
   return {

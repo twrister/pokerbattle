@@ -186,14 +186,11 @@ export function applyExplosionFrame(
   );
   const url = getExplosionFrameUrls(kind)[frame]!;
   bindExplosionTexture(url, (shared) => {
-    const prev = material.map;
-    if (prev && prev.image === shared.image) return;
-    const texture = shared.clone();
-    texture.needsUpdate = true;
-    material.map = texture;
+    // 多 PNG 帧不改 UV，直接引用共享贴图，避免每帧 clone/dispose
+    if (material.map === shared) return;
+    material.map = shared;
     material.visible = true;
     material.needsUpdate = true;
-    prev?.dispose();
   });
 }
 

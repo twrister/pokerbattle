@@ -14,6 +14,14 @@ export interface BattleHudHandle {
   update(match: MatchState): void;
 }
 
+interface CastleHudCache {
+  text: string;
+  width: string;
+  markLeft: string;
+  markTitle: string;
+  protect: boolean;
+}
+
 /** 将共享仿真状态投射到顶部信息条；左右始终是「己方蓝 / 对阵红」。 */
 export function createBattleHud(): BattleHudHandle {
   const root = requiredElement<HTMLElement>('#battle-hud');
@@ -37,33 +45,78 @@ export function createBattleHud(): BattleHudHandle {
     localName: '玩家',
     opponentName: '电脑',
   };
+  let lastTick = -1;
+  let lastSelfName = '';
+  let lastOppName = '';
+  let lastPhaseText = '';
+  let lastTimerLabel = '';
+  let lastTimerText = '';
+  const selfCastle: CastleHudCache = emptyCastleCache();
+  const oppCastle: CastleHudCache = emptyCastleCache();
 
   return {
     show: () => root.classList.remove('is-hidden'),
-    hide: () => root.classList.add('is-hidden'),
+    hide() {
+      root.classList.add('is-hidden');
+      lastTick = -1;
+    },
     setContext(next) {
       context = next;
-      selfName.textContent = next.localName || '玩家';
-      oppName.textContent = next.opponentName || '对手';
+      writeText(selfName, next.localName || '玩家', (value) => {
+        lastSelfName = value;
+      }, lastSelfName);
+      writeText(oppName, next.opponentName || '对手', (value) => {
+        lastOppName = value;
+      }, lastOppName);
     },
     update(match) {
+      const tick = match.world.tick;
+      if (tick === lastTick) return;
+      lastTick = tick;
+
       const local = context.localFaction;
       const opp = opposingFaction(local);
-      selfName.textContent = context.localName || '玩家';
-      oppName.textContent = context.opponentName || '对手';
-      updateCastle(local, selfHp, selfBar, selfTrack, selfMark, match);
-      updateCastle(opp, oppHp, oppBar, oppTrack, oppMark, match);
+      writeText(selfName, context.localName || '玩家', (value) => {
+        lastSelfName = value;
+      }, lastSelfName);
+      writeText(oppName, context.opponentName || '对手', (value) => {
+        lastOppName = value;
+      }, lastOppName);
+      updateCastle(local, selfHp, selfBar, selfTrack, selfMark, match, selfCastle);
+      updateCastle(opp, oppHp, oppBar, oppTrack, oppMark, match, oppCastle);
 
       const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
-      phaseLabel.textContent = phaseText;
+      writeText(phaseLabel, phaseText, (value) => {
+        lastPhaseText = value;
+      }, lastPhaseText);
 
       const remainingTicks = Math.max(0, match.getPhaseDeadlineTick() - match.world.tick);
-      timerLabel.textContent = match.phase === 'final' ? '决胜剩余：' : '剩余时间：';
-      timer.textContent = formatTicks(remainingTicks);
+      const nextTimerLabel = match.phase === 'final' ? '决胜剩余：' : '剩余时间：';
+      writeText(timerLabel, nextTimerLabel, (value) => {
+        lastTimerLabel = value;
+      }, lastTimerLabel);
+      writeText(timer, formatTicks(remainingTicks), (value) => {
+        lastTimerText = value;
+      }, lastTimerText);
 
       syncOpponentHand(oppHand, match.decks[opp].hand.length);
     },
   };
+}
+
+function emptyCastleCache(): CastleHudCache {
+  return { text: '', width: '', markLeft: '', markTitle: '', protect: false };
+}
+
+function writeText(
+  element: HTMLElement,
+  next: string,
+  assign: (value: string) => void,
+  current: string,
+): void {
+  if (current === next) return;
+  element.textContent = next;
+  assign(next);
 }
 
 function updateCastle(
@@ -73,15 +126,36 @@ function updateCastle(
   track: HTMLElement,
   mark: HTMLElement,
   match: MatchState,
+  cache: CastleHudCache,
 ): void {
   const hp = toFloat(match.getCastleHp(faction));
   const maxHp = toFloat(match.getCastleMaxHp(faction));
   const protectHp = match.getCastleProtectHp();
-  label.textContent = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
-  bar.style.width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
-  mark.style.left = `${maxHp > 0 ? Math.max(0, Math.min(100, (protectHp / maxHp) * 100)) : 0}%`;
-  mark.title = `保护线 ${protectHp}`;
-  track.classList.toggle('is-protect', hp < protectHp);
+  const text = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
+  const width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
+  const markLeft = `${maxHp > 0 ? Math.max(0, Math.min(100, (protectHp / maxHp) * 100)) : 0}%`;
+  const markTitle = `保护线 ${protectHp}`;
+  const protect = hp < protectHp;
+  if (cache.text !== text) {
+    label.textContent = text;
+    cache.text = text;
+  }
+  if (cache.width !== width) {
+    bar.style.width = width;
+    cache.width = width;
+  }
+  if (cache.markLeft !== markLeft) {
+    mark.style.left = markLeft;
+    cache.markLeft = markLeft;
+  }
+  if (cache.markTitle !== markTitle) {
+    mark.title = markTitle;
+    cache.markTitle = markTitle;
+  }
+  if (cache.protect !== protect) {
+    track.classList.toggle('is-protect', protect);
+    cache.protect = protect;
+  }
 }
 
 /** 用缩小牌背数量表示对手手牌数，不展示正面；可超过阶段上限。 */

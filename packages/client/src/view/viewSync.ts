@@ -1,5 +1,12 @@
 import * as THREE from 'three';
-import { Faction, type MatchState, type ProjectileVisual, type Snapshot, type UnitSnapshot } from '@pb/sim';
+import {
+  Faction,
+  type MatchState,
+  type ProjectileSnapshot,
+  type ProjectileVisual,
+  type Snapshot,
+  type UnitSnapshot,
+} from '@pb/sim';
 import { projectWorldToClient, toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey, visualFaction } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
@@ -169,6 +176,7 @@ export class BattleView {
   private hasLastPackWorld = false;
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
+  private readonly prevProjectiles = new Map<number, ProjectileSnapshot>();
   private prevUnitsTick = -1;
   private readonly seen = new Set<number>();
 
@@ -267,8 +275,8 @@ export class BattleView {
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
     this.syncAttackRangeMark(curr, alpha);
-    this.renderAoeImpactWarnings(prev, curr, alpha);
-    this.renderProjectiles(prev, curr, alpha, camera);
+    this.renderAoeImpactWarnings(curr, alpha);
+    this.renderProjectiles(curr, alpha, camera);
     this.renderHealEffects(curr);
     this.renderAoePulses(curr);
     this.renderExplosions(curr, camera);
@@ -279,7 +287,9 @@ export class BattleView {
     if (this.prevUnitsTick === prev.tick) return;
     this.prevUnitsTick = prev.tick;
     this.prevUnits.clear();
+    this.prevProjectiles.clear();
     for (const unit of prev.units) this.prevUnits.set(unit.id, unit);
+    for (const projectile of prev.projectiles) this.prevProjectiles.set(projectile.id, projectile);
   }
 
   private renderUnits(curr: Snapshot, alpha: number, camera: THREE.Camera): void {
@@ -405,7 +415,7 @@ export class BattleView {
    * 带爆炸范围的弹道在落点画预警圈，样式与出牌预瞄圈相同。
    * 数据来自快照，双方客户端都会画；龙/战车圈固定在发射锁定点，弓箭等追踪弹仍随目标插值。
    */
-  private renderAoeImpactWarnings(prev: Snapshot, curr: Snapshot, alpha: number): void {
+  private renderAoeImpactWarnings(curr: Snapshot, alpha: number): void {
     this.seen.clear();
     for (const projectile of curr.projectiles) {
       if (projectile.aoeRadius <= 0) continue;
@@ -416,7 +426,7 @@ export class BattleView {
         this.activeAoeWarnings.set(projectile.id, mark);
         this.scene.add(mark.group);
       }
-      const from = prev.projectiles.find((item) => item.id === projectile.id) ?? projectile;
+      const from = this.prevProjectiles.get(projectile.id) ?? projectile;
       mark.update(
         toSceneX(lerp(from.impactX, projectile.impactX, alpha)),
         toSceneZ(lerp(from.impactY, projectile.impactY, alpha)),
@@ -454,7 +464,6 @@ export class BattleView {
   }
 
   private renderProjectiles(
-    prev: Snapshot,
     curr: Snapshot,
     alpha: number,
     camera: THREE.Camera,
@@ -492,7 +501,7 @@ export class BattleView {
       const groundLift =
         projectile.landed && visual === 'bomb' ? (BOMB_PROJECTILE_HEIGHT * size) / 2 : 0;
 
-      const from = prev.projectiles.find((p) => p.id === projectile.id) ?? projectile;
+      const from = this.prevProjectiles.get(projectile.id) ?? projectile;
       const fromX = toSceneX(from.x);
       const fromH = from.height;
       const fromZ = toSceneZ(from.y);
@@ -612,6 +621,7 @@ export class BattleView {
     this.hideCastlePack();
     this.hasLastPackWorld = false;
     this.prevUnits.clear();
+    this.prevProjectiles.clear();
     this.prevUnitsTick = -1;
   }
 
@@ -661,6 +671,7 @@ export class BattleView {
     this.hideCastlePack();
     this.hasLastPackWorld = false;
     this.prevUnits.clear();
+    this.prevProjectiles.clear();
     this.prevUnitsTick = -1;
   }
 

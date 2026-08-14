@@ -44,6 +44,7 @@ const neighbors: number[] = [];
  * 非追踪弹（龙/战车）落点在发射时锁定，目标走开则打空。
  */
 export function updateProjectiles(world: World): void {
+  world.ensureUnitGrid();
   for (const projectile of world.projectiles) {
     if (projectile.dead) continue;
 
@@ -182,12 +183,6 @@ function resolveProjectileAoe(
   impactFx: Projectile['impactFx'],
   hitBuilding: boolean,
 ): void {
-  world.unitGrid.clear();
-  for (let i = 0; i < world.units.length; i++) {
-    const unit = world.units[i]!;
-    if (!isAlive(unit)) continue;
-    world.unitGrid.insert(i, unit.pos.x, unit.pos.y);
-  }
   world.unitGrid.query(x, y, radius, neighbors);
 
   const radiusSq = mul(radius, radius);

@@ -1,10 +1,17 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
 import { canBuildingAttack, isBuildingConfig } from '../config/units.js';
-import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
+import { Faction, NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
 import { canAttackTarget, canThreatenTarget, isWithinAttackReach } from './combatRange.js';
+
+/** 按 world.units 原序拆出的存活列表，避免每次索敌重复跳过死亡单位 */
+const liveBlue: Unit[] = [];
+const liveRed: Unit[] = [];
+/** 建筑远少于单位，单独缓存供视野内推家判断 */
+const buildingsBlue: Unit[] = [];
+const buildingsRed: Unit[] = [];
 
 /**
  * 选敌策略：
@@ -20,6 +27,8 @@ import { canAttackTarget, canThreatenTarget, isWithinAttackReach } from './comba
  * 新锁定敌军时立刻分配攻击环槽位；治疗友军不占槽位。
  */
 export function updateTargeting(world: World): void {
+  collectLiveFactions(world);
+
   for (const unit of world.units) {
     if (unit.dead) continue;
     // 无攻击能力的建筑不索敌；仍可作为敌军目标被其它单位选中
@@ -39,16 +48,16 @@ export function updateTargeting(world: World): void {
 
       if (unit.config.movementLayer === 'air') {
         // 非建筑出距立刻弃；建筑出距仅被射程内可打敌军打断
-        if (isBuildingConfig(current.config) && !hasInReachAttackable(world, unit, current)) {
+        if (isBuildingConfig(current.config) && !hasInReachAttackable(unit, current)) {
           continue;
         }
         // fall through
-      } else if (!hasInReachEnemyThreat(world, unit, current)) {
+      } else if (!hasInReachEnemyThreat(unit, current)) {
         continue;
       }
     }
 
-    const enemyId = findNearestEnemy(world, unit);
+    const enemyId = findNearestEnemy(unit);
     if (enemyId !== NO_TARGET) {
       // 重索到同一目标时保留槽位，避免无意义换槽抖路径
       if (enemyId === unit.targetId) continue;
@@ -71,7 +80,7 @@ export function updateTargeting(world: World): void {
         continue;
       }
 
-      unit.targetId = findNearestInjuredAlly(world, unit);
+      unit.targetId = findNearestInjuredAlly(unit);
       unit.engageSlot = NO_ENGAGE_SLOT;
       continue;
     }
@@ -81,13 +90,43 @@ export function updateTargeting(world: World): void {
   }
 }
 
+/** 按 world.units 原序拆阵营，保证等距选 id 时遍历顺序与全场扫描一致。 */
+function collectLiveFactions(world: World): void {
+  liveBlue.length = 0;
+  liveRed.length = 0;
+  buildingsBlue.length = 0;
+  buildingsRed.length = 0;
+  for (const unit of world.units) {
+    if (unit.dead) continue;
+    if (unit.faction === Faction.Blue) {
+      liveBlue.push(unit);
+      if (isBuildingConfig(unit.config)) buildingsBlue.push(unit);
+    } else {
+      liveRed.push(unit);
+      if (isBuildingConfig(unit.config)) buildingsRed.push(unit);
+    }
+  }
+}
+
+function enemiesOf(unit: Unit): readonly Unit[] {
+  return unit.faction === Faction.Blue ? liveRed : liveBlue;
+}
+
+function alliesOf(unit: Unit): readonly Unit[] {
+  return unit.faction === Faction.Blue ? liveBlue : liveRed;
+}
+
+function enemyBuildingsOf(unit: Unit): readonly Unit[] {
+  return unit.faction === Faction.Blue ? buildingsRed : buildingsBlue;
+}
+
 /**
  * 是否存在「已进入攻击射程且己方可打」的其它敌军（不要求对方能打到自己）。
  * 供飞行单位打断推家粘性，避免贴脸地面兵被推家过滤漏掉。
  */
-function hasInReachAttackable(world: World, unit: Unit, current: Unit): boolean {
-  for (const other of world.units) {
-    if (other.dead || other.faction === unit.faction || other.id === current.id) continue;
+function hasInReachAttackable(unit: Unit, current: Unit): boolean {
+  for (const other of enemiesOf(unit)) {
+    if (other.id === current.id) continue;
     if (!canAttackTarget(unit, other)) continue;
     if (isWithinAttackReach(unit, other)) return true;
   }
@@ -97,12 +136,12 @@ function hasInReachAttackable(world: World, unit: Unit, current: Unit): boolean 
 /**
  * 地面追击中是否存在「已进入攻击射程」的其它敌军（含推家威胁过滤）。
  */
-function hasInReachEnemyThreat(world: World, unit: Unit, current: Unit): boolean {
+function hasInReachEnemyThreat(unit: Unit, current: Unit): boolean {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
-  const buildingInSight = hasEnemyBuildingInSight(world, unit, sightSq);
+  const buildingInSight = hasEnemyBuildingInSight(unit, sightSq);
 
-  for (const other of world.units) {
-    if (other.dead || other.faction === unit.faction || other.id === current.id) continue;
+  for (const other of enemiesOf(unit)) {
+    if (other.id === current.id) continue;
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d > sightSq) continue;
@@ -112,61 +151,49 @@ function hasInReachEnemyThreat(world: World, unit: Unit, current: Unit): boolean
 }
 
 /**
- * 全场线性扫描找最近的敌人。
- * 优先锁已进攻击射程的可打敌军（保证飞行贴脸改火能真正锁上近战）；
- * 否则按视野 + 推家过滤选远敌。
+ * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
+ * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
  *
  * 这里刻意不用空间哈希：索敌半径覆盖整个场地，按半径查哈希等于把所有格子
  * 都遍历一遍，反而比直接扫单位数组更慢。等以后出现「短视野」兵种再按需切换。
  */
-function findNearestEnemy(world: World, unit: Unit): number {
-  const inReachId = findNearestInReachAttackable(world, unit);
-  if (inReachId !== NO_TARGET) return inReachId;
-
+function findNearestEnemy(unit: Unit): number {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
-  const buildingInSight = hasEnemyBuildingInSight(world, unit, sightSq);
-  let bestId = NO_TARGET;
-  let bestDistSq: Fx = 0;
+  const buildingInSight = hasEnemyBuildingInSight(unit, sightSq);
+  let inReachId = NO_TARGET;
+  let inReachDistSq: Fx = 0;
+  let farId = NO_TARGET;
+  let farDistSq: Fx = 0;
 
-  for (const other of world.units) {
-    if (other.dead || other.faction === unit.faction) continue;
-    if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
+  for (const other of enemiesOf(unit)) {
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (canAttackTarget(unit, other) && isWithinAttackReach(unit, other)) {
+      if (
+        inReachId === NO_TARGET
+        || d < inReachDistSq
+        || (d === inReachDistSq && other.id < inReachId)
+      ) {
+        inReachId = other.id;
+        inReachDistSq = d;
+      }
+    }
+    if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     if (d > sightSq) continue;
     // 等距时取 id 小的，保证任何机器上选出的都是同一个目标
-    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
-      bestId = other.id;
-      bestDistSq = d;
+    if (farId === NO_TARGET || d < farDistSq || (d === farDistSq && other.id < farId)) {
+      farId = other.id;
+      farDistSq = d;
     }
   }
-  return bestId;
-}
 
-/** 最近的已进攻击射程且己方可打的敌军（不受推家威胁过滤）。 */
-function findNearestInReachAttackable(world: World, unit: Unit): number {
-  let bestId = NO_TARGET;
-  let bestDistSq: Fx = 0;
-
-  for (const other of world.units) {
-    if (other.dead || other.faction === unit.faction) continue;
-    if (!canAttackTarget(unit, other)) continue;
-    if (!isWithinAttackReach(unit, other)) continue;
-    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
-    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
-      bestId = other.id;
-      bestDistSq = d;
-    }
-  }
-  return bestId;
+  return inReachId !== NO_TARGET ? inReachId : farId;
 }
 
 /**
  * 视野内是否存在敌方建筑。有建筑时进入「威胁过滤」模式，避免被无威胁单位引离推家。
  */
-function hasEnemyBuildingInSight(world: World, unit: Unit, sightSq: Fx): boolean {
-  for (const other of world.units) {
-    if (other.dead || other.faction === unit.faction) continue;
-    if (!isBuildingConfig(other.config)) continue;
+function hasEnemyBuildingInSight(unit: Unit, sightSq: Fx): boolean {
+  for (const other of enemyBuildingsOf(unit)) {
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (d <= sightSq) return true;
   }
@@ -184,13 +211,13 @@ function isEnemyTargetCandidate(unit: Unit, other: Unit, buildingInSight: boolea
 }
 
 /** 全场扫描最近的受伤友军（排除自身与建筑），供治疗单位在无敌军时寻路接近。 */
-function findNearestInjuredAlly(world: World, unit: Unit): number {
+function findNearestInjuredAlly(unit: Unit): number {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
   let bestId = NO_TARGET;
   let bestDistSq: Fx = 0;
 
-  for (const other of world.units) {
-    if (other.dead || other.id === unit.id || other.faction !== unit.faction) continue;
+  for (const other of alliesOf(unit)) {
+    if (other.id === unit.id) continue;
     if (isBuildingConfig(other.config)) continue;
     if (other.hp >= other.stats.maxHp) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);

@@ -107,6 +107,8 @@ export interface Unit {
   readonly buffs: Buff[];
   /** buffs 变动后置位，下一帧重算 stats，避免每帧无谓地遍历 */
   statsDirty: boolean;
+  /** 国王振奋光环是否生效；由技能系统写入，快照只读此标记 */
+  inspired: boolean;
 
   /** A* 产出的剩余路点，pathIndex 指向当前要走的那个 */
   readonly path: Vec2[];
@@ -165,6 +167,7 @@ export function createUnit(
     stats: attributesFromConfig(config),
     buffs: [],
     statsDirty: false,
+    inspired: false,
     path: [],
     pathIndex: 0,
     repathIn: 0,

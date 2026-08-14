@@ -266,8 +266,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   if (isSolo) {
     loop.match!.seedStartingCastles();
     // 立刻拍一帧快照，首帧就能看到城堡
-    loop.curr = takeSnapshot(loop.world);
-    loop.prev = loop.curr;
+    loop.curr = takeSnapshot(loop.world, loop.curr);
+    loop.prev = takeSnapshot(loop.world, loop.prev);
   }
   const soloBot = isSolo ? new SoloBotController(selectedSoloDifficulty, battleSeed) : null;
   const removeSoloBot = soloBot

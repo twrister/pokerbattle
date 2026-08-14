@@ -15,6 +15,8 @@ import type { World } from '../world.js';
 
 /** 复用的邻居缓冲，避免每帧每单位都新建数组 */
 const neighbors: number[] = [];
+/** 本 tick 建筑下标，两轮分离迭代共用，避免每轮再扫全场认建筑 */
+const buildingIndices: number[] = [];
 
 /**
  * 圆形软碰撞：单位互相挤开而不是硬性阻挡。
@@ -31,6 +33,7 @@ const neighbors: number[] = [];
 export function resolveSeparation(world: World): void {
   const units = world.units;
   const grid = world.unitGrid;
+  collectBuildingIndices(units);
 
   for (let iter = 0; iter < SEPARATION_ITERATIONS; iter++) {
     // 上一轮已经改过位置，每轮都要重建哈希；建筑不入哈希
@@ -123,16 +126,27 @@ export function resolveSeparation(world: World): void {
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
     }
   }
+  world.markUnitGridDirty();
 }
 
 /**
  * 圆 vs 建筑 AABB：把单位中心夹到矩形得最近点，穿透则沿法线推出单位。
  * 建筑侧位移恒为 0；空中单位不受阻挡。
  */
+/** 按 world.units 原序收集存活建筑，保证推出顺序与原先双重循环一致。 */
+function collectBuildingIndices(units: readonly Unit[]): void {
+  buildingIndices.length = 0;
+  for (let i = 0; i < units.length; i++) {
+    const unit = units[i]!;
+    if (unit.dead || !isBuildingConfig(unit.config)) continue;
+    buildingIndices.push(i);
+  }
+}
+
 function resolveBuildingSeparation(world: World): void {
   const units = world.units;
-  for (let bi = 0; bi < units.length; bi++) {
-    const building = units[bi]!;
+  for (let b = 0; b < buildingIndices.length; b++) {
+    const building = units[buildingIndices[b]!]!;
     if (building.dead || !isBuildingConfig(building.config)) continue;
 
     const half = fromFloat(building.config.footprint / 2);

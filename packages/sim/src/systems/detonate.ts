@@ -13,6 +13,7 @@ const neighbors: number[] = [];
  * 只伤地面敌军，空中单位免疫爆炸伤害。
  */
 export function updateDetonate(world: World): void {
+  world.ensureUnitGrid();
   for (const unit of world.units) {
     const detonate = unit.config.detonate;
     if (!detonate || unit.detonated) continue;
@@ -57,12 +58,6 @@ function resolveDetonate(world: World, unit: Unit): void {
   // 建筑只按中心插入空间哈希；查询半径要覆盖「贴外缘爆炸 → 中心仍可能很远」
   const queryRadius = radius + maxBuildingHalfFootprint(world);
 
-  world.unitGrid.clear();
-  for (let i = 0; i < world.units.length; i++) {
-    const other = world.units[i]!;
-    if (!isAlive(other)) continue;
-    world.unitGrid.insert(i, other.pos.x, other.pos.y);
-  }
   world.unitGrid.query(unit.pos.x, unit.pos.y, queryRadius, neighbors);
 
   for (let i = 0; i < neighbors.length; i++) {

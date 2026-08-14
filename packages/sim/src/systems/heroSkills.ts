@@ -21,6 +21,7 @@ export function updateHeroSkills(world: World): void {
   updateKingInspires(world);
   updateQueenHeals(world);
   updateMageSummons(world);
+  world.markUnitGridDirty();
 }
 
 /**
@@ -64,7 +65,10 @@ function removeExpiredInspires(world: World): void {
         changed = true;
       }
     }
-    if (changed) unit.statsDirty = true;
+    if (changed) {
+      unit.statsDirty = true;
+      syncInspiredFlag(unit);
+    }
   }
 }
 
@@ -87,6 +91,7 @@ function updateKingInspires(world: World): void {
         createInspireBuff(king.id, 'moveSpeed', inspire.moveSpeedMul - ONE),
       );
       target.statsDirty = true;
+      target.inspired = true;
     }
   }
 }
@@ -224,6 +229,17 @@ function isInInspireRange(king: Unit, target: Unit): boolean {
 
 function hasInspire(world: World, unit: Unit): boolean {
   return unit.buffs.some((buff) => isInspireBuff(world.getUnit(buff.sourceId), buff));
+}
+
+/** 振奋 Buff 被摘掉后按剩余列表重算，避免快照每单位扫描 buffs。 */
+function syncInspiredFlag(unit: Unit): void {
+  for (const buff of unit.buffs) {
+    if (buff.id === -buff.sourceId && buff.stat === 'moveSpeed') {
+      unit.inspired = true;
+      return;
+    }
+  }
+  unit.inspired = false;
 }
 
 function isInspireBuff(source: Unit | undefined, buff: Buff): boolean {

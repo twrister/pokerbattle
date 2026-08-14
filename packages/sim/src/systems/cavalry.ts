@@ -18,7 +18,7 @@ const lateral = vec();
  */
 export function updateCharge(world: World): void {
   // 冲刺位移会改坐标，命中查询前重建空间哈希
-  rebuildUnitGrid(world);
+  world.rebuildUnitGrid();
 
   for (const unit of world.units) {
     if (unit.dead) continue;
@@ -30,6 +30,7 @@ export function updateCharge(world: World): void {
 
     advanceCharge(world, unit);
   }
+  world.markUnitGridDirty();
 }
 
 /** 沿锁定方向推进一段路程，并结算途经敌人 */
@@ -181,12 +182,3 @@ function endCharge(unit: Unit): void {
   unit.state = UnitState.Idle;
 }
 
-function rebuildUnitGrid(world: World): void {
-  const grid = world.unitGrid;
-  grid.clear();
-  for (let i = 0; i < world.units.length; i++) {
-    const unit = world.units[i]!;
-    if (unit.dead) continue;
-    grid.insert(i, unit.pos.x, unit.pos.y);
-  }
-}

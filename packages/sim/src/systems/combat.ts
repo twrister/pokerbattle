@@ -20,6 +20,7 @@ const neighbors: number[] = [];
  * 这样一轮完整攻击恰好等于 attackInterval，DPS 才等于 damage / interval。
  */
 export function updateCombat(world: World): void {
+  world.ensureUnitGrid();
   for (const unit of world.units) {
     if (unit.dead) continue;
     // 无攻击能力的建筑跳过；基地/防御塔等走下方普攻节奏
@@ -108,12 +109,6 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
   // 查询半径取「自身射程 + 双方最大半径 + 容差」，再按每个敌人各自 reach 过滤
   const queryRadius =
     unit.stats.range + unit.config.radius + MAX_UNIT_RADIUS + ATTACK_RANGE_TOLERANCE;
-  world.unitGrid.clear();
-  for (let i = 0; i < world.units.length; i++) {
-    const u = world.units[i]!;
-    if (u.dead) continue;
-    world.unitGrid.insert(i, u.pos.x, u.pos.y);
-  }
   world.unitGrid.query(unit.pos.x, unit.pos.y, queryRadius, neighbors);
 
   let hitAny = false;

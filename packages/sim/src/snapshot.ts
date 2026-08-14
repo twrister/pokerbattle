@@ -100,95 +100,120 @@ export interface Snapshot {
   explosionEffects: ExplosionEffectSnapshot[];
 }
 
-export function takeSnapshot(world: World): Snapshot {
-  const units: UnitSnapshot[] = [];
+/**
+ * 把当前世界写入只读快照。传入 out 时复用数组与元素槽位，供客户端双缓冲避免每 tick 全量 new。
+ */
+export function takeSnapshot(world: World, out?: Snapshot): Snapshot {
+  const snap = out ?? emptySnapshot();
+  snap.tick = world.tick;
+  writeUnitSnapshots(world, snap.units);
+  writeProjectileSnapshots(world, snap.projectiles);
+  writeHealSnapshots(world, snap.healEffects);
+  writeAoePulseSnapshots(world, snap.aoePulseEffects);
+  writeExplosionSnapshots(world, snap.explosionEffects);
+  return snap;
+}
+
+function writeUnitSnapshots(world: World, units: UnitSnapshot[]): void {
+  let n = 0;
   for (const unit of world.units) {
     if (unit.dead) continue;
-    units.push({
-      id: unit.id,
-      typeId: unit.typeId,
-      level: unit.level,
-      faction: unit.faction,
-      state: unit.state,
-      x: toFloat(unit.pos.x),
-      y: toFloat(unit.pos.y),
-      facingX: toFloat(unit.facing.x),
-      facingY: toFloat(unit.facing.y),
-      radius: toFloat(unit.config.radius),
-      range: toFloat(unit.stats.range),
-      footprint: unit.config.footprint,
-      hpRatio: unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0,
-      // 普攻与各类技能前摇共用同一套攻击蓄力姿势
-      attacking:
-        unit.windupLeft > 0
-        || unit.chargeWindupLeft > 0
-        || unit.healWindupLeft > 0
-        || unit.summonWindupLeft > 0
-        || unit.detonateWindupLeft > 0,
-      charging: unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0,
-      inspired: unit.buffs.some((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed'),
-      // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）
-      casting: unit.chargeWindupLeft > 0 || unit.castFxLeft > 0 || unit.detonateWindupLeft > 0,
-      aoeHit: unit.aoeHitFxLeft > 0,
-    });
+    const slot = units[n] ?? (units[n] = {} as UnitSnapshot);
+    slot.id = unit.id;
+    slot.typeId = unit.typeId;
+    slot.level = unit.level;
+    slot.faction = unit.faction;
+    slot.state = unit.state;
+    slot.x = toFloat(unit.pos.x);
+    slot.y = toFloat(unit.pos.y);
+    slot.facingX = toFloat(unit.facing.x);
+    slot.facingY = toFloat(unit.facing.y);
+    slot.radius = toFloat(unit.config.radius);
+    slot.range = toFloat(unit.stats.range);
+    slot.footprint = unit.config.footprint;
+    slot.hpRatio = unit.stats.maxHp > 0 ? toFloat(unit.hp) / toFloat(unit.stats.maxHp) : 0;
+    // 普攻与各类技能前摇共用同一套攻击蓄力姿势
+    slot.attacking =
+      unit.windupLeft > 0
+      || unit.chargeWindupLeft > 0
+      || unit.healWindupLeft > 0
+      || unit.summonWindupLeft > 0
+      || unit.detonateWindupLeft > 0;
+    slot.charging = unit.state === UnitState.Charge && unit.chargeWindupLeft <= 0;
+    slot.inspired = unit.inspired;
+    // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）
+    slot.casting = unit.chargeWindupLeft > 0 || unit.castFxLeft > 0 || unit.detonateWindupLeft > 0;
+    slot.aoeHit = unit.aoeHitFxLeft > 0;
+    n++;
   }
+  units.length = n;
+}
 
-  const projectiles: ProjectileSnapshot[] = [];
+function writeProjectileSnapshots(world: World, projectiles: ProjectileSnapshot[]): void {
+  let n = 0;
   for (const p of world.projectiles) {
     if (p.dead) continue;
-    projectiles.push({
-      id: p.id,
-      faction: p.faction,
-      x: toFloat(p.pos.x),
-      y: toFloat(p.pos.y),
-      height: p.height,
-      visual: p.visual,
-      landed: p.landed,
-      fuseBombKind: p.fuseBombKind,
-      impactX: toFloat(p.impactPos.x),
-      impactY: toFloat(p.impactPos.y),
-      aoeRadius: toFloat(p.aoeRadius),
-    });
+    const slot = projectiles[n] ?? (projectiles[n] = {} as ProjectileSnapshot);
+    slot.id = p.id;
+    slot.faction = p.faction;
+    slot.x = toFloat(p.pos.x);
+    slot.y = toFloat(p.pos.y);
+    slot.height = p.height;
+    slot.visual = p.visual;
+    slot.landed = p.landed;
+    slot.fuseBombKind = p.fuseBombKind;
+    slot.impactX = toFloat(p.impactPos.x);
+    slot.impactY = toFloat(p.impactPos.y);
+    slot.aoeRadius = toFloat(p.aoeRadius);
+    n++;
   }
+  projectiles.length = n;
+}
 
-  const healEffects: HealEffectSnapshot[] = [];
+function writeHealSnapshots(world: World, effects: HealEffectSnapshot[]): void {
+  let n = 0;
   for (const effect of world.healEffects) {
-    healEffects.push({
-      id: effect.id,
-      x: toFloat(effect.x),
-      y: toFloat(effect.y),
-      radius: toFloat(effect.radius),
-      progress: 1 - effect.remainingTicks / effect.totalTicks,
-    });
+    const slot = effects[n] ?? (effects[n] = {} as HealEffectSnapshot);
+    slot.id = effect.id;
+    slot.x = toFloat(effect.x);
+    slot.y = toFloat(effect.y);
+    slot.radius = toFloat(effect.radius);
+    slot.progress = 1 - effect.remainingTicks / effect.totalTicks;
+    n++;
   }
+  effects.length = n;
+}
 
-  const aoePulseEffects: AoePulseEffectSnapshot[] = [];
+function writeAoePulseSnapshots(world: World, effects: AoePulseEffectSnapshot[]): void {
+  let n = 0;
   for (const effect of world.aoePulseEffects) {
-    aoePulseEffects.push({
-      id: effect.id,
-      kind: effect.kind,
-      x: toFloat(effect.x),
-      y: toFloat(effect.y),
-      radius: toFloat(effect.radius),
-      dirX: toFloat(effect.dirX),
-      dirY: toFloat(effect.dirY),
-      progress: 1 - effect.remainingTicks / effect.totalTicks,
-    });
+    const slot = effects[n] ?? (effects[n] = {} as AoePulseEffectSnapshot);
+    slot.id = effect.id;
+    slot.kind = effect.kind;
+    slot.x = toFloat(effect.x);
+    slot.y = toFloat(effect.y);
+    slot.radius = toFloat(effect.radius);
+    slot.dirX = toFloat(effect.dirX);
+    slot.dirY = toFloat(effect.dirY);
+    slot.progress = 1 - effect.remainingTicks / effect.totalTicks;
+    n++;
   }
+  effects.length = n;
+}
 
-  const explosionEffects: ExplosionEffectSnapshot[] = [];
+function writeExplosionSnapshots(world: World, effects: ExplosionEffectSnapshot[]): void {
+  let n = 0;
   for (const effect of world.explosionEffects) {
-    explosionEffects.push({
-      id: effect.id,
-      x: toFloat(effect.x),
-      y: toFloat(effect.y),
-      radius: toFloat(effect.radius),
-      kind: effect.kind,
-      progress: 1 - effect.remainingTicks / effect.totalTicks,
-    });
+    const slot = effects[n] ?? (effects[n] = {} as ExplosionEffectSnapshot);
+    slot.id = effect.id;
+    slot.x = toFloat(effect.x);
+    slot.y = toFloat(effect.y);
+    slot.radius = toFloat(effect.radius);
+    slot.kind = effect.kind;
+    slot.progress = 1 - effect.remainingTicks / effect.totalTicks;
+    n++;
   }
-
-  return { tick: world.tick, units, projectiles, healEffects, aoePulseEffects, explosionEffects };
+  effects.length = n;
 }
 
 /** 空快照，供渲染层在第一帧之前占位 */

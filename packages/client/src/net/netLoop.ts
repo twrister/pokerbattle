@@ -67,7 +67,7 @@ export class NetSimLoop {
     this.onPeerReconnected = options.onPeerReconnected;
     this.onMatchEnd = options.onMatchEnd;
     this.curr = takeSnapshot(this.match.world);
-    this.prev = this.curr;
+    this.prev = takeSnapshot(this.match.world);
     options.onReady?.();
   }
 
@@ -168,8 +168,9 @@ export class NetSimLoop {
       const commands = this.frames.get(this.nextTick)!;
       this.frames.delete(this.nextTick);
       this.match.step(commands);
+      const reuse = this.prev;
       this.prev = this.curr;
-      this.curr = takeSnapshot(this.match.world);
+      this.curr = takeSnapshot(this.match.world, reuse);
       this.lastStepAt = performance.now();
 
       if (this.nextTick % HASH_INTERVAL_TICKS === 0) {

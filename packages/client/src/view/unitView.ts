@@ -49,6 +49,10 @@ export class UnitView {
   /** 血条左侧等级徽章；贴图按等级共享，避免每个单位创建 Canvas。 */
   private readonly levelBadge: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private displayedLevel = 1;
+  /** 已写入网格的血量比例；未变化则跳过 scale/刻度写入 */
+  private displayedHpRatio = -1;
+  private displayedInspired = false;
+  private displayedProtectAlert: boolean | null = null;
   private readonly barWidth: number;
   private readonly hpBaseY: number;
   /** 空中单位只抬高角色与血条，碰撞圈和阴影仍留在地面标示落点。 */
@@ -453,12 +457,18 @@ export class UnitView {
 
     const ratio = Math.max(0, Math.min(1, hpRatio));
     this.setLevel(level);
-    this.hpFill.scale.x = Math.max(ratio, 0.0001);
-    // 缩放是绕中心的，往左挪回去血条才是从右往左掉
-    this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
-    this.syncProtectMark(ratio);
+    if (ratio !== this.displayedHpRatio) {
+      this.displayedHpRatio = ratio;
+      this.hpFill.scale.x = Math.max(ratio, 0.0001);
+      // 缩放是绕中心的，往左挪回去血条才是从右往左掉
+      this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
+      this.syncProtectMark(ratio);
+    }
     this.hpAnchor.quaternion.copy(camera.quaternion);
-    this.inspireAura.visible = inspired;
+    if (inspired !== this.displayedInspired) {
+      this.displayedInspired = inspired;
+      this.inspireAura.visible = inspired;
+    }
     if (inspired) {
       const pulse = 1 + Math.sin(timeSec * 7 + this.phase) * 0.08;
       this.inspireAura.scale.setScalar(pulse);
@@ -474,7 +484,10 @@ export class UnitView {
     if (!this.protectMark) return;
     const material = this.protectMark.material;
     if (!(material instanceof THREE.MeshBasicMaterial)) return;
-    material.color.setHex(hpRatio < this.protectRatio ? HP_PROTECT_MARK_ALERT : HP_PROTECT_MARK_COLOR);
+    const alert = hpRatio < this.protectRatio;
+    if (this.displayedProtectAlert === alert) return;
+    this.displayedProtectAlert = alert;
+    material.color.setHex(alert ? HP_PROTECT_MARK_ALERT : HP_PROTECT_MARK_COLOR);
   }
 
   /** 同步单位等级；对象池复用时每帧写入，避免沿用上一名单位的徽章。 */
@@ -734,6 +747,9 @@ export class UnitView {
     this.wasCasting = false;
     this.castAnimStartedAt = 0;
     this.lastHpRatio = 1;
+    this.displayedHpRatio = -1;
+    this.displayedInspired = false;
+    this.displayedProtectAlert = null;
     this.setLevel(1);
     this.inspireAura.visible = false;
     if (this.castFx) this.castFx.visible = false;

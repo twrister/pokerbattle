@@ -68,6 +68,8 @@ export class World {
   readonly pathFinder: PathFinder;
   /** 清空战场时会按当前 MAX_UNIT_RADIUS 重建，保证改半径后空间哈希仍正确 */
   unitGrid: SpatialHash;
+  /** 单位坐标或名单变化后置位，AOE 查询前按需重建含建筑网格 */
+  unitGridDirty = true;
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
   readonly healEffects: HealEffect[] = [];
@@ -99,6 +101,33 @@ export class World {
     return this.unitsById.get(id);
   }
 
+  /**
+   * 按当前坐标重建空间哈希。分离系统内部仍自行重建（位置每轮在变且不含建筑）；
+   * 冲刺与分离后的 AOE 查询走这里，避免各系统重复 clear+insert。
+   */
+  rebuildUnitGrid(includeBuildings = true): void {
+    const grid = this.unitGrid;
+    grid.clear();
+    for (let i = 0; i < this.units.length; i++) {
+      const unit = this.units[i]!;
+      if (unit.dead) continue;
+      if (!includeBuildings && isBuildingConfig(unit.config)) continue;
+      grid.insert(i, unit.pos.x, unit.pos.y);
+    }
+    this.unitGridDirty = false;
+  }
+
+  /** 坐标或名单已变，下一次 AOE 查询前必须重建。 */
+  markUnitGridDirty(): void {
+    this.unitGridDirty = true;
+  }
+
+  /** 战斗/弹道/自爆共用：同一 tick 内只重建一次含建筑网格。 */
+  ensureUnitGrid(): void {
+    if (!this.unitGridDirty) return;
+    this.rebuildUnitGrid(true);
+  }
+
   spawnUnit(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx, level = 1): Unit {
     const config = getUnitConfig(typeId, level);
     // 建筑必须走 spawnBuilding，保证占格与寻路阻挡同步写入
@@ -121,6 +150,7 @@ export class World {
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
+    this.markUnitGridDirty();
     return unit;
   }
 
@@ -158,6 +188,7 @@ export class World {
     this.evictUnitsFromBuilding(unit);
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
+    this.markUnitGridDirty();
     return unit;
   }
 
@@ -504,6 +535,7 @@ export class World {
     this.rng.setState(this.seed);
     // 配置面板可能改过半径，格子尺寸要跟着 MAX_UNIT_RADIUS 走
     this.unitGrid = new SpatialHash(ARENA_WIDTH, ARENA_HEIGHT, MAX_UNIT_RADIUS * 2);
+    this.unitGridDirty = true;
   }
 
   /**

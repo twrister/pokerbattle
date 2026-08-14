@@ -103,6 +103,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
   let buildingType: UnitTypeId | null = null;
   let speedIndex = 0;
   let lastStatsAt = 0;
+  let lastHashTick = -1;
+  let lastHashText = '';
   let collapsed = readCollapsed();
   let saveDefaultsTimer = 0;
 
@@ -420,11 +422,18 @@ export function createPanel(options: PanelOptions): PanelHandle {
       if (now - lastStatsAt < STATS_REFRESH_MS) return;
       lastStatsAt = now;
 
-      tickOut.textContent = String(loop.world.tick);
+      const tick = loop.world.tick;
+      tickOut.textContent = String(tick);
       unitsOut.textContent = String(loop.world.units.length);
       projectilesOut.textContent = String(loop.world.projectiles.length);
-      hashOut.textContent = loop.world.hash().toString(16).padStart(8, '0');
       fpsOut.textContent = fps.toFixed(0);
+      // 全场 hash 很贵：收起不算，同一 tick 复用上次结果
+      if (collapsed) return;
+      if (lastHashTick !== tick) {
+        lastHashTick = tick;
+        lastHashText = loop.world.hash().toString(16).padStart(8, '0');
+      }
+      hashOut.textContent = lastHashText;
     },
     refreshUnitLabels() {
       for (const button of unitGroup.querySelectorAll<HTMLButtonElement>('button')) {
