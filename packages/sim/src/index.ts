@@ -84,6 +84,7 @@ export {
   type FormationSpawnPoint,
   type FormationUnitEntry,
   type HandCategory,
+  getExclusiveFormationUnitTag,
   getFormationBuildingTypeId,
   getFormationsFor,
   getFuseBombTypeId,

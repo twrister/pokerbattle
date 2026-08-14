@@ -224,6 +224,27 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('单兵种阵型按钮右下角显示该兵种标签，混编不显示', () => {
+    const singlePanel = createHandPanel({ deck: deckWithCards(['3-spades']) });
+    selectAllCards();
+    const gruntOption = document.querySelector<HTMLButtonElement>(
+      '.formation-option[data-formation-id="single_grunt"]',
+    );
+    const archerOption = document.querySelector<HTMLButtonElement>(
+      '.formation-option[data-formation-id="single_archer"]',
+    );
+    expect(gruntOption?.querySelector('.formation-tag')?.textContent).toBe('近战');
+    expect(archerOption?.querySelector('.formation-tag')?.textContent).toBe('远程');
+    singlePanel.dispose();
+
+    const mixedPanel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+    });
+    selectAllCards();
+    expect(document.querySelector('.formation-option .formation-tag')).toBeNull();
+    mixedPanel.dispose();
+  });
+
   it('手牌未变时 syncFromDeck 不重建搭配按钮，避免悬停闪烁', () => {
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),

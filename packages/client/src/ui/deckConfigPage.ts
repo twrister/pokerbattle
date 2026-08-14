@@ -28,6 +28,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { IS_DEV_SERVER } from '../env.js';
+import { appendFormationTag, applyFormationNameFallback } from './formationTag.js';
 import { createFormationPreview, type FormationPreviewHandle } from '../view/formationPreview.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
@@ -150,6 +151,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     image.className = 'formation-thumb';
     image.alt = '';
     button.appendChild(image);
+    appendFormationTag(button, formation);
     buttonPreviewRoot.appendChild(button);
 
     const url = await getFormationThumbnail(formation);
@@ -159,7 +161,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       return;
     }
     // 无 WebGL 时退回文字，与手牌阵型按钮一致。
-    button.textContent = formation.name;
+    applyFormationNameFallback(button, formation.name);
   }
 
   function renderCategories(): void {

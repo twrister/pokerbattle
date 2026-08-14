@@ -89,6 +89,11 @@ export interface DetonateConfig {
 export interface UnitConfig {
   id: UnitTypeId;
   name: string;
+  /**
+   * 卡组按钮角标；仅当阵型只含本兵种且非空时显示。
+   * 与 name 一样挂在兵种级，不随等级变化。
+   */
+  tag: string;
   /** 该配置对应的兵种等级。 */
   level: number;
   /** 碰撞半径（推挤 / 射程 / 场地夹紧），与显示体型无关 */
@@ -183,6 +188,8 @@ export interface DetonateConfigDraft {
 export interface UnitConfigDraft {
   id: UnitTypeId;
   name: string;
+  /** 卡组角标；空或缺省表示不显示 */
+  tag?: string;
   radius: number;
   bodyScale: number;
   mass: number;
@@ -211,8 +218,8 @@ export interface UnitConfigDraft {
   detonate?: DetonateConfigDraft;
 }
 
-/** 单个等级可编辑的参数；兵种标识与名称由外层兵种配置统一管理。 */
-export type UnitLevelConfigDraft = Omit<UnitConfigDraft, 'id' | 'name'>;
+/** 单个等级可编辑的参数；兵种标识、名称与标签由外层兵种配置统一管理。 */
+export type UnitLevelConfigDraft = Omit<UnitConfigDraft, 'id' | 'name' | 'tag'>;
 
 /** 兵种多等级草稿。未配置 levels 的旧数据会自动视为仅有 1 级。 */
 export interface UnitTypeConfigDraft extends UnitConfigDraft {
@@ -265,6 +272,7 @@ function cloneLevelConfigs(
 /** 把源配置逐字段写回目标对象，保持 UNIT_CONFIGS 条目引用稳定（已上场单位仍挂着它） */
 function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.name = source.name;
+  target.tag = source.tag;
   target.level = source.level;
   target.radius = source.radius;
   target.bodyScale = source.bodyScale;
@@ -357,6 +365,7 @@ function configFromDraft(draft: UnitConfigDraft, level = 1): UnitConfig {
   return {
     id: draft.id,
     name: draft.name,
+    tag: normalizeUnitTag(draft.tag),
     level,
     radius: fromFloat(draft.radius),
     bodyScale: fromFloat(
@@ -380,6 +389,11 @@ function configFromDraft(draft: UnitConfigDraft, level = 1): UnitConfig {
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
     detonate: draft.detonate ? detonateFromDraft(draft.detonate) : undefined,
   };
+}
+
+/** 标签只保留可见文本；空/空白视为未配置。 */
+function normalizeUnitTag(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** 最小射程缺省/非法回落为 0（无近距限制）。 */
@@ -419,7 +433,7 @@ function sortedLevels(levels: Record<string, UnitLevelConfigDraft>): number[] {
 
 /** 从一条旧配置构造可编辑的一级参数，用于兼容尚未迁移 levels 的兵种。 */
 function levelDraftFromTypeDraft(draft: UnitTypeConfigDraft): UnitLevelConfigDraft {
-  const { id: _id, name: _name, levels: _levels, ...levelDraft } = draft;
+  const { id: _id, name: _name, tag: _tag, levels: _levels, ...levelDraft } = draft;
   return levelDraft;
 }
 
@@ -510,6 +524,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
         : 9,
     aoeRadius: config.attack.kind === 'projectile_aoe' ? toFloat(config.attack.aoeRadius) : 0,
   };
+  if (config.tag) draft.tag = config.tag;
   if (config.footprint > 0) draft.footprint = config.footprint;
   if (config.charge) {
     draft.charge = {
@@ -555,7 +570,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
 
 /** 将单个等级配置转换为不含兵种元数据的表单值。 */
 function toLevelConfigDraft(config: UnitConfig): UnitLevelConfigDraft {
-  const { id: _id, name: _name, ...levelDraft } = toUnitConfigDraft(config);
+  const { id: _id, name: _name, tag: _tag, ...levelDraft } = toUnitConfigDraft(config);
   return levelDraft;
 }
 

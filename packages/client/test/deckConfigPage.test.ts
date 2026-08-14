@@ -77,6 +77,18 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
+  it('按钮预览在单兵种阵型右下角显示标签', async () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+    document.querySelector<HTMLButtonElement>('#deck-preview-tab-button')!.click();
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('#deck-preview-button .formation-option .formation-tag')?.textContent,
+      ).toBe('近战');
+    });
+    page.dispose();
+  });
+
   it('单张阵型可编辑站位兵种并刷新预览', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();

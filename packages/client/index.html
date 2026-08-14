@@ -1614,6 +1614,7 @@
 
       /* 与卡组页「按钮显示」预览共用，保证所见即所得。 */
       .formation-option {
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1660,6 +1661,30 @@
         object-fit: cover;
         object-position: center center;
         pointer-events: none;
+      }
+
+      /* 单兵种卡组角标：叠在缩略图右下，不抢拖拽。 */
+      .formation-tag {
+        position: absolute;
+        right: 5px;
+        bottom: 4px;
+        z-index: 1;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: rgba(8, 16, 14, 0.72);
+        color: #effff5;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+        pointer-events: none;
+      }
+
+      #solo-hand .formation-tag {
+        right: calc(5 * var(--hu));
+        bottom: calc(4 * var(--hu));
+        padding: calc(1 * var(--hu)) calc(5 * var(--hu));
+        border-radius: calc(4 * var(--hu));
+        font-size: calc(11 * var(--hu));
       }
 
       #btn-select-best {
@@ -2795,6 +2820,21 @@
       }
 
       .unit-stats-name input {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      .unit-stats-table th[data-field='tag'],
+      .unit-stats-table td.unit-stats-tag {
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        box-sizing: border-box;
+      }
+
+      .unit-stats-tag input {
         width: 100%;
         min-width: 0;
         max-width: 100%;

@@ -1,6 +1,7 @@
 import {
   detectHandCategories,
   findStrongestHand,
+  getExclusiveFormationUnitTag,
   getFormationsFor,
   isFuseBombFormation,
   isBuildingOnlyFormation,
@@ -14,6 +15,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
+import { appendFormationTag, applyFormationNameFallback } from './formationTag.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
 const PLAY_ANIMATION_MS = 360;
@@ -679,6 +681,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
             [
               formation.id,
               formation.slots.map((slot) => `${slot.typeId}:${slot.level}:${slot.row}:${slot.col}`).join(','),
+              getExclusiveFormationUnitTag(formation),
             ].join('#'),
           )
           .join('\0')
@@ -706,6 +709,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       image.alt = '';
       image.draggable = false;
       button.appendChild(image);
+      appendFormationTag(button, formation);
       fragment.appendChild(button);
       void applyThumbnail(button, image, formation, generation);
     }
@@ -726,7 +730,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       return;
     }
     button.classList.add('is-thumb-missing');
-    button.textContent = formation.name;
+    applyFormationNameFallback(button, formation.name);
   }
 
   /** 同步牌堆补牌进度；满手时以持续晃动替代倒计时，避免误导玩家仍会抽牌。 */

@@ -5,14 +5,18 @@ import {
   HAND_CATEGORY_ORDER,
   allocateCopiedFormationIdentity,
   applyCardFormationDrafts,
+  applyUnitConfigDrafts,
   cloneFormationDraft,
   dumpCardFormationDrafts,
+  dumpUnitConfigDrafts,
+  getExclusiveFormationUnitTag,
   getFormationBuildingTypeId,
   getFormationsFor,
   getPokerCardById,
   isBuildingOnlyFormation,
   layoutMappedUnits,
   resetCardFormationsToDefault,
+  resetUnitConfigsToDefault,
   resolveFormationSpawns,
   validateCardFormationDrafts,
   type FormationDraft,
@@ -773,5 +777,29 @@ describe('牌型兵种阵型配置', () => {
       id: 'single_J_copy2',
       name: '单张 J 副本2',
     });
+  });
+
+  it('只含一种兵种时返回该兵种默认角标，混编或空阵型不返回', () => {
+    expect(getExclusiveFormationUnitTag({ rows: [['melee_grunt'], ['melee_grunt']] })).toBe('近战');
+    expect(getExclusiveFormationUnitTag({ rows: [['ranged_archer']] })).toBe('远程');
+    expect(getExclusiveFormationUnitTag({ rows: [['hero_queen']] })).toBe('治疗');
+    expect(getExclusiveFormationUnitTag({ rows: [['hero_mage']] })).toBe('召唤');
+    expect(
+      getExclusiveFormationUnitTag({
+        rows: [['melee_grunt'], ['ranged_archer']],
+      }),
+    ).toBe('');
+    expect(getExclusiveFormationUnitTag({ rows: [] })).toBe('');
+  });
+
+  it('角标写入时去掉首尾空白', () => {
+    const drafts = dumpUnitConfigDrafts();
+    drafts.melee_grunt.tag = ' 先锋 ';
+    applyUnitConfigDrafts(drafts);
+    try {
+      expect(getExclusiveFormationUnitTag({ rows: [['melee_grunt']] })).toBe('先锋');
+    } finally {
+      resetUnitConfigsToDefault();
+    }
   });
 });

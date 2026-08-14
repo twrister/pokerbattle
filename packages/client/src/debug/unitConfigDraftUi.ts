@@ -209,7 +209,7 @@ export async function persistDraftsToFile(
 /** 取得当前等级参数；旧配置首次编辑时自动迁移成完整的一级配置。 */
 export function getLevelDraft(draft: UnitTypeConfigDraft, level: number): UnitLevelConfigDraft {
   if (!draft.levels) {
-    const { id: _id, name: _name, levels: _levels, ...levelOne } = draft;
+    const { id: _id, name: _name, tag: _tag, levels: _levels, ...levelOne } = draft;
     draft.levels = { 1: levelOne };
   }
   const current = draft.levels[String(level)];
@@ -381,6 +381,12 @@ export function readControlsIntoDrafts(
     }
     if (field === 'name') {
       draft.name = el.value.trim() || draft.name;
+      continue;
+    }
+    if (field === 'tag') {
+      const tag = el.value.trim();
+      if (tag) draft.tag = tag;
+      else delete draft.tag;
       continue;
     }
     if (field === 'attackKind') {

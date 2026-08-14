@@ -120,6 +120,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       headRow.appendChild(th);
     };
     appendHead('兵种', 'name');
+    appendHead('标签', 'tag');
     if (UNIT_LEVELS_ENABLED) appendHead('等级', 'level');
     for (const key of PRIMARY_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
     for (const key of POST_MOVE_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
@@ -164,6 +165,20 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     nameInput.setAttribute('aria-label', `${displayUnitName(draft.name)}名称`);
     nameCell.appendChild(nameInput);
     row.appendChild(nameCell);
+
+    // 兵种级角标：只影响单兵种卡组按钮，不进等级表
+    const tagCell = document.createElement('td');
+    tagCell.className = 'unit-stats-tag';
+    const tagInput = document.createElement('input');
+    tagInput.type = 'text';
+    tagInput.dataset.unit = typeId;
+    tagInput.dataset.field = 'tag';
+    tagInput.maxLength = 8;
+    tagInput.placeholder = '角标';
+    tagInput.value = draft.tag ?? '';
+    tagInput.setAttribute('aria-label', `${displayUnitName(draft.name)}标签`);
+    tagCell.appendChild(tagInput);
+    row.appendChild(tagCell);
 
     if (UNIT_LEVELS_ENABLED) {
       const levelCell = document.createElement('td');

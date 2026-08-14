@@ -17,6 +17,7 @@
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "近战",
     "levels": {
       "1": {
         "radius": 0.5,
@@ -55,6 +56,7 @@
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "近战",
     "levels": {
       "1": {
         "radius": 0.55,
@@ -93,6 +95,7 @@
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "坦克",
     "levels": {
       "1": {
         "radius": 0.8,
@@ -131,6 +134,7 @@
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "远程",
     "levels": {
       "1": {
         "radius": 0.5,
@@ -169,6 +173,7 @@
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 2,
+    "tag": "超远程",
     "levels": {
       "1": {
         "radius": 0.8,
@@ -283,13 +288,14 @@
     "attackKind": "melee_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "近战AOE",
     "charge": {
       "cooldown": 100,
       "windup": 10,
-      "distance": 3,
+      "distance": 4,
       "speedMul": 2,
-      "triggerMin": 2,
-      "triggerMax": 2.5,
+      "triggerMin": 3,
+      "triggerMax": 3.5,
       "hitDamage": 50,
       "knockback": 1,
       "aoeRadius": 1.5
@@ -343,6 +349,7 @@
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "振奋",
     "inspire": {
       "radius": 3,
       "attackIntervalMul": 0.8000030517578125,
@@ -391,6 +398,7 @@
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "治疗",
     "heal": {
       "cooldown": 1,
       "targetRange": 5,
@@ -439,6 +447,7 @@
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "召唤",
     "summon": {
       "cooldown": 60,
       "unitTypeId": "summoned_skeleton"
@@ -485,6 +494,7 @@
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
+    "tag": "召唤",
     "summon": {
       "cooldown": 60,
       "unitTypeId": "summoned_bomber"
@@ -531,6 +541,7 @@
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 2,
+    "tag": "飞行",
     "levels": {
       "1": {
         "radius": 0.8,
@@ -677,7 +688,7 @@
   },
   "building_tower": {
     "id": "building_tower",
-    "name": "防御塔",
+    "name": "箭塔",
     "radius": 1,
     "bodyScale": 2,
     "mass": 9999,
@@ -713,7 +724,8 @@
         "aoeRadius": 0,
         "footprint": 2
       }
-    }
+    },
+    "tag": "🌟"
   },
   "building_tower_advanced": {
     "id": "building_tower_advanced",
@@ -753,6 +765,7 @@
         "aoeRadius": 0,
         "footprint": 2
       }
-    }
+    },
+    "tag": "🌟🌟"
   }
 }

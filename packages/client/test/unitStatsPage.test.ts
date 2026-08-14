@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UNIT_CONFIGS, dumpUnitConfigDrafts, resetUnitConfigsToDefault } from '@pb/sim';
+import {
+  UNIT_CONFIGS,
+  applyUnitConfigDrafts,
+  captureUnitConfigsAsDefault,
+  dumpUnitConfigDrafts,
+  resetUnitConfigsToDefault,
+} from '@pb/sim';
 import { createUnitStatsPage } from '../src/ui/unitStatsPage.js';
 
 function mountDom(): void {
@@ -141,6 +147,38 @@ describe('单位参数页', () => {
 
     resetUnitConfigsToDefault();
     expect(UNIT_CONFIGS.melee_cavalry.charge).toBeTruthy();
+    page.dispose();
+  });
+
+  it('可为兵种配置标签并保存写回', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = createUnitStatsPage({ onBack: vi.fn() });
+    page.show();
+
+    const tagInput = document.querySelector<HTMLInputElement>(
+      'input[data-unit="melee_grunt"][data-field="tag"]',
+    );
+    expect(tagInput).toBeTruthy();
+    expect(tagInput!.value).toBe('近战');
+    tagInput!.value = '先锋';
+    tagInput!.dispatchEvent(new Event('change'));
+
+    document.querySelector<HTMLButtonElement>('#btn-unit-stats-save')?.click();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(dumpUnitConfigDrafts().melee_grunt.tag).toBe('先锋');
+    expect(dumpUnitConfigDrafts().melee_grunt.levels?.['1']).not.toHaveProperty('tag');
+
+    const drafts = dumpUnitConfigDrafts();
+    drafts.melee_grunt.tag = '近战';
+    applyUnitConfigDrafts(drafts);
+    captureUnitConfigsAsDefault();
     page.dispose();
   });
 

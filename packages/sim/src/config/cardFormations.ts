@@ -504,6 +504,16 @@ export function validateBuildingOnlyRows(
   return `${label}若包含建筑，则只能配置单个建筑（不可与其它单位混编）`;
 }
 
+/** 阵型只含一种兵种时返回该兵种标签；混编或未配置则空串。 */
+export function getExclusiveFormationUnitTag(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): string {
+  const slots = formation.rows.flat();
+  const typeId = slots[0];
+  if (!typeId || slots.some((id) => id !== typeId)) return '';
+  return UNIT_CONFIGS[typeId]?.tag.trim() ?? '';
+}
+
 /** 是否为合法的单建筑阵型（恰好一个建筑槽）。 */
 export function isBuildingOnlyFormation(
   formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
