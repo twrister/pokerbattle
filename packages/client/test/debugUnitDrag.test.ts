@@ -27,7 +27,7 @@ describe('调试模式单兵种拖拽上场', () => {
     vi.restoreAllMocks();
   });
 
-  it('在按钮内松开走自动放置，拖拽期间显示箭头', () => {
+  it('未拖出按钮时松开走自动放置，不显示指引线', () => {
     const onRequestSpawn = vi.fn(() => true);
     const onDragStart = vi.fn();
     const onDragEnd = vi.fn();
@@ -45,23 +45,65 @@ describe('调试模式单兵种拖拽上场', () => {
     const arrow = document.querySelector('#hand-arrow')!;
 
     option.dispatchEvent(pointerEvent('pointerdown', 40, 120, 500));
-    expect(onDragStart).toHaveBeenCalledWith('melee_grunt');
-    expect(arrow.classList.contains('is-visible')).toBe(true);
-    expect(arrow.classList.contains('is-invalid')).toBe(false);
-    expect(document.querySelector('#hand-arrow-head')?.getAttribute('transform')).toBe(
-      'translate(120 500)',
-    );
+    expect(onDragStart).not.toHaveBeenCalled();
+    expect(arrow.classList.contains('is-visible')).toBe(false);
 
-    unitGroup().dispatchEvent(pointerEvent('pointermove', 40, 130, 480));
-    const path = document.querySelector('#hand-arrow-path')?.getAttribute('d') ?? '';
-    const quad = path.match(/Q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/);
-    expect(quad).toBeTruthy();
-    expect(Number(quad![2])).toBeGreaterThan(Number(quad![4]));
+    unitGroup().dispatchEvent(pointerEvent('pointermove', 40, 130, 500));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
 
     unitGroup().dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
     expect(arrow.classList.contains('is-visible')).toBe(false);
     expect(onRequestSpawn).toHaveBeenCalledOnce();
     expect(onRequestSpawn).toHaveBeenCalledWith('melee_grunt', null);
+    expect(onDragEnd).not.toHaveBeenCalled();
+
+    handle.dispose();
+  });
+
+  it('拖出按钮后才显示指引线；拖回按钮变红且松手取消', () => {
+    const onRequestSpawn = vi.fn(() => true);
+    const onDragStart = vi.fn();
+    const onDragEnd = vi.fn();
+    const handle = enableDebugUnitDrag({
+      unitGroup: unitGroup(),
+      onPickUnit: vi.fn(),
+      canDropAt: () => true,
+      onRequestSpawn,
+      onDragStart,
+      onDragEnd,
+    });
+
+    const option = gruntButton();
+    option.getBoundingClientRect = () => buttonRect();
+    const arrow = document.querySelector('#hand-arrow')!;
+    const canvas = document.querySelector('#battle-canvas')!;
+
+    option.dispatchEvent(pointerEvent('pointerdown', 40, 120, 500));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => canvas),
+    });
+    unitGroup().dispatchEvent(pointerEvent('pointermove', 40, 200, 300));
+    expect(onDragStart).toHaveBeenCalledWith('melee_grunt');
+    expect(arrow.classList.contains('is-visible')).toBe(true);
+    expect(arrow.classList.contains('is-invalid')).toBe(false);
+    expect(document.querySelector('#hand-arrow-head')?.getAttribute('transform')).toBe(
+      'translate(200 300)',
+    );
+    const path = document.querySelector('#hand-arrow-path')?.getAttribute('d') ?? '';
+    const quad = path.match(/Q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/);
+    expect(quad).toBeTruthy();
+    expect(Number(quad![2])).toBeGreaterThan(Number(quad![4]));
+
+    unitGroup().dispatchEvent(pointerEvent('pointermove', 40, 122, 502));
+    expect(arrow.classList.contains('is-visible')).toBe(true);
+    expect(arrow.classList.contains('is-invalid')).toBe(true);
+
+    unitGroup().dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+    expect(onRequestSpawn).not.toHaveBeenCalled();
     expect(onDragEnd).toHaveBeenCalledOnce();
 
     handle.dispose();
@@ -108,7 +150,7 @@ describe('调试模式单兵种拖拽上场', () => {
     const canvas = document.querySelector('#battle-canvas')!;
 
     option.dispatchEvent(pointerEvent('pointerdown', 44, 120, 500));
-    expect(arrow.classList.contains('is-invalid')).toBe(false);
+    expect(arrow.classList.contains('is-visible')).toBe(false);
 
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
@@ -157,7 +199,7 @@ describe('调试模式单兵种拖拽上场', () => {
     handle.dispose();
   });
 
-  it('炸弹在按钮内松开不放置且箭头为非法，拖到战场才带落点', () => {
+  it('炸弹在按钮内松开不放置，拖到战场才带落点', () => {
     const canDropAt = vi.fn(
       (typeId: string, point: { clientX: number; clientY: number } | null) =>
         typeId !== 'giant_bomb' || point !== null,
@@ -179,8 +221,8 @@ describe('调试模式单兵种拖拽上场', () => {
     const arrow = document.querySelector('#hand-arrow')!;
 
     option.dispatchEvent(pointerEvent('pointerdown', 50, 120, 500));
-    expect(arrow.classList.contains('is-invalid')).toBe(true);
-    expect(onDragMove).toHaveBeenCalledWith('giant_bomb', 120, 500);
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+    expect(onDragMove).not.toHaveBeenCalled();
 
     unitGroup().dispatchEvent(pointerEvent('pointerup', 50, 122, 502));
     expect(onRequestSpawn).not.toHaveBeenCalled();

@@ -30,8 +30,8 @@ export interface DebugUnitDragHandle {
 }
 
 /**
- * 调试模式放兵手势：与手牌阵型按钮相同——按下画箭头并高亮半场，
- * 按钮内松开自动放置，拖到战场松手按落点放置。
+ * 调试模式放兵手势：与手牌阵型按钮相同——拖出按钮后才画指引线并高亮半场，
+ * 从未离开时松开自动放置；出现指引线后再回到按钮松手等于取消。
  */
 export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDragHandle {
   const { unitGroup } = options;
@@ -42,6 +42,8 @@ export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDra
   let dragTypeId: UnitTypeId | null = null;
   let dragPointerId: number | null = null;
   let dragButtonRect: DOMRect | null = null;
+  /** 指针是否已拖出按钮：出现指引线后，按钮内不再是可放置区，松手等于取消。 */
+  let dragLeftButton = false;
   let suppressClick = false;
 
   const onPointerDown = (event: PointerEvent): void => {
@@ -53,24 +55,22 @@ export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDra
     dragTypeId = typeId;
     dragPointerId = event.pointerId;
     dragButtonRect = button.getBoundingClientRect();
+    dragLeftButton = false;
     unitGroup.setPointerCapture(event.pointerId);
     options.onPickUnit(typeId);
-    drawArrow(event.clientX, event.clientY);
-    options.onDragStart(typeId);
-    options.onDragMove?.(typeId, event.clientX, event.clientY);
   };
 
   const onPointerMove = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
-    drawArrow(event.clientX, event.clientY);
-    if (dragTypeId) options.onDragMove?.(dragTypeId, event.clientX, event.clientY);
+    updateAiming(event.clientX, event.clientY);
   };
 
-  /** 松手判定与阵型一致：按钮内 = 自动放置（炸弹禁止）；战场上按落点；其余取消。 */
+  /** 松手判定：从未拖出 = 自动放置（炸弹禁止）；已出现指引线后再回按钮 = 取消。 */
   const onPointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     const typeId = dragTypeId;
     const buttonRect = dragButtonRect;
+    const leftButton = dragLeftButton;
     const clientX = event.clientX;
     const clientY = event.clientY;
     suppressClick = true;
@@ -80,8 +80,8 @@ export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDra
     }
 
     if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
-      // 炸弹没有自动落点，按钮内松开只取消，与阵型拖拽一致
-      if (options.canDropAt(typeId, null)) options.onRequestSpawn(typeId, null);
+      // 已拖出再回来只取消；炸弹没有自动落点
+      if (!leftButton && options.canDropAt(typeId, null)) options.onRequestSpawn(typeId, null);
     } else if (isOverBattlefield(clientX, clientY)) {
       options.onRequestSpawn(typeId, { clientX, clientY });
     }
@@ -116,11 +116,36 @@ export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDra
     if (unitGroup.hasPointerCapture(pointerId)) {
       unitGroup.releasePointerCapture(pointerId);
     }
+    const wasAiming = dragLeftButton;
     dragTypeId = null;
     dragPointerId = null;
     dragButtonRect = null;
+    dragLeftButton = false;
     hideArrow();
-    options.onDragEnd();
+    if (wasAiming) options.onDragEnd();
+  }
+
+  /**
+   * 拖出按钮后才进入瞄准：开场地预览并画指引线。
+   * 未离开时保持静默，方便按钮内松开走自动放置。
+   */
+  function updateAiming(clientX: number, clientY: number): void {
+    if (!dragLeftButton) {
+      beginAiming(clientX, clientY);
+      return;
+    }
+    drawArrow(clientX, clientY);
+    if (dragTypeId) options.onDragMove?.(dragTypeId, clientX, clientY);
+  }
+
+  /** 首次拖出按钮：锁定瞄准态，之后回到按钮也只显示红色取消指引。 */
+  function beginAiming(clientX: number, clientY: number): void {
+    if (dragLeftButton || !dragButtonRect || !dragTypeId) return;
+    if (isInsideRect(dragButtonRect, clientX, clientY)) return;
+    dragLeftButton = true;
+    options.onDragStart(dragTypeId);
+    options.onDragMove?.(dragTypeId, clientX, clientY);
+    drawArrow(clientX, clientY);
   }
 
   /**
@@ -142,9 +167,8 @@ export function enableDebugUnitDrag(options: DebugUnitDragOptions): DebugUnitDra
 
   function isArrowDropValid(clientX: number, clientY: number): boolean {
     if (!dragTypeId || !dragButtonRect) return false;
-    if (isInsideRect(dragButtonRect, clientX, clientY)) {
-      return options.canDropAt(dragTypeId, null);
-    }
+    // 已拖出后再回到按钮 = 取消区，指引线保持红色
+    if (isInsideRect(dragButtonRect, clientX, clientY)) return false;
     if (!isOverBattlefield(clientX, clientY)) return false;
     return options.canDropAt(dragTypeId, { clientX, clientY });
   }

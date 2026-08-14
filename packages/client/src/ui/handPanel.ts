@@ -82,7 +82,7 @@ export interface HandPanelOptions {
   onAoeDragMove?: (clientX: number, clientY: number) => void;
   /** 结束巨型炸弹拖拽：移除范围落点预览。 */
   onAoeDragEnd?: () => void;
-  /** 非建筑阵型持续拖拽 0.5 秒后：显示场地可放置区域。 */
+  /** 非建筑阵型拖出按钮后：显示场地可放置区域。 */
   onPlaceableHighlightStart?: (formation: CardFormation) => void;
   /** 非建筑阵型拖拽结束或取消：隐藏场地可放置区域。 */
   onPlaceableHighlightEnd?: () => void;
@@ -150,8 +150,10 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /** 正在拖拽的阵型 id；null 表示当前没有出兵手势。 */
   let dragFormationId: string | null = null;
   let dragPointerId: number | null = null;
-  /** 按下时的按钮范围：在其内松开视为「原地自动放置」。 */
+  /** 按下时的按钮范围：从未拖出时在其内松开视为自动放置。 */
   let dragButtonRect: DOMRect | null = null;
+  /** 指针是否已拖出按钮：出现指引线后，按钮内不再是可放置区，松手等于取消。 */
+  let dragLeftButton = false;
   /** 指针手势已处理过一次放置，抑制紧随其后的合成 click。 */
   let suppressClick = false;
   /** 当前拖拽是否为单建筑阵型（决定是否走绿格预览）。 */
@@ -333,7 +335,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncSelection();
   };
 
-  /** 按下阵型按钮：捕获指针并开始画拖拽箭头；建筑则立刻进入白色格放置预览。 */
+  /** 按下阵型按钮：只捕获指针。指引线与场地预览要等拖出按钮后才出现。 */
   const onFormationPointerDown = (event: PointerEvent): void => {
     if (playing || event.button !== 0) return;
     const button = (event.target as Element).closest<HTMLButtonElement>(
@@ -347,32 +349,20 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     dragFormationId = formation.id;
     dragPointerId = event.pointerId;
     dragButtonRect = button.getBoundingClientRect();
+    dragLeftButton = false;
     draggingBuilding = isBuildingOnlyFormation(formation);
     draggingAoe = isFuseBombFormation(formation);
     formationsElement.setPointerCapture(event.pointerId);
-    drawArrow(event.clientX, event.clientY);
-    if (draggingBuilding) {
-      options.onBuildingDragStart?.(formation);
-      options.onBuildingDragMove?.(event.clientX, event.clientY);
-      setActionStatus(STATUS_BUILDING_DRAG);
-    } else if (draggingAoe) {
-      options.onAoeDragStart?.(formation);
-      options.onAoeDragMove?.(event.clientX, event.clientY);
-    } else {
-      options.onPlaceableHighlightStart?.(formation);
-    }
   };
 
   const onFormationPointerMove = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
-    drawArrow(event.clientX, event.clientY);
-    if (draggingBuilding) options.onBuildingDragMove?.(event.clientX, event.clientY);
-    else if (draggingAoe) options.onAoeDragMove?.(event.clientX, event.clientY);
+    updateAiming(event.clientX, event.clientY);
   };
 
   /**
-   * 松手判定：非建筑在按钮内 = 自动放置；建筑必须拖到战场松手，按钮内/场外一律取消。
-   * 建筑在按下时已进入预览；先落成再卸绿格，避免预览先 dispose 导致校验脱节。
+   * 松手判定：从未拖出按钮时，非建筑走自动放置；已出现指引线后再回到按钮 = 取消。
+   * 建筑/炸弹没有自动落点，按钮内一律取消。先落成再卸预览，避免校验脱节。
    */
   const onFormationPointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
@@ -380,6 +370,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const buttonRect = dragButtonRect;
     const wasBuilding = draggingBuilding;
     const wasAoe = draggingAoe;
+    const leftButton = dragLeftButton;
     const clientX = event.clientX;
     const clientY = event.clientY;
     suppressClick = true;
@@ -389,8 +380,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
 
     if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
-      // 建筑禁止点击/按钮内自动放置，必须拖到绿格上松手
-      if (wasBuilding || wasAoe) setActionStatus(null);
+      // 已拖出再回来，或建筑/炸弹：按钮内松手只取消
+      if (leftButton || wasBuilding || wasAoe) setActionStatus(null);
       else requestPlay(formation, null);
     } else if (isOverBattlefield(clientX, clientY)) {
       requestPlay(formation, { clientX, clientY });
@@ -439,22 +430,60 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   formationsElement.addEventListener('pointercancel', onFormationPointerCancel);
   formationsElement.addEventListener('click', onFormationClick);
 
-  /** 结束一次出兵手势：释放指针捕获、卸建筑白色格预览并收起箭头。 */
+  /** 结束一次出兵手势：释放指针捕获、卸已开启的场地预览并收起箭头。 */
   function endFormationDrag(pointerId: number): void {
     if (formationsElement.hasPointerCapture(pointerId)) {
       formationsElement.releasePointerCapture(pointerId);
     }
+    const wasAiming = dragLeftButton;
     const wasBuilding = draggingBuilding;
     const wasAoe = draggingAoe;
     dragFormationId = null;
     dragPointerId = null;
     dragButtonRect = null;
+    dragLeftButton = false;
     draggingBuilding = false;
     draggingAoe = false;
     hideArrow();
+    // 从未拖出按钮则没开过预览，避免 End 无配对 Start
+    if (!wasAiming) return;
     if (wasBuilding) options.onBuildingDragEnd?.();
     else if (wasAoe) options.onAoeDragEnd?.();
     else options.onPlaceableHighlightEnd?.();
+  }
+
+  /**
+   * 拖出按钮后才进入瞄准：开场地预览并画指引线。
+   * 未离开时保持静默，方便按钮内松开走自动放置。
+   */
+  function updateAiming(clientX: number, clientY: number): void {
+    if (!dragLeftButton) {
+      beginAiming(clientX, clientY);
+      return;
+    }
+    drawArrow(clientX, clientY);
+    if (draggingBuilding) options.onBuildingDragMove?.(clientX, clientY);
+    else if (draggingAoe) options.onAoeDragMove?.(clientX, clientY);
+  }
+
+  /** 首次拖出按钮：锁定瞄准态，之后回到按钮也只显示红色取消指引。 */
+  function beginAiming(clientX: number, clientY: number): void {
+    if (dragLeftButton || !dragButtonRect) return;
+    if (isInsideRect(dragButtonRect, clientX, clientY)) return;
+    dragLeftButton = true;
+    const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
+    if (!formation) return;
+    if (draggingBuilding) {
+      options.onBuildingDragStart?.(formation);
+      options.onBuildingDragMove?.(clientX, clientY);
+      setActionStatus(STATUS_BUILDING_DRAG);
+    } else if (draggingAoe) {
+      options.onAoeDragStart?.(formation);
+      options.onAoeDragMove?.(clientX, clientY);
+    } else {
+      options.onPlaceableHighlightStart?.(formation);
+    }
+    drawArrow(clientX, clientY);
   }
 
   /**
@@ -475,15 +504,12 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     arrowLayer.classList.add('is-visible');
   }
 
-  /** 当前拖拽落点是否可放置：非建筑可在按钮内自动放置；建筑仅战场坐标可放。 */
+  /** 当前拖拽落点是否可放置：指引线出现后按钮区一律非法，只认战场坐标。 */
   function isArrowDropValid(clientX: number, clientY: number): boolean {
     const formation = formations.find((entry) => entry.id === dragFormationId) ?? null;
     if (!formation || !dragButtonRect) return false;
-    if (isInsideRect(dragButtonRect, clientX, clientY)) {
-      // 建筑没有自动落点，停留在按钮上视为非法
-      if (isBuildingOnlyFormation(formation) || isFuseBombFormation(formation)) return false;
-      return options.canDropAt?.(null, formation) !== false;
-    }
+    // 已拖出后再回到按钮 = 取消区，指引线保持红色
+    if (isInsideRect(dragButtonRect, clientX, clientY)) return false;
     if (!isOverBattlefield(clientX, clientY)) return false;
     return options.canDropAt?.({ clientX, clientY }, formation) !== false;
   }
@@ -784,15 +810,14 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     },
     dispose() {
       disposed = true;
-      if (draggingBuilding) {
-        draggingBuilding = false;
-        options.onBuildingDragEnd?.();
-      } else if (draggingAoe) {
-        draggingAoe = false;
-        options.onAoeDragEnd?.();
-      } else if (dragPointerId !== null) {
-        options.onPlaceableHighlightEnd?.();
+      if (dragLeftButton) {
+        if (draggingBuilding) options.onBuildingDragEnd?.();
+        else if (draggingAoe) options.onAoeDragEnd?.();
+        else options.onPlaceableHighlightEnd?.();
       }
+      draggingBuilding = false;
+      draggingAoe = false;
+      dragLeftButton = false;
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();
       cardsElement.removeEventListener('pointerdown', onPointerDown);

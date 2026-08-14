@@ -305,44 +305,32 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('在按钮内松开走自动放置，拖拽期间显示箭头', () => {
+  it('未拖出按钮时松开走自动放置，不显示指引线', () => {
     vi.useFakeTimers();
     const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
     const onPlay = vi.fn();
+    const onPlaceableHighlightStart = vi.fn();
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
       onRequestSpawn,
       onPlay,
+      onPlaceableHighlightStart,
     });
     selectAllCards();
 
     const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
     option.getBoundingClientRect = () => buttonRect();
     const arrow = document.querySelector('#hand-arrow')!;
+    const formations = document.querySelector('#hand-formations')!;
 
     option.dispatchEvent(pointerEvent('pointerdown', 40, 120, 500));
-    expect(arrow.classList.contains('is-visible')).toBe(true);
-    expect(arrow.classList.contains('is-invalid')).toBe(false);
-    // 箭头尖固定朝上：只有平移，不随弧线切线旋转
-    expect(document.querySelector('#hand-arrow-head')?.getAttribute('transform')).toBe(
-      'translate(120 500)',
-    );
-    document
-      .querySelector('#hand-formations')!
-      .dispatchEvent(pointerEvent('pointermove', 40, 130, 480));
-    const path = document.querySelector('#hand-arrow-path')?.getAttribute('d') ?? '';
-    expect(path).toContain('M ');
-    // 控制点在终点正下方（Q 的 y > 终点 y），末端切线朝上
-    const quad = path.match(/Q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/);
-    expect(quad).toBeTruthy();
-    expect(Number(quad![1])).toBe(130);
-    expect(Number(quad![2])).toBeGreaterThan(Number(quad![4]));
-    expect(Number(quad![3])).toBe(130);
-    expect(Number(quad![4])).toBe(480);
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+    expect(onPlaceableHighlightStart).not.toHaveBeenCalled();
 
-    document
-      .querySelector('#hand-formations')!
-      .dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
+    formations.dispatchEvent(pointerEvent('pointermove', 40, 130, 500));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+
+    formations.dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
     expect(arrow.classList.contains('is-visible')).toBe(false);
     expect(onRequestSpawn).toHaveBeenCalledOnce();
     expect(onRequestSpawn.mock.calls[0]?.[0]?.point).toBeNull();
@@ -350,6 +338,62 @@ describe('单机手牌交互', () => {
     vi.advanceTimersByTime(360);
     expect(onPlay).toHaveBeenCalledOnce();
     expect(panel.deck.hand).toHaveLength(0);
+
+    panel.dispose();
+  });
+
+  it('拖出按钮后才显示指引线；拖回按钮变红且松手取消', () => {
+    const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
+    const onPlaceableHighlightStart = vi.fn();
+    const onPlaceableHighlightEnd = vi.fn();
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onRequestSpawn,
+      onPlaceableHighlightStart,
+      onPlaceableHighlightEnd,
+    });
+    selectAllCards();
+
+    const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
+    option.getBoundingClientRect = () => buttonRect();
+    const arrow = document.querySelector('#hand-arrow')!;
+    const formations = document.querySelector('#hand-formations')!;
+    const canvas = document.querySelector('#battle-canvas')!;
+
+    option.dispatchEvent(pointerEvent('pointerdown', 40, 120, 500));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => canvas),
+    });
+    formations.dispatchEvent(pointerEvent('pointermove', 40, 200, 300));
+    expect(onPlaceableHighlightStart).toHaveBeenCalledOnce();
+    expect(arrow.classList.contains('is-visible')).toBe(true);
+    expect(arrow.classList.contains('is-invalid')).toBe(false);
+    // 箭头尖固定朝上：只有平移，不随弧线切线旋转
+    expect(document.querySelector('#hand-arrow-head')?.getAttribute('transform')).toBe(
+      'translate(200 300)',
+    );
+    const path = document.querySelector('#hand-arrow-path')?.getAttribute('d') ?? '';
+    expect(path).toContain('M ');
+    // 控制点在终点正下方（Q 的 y > 终点 y），末端切线朝上
+    const quad = path.match(/Q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/);
+    expect(quad).toBeTruthy();
+    expect(Number(quad![1])).toBe(200);
+    expect(Number(quad![2])).toBeGreaterThan(Number(quad![4]));
+    expect(Number(quad![3])).toBe(200);
+    expect(Number(quad![4])).toBe(300);
+
+    formations.dispatchEvent(pointerEvent('pointermove', 40, 122, 502));
+    expect(arrow.classList.contains('is-visible')).toBe(true);
+    expect(arrow.classList.contains('is-invalid')).toBe(true);
+
+    formations.dispatchEvent(pointerEvent('pointerup', 40, 122, 502));
+    expect(arrow.classList.contains('is-visible')).toBe(false);
+    expect(onRequestSpawn).not.toHaveBeenCalled();
+    expect(onPlaceableHighlightEnd).toHaveBeenCalledOnce();
+    expect(panel.deck.hand).toHaveLength(3);
 
     panel.dispose();
   });
@@ -373,7 +417,7 @@ describe('单机手牌交互', () => {
     const canvas = document.querySelector('#battle-canvas')!;
 
     option.dispatchEvent(pointerEvent('pointerdown', 44, 120, 500));
-    expect(arrow.classList.contains('is-invalid')).toBe(false);
+    expect(arrow.classList.contains('is-visible')).toBe(false);
 
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
@@ -526,15 +570,14 @@ describe('单机手牌交互', () => {
     expect(onRequestSpawn).not.toHaveBeenCalled();
     expect(document.querySelector('#hand-status')?.textContent).toBe('拖到白色格子上松手放置');
 
-    // 按下即进入建筑预览；停在按钮上箭头为非法，松开也不自动放置
+    // 未拖出按钮：不画指引线、不开预览，松开也不自动放置
     option.dispatchEvent(pointerEvent('pointerdown', 50, 120, 500));
-    expect(onBuildingDragStart).toHaveBeenCalledOnce();
-    expect(arrow.classList.contains('is-visible')).toBe(true);
-    expect(arrow.classList.contains('is-invalid')).toBe(true);
+    expect(onBuildingDragStart).not.toHaveBeenCalled();
+    expect(arrow.classList.contains('is-visible')).toBe(false);
 
     formations.dispatchEvent(pointerEvent('pointerup', 50, 122, 502));
     expect(onRequestSpawn).not.toHaveBeenCalled();
-    expect(onBuildingDragEnd).toHaveBeenCalledOnce();
+    expect(onBuildingDragEnd).not.toHaveBeenCalled();
     expect(panel.deck.hand).toHaveLength(5);
 
     // 拖到战场松手才真正请求落点
