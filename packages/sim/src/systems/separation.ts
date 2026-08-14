@@ -1,7 +1,7 @@
 import { type Fx, ONE, div, fromFloat, mul, sqrt } from '../math/fixed.js';
 import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
-import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
+import { isBuildingConfig } from '../config/units.js';
 import { evictionDeltaOutOfAabb } from '../nav/buildingEvict.js';
 import {
   ATTACK_PUSH_DEEP_RATIO,
@@ -14,8 +14,6 @@ import {
 import { UnitState, type Unit } from '../entity/unit.js';
 import type { World } from '../world.js';
 
-/** 复用的邻居缓冲，避免每帧每单位都新建数组 */
-const neighbors: number[] = [];
 /** 本 tick 建筑下标，两轮分离迭代共用，避免每轮再扫全场认建筑 */
 const buildingIndices: number[] = [];
 
@@ -51,68 +49,19 @@ export function resolveSeparation(world: World): void {
     // 先把地面单位推出建筑 AABB，再解单位间圆-圆重叠
     resolveBuildingSeparation(world);
 
-    for (let i = 0; i < units.length; i++) {
-      const a = units[i]!;
-      if (a.dead || isBuildingConfig(a.config)) continue;
-      grid.query(a.pos.x, a.pos.y, a.config.radius + MAX_UNIT_RADIUS, neighbors);
+    // 格子配对已去重；死亡/建筑未入哈希，这里只再滤移动层
+    grid.forEachCandidatePair((ia, ib) => {
+      resolveUnitPair(units[ia]!, units[ib]!);
+    });
 
-      for (let k = 0; k < neighbors.length; k++) {
-        const j = neighbors[k]!;
-        // 只处理 i < j 的一半配对，既去重又让遍历顺序完全由下标决定
-        if (j <= i) continue;
-        const b = units[j]!;
-        if (b.dead || isBuildingConfig(b.config)) continue;
-        // 空中与地面单位处于不同移动层，双方都不会被彼此顶开。
-        if (a.config.movementLayer !== b.config.movementLayer) continue;
-
-        const dx = b.pos.x - a.pos.x;
-        const dy = b.pos.y - a.pos.y;
-        const minDist = a.config.radius + b.config.radius;
-        const gapSq = mul(dx, dx) + mul(dy, dy);
-        if (gapSq >= mul(minDist, minDist)) continue;
-
-        const gap = sqrt(gapSq);
-        let nx: Fx;
-        let ny: Fx;
-        if (gap <= 0) {
-          // 两个单位完全重合时没有可用的分离方向，
-          // 按 id 派生四个固定方向之一，避免整堆单位被推成一条直线
-          const dir = (a.id + b.id) & 3;
-          nx = dir === 0 ? ONE : dir === 1 ? -ONE : 0;
-          ny = dir === 2 ? ONE : dir === 3 ? -ONE : 0;
-        } else {
-          nx = div(dx, gap);
-          ny = div(dy, gap);
-        }
-
-        const penetration = minDist - gap;
-        let strength = SEPARATION_STRENGTH;
-        // 任一方在 Attack 且重叠尚浅：削弱推挤，优先保住输出站位
-        if (
-          (a.state === UnitState.Attack || b.state === UnitState.Attack) &&
-          penetration < mul(minDist, ATTACK_PUSH_DEEP_RATIO)
-        ) {
-          strength = mul(strength, ATTACK_PUSH_SCALE);
-        }
-
-        const correction = mul(penetration, strength);
-        const totalMass = a.config.mass + b.config.mass;
-        const aShare = div(b.config.mass, totalMass);
-        const bShare = ONE - aShare;
-
-        a.push.x -= mul(mul(nx, correction), aShare);
-        a.push.y -= mul(mul(ny, correction), aShare);
-        b.push.x += mul(mul(nx, correction), bShare);
-        b.push.y += mul(mul(ny, correction), bShare);
-      }
-    }
-
+    let moved = false;
     for (let i = 0; i < units.length; i++) {
       const unit = units[i]!;
       if (unit.dead) continue;
       if (isBuildingConfig(unit.config)) continue;
       // 冲刺中不受软碰撞推挤，保证直线冲锋不被挤歪
       if (unit.state === UnitState.Charge) continue;
+      if (unit.push.x === 0 && unit.push.y === 0) continue;
 
       // 多邻居累加后可能超大，按本 tick 移动能力裁剪，防止被弹飞
       const pushLen = lengthOf(unit.push.x, unit.push.y);
@@ -125,15 +74,60 @@ export function resolveSeparation(world: World): void {
 
       unit.pos.x = clampToArena(unit.pos.x + unit.push.x, ARENA_WIDTH, unit.config.radius);
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
+      moved = true;
     }
+    // 无人位移则下一轮会看到同一批位置，再算一遍结果不变
+    if (!moved) break;
   }
   world.markUnitGridDirty();
 }
 
-/**
- * 圆 vs 建筑 AABB：把单位中心夹到矩形得最近点，穿透则沿法线推出单位。
- * 建筑侧位移恒为 0；空中单位不受阻挡。
- */
+/** 圆-圆软推挤；哈希已保证双方存活且非建筑。 */
+function resolveUnitPair(a: Unit, b: Unit): void {
+  // 空中与地面单位处于不同移动层，双方都不会被彼此顶开。
+  if (a.config.movementLayer !== b.config.movementLayer) return;
+
+  const dx = b.pos.x - a.pos.x;
+  const dy = b.pos.y - a.pos.y;
+  const minDist = a.config.radius + b.config.radius;
+  const gapSq = mul(dx, dx) + mul(dy, dy);
+  if (gapSq >= mul(minDist, minDist)) return;
+
+  const gap = sqrt(gapSq);
+  let nx: Fx;
+  let ny: Fx;
+  if (gap <= 0) {
+    // 两个单位完全重合时没有可用的分离方向，
+    // 按 id 派生四个固定方向之一，避免整堆单位被推成一条直线
+    const dir = (a.id + b.id) & 3;
+    nx = dir === 0 ? ONE : dir === 1 ? -ONE : 0;
+    ny = dir === 2 ? ONE : dir === 3 ? -ONE : 0;
+  } else {
+    nx = div(dx, gap);
+    ny = div(dy, gap);
+  }
+
+  const penetration = minDist - gap;
+  let strength = SEPARATION_STRENGTH;
+  // 任一方在 Attack 且重叠尚浅：削弱推挤，优先保住输出站位
+  if (
+    (a.state === UnitState.Attack || b.state === UnitState.Attack) &&
+    penetration < mul(minDist, ATTACK_PUSH_DEEP_RATIO)
+  ) {
+    strength = mul(strength, ATTACK_PUSH_SCALE);
+  }
+
+  const correction = mul(penetration, strength);
+  const totalMass = a.config.mass + b.config.mass;
+  const aShare = div(b.config.mass, totalMass);
+  const bShare = ONE - aShare;
+
+  a.push.x -= mul(mul(nx, correction), aShare);
+  a.push.y -= mul(mul(ny, correction), aShare);
+  b.push.x += mul(mul(nx, correction), bShare);
+  b.push.y += mul(mul(ny, correction), bShare);
+}
+
 /** 按 world.units 原序收集存活建筑，保证推出顺序与原先双重循环一致。 */
 function collectBuildingIndices(units: readonly Unit[]): void {
   buildingIndices.length = 0;
@@ -144,6 +138,10 @@ function collectBuildingIndices(units: readonly Unit[]): void {
   }
 }
 
+/**
+ * 圆 vs 建筑 AABB：把单位中心夹到矩形得最近点，穿透则沿法线推出单位。
+ * 建筑侧位移恒为 0；空中单位不受阻挡。
+ */
 function resolveBuildingSeparation(world: World): void {
   const units = world.units;
   for (let b = 0; b < buildingIndices.length; b++) {
