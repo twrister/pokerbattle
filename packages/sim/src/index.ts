@@ -9,8 +9,21 @@ export {
   ARENA_RIVER_MAX_Y,
   ARENA_RIVER_MIN_Y,
   applyArenaTerrain,
+  centeredRiverRange,
   type ArenaBridge,
 } from './config/arenaTerrain.js';
+export {
+  applyArenaConfigDraft,
+  captureArenaConfigAsDefault,
+  dumpArenaConfigDraft,
+  dumpDefaultArenaConfigDraft,
+  resetArenaConfigToDefault,
+  validateArenaConfigDraft,
+  type ArenaCameraDraft,
+  type ArenaCameraMode,
+  type ArenaColorsDraft,
+  type ArenaConfigDraft,
+} from './config/arenaConfig.js';
 export {
   AIR_PROJECTILE_HEIGHT,
   AIR_UNIT_HOVER_HEIGHT,

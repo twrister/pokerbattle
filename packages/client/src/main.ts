@@ -63,6 +63,7 @@ import { createHandOddsPage } from './ui/handOddsPage.js';
 import { createMainMenu, type VersusJoinRequest } from './ui/mainMenu.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
+import { createSceneConfigPage } from './ui/sceneConfigPage.js';
 import { createUnitStatsPage } from './ui/unitStatsPage.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import {
@@ -151,14 +152,34 @@ const deckConfigPage = createDeckConfigPage({
 });
 const handOddsPage = createHandOddsPage({ onBack: () => screens.show('deck-config') });
 const unitStatsPage = createUnitStatsPage({ onBack: () => screens.show('codex') });
+const sceneConfigPage = createSceneConfigPage({ onBack: () => screens.show('codex') });
 const codexPage = createCodexPage({
   onBack: () => screens.show('menu'),
   onOpenUnitStats: () => screens.show('unit-stats'),
+  onOpenSceneConfig: () => screens.show('scene-config'),
 });
 const battleHud = createBattleHud();
 const battleAnnounce = createBattleAnnounce();
 const battleResult = createBattleResult(() => screens.show('menu'));
 const openUnitStatsButton = document.querySelector<HTMLButtonElement>('#btn-open-unit-stats');
+const openSceneConfigButton = document.querySelector<HTMLButtonElement>('#btn-open-scene-config');
+
+/** 开发服对局里用 overlay 调场景，改完立刻重建当前战场镜头/地形。 */
+function bindSceneConfigOverlay(): () => void {
+  if (!IS_DEV_SERVER) return () => {};
+  const open = (): void => {
+    sceneConfigPage.setOnApplied(() => {
+      sharedScene?.rebuildArena();
+    });
+    sceneConfigPage.showAsOverlay();
+  };
+  openSceneConfigButton?.addEventListener('click', open);
+  return () => {
+    openSceneConfigButton?.removeEventListener('click', open);
+    sceneConfigPage.setOnApplied(() => {});
+    sceneConfigPage.hide();
+  };
+}
 
 /**
  * 战斗场景跨「大厅 ↔ 单机/沙盒/联机」复用。
@@ -179,9 +200,10 @@ function ensureBattleScene(mode: BattleMode, viewFaction: Faction = Faction.Blue
     });
     sharedBattleView = new BattleView(sharedScene.scene);
   } else {
+    sharedScene.rebuildArena();
     sharedScene.setMode(mode, viewFaction);
   }
-  // 每次进单机都套用已保存默认，保证「保存为默认」后的后续对局生效
+  // 每次进单机都套用已保存默认，保证场景配置页保存后的后续对局生效
   if (mode === 'solo') {
     sharedScene.setSoloCameraAngle(defaults.cameraAngle);
     sharedScene.setSoloViewBottomExtra(defaults.viewBottomExtra);
@@ -565,6 +587,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     unitStatsPage.showAsOverlay();
   };
   if (IS_DEV_SERVER) openUnitStatsButton?.addEventListener('click', openUnitStatsOverlay);
+  const unbindSceneConfig = bindSceneConfigOverlay();
 
   if (!isSolo && !panel.buildingType) bindUnitPlacement();
   if (debugSpawn) {
@@ -604,6 +627,7 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   const returnToMenu = (): void => {
     unitStatsPage.hide();
+    sceneConfigPage.hide();
     screens.show('menu');
   };
   backButton.addEventListener('click', returnToMenu);
@@ -670,6 +694,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     openUnitStatsButton?.removeEventListener('click', openUnitStatsOverlay);
     unitStatsPage.setOnApplied(() => {});
     unitStatsPage.hide();
+    unbindSceneConfig();
     battleView.reset();
   };
 }
@@ -1039,7 +1064,12 @@ function runVersusSession(
     enableRuntimeControls: false,
   });
 
-  const returnToMenu = (): void => screens.show('menu');
+  const unbindSceneConfig = bindSceneConfigOverlay();
+
+  const returnToMenu = (): void => {
+    sceneConfigPage.hide();
+    screens.show('menu');
+  };
   backButton.addEventListener('click', returnToMenu);
 
   let lastFrameAt = performance.now();
@@ -1095,6 +1125,7 @@ function runVersusSession(
     disableUnitSelection();
     handPanel.dispose();
     panel.dispose();
+    unbindSceneConfig();
     battleView.reset();
     closeSocket();
   };
@@ -1135,6 +1166,11 @@ screens = createScreenController({
     unitStatsPage.show();
     return () => unitStatsPage.hide();
   },
+  'scene-config': () => {
+    syncLobbyPresenceForScreen('scene-config');
+    sceneConfigPage.show();
+    return () => sceneConfigPage.hide();
+  },
   sandbox: () => {
     // 正式服禁止进入沙盒；若被直接调起则立刻回大厅
     if (!IS_DEV_SERVER) {
@@ -1167,6 +1203,7 @@ function disposeApp(): void {
   deckConfigPage.dispose();
   handOddsPage.dispose();
   unitStatsPage.dispose();
+  sceneConfigPage.dispose();
   codexPage.dispose();
 }
 

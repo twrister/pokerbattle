@@ -6,8 +6,14 @@ import {
   applySoloCameraPose,
   calculateSoloOrthoBounds,
   clampSoloCameraAngle,
+  clampSoloCameraDistance,
+  clampSoloCameraFov,
+  clampSoloCameraOffsetY,
   clampSoloViewBottomExtra,
   DEFAULT_SOLO_CAMERA_ANGLE_DEG,
+  DEFAULT_SOLO_CAMERA_DISTANCE,
+  DEFAULT_SOLO_CAMERA_FOV,
+  DEFAULT_SOLO_CAMERA_OFFSET_Y,
   DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
 } from '../src/view/scene.js';
 
@@ -22,6 +28,44 @@ describe('单机正交镜头', () => {
     expect(DEFAULT_SOLO_VIEW_BOTTOM_EXTRA).toBe(8);
     expect(clampSoloViewBottomExtra(-1)).toBe(0);
     expect(clampSoloViewBottomExtra(20)).toBe(15);
+  });
+
+  it('默认透视 FOV 为 45°，并限制在 20–90', () => {
+    expect(DEFAULT_SOLO_CAMERA_FOV).toBe(45);
+    expect(clampSoloCameraFov(10)).toBe(20);
+    expect(clampSoloCameraFov(120)).toBe(90);
+  });
+
+  it('默认透视距离为 50，并限制在 8–120', () => {
+    expect(DEFAULT_SOLO_CAMERA_DISTANCE).toBe(50);
+    expect(clampSoloCameraDistance(1)).toBe(8);
+    expect(clampSoloCameraDistance(200)).toBe(120);
+  });
+
+  it('默认画面上下偏移为 0，并限制在 -30–30', () => {
+    expect(DEFAULT_SOLO_CAMERA_OFFSET_Y).toBe(0);
+    expect(clampSoloCameraOffsetY(-40)).toBe(-30);
+    expect(clampSoloCameraOffsetY(40)).toBe(30);
+  });
+
+  it('透视距离加倍时斜视位姿沿视线拉远', () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+    applySoloCameraPose(camera, 45, Faction.Blue, 100);
+    expect(camera.position.y).toBeCloseTo(100 * Math.sin(Math.PI / 4), 5);
+    expect(camera.position.z).toBeCloseTo(100 * Math.cos(Math.PI / 4), 5);
+  });
+
+  it('透视画面上下偏移为正时，场地中心出现在画面更高处', () => {
+    const origin = new THREE.Vector3(0, 0, 0);
+    const ndcY = (camera: THREE.PerspectiveCamera): number => {
+      origin.set(0, 0, 0).project(camera);
+      return origin.y;
+    };
+    const base = new THREE.PerspectiveCamera(45, 9 / 16, 0.1, 500);
+    applySoloCameraPose(base, 30, Faction.Blue, 70, 0);
+    const shifted = new THREE.PerspectiveCamera(45, 9 / 16, 0.1, 500);
+    applySoloCameraPose(shifted, 30, Faction.Blue, 70, 8);
+    expect(ndcY(shifted)).toBeGreaterThan(ndcY(base));
   });
 
   it('45° 斜视角时镜头落在 +Z 侧且朝向原点', () => {

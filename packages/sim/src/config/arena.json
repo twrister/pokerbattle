@@ -1,0 +1,31 @@
+{
+  "width": 18,
+  "height": 32,
+  "riverWidth": 2,
+  "bridges": [
+    {
+      "minX": 3,
+      "maxX": 5
+    },
+    {
+      "minX": 13,
+      "maxX": 15
+    }
+  ],
+  "camera": {
+    "mode": "perspective",
+    "fov": 30,
+    "distance": 71,
+    "angleDeg": 45,
+    "bottomExtra": 8,
+    "offsetY": 4.5
+  },
+  "colors": {
+    "background": "#0d1117",
+    "ground": "#3a465a",
+    "river": "#548196",
+    "bridge": "#333e55",
+    "grid": "#484d56",
+    "border": "#8394ad"
+  }
+}

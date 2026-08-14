@@ -1,9 +1,5 @@
-import {
-  clampSoloCameraAngle,
-  clampSoloViewBottomExtra,
-  DEFAULT_SOLO_CAMERA_ANGLE_DEG,
-  DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
-} from '../view/scene.js';
+import { dumpArenaConfigDraft } from '@pb/sim';
+import { clampSoloCameraAngle, clampSoloViewBottomExtra } from '../view/scene.js';
 
 /** localStorage 键：运行控制「保存为默认」后的参数 */
 const STORAGE_KEY = 'pb.runtimeControls.defaults';
@@ -23,25 +19,31 @@ export interface RuntimeDefaults {
   overtimeDrawIntervalSeconds: number;
 }
 
-/** 内置默认；无本地记录或字段非法时回落至此。 */
+/** 内置默认：镜头读 arena.json，发牌间隔保持原常量。 */
 export function builtInRuntimeDefaults(): RuntimeDefaults {
+  const camera = dumpArenaConfigDraft().camera;
   return {
-    cameraAngle: DEFAULT_SOLO_CAMERA_ANGLE_DEG,
-    viewBottomExtra: DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
+    cameraAngle: camera.angleDeg,
+    viewBottomExtra: camera.bottomExtra,
     normalDrawIntervalSeconds: DEFAULT_NORMAL_DRAW_INTERVAL_SECONDS,
     doubleSpeedDrawIntervalSeconds: DEFAULT_DOUBLE_SPEED_DRAW_INTERVAL_SECONDS,
     overtimeDrawIntervalSeconds: DEFAULT_OVERTIME_DRAW_INTERVAL_SECONDS,
   };
 }
 
-/** 读取已保存的运行控制默认值；缺省或损坏时与内置默认合并。 */
+/** 读取运行控制默认值；镜头以 arena 配置为准，发牌间隔仍可走 localStorage。 */
 export function loadRuntimeDefaults(): RuntimeDefaults {
   const fallback = builtInRuntimeDefaults();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<RuntimeDefaults>;
-    return sanitizeRuntimeDefaults(parsed, fallback);
+    const merged = sanitizeRuntimeDefaults(parsed, fallback);
+    return {
+      ...merged,
+      cameraAngle: fallback.cameraAngle,
+      viewBottomExtra: fallback.viewBottomExtra,
+    };
   } catch {
     return fallback;
   }

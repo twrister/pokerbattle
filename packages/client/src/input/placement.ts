@@ -13,7 +13,7 @@ import {
 import { ARENA_H, ARENA_W, toSimX, toSimY } from '../view/coords.js';
 
 /** @deprecated 使用 HALF_COURT_MID_Y；保留别名以免旧测试/调用方断裂。 */
-export const BLUE_HALF_MAX_Y = HALF_COURT_MID_Y;
+export { HALF_COURT_MID_Y as BLUE_HALF_MAX_Y };
 
 export interface SimPoint {
   x: number;

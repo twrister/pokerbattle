@@ -4,6 +4,7 @@ export type AppScreen =
   | 'hand-odds'
   | 'codex'
   | 'unit-stats'
+  | 'scene-config'
   | 'sandbox'
   | 'solo'
   | 'versus';

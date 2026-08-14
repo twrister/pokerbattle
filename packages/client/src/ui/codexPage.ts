@@ -24,6 +24,8 @@ export interface CodexPageOptions {
   onBack: () => void;
   /** 开发服：打开单位参数对比/编辑页。 */
   onOpenUnitStats?: () => void;
+  /** 开发服：打开场景参数配置页。 */
+  onOpenSceneConfig?: () => void;
 }
 
 export interface CodexPageHandle {
@@ -52,6 +54,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   const root = required<HTMLElement>('#codex');
   const backButton = required<HTMLButtonElement>('#btn-codex-back', root);
   const unitStatsButton = root.querySelector<HTMLButtonElement>('#btn-codex-unit-stats');
+  const sceneConfigButton = root.querySelector<HTMLButtonElement>('#btn-codex-scene-config');
   const categoryList = required<HTMLElement>('#codex-category-list', root);
   const unitList = required<HTMLElement>('#codex-unit-list', root);
   const detail = required<HTMLElement>('#codex-detail', root);
@@ -64,8 +67,10 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
 
   const back = (): void => options.onBack();
   const openUnitStats = (): void => options.onOpenUnitStats?.();
+  const openSceneConfig = (): void => options.onOpenSceneConfig?.();
   backButton.addEventListener('click', back);
   unitStatsButton?.addEventListener('click', openUnitStats);
+  sceneConfigButton?.addEventListener('click', openSceneConfig);
 
   /** 根据当前分类、选中兵种与等级重新渲染整页内容。 */
   function render(): void {
@@ -239,6 +244,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     dispose() {
       backButton.removeEventListener('click', back);
       unitStatsButton?.removeEventListener('click', openUnitStats);
+      sceneConfigButton?.removeEventListener('click', openSceneConfig);
     },
   };
 }

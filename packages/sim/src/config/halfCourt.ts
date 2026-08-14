@@ -15,21 +15,28 @@ import {
 } from './cardFormations.js';
 import { UNIT_CONFIGS } from './units.js';
 
-/** 场地浮点宽高，半场规则与客户端射线落点共用同一套数值。 */
-const ARENA_W = toFloat(ARENA_WIDTH);
-const ARENA_H = toFloat(ARENA_HEIGHT);
-/** 蓝方部署区上沿；保留旧名称以兼容客户端放置逻辑。 */
-export const HALF_COURT_MID_Y = ARENA_RIVER_MIN_Y;
+/** 蓝方部署区上沿；与河道下沿同一 live 绑定，配置 apply 后下一局生效。 */
+export { ARENA_RIVER_MIN_Y as HALF_COURT_MID_Y } from './arenaTerrain.js';
 
 export interface SimPoint {
   x: number;
   y: number;
 }
 
+/** 当前场地浮点宽，避免模块加载时把尺寸缓存死。 */
+function arenaW(): number {
+  return toFloat(ARENA_WIDTH);
+}
+
+/** 当前场地浮点高。 */
+function arenaH(): number {
+  return toFloat(ARENA_HEIGHT);
+}
+
 /** 返回阵营己方部署区的 Y 边界；中间河道和桥面均不可部署。 */
 export function halfCourtYRange(faction: Faction): { minY: number; maxY: number } {
-  if (faction === Faction.Blue) return { minY: 0, maxY: HALF_COURT_MID_Y };
-  return { minY: ARENA_RIVER_MAX_Y, maxY: ARENA_H };
+  if (faction === Faction.Blue) return { minY: 0, maxY: ARENA_RIVER_MIN_Y };
+  return { minY: ARENA_RIVER_MAX_Y, maxY: arenaH() };
 }
 
 /**
@@ -44,7 +51,7 @@ export function isDeployAnchorInsideHalfCourt(
   const { minY, maxY } = halfCourtYRange(faction);
   return (
     x >= 0
-    && x <= ARENA_W
+    && x <= arenaW()
     && y >= minY
     && (faction === Faction.Blue ? y < maxY : y <= maxY)
   );
@@ -74,7 +81,7 @@ export function isBuildingInsideHalfCourt(
   const snappedX = snapBuildingCenter(centerX, footprint);
   const snappedY = snapBuildingCenter(centerY, footprint);
   const rect = buildingCellRange(snappedX, snappedY, footprint);
-  if (!isBuildingRectInsideArena(rect, ARENA_W, ARENA_H)) return false;
+  if (!isBuildingRectInsideArena(rect, arenaW(), arenaH())) return false;
   const { minY, maxY } = halfCourtYRange(faction);
   return rect.minY >= minY && rect.maxY <= maxY;
 }
@@ -89,7 +96,7 @@ export function halfCourtSafeAnchor(formation: CardFormation, faction: Faction):
     return halfCourtSafeBuildingAnchor(UNIT_CONFIGS[typeId].footprint, faction);
   }
   const { minY, maxY } = halfCourtYRange(faction);
-  const centerX = ARENA_W / 2;
+  const centerX = arenaW() / 2;
   const centerY = (minY + maxY) / 2;
   if (!isDeployAnchorInsideHalfCourt(centerX, centerY, faction)) return null;
   return { x: centerX, y: centerY };
@@ -100,10 +107,10 @@ export function halfCourtSafeBuildingAnchor(footprint: number, faction: Faction)
   const size = Math.max(1, Math.floor(footprint));
   const { minY, maxY } = halfCourtYRange(faction);
   const halfHeight = maxY - minY;
-  if (size > ARENA_W || size > halfHeight) return null;
+  if (size > arenaW() || size > halfHeight) return null;
   const half = size / 2;
   const minCenter = minY + half;
-  const maxCenterX = ARENA_W - half;
+  const maxCenterX = arenaW() - half;
   const maxCenterY = maxY - half;
   if (half > maxCenterX || minCenter > maxCenterY) return null;
   const cx = snapBuildingCenter((half + maxCenterX) / 2, size);

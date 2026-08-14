@@ -10,6 +10,8 @@ const clientDir = path.dirname(fileURLToPath(import.meta.url));
 const unitsJsonPath = path.resolve(clientDir, '../sim/src/config/units.json');
 /** monorepo 内牌型阵型配置的唯一落盘路径 */
 const cardFormationsJsonPath = path.resolve(clientDir, '../sim/src/config/cardFormations.json');
+/** monorepo 内场景配置的唯一落盘路径 */
+const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
 
 /** 开发服务器：接收面板 POST，覆盖 units.json */
 function unitConfigWritePlugin(): Plugin {
@@ -101,6 +103,42 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+/** 开发服务器：接收场景配置页保存请求，覆盖 arena.json。 */
+function arenaConfigWritePlugin(): Plugin {
+  return {
+    name: 'pb-arena-config-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__pb/arena-config' || req.method !== 'POST') {
+          next();
+          return;
+        }
+        readRequestBody(req)
+          .then((raw) => {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              sendJson(res, 400, { error: 'invalid JSON' });
+              return;
+            }
+            const validationError = validateArenaConfigBody(parsed);
+            if (validationError) {
+              sendJson(res, 400, { error: validationError });
+              return;
+            }
+            fs.writeFileSync(arenaJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -129,6 +167,30 @@ function validateUnitLevels(value: object): string | undefined {
   return undefined;
 }
 
+/** 写盘前做结构校验，避免把残缺场景配置写进 arena.json。 */
+function validateArenaConfigBody(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
+  const draft = value as {
+    width?: unknown;
+    height?: unknown;
+    riverWidth?: unknown;
+    bridges?: unknown;
+    camera?: { mode?: unknown };
+    colors?: unknown;
+  };
+  if (!Number.isInteger(draft.width) || (draft.width as number) <= 0) return 'width must be a positive integer';
+  if (!Number.isInteger(draft.height) || (draft.height as number) <= 0) return 'height must be a positive integer';
+  if (!Number.isInteger(draft.riverWidth) || (draft.riverWidth as number) <= 0) {
+    return 'riverWidth must be a positive integer';
+  }
+  if (!Array.isArray(draft.bridges) || draft.bridges.length === 0) return 'bridges must be a non-empty array';
+  if (draft.camera?.mode !== 'ortho' && draft.camera?.mode !== 'perspective') {
+    return 'camera.mode must be ortho or perspective';
+  }
+  if (!draft.colors || typeof draft.colors !== 'object') return 'colors must be an object';
+  return undefined;
+}
+
 /** 开发服与正式预览共用：把同源 /ws 转到权威服，前端无需写死双端口。 */
 const wsProxy = {
   '/ws': { target: 'ws://localhost:9090', ws: true },
@@ -143,7 +205,7 @@ function resolvePublicBase(): string {
 
 export default defineConfig({
   base: resolvePublicBase(),
-  plugins: [unitConfigWritePlugin(), cardFormationWritePlugin()],
+  plugins: [unitConfigWritePlugin(), cardFormationWritePlugin(), arenaConfigWritePlugin()],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {
     host: true,

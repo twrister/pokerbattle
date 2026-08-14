@@ -1,9 +1,15 @@
 import * as THREE from 'three';
 import { ARENA_HEIGHT, ARENA_WIDTH, toFloat } from '@pb/sim';
 
-/** 场地尺寸的浮点版本，渲染层用 */
-export const ARENA_W = toFloat(ARENA_WIDTH);
-export const ARENA_H = toFloat(ARENA_HEIGHT);
+/** 场地尺寸的浮点版本，渲染层用；apply 场景配置后须调用 syncArenaCoords。 */
+export let ARENA_W = toFloat(ARENA_WIDTH);
+export let ARENA_H = toFloat(ARENA_HEIGHT);
+
+/** 把客户端缓存的场地宽高同步到当前 sim 常量，供下一局/预览使用。 */
+export function syncArenaCoords(): void {
+  ARENA_W = toFloat(ARENA_WIDTH);
+  ARENA_H = toFloat(ARENA_HEIGHT);
+}
 
 /**
  * sim 用左下角为原点的 (x, y) 平面坐标，Three 用以场地中心为原点的 (x, z)。
@@ -22,19 +28,19 @@ export function viewNearSign(camera: THREE.Camera): number {
 }
 
 export function toSceneX(simX: number): number {
-  return simX - ARENA_W / 2;
+  return simX - toFloat(ARENA_WIDTH) / 2;
 }
 
 export function toSceneZ(simY: number): number {
-  return ARENA_H / 2 - simY;
+  return toFloat(ARENA_HEIGHT) / 2 - simY;
 }
 
 export function toSimX(sceneX: number): number {
-  return sceneX + ARENA_W / 2;
+  return sceneX + toFloat(ARENA_WIDTH) / 2;
 }
 
 export function toSimY(sceneZ: number): number {
-  return ARENA_H / 2 - sceneZ;
+  return toFloat(ARENA_HEIGHT) / 2 - sceneZ;
 }
 
 /** sim 平面朝向的 Y 分量转到场景 Z；与 toSceneZ 同向取反。 */

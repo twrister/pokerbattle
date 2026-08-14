@@ -15,7 +15,7 @@ describe('运行控制默认参数', () => {
     expect(loadRuntimeDefaults()).toEqual(builtInRuntimeDefaults());
   });
 
-  it('保存后再次加载沿用写入值', () => {
+  it('保存后再次加载沿用发牌间隔，镜头仍读场景配置', () => {
     saveRuntimeDefaults({
       cameraAngle: 60,
       viewBottomExtra: 10,
@@ -24,15 +24,15 @@ describe('运行控制默认参数', () => {
       overtimeDrawIntervalSeconds: 1,
     });
     expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: 60,
-      viewBottomExtra: 10,
+      cameraAngle: builtInRuntimeDefaults().cameraAngle,
+      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
       normalDrawIntervalSeconds: 5,
       doubleSpeedDrawIntervalSeconds: 2.5,
       overtimeDrawIntervalSeconds: 1,
     });
   });
 
-  it('非法值会被夹紧或回落', () => {
+  it('非法发牌间隔会被夹紧或回落，镜头不受 localStorage 脏数据影响', () => {
     saveRuntimeDefaults({
       cameraAngle: 999,
       viewBottomExtra: -3,
@@ -41,8 +41,8 @@ describe('运行控制默认参数', () => {
       overtimeDrawIntervalSeconds: Number.NaN,
     });
     expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: 90,
-      viewBottomExtra: 0,
+      cameraAngle: builtInRuntimeDefaults().cameraAngle,
+      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
       normalDrawIntervalSeconds: 0.25,
       doubleSpeedDrawIntervalSeconds: 60,
       overtimeDrawIntervalSeconds: builtInRuntimeDefaults().overtimeDrawIntervalSeconds,
@@ -59,8 +59,8 @@ describe('运行控制默认参数', () => {
       }),
     );
     expect(loadRuntimeDefaults()).toEqual({
-      cameraAngle: 45,
-      viewBottomExtra: 8,
+      cameraAngle: builtInRuntimeDefaults().cameraAngle,
+      viewBottomExtra: builtInRuntimeDefaults().viewBottomExtra,
       normalDrawIntervalSeconds: 6,
       doubleSpeedDrawIntervalSeconds: 3,
       overtimeDrawIntervalSeconds: 2,

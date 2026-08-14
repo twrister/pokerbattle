@@ -40,7 +40,9 @@
 
       /* 正式服（无 html.is-dev）：隐藏仅开发服可用的调试/编辑入口 */
       html:not(.is-dev) #btn-open-unit-stats,
+      html:not(.is-dev) #btn-open-scene-config,
       html:not(.is-dev) #unit-stats,
+      html:not(.is-dev) #scene-config,
       html:not(.is-dev) #panel-stats,
       html:not(.is-dev) #hud.is-solo #panel-controls,
       html:not(.is-dev) #btn-deck-add-formation,
@@ -1331,8 +1333,9 @@
         display: none !important;
       }
 
-      /* 战场入口：右下角打开单位参数对比/编辑页（overlay） */
-      #btn-open-unit-stats {
+      /* 战场入口：右下角打开单位参数 / 场景配置（overlay） */
+      #btn-open-unit-stats,
+      #btn-open-scene-config {
         position: absolute;
         bottom: 16px;
         right: 16px;
@@ -1347,8 +1350,18 @@
         cursor: pointer;
       }
 
-      #hud.is-solo #btn-open-unit-stats {
+      #btn-open-scene-config {
+        right: 112px;
+      }
+
+      #hud.is-solo #btn-open-unit-stats,
+      #hud.is-solo #btn-open-scene-config {
         bottom: max(16px, env(safe-area-inset-bottom));
+      }
+
+      /* 联机藏单位参数后，场景配置占回右下角 */
+      #hud.is-versus #btn-open-scene-config {
+        right: 16px;
       }
 
       .title {
@@ -2272,6 +2285,11 @@
         text-align: center;
       }
 
+      .codex-header-actions {
+        display: flex;
+        gap: calc(8 * var(--hu));
+      }
+
       .codex-back,
       .codex-category,
       .codex-unit-card {
@@ -2977,6 +2995,195 @@
         color: var(--red);
       }
 
+      #scene-config {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 22% 18%, rgba(120, 96, 48, 0.22), transparent 34%),
+          #0a1018;
+      }
+
+      /* 局内 overlay：右侧表单，左侧透出战场方便对照镜头 */
+      #scene-config.is-overlay {
+        z-index: 40;
+        background: transparent;
+        pointer-events: none;
+      }
+
+      #scene-config.is-overlay .scene-config-shell {
+        align-items: flex-end;
+        background: transparent;
+        padding: 12px 12px 12px 0;
+        pointer-events: none;
+      }
+
+      #scene-config.is-overlay .scene-config-header,
+      #scene-config.is-overlay .scene-config-footer,
+      #scene-config.is-overlay #scene-config-form {
+        width: min(380px, 100%);
+        pointer-events: auto;
+        background: rgba(10, 16, 24, 0.92);
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+      }
+
+      #scene-config.is-overlay .scene-config-header,
+      #scene-config.is-overlay .scene-config-footer {
+        padding: 10px 12px;
+      }
+
+      #scene-config.is-overlay .scene-config-body {
+        width: min(380px, 100%);
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr);
+      }
+
+      #scene-config.is-overlay #scene-config-preview {
+        display: none;
+      }
+
+      .scene-config-shell {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 16px 20px 12px;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .scene-config-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .scene-config-header h1 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .scene-config-header button,
+      .scene-config-footer button {
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+        min-height: 34px;
+        padding: 7px 12px;
+      }
+
+      .scene-config-body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+        gap: 16px;
+      }
+
+      #scene-config-preview {
+        min-height: 0;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      #scene-config-preview canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #scene-config-form {
+        min-height: 0;
+        overflow: auto;
+        padding: 12px 14px;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(16, 24, 34, 0.72);
+      }
+
+      .scene-config-group {
+        margin: 0 0 16px;
+      }
+
+      .scene-config-group h2 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--text-dim);
+        font-weight: 600;
+      }
+
+      .scene-config-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 12px;
+        margin-bottom: 8px;
+      }
+
+      .scene-config-row label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--text-dim);
+        font-size: 12px;
+        min-width: 110px;
+        flex: 1;
+      }
+
+      .scene-config-row input,
+      .scene-config-row select {
+        min-height: 30px;
+        padding: 4px 8px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(10, 16, 24, 0.9);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .scene-config-row input[type='color'] {
+        padding: 2px;
+        min-height: 34px;
+      }
+
+      .scene-config-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      #scene-config-status {
+        flex: 1;
+        min-width: 160px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      #scene-config-status[data-tone='ok'] {
+        color: var(--accent);
+      }
+
+      #scene-config-status[data-tone='error'] {
+        color: var(--red);
+      }
+
+      @media (max-width: 900px) {
+        .scene-config-body {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(220px, 1fr) minmax(0, 1fr);
+        }
+      }
+
       @media (max-width: 720px) {
         .hand-odds-body {
           grid-template-columns: 1fr;
@@ -3204,7 +3411,10 @@
         <header class="codex-header">
           <button id="btn-codex-back" class="codex-back" type="button">返回主界面</button>
           <h1>兵种图鉴</h1>
-          <button id="btn-codex-unit-stats" class="codex-back dev-only" type="button">单位参数</button>
+          <div class="codex-header-actions">
+            <button id="btn-codex-unit-stats" class="codex-back dev-only" type="button">单位参数</button>
+            <button id="btn-codex-scene-config" class="codex-back dev-only" type="button">场景配置</button>
+          </div>
         </header>
         <section class="codex-toolbar">
           <p class="codex-toolbar-copy">浏览可移动单位的战斗属性与特性，选择兵种查看详细档案。</p>
@@ -3342,6 +3552,81 @@
       </div>
     </main>
 
+    <main id="scene-config" class="is-hidden" aria-hidden="true">
+      <div class="scene-config-shell">
+        <header class="scene-config-header">
+          <button id="btn-scene-config-back" type="button">返回图鉴</button>
+          <h1>场景配置</h1>
+          <span aria-hidden="true"></span>
+        </header>
+        <section class="scene-config-body">
+          <div id="scene-config-preview" aria-label="场景预览"></div>
+          <form id="scene-config-form">
+            <section class="scene-config-group">
+              <h2>镜头</h2>
+              <div class="scene-config-row">
+                <label>模式
+                  <select id="scene-camera-mode">
+                    <option value="ortho">正交</option>
+                    <option value="perspective">透视</option>
+                  </select>
+                </label>
+                <label id="scene-fov-row">FOV
+                  <input id="scene-fov" type="number" min="20" max="90" step="1" />
+                </label>
+                <label id="scene-distance-row">距离
+                  <input id="scene-distance" type="number" min="8" max="120" step="1" />
+                </label>
+                <label id="scene-offset-y-row">画面上下
+                  <input id="scene-offset-y" type="number" min="-30" max="30" step="0.5" />
+                </label>
+                <label>俯仰角
+                  <input id="scene-angle" type="number" min="15" max="90" step="1" />
+                </label>
+                <label id="scene-bottom-extra-row">底部留白
+                  <input id="scene-bottom-extra" type="number" min="0" max="15" step="0.5" />
+                </label>
+              </div>
+            </section>
+            <section class="scene-config-group">
+              <h2>场地</h2>
+              <div class="scene-config-row">
+                <label>宽
+                  <input id="scene-width" type="number" min="4" step="1" />
+                </label>
+                <label>高
+                  <input id="scene-height" type="number" min="5" step="1" />
+                </label>
+                <label>河道宽度
+                  <input id="scene-river-width" type="number" min="1" step="1" />
+                </label>
+              </div>
+            </section>
+            <section class="scene-config-group">
+              <h2>桥</h2>
+              <div id="scene-bridge-list"></div>
+            </section>
+            <section class="scene-config-group">
+              <h2>颜色</h2>
+              <div class="scene-config-row">
+                <label>背景<input id="scene-color-background" type="color" /></label>
+                <label>地面<input id="scene-color-ground" type="color" /></label>
+                <label>河道<input id="scene-color-river" type="color" /></label>
+                <label>桥面<input id="scene-color-bridge" type="color" /></label>
+                <label>网格<input id="scene-color-grid" type="color" /></label>
+                <label>边框<input id="scene-color-border" type="color" /></label>
+              </div>
+            </section>
+          </form>
+        </section>
+        <footer class="scene-config-footer">
+          <div id="scene-config-status" role="status" aria-live="polite">改完点保存写回配置文件</div>
+          <button id="btn-scene-config-reset" type="button">重置</button>
+          <button id="btn-scene-config-save" type="button">保存</button>
+        </footer>
+      </div>
+    </main>
+
     <div id="app" class="is-hidden"></div>
 
     <div id="hud" class="is-hidden">
@@ -3474,6 +3759,7 @@
       </section>
 
       <button id="btn-open-unit-stats" class="dev-only" type="button">单位参数</button>
+      <button id="btn-open-scene-config" class="dev-only" type="button">场景配置</button>
 
       <div id="panel-bottom-dock">
         <section class="panel" id="panel-building">
