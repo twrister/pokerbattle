@@ -14,7 +14,6 @@ import {
   PRIMARY_NUMERIC_KEYS,
   formatDraftNumber,
   getLevelDraft,
-  loadDefaultUnitDrafts,
   loadUnitDrafts,
   presentSkillGroups,
   readControlsIntoDrafts,
@@ -27,9 +26,7 @@ import {
   type UnitCatalogEntry,
 } from './unitCatalog.js';
 
-type PageTab = 'overview' | 'bar' | 'radar';
-
-/** 柱状/雷达可选的对比属性（含衍生 DPS）。 */
+/** 总览相对条与 DPS 用的对比属性（含衍生 DPS）。 */
 type CompareStatKey =
   | 'maxHp'
   | 'damage'
@@ -39,32 +36,10 @@ type CompareStatKey =
   | 'moveSpeed'
   | 'sightRange';
 
-const COMPARE_STAT_NAMES: Record<CompareStatKey, string> = {
-  maxHp: '生命',
-  damage: '伤害',
-  attackSpeed: '攻速',
-  dps: 'DPS',
-  range: '射程',
-  moveSpeed: '移速',
-  sightRange: '索敌',
-};
-
-const RADAR_AXES: readonly CompareStatKey[] = [
-  'maxHp',
-  'dps',
-  'range',
-  'moveSpeed',
-  'sightRange',
-  'attackSpeed',
-];
-
-const RADAR_COLORS = ['#f5d26b', '#4cc9f0', '#80ed99', '#ff6b6b', '#c77dff', '#90e0ef'];
-const MAX_RADAR_UNITS = 6;
-
 export interface UnitStatsPageOptions {
   /** 从屏幕路由返回（图鉴入口）。 */
   onBack: () => void;
-  /** 保存/重置应用到运行时后回调（战场清场等）。 */
+  /** 保存应用到运行时后回调（战场清场等）。 */
   onApplied?: () => void;
 }
 
@@ -79,25 +54,18 @@ export interface UnitStatsPageHandle {
 }
 
 /**
- * 开发服单位参数页：可编辑总览 + 单属性柱状对比 + 多选雷达对比，保存写回 units.json。
+ * 开发服单位参数页：可编辑总览，保存写回 units.json。
  */
 export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPageHandle {
   const root = required<HTMLElement>('#unit-stats');
   const backButton = required<HTMLButtonElement>('#btn-unit-stats-back', root);
-  const tabList = required<HTMLElement>('#unit-stats-tabs', root);
   const panelRoot = required<HTMLElement>('#unit-stats-panel', root);
   const statusEl = required<HTMLElement>('#unit-stats-status', root);
   const saveButton = required<HTMLButtonElement>('#btn-unit-stats-save', root);
-  const resetButton = required<HTMLButtonElement>('#btn-unit-stats-reset', root);
 
   const catalog = getUnitCatalogEntries();
   let drafts: UnitDraftMap = loadUnitDrafts();
-  let tab: PageTab = 'overview';
-  let barStat: CompareStatKey = 'maxHp';
   let selectedLevels = new Map<UnitTypeId, number>();
-  let radarSelection = new Set<UnitTypeId>(
-    catalog.slice(0, 2).map((entry) => entry.typeId),
-  );
   let saveSeq = 0;
   let onApplied = options.onApplied ?? (() => {});
   let overlayMode = false;
@@ -112,7 +80,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
 
   backButton.addEventListener('click', back);
   saveButton.addEventListener('click', () => void save());
-  resetButton.addEventListener('click', reset);
 
   /** 从当前表单读回草稿并写运行时 / 文件。 */
   async function save(): Promise<void> {
@@ -126,51 +93,13 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     render();
   }
 
-  /** 恢复配置文件快照。 */
-  function reset(): void {
-    drafts = loadDefaultUnitDrafts();
-    setStatus('已恢复为配置文件快照', false);
-    onApplied();
-    render();
-  }
-
   function setStatus(text: string, isError: boolean): void {
     statusEl.textContent = text;
     statusEl.dataset.tone = isError ? 'error' : 'ok';
   }
 
-  /** 切换 Tab 前先收集未保存输入。 */
-  function switchTab(next: PageTab): void {
-    readControlsIntoDrafts(panelRoot, drafts);
-    tab = next;
-    render();
-  }
-
   function render(): void {
-    renderTabs();
-    if (tab === 'overview') renderOverview();
-    else if (tab === 'bar') renderBarCompare();
-    else renderRadarCompare();
-  }
-
-  function renderTabs(): void {
-    const tabs: Array<{ id: PageTab; label: string }> = [
-      { id: 'overview', label: '编辑总览' },
-      { id: 'bar', label: '属性柱状' },
-      { id: 'radar', label: '兵种雷达' },
-    ];
-    tabList.replaceChildren(
-      ...tabs.map(({ id, label }) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'unit-stats-tab';
-        button.textContent = label;
-        button.classList.toggle('is-active', id === tab);
-        button.setAttribute('aria-pressed', String(id === tab));
-        button.addEventListener('click', () => switchTab(id));
-        return button;
-      }),
-    );
+    renderOverview();
   }
 
   /** 可编辑总览表：行=兵种，列=主战斗属性 + DPS 只读。 */
@@ -322,7 +251,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.addEventListener('change', () => {
       readControlsIntoDrafts(panelRoot, drafts);
       // 改主属性后刷新相对条与 DPS，避免表内数字不同步
-      if (tab === 'overview') renderOverview();
+      renderOverview();
     });
     // 主战斗属性走对比键（如攻击间隔→攻速）；半径/体型/前摇按自身值相对全库上限
     const compareKey = primaryToCompareKey(key);
@@ -393,7 +322,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.setAttribute('aria-label', meta.label);
     input.addEventListener('change', () => {
       readControlsIntoDrafts(panelRoot, drafts);
-      if (tab === 'overview') renderOverview();
+      renderOverview();
     });
     const ratio = value / Math.max(maxima[key], 1e-6);
     cell.appendChild(makeValueWithBar(input, ratio));
@@ -546,273 +475,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     return cell;
   }
 
-  /** 单属性柱状对比。 */
-  function renderBarCompare(): void {
-    panelRoot.replaceChildren();
-    const controls = document.createElement('div');
-    controls.className = 'unit-stats-compare-controls';
-    const label = document.createElement('label');
-    label.textContent = '对比属性';
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', '对比属性');
-    for (const key of Object.keys(COMPARE_STAT_NAMES) as CompareStatKey[]) {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = COMPARE_STAT_NAMES[key];
-      option.selected = key === barStat;
-      select.appendChild(option);
-    }
-    select.addEventListener('change', () => {
-      barStat = select.value as CompareStatKey;
-      renderBarCompare();
-    });
-    label.appendChild(select);
-    controls.appendChild(label);
-
-    const chart = document.createElement('div');
-    chart.className = 'unit-stats-chart';
-    chart.appendChild(buildBarChart(barStat));
-    panelRoot.append(controls, chart);
-  }
-
-  function buildBarChart(stat: CompareStatKey): SVGElement {
-    const rows = catalog
-      .map((entry) => {
-        const level = selectedLevels.get(entry.typeId) ?? 1;
-        const levelDraft = getLevelDraft(drafts[entry.typeId], level);
-        return {
-          typeId: entry.typeId,
-          name: displayUnitName(drafts[entry.typeId].name || entry.name),
-          value: computeStat(levelDraft, stat),
-        };
-      })
-      .sort((a, b) => b.value - a.value);
-
-    const width = 720;
-    const rowH = 28;
-    const padL = 100;
-    const padR = 64;
-    const padT = 16;
-    const padB = 16;
-    const height = padT + padB + rows.length * rowH;
-    const plotW = width - padL - padR;
-    const maxV = Math.max(1e-6, ...rows.map((row) => row.value));
-
-    const svg = svgEl('svg', {
-      viewBox: `0 0 ${width} ${height}`,
-      class: 'unit-stats-svg',
-      role: 'img',
-      'aria-label': `${COMPARE_STAT_NAMES[stat]}兵种对比柱状图`,
-    });
-
-    rows.forEach((row, index) => {
-      const y = padT + index * rowH;
-      const barW = (row.value / maxV) * plotW;
-      const name = svgEl('text', {
-        x: String(padL - 8),
-        y: String(y + 18),
-        class: 'unit-stats-axis-label',
-        'text-anchor': 'end',
-      });
-      name.textContent = row.name;
-      const rect = svgEl('rect', {
-        x: String(padL),
-        y: String(y + 4),
-        width: String(Math.max(barW, 0)),
-        height: '18',
-        class: 'unit-stats-bar',
-      });
-      const value = svgEl('text', {
-        x: String(padL + barW + 6),
-        y: String(y + 18),
-        class: 'unit-stats-axis-label',
-      });
-      value.textContent = formatDraftNumber(row.value);
-      svg.append(name, rect, value);
-    });
-    return svg;
-  }
-
-  /** 多选兵种雷达 + 并排绝对值表。 */
-  function renderRadarCompare(): void {
-    panelRoot.replaceChildren();
-    const picker = document.createElement('div');
-    picker.className = 'unit-stats-radar-picker';
-    picker.setAttribute('aria-label', '选择对比兵种');
-    for (const entry of catalog) {
-      const label = document.createElement('label');
-      label.className = 'unit-stats-radar-option';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = radarSelection.has(entry.typeId);
-      const atLimit = radarSelection.size >= MAX_RADAR_UNITS && !checkbox.checked;
-      checkbox.disabled = atLimit;
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-          if (radarSelection.size >= MAX_RADAR_UNITS) {
-            checkbox.checked = false;
-            return;
-          }
-          radarSelection.add(entry.typeId);
-        } else {
-          radarSelection.delete(entry.typeId);
-        }
-        renderRadarCompare();
-      });
-      const text = document.createElement('span');
-      text.textContent = displayUnitName(drafts[entry.typeId].name || entry.name);
-      label.append(checkbox, text);
-      picker.appendChild(label);
-    }
-
-    const selected = catalog.filter((entry) => radarSelection.has(entry.typeId));
-    const chart = document.createElement('div');
-    chart.className = 'unit-stats-chart';
-    if (selected.length < 2) {
-      const hint = document.createElement('p');
-      hint.className = 'unit-stats-hint';
-      hint.textContent = '请至少选择 2 个兵种进行雷达对比（最多 6 个）。';
-      chart.appendChild(hint);
-    } else {
-      chart.appendChild(buildRadarChart(selected));
-      chart.appendChild(buildRadarTable(selected));
-    }
-    panelRoot.append(picker, chart);
-  }
-
-  function buildRadarChart(selected: readonly UnitCatalogEntry[]): SVGElement {
-    const maxima = computeCompareMaxima(catalog, drafts, selectedLevels);
-    const size = 360;
-    const cx = size / 2;
-    const cy = size / 2;
-    const radius = 120;
-    const svg = svgEl('svg', {
-      viewBox: `0 0 ${size} ${size}`,
-      class: 'unit-stats-svg unit-stats-radar-svg',
-      role: 'img',
-      'aria-label': '兵种属性雷达对比',
-    });
-
-    // 网格环
-    for (const ring of [0.25, 0.5, 0.75, 1]) {
-      const points = RADAR_AXES.map((_, index) => {
-        const angle = (-Math.PI / 2) + (index * 2 * Math.PI) / RADAR_AXES.length;
-        const x = cx + Math.cos(angle) * radius * ring;
-        const y = cy + Math.sin(angle) * radius * ring;
-        return `${x},${y}`;
-      }).join(' ');
-      svg.appendChild(
-        svgEl('polygon', {
-          points,
-          class: 'unit-stats-radar-grid',
-        }),
-      );
-    }
-
-    RADAR_AXES.forEach((axis, index) => {
-      const angle = (-Math.PI / 2) + (index * 2 * Math.PI) / RADAR_AXES.length;
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
-      svg.appendChild(
-        svgEl('line', {
-          x1: String(cx),
-          y1: String(cy),
-          x2: String(x),
-          y2: String(y),
-          class: 'unit-stats-radar-axis',
-        }),
-      );
-      const label = svgEl('text', {
-        x: String(cx + Math.cos(angle) * (radius + 22)),
-        y: String(cy + Math.sin(angle) * (radius + 22) + 4),
-        class: 'unit-stats-axis-label',
-        'text-anchor': 'middle',
-      });
-      label.textContent = COMPARE_STAT_NAMES[axis];
-      svg.appendChild(label);
-    });
-
-    selected.forEach((entry, unitIndex) => {
-      const level = selectedLevels.get(entry.typeId) ?? 1;
-      const levelDraft = getLevelDraft(drafts[entry.typeId], level);
-      const points = RADAR_AXES.map((axis, index) => {
-        const angle = (-Math.PI / 2) + (index * 2 * Math.PI) / RADAR_AXES.length;
-        const ratio = computeStat(levelDraft, axis) / Math.max(maxima[axis], 1e-6);
-        const x = cx + Math.cos(angle) * radius * Math.min(1, ratio);
-        const y = cy + Math.sin(angle) * radius * Math.min(1, ratio);
-        return `${x},${y}`;
-      }).join(' ');
-      const color = RADAR_COLORS[unitIndex % RADAR_COLORS.length]!;
-      const poly = svgEl('polygon', {
-        points,
-        class: 'unit-stats-radar-poly',
-        fill: color,
-        stroke: color,
-      });
-      poly.setAttribute('fill-opacity', '0.18');
-      svg.appendChild(poly);
-    });
-
-    const legend = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    selected.forEach((entry, unitIndex) => {
-      const color = RADAR_COLORS[unitIndex % RADAR_COLORS.length]!;
-      const y = 18 + unitIndex * 16;
-      const swatch = svgEl('rect', {
-        x: '12',
-        y: String(y - 10),
-        width: '10',
-        height: '10',
-        fill: color,
-      });
-      const text = svgEl('text', {
-        x: '28',
-        y: String(y),
-        class: 'unit-stats-axis-label',
-      });
-      text.textContent = displayUnitName(drafts[entry.typeId].name || entry.name);
-      legend.append(swatch, text);
-    });
-    svg.appendChild(legend);
-    return svg;
-  }
-
-  function buildRadarTable(selected: readonly UnitCatalogEntry[]): HTMLTableElement {
-    const table = document.createElement('table');
-    table.className = 'unit-stats-table unit-stats-radar-table';
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    headRow.appendChild(document.createElement('th')).textContent = '属性';
-    for (const entry of selected) {
-      const th = document.createElement('th');
-      th.textContent = displayUnitName(drafts[entry.typeId].name || entry.name);
-      headRow.appendChild(th);
-    }
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    for (const axis of RADAR_AXES) {
-      const row = document.createElement('tr');
-      const nameCell = document.createElement('td');
-      nameCell.textContent = COMPARE_STAT_NAMES[axis];
-      row.appendChild(nameCell);
-      const values = selected.map((entry) => {
-        const level = selectedLevels.get(entry.typeId) ?? 1;
-        return computeStat(getLevelDraft(drafts[entry.typeId], level), axis);
-      });
-      const max = Math.max(...values);
-      values.forEach((value) => {
-        const cell = document.createElement('td');
-        cell.textContent = formatDraftNumber(value);
-        if (value === max && selected.length > 1) cell.classList.add('is-best');
-        row.appendChild(cell);
-      });
-      tbody.appendChild(row);
-    }
-    table.appendChild(tbody);
-    return table;
-  }
-
   function showInternal(asOverlay: boolean): void {
     overlayMode = asOverlay;
     root.classList.toggle('is-overlay', asOverlay);
@@ -907,7 +569,7 @@ function computeStat(levelDraft: UnitLevelConfigDraft, key: CompareStatKey): num
   }
 }
 
-/** 全库当前草稿的各对比属性上限，供进度条与雷达归一化。 */
+/** 全库当前草稿的各对比属性上限，供进度条归一化。 */
 function computeCompareMaxima(
   catalog: readonly UnitCatalogEntry[],
   drafts: UnitDraftMap,
@@ -977,14 +639,6 @@ function makeValueWithBar(value: string | HTMLElement, ratio: number): HTMLEleme
   bar.appendChild(fill);
   wrap.appendChild(bar);
   return wrap;
-}
-
-function svgEl(tag: string, attrs: Record<string, string>): SVGElement {
-  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    el.setAttribute(key, value);
-  }
-  return el;
 }
 
 function required<T extends Element>(selector: string, parent: ParentNode = document): T {

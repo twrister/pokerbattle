@@ -2703,7 +2703,6 @@
       }
 
       .unit-stats-back,
-      .unit-stats-tab,
       .unit-stats-footer button {
         border: 1px solid var(--panel-border);
         border-radius: 8px;
@@ -2714,23 +2713,9 @@
       }
 
       .unit-stats-back,
-      .unit-stats-tab,
       .unit-stats-footer button {
         min-height: 34px;
         padding: 7px 12px;
-      }
-
-      .unit-stats-tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        flex-shrink: 0;
-      }
-
-      .unit-stats-tab.is-active {
-        color: #172030;
-        background: #f5d26b;
-        border-color: #f5d26b;
       }
 
       .unit-stats-panel {
@@ -2781,17 +2766,6 @@
         box-sizing: border-box;
         font: inherit;
         font-variant-numeric: tabular-nums;
-        color: var(--text);
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
-        padding: 5px 8px;
-      }
-
-      .unit-stats-compare-controls select {
-        width: auto;
-        min-width: 120px;
-        font: inherit;
         color: var(--text);
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid var(--panel-border);
@@ -2935,69 +2909,6 @@
 
       .unit-stats-skill-group:first-child {
         margin-top: 0;
-      }
-
-      .unit-stats-compare-controls,
-      .unit-stats-radar-picker {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px 14px;
-        margin-bottom: 14px;
-        align-items: center;
-      }
-
-      .unit-stats-radar-option {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--text-dim);
-        font-size: 13px;
-      }
-
-      .unit-stats-chart {
-        display: grid;
-        gap: 16px;
-        justify-items: start;
-      }
-
-      .unit-stats-svg {
-        width: min(100%, 960px);
-        height: auto;
-        background: rgba(18, 28, 40, 0.55);
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
-      }
-
-      .unit-stats-bar {
-        fill: #f5d26b;
-      }
-
-      .unit-stats-axis-label {
-        fill: rgba(210, 222, 234, 0.78);
-        font-size: 11px;
-      }
-
-      .unit-stats-radar-grid {
-        fill: none;
-        stroke: rgba(144, 166, 187, 0.2);
-      }
-
-      .unit-stats-radar-axis {
-        stroke: rgba(144, 166, 187, 0.28);
-      }
-
-      .unit-stats-radar-poly {
-        stroke-width: 2;
-      }
-
-      .unit-stats-radar-table td.is-best {
-        color: #f5d26b;
-        font-weight: 600;
-      }
-
-      .unit-stats-hint {
-        margin: 0;
-        color: var(--text-dim);
       }
 
       .unit-stats-footer {
@@ -3381,11 +3292,9 @@
           <h1>单位参数</h1>
           <span aria-hidden="true"></span>
         </header>
-        <nav id="unit-stats-tabs" class="unit-stats-tabs" aria-label="单位参数视图"></nav>
         <section id="unit-stats-panel" class="unit-stats-panel" aria-live="polite"></section>
         <footer class="unit-stats-footer">
           <div id="unit-stats-status" role="status" aria-live="polite">改完点保存写回配置文件</div>
-          <button id="btn-unit-stats-reset" type="button">重置</button>
           <button id="btn-unit-stats-save" type="button">保存</button>
         </footer>
       </div>
