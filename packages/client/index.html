@@ -821,17 +821,12 @@
         }
       }
 
+      /*
+       * 对局画布锁进最大 9:16 舞台：宽屏左右留边，瘦高屏上下留边。
+       * 沙盒/单机/联机共用；调试 HUD 另用 fixed 锚视口四周。
+       */
       #app {
         position: fixed;
-        inset: 0;
-      }
-
-      /*
-       * 对局画布锁进最大 9:16 舞台：宽屏左右留边，瘦高屏上下留边，
-       * 战场位置比例始终与 720×1280 竖屏一致。
-       */
-      #app.is-solo {
-        inset: auto;
         top: var(--stage-top);
         left: var(--stage-left);
         width: var(--stage-w);
@@ -848,20 +843,14 @@
         height: 100%;
       }
 
-      /* HUD 整体不吃事件，只有具体控件吃，这样空白处的点击能穿透到画布上放兵 */
+      /* 玩法 HUD 与画布共用 9:16 舞台；空白不吃事件，点击才能穿透到画布放兵 */
       #hud {
         position: fixed;
-        inset: 0;
-        pointer-events: none;
-      }
-
-      /* 局内 HUD 与画布共用 9:16 舞台，血条/手牌相对战场的位置与 720p 一致 */
-      #hud.is-solo {
-        inset: auto;
         top: var(--stage-top);
         left: var(--stage-left);
         width: var(--stage-w);
         height: var(--stage-h);
+        pointer-events: none;
       }
 
       .panel {
@@ -875,15 +864,18 @@
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
       }
 
+      /* 调试面板跳出舞台，按视口四角锚定，宽屏落在 letterbox 里 */
       #panel-stats {
-        top: 16px;
-        left: 16px;
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        left: max(16px, env(safe-area-inset-left));
         min-width: 188px;
       }
 
       #panel-controls {
-        top: 16px;
-        right: 16px;
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        right: max(16px, env(safe-area-inset-right));
         min-width: 188px;
         display: flex;
         flex-direction: column;
@@ -1006,8 +998,8 @@
 
       #btn-back-menu {
         position: absolute;
-        top: max(calc(12 * var(--hu)), env(safe-area-inset-top));
-        left: max(calc(12 * var(--hu)), env(safe-area-inset-left));
+        top: max(calc(12 * var(--hu)), var(--stage-safe-top));
+        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
         z-index: 2;
         width: auto;
         max-width: calc(88 * var(--hu));
@@ -1019,12 +1011,6 @@
         letter-spacing: 0.02em;
         white-space: normal;
         text-align: center;
-      }
-
-      /* HUD 已是 9:16 舞台，返回键按舞台内边距即可，安全区扣掉 letterbox */
-      #hud.is-solo #btn-back-menu {
-        top: max(calc(12 * var(--hu)), var(--stage-safe-top));
-        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
       }
 
       #battle-hud {
@@ -1330,10 +1316,10 @@
         line-height: 1.6;
       }
 
-      /* 底部居中：建造在上、出兵在下，用 gap 错开避免互相遮挡 */
+      /* 底部居中：建造在上、出兵在下；贴视口底边，不跟舞台 letterbox */
       #panel-bottom-dock {
-        position: absolute;
-        bottom: 16px;
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         display: flex;
@@ -1368,8 +1354,9 @@
       }
 
       #panel-help {
-        bottom: 16px;
-        left: 16px;
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: max(16px, env(safe-area-inset-left));
         max-width: 230px;
         color: var(--text-dim);
         line-height: 1.7;
@@ -1401,14 +1388,9 @@
         touch-action: none;
       }
 
-      #hud.is-solo #panel-stats,
-      #hud.is-solo #panel-controls {
-        top: max(16px, var(--stage-safe-top));
-      }
-
-      /* 返回键占左上角后，调试统计下移，避免叠在返回按钮上 */
+      /* 窄屏舞台贴边时，统计下移避免叠在返回键上 */
       #hud.is-solo #panel-stats {
-        top: max(calc(52 * var(--hu)), calc(var(--stage-safe-top) + 40px));
+        top: max(52px, calc(env(safe-area-inset-top) + 40px));
       }
 
       #hud.is-solo #panel-help,
@@ -1419,12 +1401,12 @@
         display: none !important;
       }
 
-      /* 战场入口：右下角打开单位参数 / 场景配置（overlay） */
+      /* 战场入口：视口右下角打开单位参数 / 场景配置（overlay） */
       #btn-open-unit-stats,
       #btn-open-scene-config {
-        position: absolute;
-        bottom: 16px;
-        right: 16px;
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        right: max(16px, env(safe-area-inset-right));
         z-index: 5;
         padding: 8px 12px;
         font: inherit;
@@ -1437,17 +1419,12 @@
       }
 
       #btn-open-scene-config {
-        right: 112px;
+        right: max(112px, env(safe-area-inset-right));
       }
 
-      #hud.is-solo #btn-open-unit-stats,
-      #hud.is-solo #btn-open-scene-config {
-        bottom: max(16px, var(--stage-safe-bottom));
-      }
-
-      /* 联机藏单位参数后，场景配置占回右下角 */
+      /* 联机藏单位参数后，场景配置占回视口右下角 */
       #hud.is-versus #btn-open-scene-config {
-        right: 16px;
+        right: max(16px, env(safe-area-inset-right));
       }
 
       .title {
@@ -3099,7 +3076,7 @@
           #0a1018;
       }
 
-      /* 局内 overlay：右侧表单，左侧透出战场方便对照镜头 */
+      /* 局内 overlay：贴视口右侧，左侧透出战场方便对照镜头 */
       #scene-config.is-overlay {
         z-index: 40;
         background: transparent;
