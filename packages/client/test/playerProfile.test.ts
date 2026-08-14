@@ -183,6 +183,31 @@ describe('玩家档案服务', () => {
     ).toBe(false);
   });
 
+  it('同一设备 ID 默认名稳定，不同 ID 后缀不同', () => {
+    const first = defaultDisplayName('device-aaa');
+    const second = defaultDisplayName('device-bbb');
+    expect(first).toBe(defaultDisplayName('device-aaa'));
+    expect(first).toMatch(/^玩家-[0-9A-Z]{8}$/);
+    expect(second).toMatch(/^玩家-[0-9A-Z]{8}$/);
+    expect(first).not.toBe(second);
+  });
+
+  it('旧版 4 位十六进制默认名仍视为未自定义', () => {
+    const deviceAccountId = 'abcd-efgh';
+    expect(
+      isDefaultDisplayName({
+        deviceAccountId,
+        displayName: '玩家-ABCD',
+      }),
+    ).toBe(true);
+    expect(
+      isDefaultDisplayName({
+        deviceAccountId,
+        displayName: '玩家-0000',
+      }),
+    ).toBe(false);
+  });
+
   it('首次开局改名提示旗标只写会话，不落本地持久化', () => {
     expect(hasPromptedFirstPlayRename()).toBe(false);
     markFirstPlayRenamePrompted();
