@@ -298,7 +298,7 @@ function getStatMaxima(units: readonly UnitCatalogEntry[]): Record<StatKey, numb
 
 /** 依据配置中的技能块生成图鉴特性文案。 */
 function getSkill(config: UnitConfig): { title: string; description: string } {
-  if (config.charge) return { title: '冲锋', description: '与目标保持合适距离时发动突击，对路径上的敌人造成伤害并击退。' };
+  if (config.charge) return { title: '冲锋', description: '与可移动敌人保持合适距离时发动突击，对路径上的单位造成伤害并击退，不对建筑生效。' };
   if (config.inspire) return { title: '振奋', description: '提升附近友军的攻击速度与移动速度。' };
   if (config.heal) return { title: '治疗', description: '周期性治疗范围内受伤的友军。' };
   if (config.summon) {

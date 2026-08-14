@@ -1,7 +1,7 @@
 import { type Fx, ONE, div, mul } from '../math/fixed.js';
 import { distSq, lengthOf, normalize, set, vec } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
-import { MAX_UNIT_RADIUS } from '../config/units.js';
+import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -86,9 +86,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
-    if (other.config.movementLayer === 'air') continue;
-    // 投放炸弹不可被冲刺锁定命中
-    if (isUntargetableBomb(other)) continue;
+    if (!canChargeAffect(other)) continue;
     if (unit.chargeHits.includes(other.id)) continue;
 
     const dx = other.pos.x - unit.pos.x;
@@ -129,9 +127,8 @@ function hasEnemyBodyContact(world: World, unit: Unit): boolean {
     if (!isAlive(other)) continue;
     if (other.faction === unit.faction) continue;
     if (other.id === unit.id) continue;
-    // 飞行单位与投放炸弹不参与冲刺体碰判定
-    if (other.config.movementLayer === 'air') continue;
-    if (isUntargetableBomb(other)) continue;
+    // 建筑/飞行/投放炸弹不参与冲刺体碰，避免仅蹭到塔就触发溅射
+    if (!canChargeAffect(other)) continue;
 
     const minDist = unit.config.radius + other.config.radius;
     if (distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y) < mul(minDist, minDist)) {
@@ -139,6 +136,14 @@ function hasEnemyBodyContact(world: World, unit: Unit): boolean {
     }
   }
   return false;
+}
+
+/** 冲锋只打地面可移动单位；建筑不受伤、不击退，也不作为体碰触发源。 */
+function canChargeAffect(other: Unit): boolean {
+  if (isBuildingConfig(other.config)) return false;
+  if (other.config.movementLayer === 'air') return false;
+  if (isUntargetableBomb(other)) return false;
+  return true;
 }
 
 /**

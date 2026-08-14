@@ -173,12 +173,14 @@ function updateHealSeek(unit: Unit, ally: Unit): void {
 
 /**
  * CD 就绪、非普攻前摇、目标中心距落在触发窗时进入冲刺（先原地前摇再起动）。
+ * 建筑不是冲锋目标：只走近普攻，避免对塔/基地浪费技能。
  * 返回 true 表示本帧已切入 Charge。
  */
 function tryStartCharge(unit: Unit, target: Unit, gapSq: ReturnType<typeof distSq>): boolean {
   const charge = unit.config.charge;
   if (!charge) return false;
-  // 冲刺是地面近战技，不对空中单位起手
+  // 冲刺是地面近战技，不对空中单位或建筑起手
+  if (isBuildingConfig(target.config)) return false;
   if (!canAttackTarget(unit, target)) return false;
   if (unit.chargeCooldown > 0) return false;
   if (unit.windupLeft > 0 || unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) return false;

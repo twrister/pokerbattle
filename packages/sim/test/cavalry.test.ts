@@ -188,4 +188,51 @@ describe('皇家骑士冲刺', () => {
     expect(fanCount).toBeGreaterThanOrEqual(1);
     expect(fanCount).toBeLessThanOrEqual(8);
   });
+
+  it('目标为建筑时不主动发动冲锋，改为接近并普攻', () => {
+    const world = new World(1);
+    const cavalry = world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(10));
+    // 中心距 3.2，落在冲锋触发窗内；无此限制时会直接冲塔
+    const tower = world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(9), fromFloat(13.2));
+    expect(tower).not.toBeNull();
+
+    let sawCharge = false;
+    for (let i = 0; i < 80; i++) {
+      world.step();
+      if (cavalry.state === UnitState.Charge) sawCharge = true;
+      if (tower!.hp < tower!.stats.maxHp) break;
+    }
+
+    expect(sawCharge).toBe(false);
+    expect(cavalry.chargeCooldown).toBe(0);
+    expect(tower!.hp).toBeLessThan(tower!.stats.maxHp);
+  });
+
+  it('冲锋命中单位后，溅射不对建筑造成伤害或击退', () => {
+    const world = new World(1);
+    const cavalry = world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(13.3));
+    const targetHp = target.hp;
+
+    // 锁定单位并进入冲锋后再放塔，避免索敌改锁建筑
+    let tower = null as ReturnType<World['spawnBuilding']>;
+    let charged = false;
+    for (let i = 0; i < 60; i++) {
+      world.step();
+      if (!tower && cavalry.state === UnitState.Charge) {
+        tower = world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(10), fromFloat(13));
+      }
+      if (cavalry.state === UnitState.Charge && cavalry.chargeWindupLeft <= 0) charged = true;
+      if (charged && cavalry.state !== UnitState.Charge) break;
+    }
+
+    expect(charged).toBe(true);
+    expect(tower).not.toBeNull();
+    expect(cavalry.chargeHits).toContain(target.id);
+    expect(cavalry.chargeHits).not.toContain(tower!.id);
+    expect(target.hp).toBeLessThan(targetHp);
+    expect(tower!.hp).toBe(tower!.stats.maxHp);
+    expect(toFloat(tower!.pos.x)).toBeCloseTo(10, 5);
+    expect(toFloat(tower!.pos.y)).toBeCloseTo(13, 5);
+  });
 });
