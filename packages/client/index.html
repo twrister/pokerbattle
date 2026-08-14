@@ -13,9 +13,16 @@
         --blue: #4f8dfd;
         --red: #f2604f;
         --accent: #63d68a;
-        /* 9:16 舞台宽；--hu 以 720 设计宽为 1，各分辨率等比接近 720×1280 */
-        --stage-w: min(100vw, calc(100svh * 0.5625));
+        /* 9:16 舞台；--hu 以 720 设计宽为 1，各分辨率等比对齐 720×1280 */
+        --stage-w: min(100vw, calc(100svh * 9 / 16));
+        --stage-h: min(100svh, calc(100vw * 16 / 9));
+        --stage-left: calc((100vw - var(--stage-w)) / 2);
+        --stage-top: calc((100svh - var(--stage-h)) / 2);
         --hu: calc(var(--stage-w) / 720);
+        /* 舞台已 letterbox 后，安全区只保留超出黑边的部分，避免刘海与留边双计 */
+        --stage-safe-top: max(0px, calc(env(safe-area-inset-top) - var(--stage-top)));
+        --stage-safe-bottom: max(0px, calc(env(safe-area-inset-bottom) - var(--stage-top)));
+        --stage-safe-left: max(0px, calc(env(safe-area-inset-left) - var(--stage-left)));
       }
 
       * {
@@ -820,17 +827,15 @@
       }
 
       /*
-       * 宽屏固定显示 9:16 战斗区域；更窄的设备让两侧贴边并由高度自然适配。
-       * HUD 始终铺满屏幕，四角面板锚定视口而非游戏画面边缘。
+       * 对局画布锁进最大 9:16 舞台：宽屏左右留边，瘦高屏上下留边，
+       * 战场位置比例始终与 720×1280 竖屏一致。
        */
       #app.is-solo {
-        top: 0;
-        right: auto;
-        bottom: 0;
-        left: 50%;
-        width: min(100vw, calc(100svh * 0.5625));
-        height: 100svh;
-        transform: translateX(-50%);
+        inset: auto;
+        top: var(--stage-top);
+        left: var(--stage-left);
+        width: var(--stage-w);
+        height: var(--stage-h);
       }
 
       /*
@@ -848,6 +853,15 @@
         position: fixed;
         inset: 0;
         pointer-events: none;
+      }
+
+      /* 局内 HUD 与画布共用 9:16 舞台，血条/手牌相对战场的位置与 720p 一致 */
+      #hud.is-solo {
+        inset: auto;
+        top: var(--stage-top);
+        left: var(--stage-left);
+        width: var(--stage-w);
+        height: var(--stage-h);
       }
 
       .panel {
@@ -1007,15 +1021,16 @@
         text-align: center;
       }
 
-      /* 单机/联机 HUD 铺满视口，返回键需贴 9:16 操作区左缘，避免宽屏落到黑边外 */
+      /* HUD 已是 9:16 舞台，返回键按舞台内边距即可，安全区扣掉 letterbox */
       #hud.is-solo #btn-back-menu {
-        left: calc(50% - var(--stage-w) / 2 + 12 * var(--hu));
+        top: max(calc(12 * var(--hu)), var(--stage-safe-top));
+        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
       }
 
       #battle-hud {
         position: absolute;
-        /* 去掉顶部手牌行后整体上提，贴近安全区 */
-        top: max(calc(6 * var(--hu)), env(safe-area-inset-top));
+        /* 去掉顶部手牌行后整体上提；安全区扣掉舞台 letterbox，避免双计 */
+        top: max(calc(6 * var(--hu)), var(--stage-safe-top));
         left: 50%;
         width: min(calc(480 * var(--hu)), calc(100vw - 16px));
         transform: translateX(-50%);
@@ -1388,12 +1403,12 @@
 
       #hud.is-solo #panel-stats,
       #hud.is-solo #panel-controls {
-        top: max(16px, env(safe-area-inset-top));
+        top: max(16px, var(--stage-safe-top));
       }
 
       /* 返回键占左上角后，调试统计下移，避免叠在返回按钮上 */
       #hud.is-solo #panel-stats {
-        top: max(calc(52 * var(--hu)), calc(env(safe-area-inset-top) + 40px));
+        top: max(calc(52 * var(--hu)), calc(var(--stage-safe-top) + 40px));
       }
 
       #hud.is-solo #panel-help,
@@ -1427,7 +1442,7 @@
 
       #hud.is-solo #btn-open-unit-stats,
       #hud.is-solo #btn-open-scene-config {
-        bottom: max(16px, env(safe-area-inset-bottom));
+        bottom: max(16px, var(--stage-safe-bottom));
       }
 
       /* 联机藏单位参数后，场景配置占回右下角 */
@@ -1526,7 +1541,7 @@
       #solo-hand {
         position: absolute;
         right: 0;
-        bottom: max(10px, env(safe-area-inset-bottom));
+        bottom: max(10px, var(--stage-safe-bottom));
         left: 0;
         z-index: 12;
         display: none;
