@@ -231,6 +231,10 @@ function enterBattleSession(mode: BattleMode): () => void {
       localName: playerProfile.getProfile().displayName,
       opponentName: '电脑',
     });
+    battleResult.setContext({
+      localName: playerProfile.getProfile().displayName,
+      opponentName: '电脑',
+    });
     battleHud.show();
   }
 
@@ -658,7 +662,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         if (!debugSpawn) {
           recordLocalBattle(loop.match!.result, Faction.Blue, 'solo');
         }
-        battleResult.show(loop.match!.result, Faction.Blue);
+        battleResult.show(loop.match!.result, Faction.Blue, loop.match!);
       }
     }
     sceneContext.controls?.update();
@@ -860,6 +864,10 @@ function runVersusSession(
   battleAnnounce.reset();
   battleHud.setContext({
     localFaction: faction,
+    localName: names.localName,
+    opponentName: names.opponentName,
+  });
+  battleResult.setContext({
     localName: names.localName,
     opponentName: names.opponentName,
   });
@@ -1095,7 +1103,7 @@ function runVersusSession(
       resultShown = true;
       // 与 onMatchEnd 共用会话防重；谁先到都只记一次
       accountHooks.onOfficialResult(netLoop.match.result);
-      battleResult.show(netLoop.match.result, faction);
+      battleResult.show(netLoop.match.result, faction, netLoop.match);
     }
     battleView.render(netLoop.prev, netLoop.curr, netLoop.alpha, sceneContext.camera);
     sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);

@@ -21,7 +21,7 @@ describe('单机手牌交互', () => {
         <div id="hand-draw-pile">
           <span id="hand-draw-pile-top"></span>
         </div>
-        <div id="hand-full-hint"></div>
+        <div id="hand-count"></div>
         <button id="btn-select-best"></button>
         <div id="hand-cards"></div>
       </section>
@@ -42,6 +42,8 @@ describe('单机手牌交互', () => {
 
     expect(panel.deck.hand).toHaveLength(3);
     expect(document.querySelectorAll('.playing-card')).toHaveLength(3);
+    expect(document.querySelector('#hand-count')?.textContent).toBe('3 / 9');
+    expect(document.querySelector('#hand-count')?.classList.contains('is-full')).toBe(false);
     expect(document.querySelector<HTMLElement>('#hand-draw-pile')?.style.getPropertyValue('--draw-progress')).toBe(
       '100%',
     );
@@ -81,18 +83,18 @@ describe('单机手牌交互', () => {
       'J-spades',
     ]);
     const fullPanel = createHandPanel({ deck: fullDeck });
-    const fullHint = document.querySelector<HTMLElement>('#hand-full-hint')!;
+    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
     expect(pile.classList.contains('is-full')).toBe(true);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
-    expect(fullHint.textContent).toBe('手牌已满9张');
-    expect(fullHint.classList.contains('is-visible')).toBe(true);
+    expect(handCount.textContent).toBe('手牌已满 9 / 9');
+    expect(handCount.classList.contains('is-full')).toBe(true);
 
     fullDeck.play([fullDeck.hand[0]!.id]);
     fullPanel.syncFromDeck();
     expect(pile.classList.contains('is-full')).toBe(false);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
-    expect(fullHint.textContent).toBe('');
-    expect(fullHint.classList.contains('is-visible')).toBe(false);
+    expect(handCount.textContent).toBe('8 / 9');
+    expect(handCount.classList.contains('is-full')).toBe(false);
 
     fullPanel.dispose();
   });

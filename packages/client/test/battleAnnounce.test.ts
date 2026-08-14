@@ -19,15 +19,28 @@ describe('对局文字提示', () => {
     vi.useFakeTimers();
   });
 
-  it('开局首次 tick 弹出常规阶段', () => {
+  it('开局首次 tick 弹出摧毁对方城堡', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
     const announce = createBattleAnnounce();
 
     announce.tick(match);
 
-    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('常规阶段');
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('摧毁对方城堡');
     expect(document.querySelector('#battle-announce')?.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('阶段文案停留超过原先 1.2 秒', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const announce = createBattleAnnounce();
+
+    announce.tick(match);
+    vi.advanceTimersByTime(2000);
+    expect(document.querySelector('#battle-announce')?.classList.contains('is-hidden')).toBe(false);
+
+    vi.advanceTimersByTime(800);
+    expect(document.querySelector('#battle-announce')?.classList.contains('is-hidden')).toBe(true);
   });
 
   it('阶段边沿只弹一次对应文案', () => {

@@ -1167,7 +1167,7 @@
       }
 
       #battle-announce.is-visible {
-        animation: battle-announce-pop 1.1s ease-out both;
+        animation: battle-announce-pop 2.8s ease-out both;
       }
 
       #battle-announce-text {
@@ -1186,15 +1186,15 @@
           opacity: 0;
           transform: translate(-50%, -50%) scale(0.82);
         }
-        12% {
+        6% {
           opacity: 1;
           transform: translate(-50%, -50%) scale(1.06);
         }
-        28% {
+        12% {
           opacity: 1;
           transform: translate(-50%, -50%) scale(1);
         }
-        70% {
+        82% {
           opacity: 1;
           transform: translate(-50%, -50%) scale(1);
         }
@@ -1218,7 +1218,7 @@
       .battle-result-panel {
         display: grid;
         gap: calc(18 * var(--hu));
-        width: min(100%, calc(360 * var(--hu)));
+        width: min(100%, calc(400 * var(--hu)));
         padding: calc(30 * var(--hu));
         border: 1px solid rgba(185, 207, 225, 0.28);
         border-radius: calc(16 * var(--hu));
@@ -1226,6 +1226,72 @@
         text-align: center;
         box-shadow: 0 calc(24 * var(--hu)) calc(60 * var(--hu)) rgba(0, 0, 0, 0.48);
       }
+
+      .battle-result-sides {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+        text-align: left;
+      }
+
+      .battle-result-side {
+        display: grid;
+        gap: calc(6 * var(--hu));
+        min-width: 0;
+        padding: calc(10 * var(--hu)) calc(12 * var(--hu));
+        border: 1px solid var(--panel-border);
+        border-radius: calc(10 * var(--hu));
+        background: rgba(12, 19, 29, 0.72);
+      }
+
+      .battle-result-side.is-self {
+        border-color: rgba(79, 141, 253, 0.45);
+      }
+
+      .battle-result-side.is-opp {
+        border-color: rgba(242, 96, 79, 0.45);
+      }
+
+      .battle-result-side.is-winner {
+        box-shadow: inset 0 0 0 1px rgba(122, 214, 160, 0.45);
+      }
+
+      .battle-result-side.is-loser {
+        opacity: 0.78;
+      }
+
+      .battle-result-side-tag {
+        color: var(--text-dim);
+        font-size: calc(11 * var(--hu));
+        letter-spacing: 0.08em;
+      }
+
+      .battle-result-side.is-self .battle-result-side-tag,
+      .battle-result-side.is-self .battle-result-name {
+        color: #9cbcff;
+      }
+
+      .battle-result-side.is-opp .battle-result-side-tag,
+      .battle-result-side.is-opp .battle-result-name {
+        color: #f5a498;
+      }
+
+      .battle-result-name {
+        overflow: hidden;
+        font-size: calc(16 * var(--hu));
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .battle-result-hp {
+        color: #fff;
+        font-size: calc(13 * var(--hu));
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-result-side.is-self .battle-hp-bar { background: var(--blue); }
+      .battle-result-side.is-opp .battle-hp-bar { background: var(--red); }
 
       #battle-result-title {
         margin: 0;
@@ -1524,32 +1590,11 @@
 
       .hand-toolbar-info {
         grid-area: info;
-        position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-self: start;
         min-width: 0;
-      }
-
-      /* 手牌满时叠在牌堆正上方，提醒玩家先出牌才能继续补牌。 */
-      #hand-full-hint {
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        z-index: 2;
-        transform: translateX(-50%);
-        margin-bottom: calc(2 * var(--hu));
-        color: transparent;
-        font-size: calc(16 * var(--hu));
-        line-height: 1.25;
-        white-space: nowrap;
-        pointer-events: none;
-        transition: color 0.18s;
-      }
-
-      #hand-full-hint.is-visible {
-        color: #ffcf9c;
       }
 
       .hand-toolbar-actions {
@@ -1568,6 +1613,24 @@
         margin: calc(5 * var(--hu)) 0 calc(2 * var(--hu)) calc(4 * var(--hu));
         transform-origin: center bottom;
         filter: drop-shadow(0 calc(4 * var(--hu)) calc(7 * var(--hu)) rgba(0, 0, 0, 0.45));
+      }
+
+      /* 手牌区下方：常驻张数/上限，满手时改提示色并带「已满」。 */
+      #hand-count {
+        height: calc(22 * var(--hu));
+        margin-top: calc(4 * var(--hu));
+        color: #d7e1eb;
+        font-size: calc(14 * var(--hu));
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+        line-height: calc(22 * var(--hu));
+        text-shadow: 0 calc(1 * var(--hu)) calc(3 * var(--hu)) rgba(0, 0, 0, 0.55);
+        pointer-events: none;
+      }
+
+      #hand-count.is-full {
+        color: #ffcf9c;
       }
 
       .hand-draw-pile-card {
@@ -3659,6 +3722,20 @@
         <div class="battle-result-panel">
           <h2 id="battle-result-title">胜利</h2>
           <p id="battle-result-detail"></p>
+          <div class="battle-result-sides">
+            <article id="battle-result-self" class="battle-result-side is-self">
+              <span class="battle-result-side-tag">己方</span>
+              <strong id="battle-result-self-name" class="battle-result-name">玩家</strong>
+              <span id="battle-result-self-hp" class="battle-result-hp">0 / 0</span>
+              <div class="battle-hp-track"><div id="battle-result-self-bar" class="battle-hp-bar"></div></div>
+            </article>
+            <article id="battle-result-opp" class="battle-result-side is-opp">
+              <span class="battle-result-side-tag">对方</span>
+              <strong id="battle-result-opp-name" class="battle-result-name">对手</strong>
+              <span id="battle-result-opp-hp" class="battle-result-hp">0 / 0</span>
+              <div class="battle-hp-track"><div id="battle-result-opp-bar" class="battle-hp-bar"></div></div>
+            </article>
+          </div>
           <button id="btn-battle-result-return" type="button">返回主界面</button>
         </div>
       </section>
@@ -3802,7 +3879,6 @@
         <div class="hand-bar">
           <div id="hand-status" role="status" aria-live="polite"></div>
           <div class="hand-toolbar-info">
-            <div id="hand-full-hint" role="status" aria-live="polite"></div>
             <div id="hand-draw-pile" role="img" aria-label="牌堆正在准备补牌">
               <span class="hand-draw-pile-card is-bottom"></span>
               <span class="hand-draw-pile-card is-middle"></span>
@@ -3815,6 +3891,7 @@
           </div>
         </div>
         <div id="hand-cards"></div>
+        <div id="hand-count" role="status" aria-live="polite">0 / 9</div>
       </section>
     </div>
 

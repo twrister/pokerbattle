@@ -17,8 +17,11 @@ export interface BattleAnnounceHandle {
   reset(): void;
 }
 
-const PHASE_HOLD_MS = 1200;
-const COUNTDOWN_HOLD_MS = 900;
+/** 阶段文案停留；需与 CSS `battle-announce-pop` 时长对齐。 */
+const PHASE_HOLD_MS = 2800;
+/** 倒计时数字约 1 秒一换，略长于间隔以免提前淡出。 */
+const COUNTDOWN_HOLD_MS = 1400;
+const OPENING_ANNOUNCE = '摧毁对方城堡';
 
 /** 局内居中文字提示：阶段切换与最后 10 秒倒计时共用。 */
 export function createBattleAnnounce(): BattleAnnounceHandle {
@@ -69,7 +72,8 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
     },
     tick(match) {
       if (match.phase !== lastPhase) {
-        const label = matchPhaseLabel(match.phase);
+        // 开局用目标提示，HUD 阶段名仍走 matchPhaseLabel
+        const label = match.phase === 'normal' ? OPENING_ANNOUNCE : matchPhaseLabel(match.phase);
         if (label) show(label, { holdMs: PHASE_HOLD_MS });
         lastPhase = match.phase;
         // 阶段刚切换时不叠倒数，避免与「加时阶段」等同 tick 抢显
