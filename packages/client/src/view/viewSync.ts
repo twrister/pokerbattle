@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Faction, type ProjectileVisual, type Snapshot, type UnitSnapshot } from '@pb/sim';
 import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
-import { UnitView, viewKey } from './unitView.js';
+import { UnitView, viewKey, visualFaction } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
@@ -157,6 +157,8 @@ export class BattleView {
   private selectedUnitId: number | null = null;
   /** 最近一帧插值后的单位位置，供点击拾取。 */
   private pickUnits: { id: number; x: number; y: number; radius: number; footprint: number }[] = [];
+  /** 本机阵营；画面上己方固定按蓝方着色，对阵方按红方。 */
+  private localFaction: Faction = Faction.Blue;
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -170,6 +172,11 @@ export class BattleView {
   /** 选中场上一个单位；传 null 取消。同一时刻只保留一个选中。 */
   selectUnit(unitId: number | null): void {
     this.selectedUnitId = unitId;
+  }
+
+  /** 进局时设置本机阵营，决定建筑贴图与血条走蓝皮还是红皮。 */
+  setLocalFaction(faction: Faction): void {
+    this.localFaction = faction;
   }
 
   /**
@@ -408,7 +415,7 @@ export class BattleView {
         this.scene.add(mesh);
       }
       if (visual === 'orb') {
-        mesh.material = PROJECTILE_MATERIALS[projectile.faction]!;
+        mesh.material = PROJECTILE_MATERIALS[visualFaction(projectile.faction, this.localFaction)]!;
       }
       const size =
         projectile.fuseBombKind === 'giant_bomb'
@@ -481,7 +488,8 @@ export class BattleView {
   }
 
   private obtainUnitView(unit: UnitSnapshot): UnitView {
-    const key = viewKey(unit.faction, unit.typeId);
+    const faction = visualFaction(unit.faction, this.localFaction);
+    const key = viewKey(faction, unit.typeId);
     const pooled = this.unitPool.get(key);
     const reused = pooled?.pop();
     let view: UnitView;
@@ -489,7 +497,7 @@ export class BattleView {
       reused.resetAnimState();
       view = reused;
     } else {
-      view = new UnitView(unit.faction, unit.typeId);
+      view = new UnitView(faction, unit.typeId);
     }
     // 出场对齐当前血量，避免首帧被当成「掉血」误闪红
     view.lastHpRatio = unit.hpRatio;

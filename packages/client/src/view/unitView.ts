@@ -136,6 +136,8 @@ export class UnitView {
 
   constructor(faction: Faction, typeId: UnitTypeId) {
     this.key = viewKey(faction, typeId);
+    // 供同步层/测试读取画面阵营，不参与逻辑判定
+    this.group.userData.visualFaction = faction;
 
     const config = UNIT_CONFIGS[typeId];
     this.isAir = config.movementLayer === 'air';
@@ -725,6 +727,14 @@ export function viewKey(faction: Faction, typeId: UnitTypeId): string {
   return `${faction}:${typeId}`;
 }
 
+/**
+ * 把仿真阵营映射成画面阵营：己方永远按蓝方皮，对阵方按红方皮。
+ * 与顶部 HUD「己方蓝 / 对阵红」一致，避免红方视角下近端主堡仍是红屋顶。
+ */
+export function visualFaction(simFaction: Faction, localFaction: Faction): Faction {
+  return simFaction === localFaction ? Faction.Blue : Faction.Red;
+}
+
 function bodyColor(faction: Faction, typeId: UnitTypeId): number {
   if (faction === Faction.Blue) {
     if (typeId === 'melee_grunt' || typeId === 'melee_guard') return 0x3f7ae0;
@@ -736,9 +746,9 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
   return 0xf5926a;
 }
 
+/** 画面己方（蓝皮）用绿色，对阵方用红色；颜色跟仿真阵营无关，只看映射后的画面阵营。 */
 function hpColor(faction: Faction): number {
-  // 红方用橘红，和 HUD --red 区分开，避免跟金黄资源条混淆
-  return faction === Faction.Blue ? 0x63d68a : 0xff6b35;
+  return faction === Faction.Blue ? 0x63d68a : 0xf2604f;
 }
 
 /** 等级徽章纹理缓存；测试环境无 DOM 时回退为纯色方块。 */

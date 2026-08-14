@@ -19,8 +19,23 @@ import {
   toSimY,
 } from '../src/view/coords.js';
 import { BattleView } from '../src/view/viewSync.js';
-import { UnitView } from '../src/view/unitView.js';
+import { UnitView, visualFaction } from '../src/view/unitView.js';
 import { SPRITE_DEFS, SPRITE_GEOMETRY } from '../src/view/unitSprites.js';
+
+/** 从单位视图里取出前景血条颜色，忽略底条与等级徽章。 */
+function findHpFillHex(group: THREE.Group): number | undefined {
+  for (const child of group.children) {
+    if (!(child instanceof THREE.Group)) continue;
+    for (const nested of child.children) {
+      if (!(nested instanceof THREE.Mesh)) continue;
+      const material = nested.material;
+      if (!(material instanceof THREE.MeshBasicMaterial)) continue;
+      const hex = material.color.getHex();
+      if (hex !== 0x11161f && hex !== 0xffffff) return hex;
+    }
+  }
+  return undefined;
+}
 
 /**
  * 这些用例只跑场景图，不创建 WebGL 上下文，所以能在 Node 里直接执行。
@@ -138,6 +153,51 @@ describe('渲染同步', () => {
     const withoutEffect = takeSnapshot(world);
     view.render(withEffect, withoutEffect, 1, camera);
     expect(scene.children.length).toBe(0);
+  });
+
+  it('己方血条绿色、对阵血条红色', () => {
+    const unitView = new UnitView(Faction.Blue, 'building_base');
+    expect(findHpFillHex(unitView.group)).toBe(0x63d68a);
+    unitView.dispose();
+
+    const enemyView = new UnitView(Faction.Red, 'building_base');
+    expect(findHpFillHex(enemyView.group)).toBe(0xf2604f);
+    enemyView.dispose();
+  });
+
+  it('画面阵营把己方映射为蓝、对阵方映射为红', () => {
+    expect(visualFaction(Faction.Blue, Faction.Blue)).toBe(Faction.Blue);
+    expect(visualFaction(Faction.Red, Faction.Blue)).toBe(Faction.Red);
+    expect(visualFaction(Faction.Red, Faction.Red)).toBe(Faction.Blue);
+    expect(visualFaction(Faction.Blue, Faction.Red)).toBe(Faction.Red);
+  });
+
+  it('本地为红方时己方建筑按蓝方皮渲染，对阵建筑按红方皮', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    view.setLocalFaction(Faction.Red);
+    const world = new World(1);
+    const ownBase = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(28));
+    const oppBase = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(3));
+    expect(ownBase).toBeTruthy();
+    expect(oppBase).toBeTruthy();
+    const snap = takeSnapshot(world);
+    view.render(snap, snap, 1, camera);
+
+    const ownSnap = snap.units.find((unit) => unit.id === ownBase!.id)!;
+    const oppSnap = snap.units.find((unit) => unit.id === oppBase!.id)!;
+    const ownView = scene.children.find(
+      (child) => Math.abs(child.position.z - toSceneZ(ownSnap.y)) < 1e-4,
+    );
+    const oppView = scene.children.find(
+      (child) => Math.abs(child.position.z - toSceneZ(oppSnap.y)) < 1e-4,
+    );
+    expect(ownView?.userData.visualFaction).toBe(Faction.Blue);
+    expect(oppView?.userData.visualFaction).toBe(Faction.Red);
+    expect(ownView instanceof THREE.Group && findHpFillHex(ownView)).toBe(0x63d68a);
+    expect(oppView instanceof THREE.Group && findHpFillHex(oppView)).toBe(0xf2604f);
+    expect(ownSnap.faction).toBe(Faction.Red);
+    expect(oppSnap.faction).toBe(Faction.Blue);
   });
 
   it('红方建筑使用专属贴图路径', () => {

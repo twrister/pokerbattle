@@ -217,6 +217,7 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   const battleView = sharedBattleView!;
   battleView.reset();
+  battleView.setLocalFaction(Faction.Blue);
 
   // 单机走 MatchState，与联机共用出牌/抽牌规则，避免双路径漂移
   // 每局随机 seed（对齐服务端 room.ts），避免开局手牌永远相同
@@ -843,6 +844,7 @@ function runVersusSession(
   sceneContext.resize();
   const battleView = sharedBattleView!;
   battleView.reset();
+  battleView.setLocalFaction(faction);
   const disableUnitSelection = enableUnitSelection({
     domElement: sceneContext.renderer.domElement,
     camera: sceneContext.camera,
