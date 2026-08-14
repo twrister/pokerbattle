@@ -762,6 +762,70 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('选中推荐牌型后按钮变为取消，再点则清空选中', () => {
+    const deck = deckWithCards([
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+      '10-spades',
+      '3-hearts',
+      '3-clubs',
+    ]);
+    const panel = createHandPanel({ deck });
+    const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
+
+    expect(button.textContent).toBe('推荐');
+    expect(button.classList.contains('is-cancel')).toBe(false);
+
+    button.click();
+    expect(button.textContent).toBe('取消');
+    expect(button.classList.contains('is-cancel')).toBe(true);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(5);
+
+    button.click();
+    expect(button.textContent).toBe('推荐');
+    expect(button.classList.contains('is-cancel')).toBe(false);
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(0);
+
+    panel.dispose();
+  });
+
+  it('手动选中与推荐相同的牌时按钮也变为取消', () => {
+    const deck = deckWithCards([
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+      '10-spades',
+      '3-hearts',
+      '3-clubs',
+    ]);
+    const panel = createHandPanel({ deck });
+    const recommendedIds = ['6-spades', '7-spades', '8-spades', '9-spades', '10-spades'];
+    for (const [index, cardId] of recommendedIds.entries()) {
+      const card = document.querySelector<HTMLElement>(`.playing-card[data-card-id="${cardId}"]`)!;
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: vi.fn(() => card),
+      });
+      card.dispatchEvent(pointerEvent('pointerdown', 40 + index));
+      card.dispatchEvent(pointerEvent('pointerup', 40 + index));
+    }
+
+    const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
+    expect(button.textContent).toBe('取消');
+    expect(button.classList.contains('is-cancel')).toBe(true);
+
+    button.click();
+    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(0);
+    expect(button.textContent).toBe('推荐');
+
+    panel.dispose();
+  });
+
   it('临时选牌按下与划入新牌时都会挂上划过轻晃类', () => {
     const panel = createHandPanel();
     const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];

@@ -32,6 +32,10 @@ const STATUS_INVALID_DROP = '请在白色高亮区域内放置';
 const STATUS_BUILDING_DRAG = '拖到白色格子上松手放置';
 /** 单次出牌可识别的牌型最多张数。 */
 const MAX_CATEGORY_CARDS = 5;
+/** 一键选中最强牌型时的按钮文案。 */
+const LABEL_SELECT_BEST = '推荐';
+/** 当前选中已是推荐牌型时，同一按钮改为取消选中。 */
+const LABEL_CANCEL_BEST = '取消';
 /** 箭头弧顶相对首尾连线的最大抬高像素。 */
 const ARROW_MAX_LIFT = 180;
 
@@ -326,18 +330,42 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     return true;
   };
 
-  /** 一键选中手牌中最强合法牌型，并清空其余正式/临时选中。 */
+  /**
+   * 推荐/取消共用入口：已选中推荐牌型则清空选中，否则改选最强合法组合。
+   * 中途划选未提交时先丢掉预览，避免和正式选中叠在一起。
+   */
   const onSelectBestClick = (): void => {
     if (playing) return;
-    const best = findStrongestHand(deck.hand);
-    if (best.length === 0) return;
     clearPreview();
     pointerId = null;
     dragAnchorIndex = null;
+    if (isRecommendedSelected()) {
+      selected.clear();
+      syncSelection();
+      return;
+    }
+    const best = findStrongestHand(deck.hand);
+    if (best.length === 0) return;
     selected.clear();
     for (const card of best) selected.add(card.id);
     syncSelection();
   };
+
+  /** 正式选中是否正好等于当前推荐牌型（同一组牌，与张数/顺序无关）。 */
+  function isRecommendedSelected(): boolean {
+    const best = findStrongestHand(deck.hand);
+    if (best.length === 0 || selected.size !== best.length) return false;
+    return best.every((card) => selected.has(card.id));
+  }
+
+  /** 按是否已选中推荐牌型切换按钮文案与取消态。 */
+  function syncSelectBestButton(): void {
+    const canCancel = isRecommendedSelected();
+    selectBestButton.textContent = canCancel ? LABEL_CANCEL_BEST : LABEL_SELECT_BEST;
+    selectBestButton.classList.toggle('is-cancel', canCancel);
+    selectBestButton.setAttribute('aria-pressed', String(canCancel));
+    selectBestButton.disabled = playing || deck.hand.length === 0;
+  }
 
   /** 按下阵型按钮：只捕获指针。指引线与场地预览要等拖出按钮后才出现。 */
   const onFormationPointerDown = (event: PointerEvent): void => {
@@ -667,7 +695,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardElement.setAttribute('aria-pressed', String(isSelected));
     }
     renderFormations(false);
-    selectBestButton.disabled = playing || deck.hand.length === 0;
+    syncSelectBestButton();
     refreshStatus();
   }
 
@@ -834,6 +862,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardsElement.removeEventListener('pointerup', finishPointerSelection);
       cardsElement.removeEventListener('pointercancel', cancelPointerSelection);
       selectBestButton.removeEventListener('click', onSelectBestClick);
+      selectBestButton.textContent = LABEL_SELECT_BEST;
+      selectBestButton.classList.remove('is-cancel');
+      selectBestButton.removeAttribute('aria-pressed');
       formationsElement.removeEventListener('pointerdown', onFormationPointerDown);
       formationsElement.removeEventListener('pointermove', onFormationPointerMove);
       formationsElement.removeEventListener('pointerup', onFormationPointerUp);
