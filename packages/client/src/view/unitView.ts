@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   AIR_UNIT_HOVER_HEIGHT,
   BODY_SCALE_REFERENCE,
+  CASTLE_PROTECT_HP,
   Faction,
   UNIT_CONFIGS,
   UNIT_LEVELS_ENABLED,
@@ -41,6 +42,10 @@ export class UnitView {
 
   private readonly hpAnchor = new THREE.Group();
   private readonly hpFill: THREE.Mesh;
+  /** 主堡保护线刻度；仅 building_base 有，与 HUD 同一阈值。 */
+  private readonly protectMark: THREE.Mesh | null = null;
+  /** 保护线占最大血量的比例，供掉血后高亮刻度。 */
+  private readonly protectRatio: number = 0;
   /** 血条左侧等级徽章；贴图按等级共享，避免每个单位创建 Canvas。 */
   private readonly levelBadge: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private displayedLevel = 1;
@@ -354,6 +359,22 @@ export class UnitView {
     );
     this.hpFill.position.z = HP_FILL_Z;
     this.hpFill.renderOrder = 3;
+    if (typeId === 'building_base') {
+      const maxHp = toFloat(config.maxHp);
+      this.protectRatio = maxHp > 0 ? Math.max(0, Math.min(1, CASTLE_PROTECT_HP / maxHp)) : 0;
+      // 略高于血条，与 HUD 刻度一样上下探出，避免被前景条盖住
+      this.protectMark = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.06, barHeight + 0.1),
+        new THREE.MeshBasicMaterial({
+          color: HP_PROTECT_MARK_COLOR,
+          transparent: true,
+          depthWrite: false,
+        }),
+      );
+      this.protectMark.name = 'hp-protect-mark';
+      this.protectMark.position.set((this.protectRatio - 0.5) * this.barWidth, 0, HP_FILL_Z + 0.02);
+      this.protectMark.renderOrder = 5;
+    }
     this.levelBadge = new THREE.Mesh(
       new THREE.PlaneGeometry(0.4, 0.4),
       createLevelBadgeMaterial(1),
@@ -366,6 +387,7 @@ export class UnitView {
     // 血条跟建筑贴图一起落到近端格边上方；符号在 update 里与贴图同步
     this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetMag);
     this.hpAnchor.add(hpBack, this.hpFill, this.levelBadge);
+    if (this.protectMark) this.hpAnchor.add(this.protectMark);
 
     this.group.add(this.inspireAura, this.hpAnchor);
   }
@@ -434,6 +456,7 @@ export class UnitView {
     this.hpFill.scale.x = Math.max(ratio, 0.0001);
     // 缩放是绕中心的，往左挪回去血条才是从右往左掉
     this.hpFill.position.set(-(this.barWidth * (1 - ratio)) / 2, 0, HP_FILL_Z);
+    this.syncProtectMark(ratio);
     this.hpAnchor.quaternion.copy(camera.quaternion);
     this.inspireAura.visible = inspired;
     if (inspired) {
@@ -444,6 +467,14 @@ export class UnitView {
     this.updateCastFx(casting, timeSec, camera);
     // 炸弹兵引信用 attacking 标记；闪烁盖过普通受击 tint
     this.applyHitTint(timeSec, this.isDetonator && attacking);
+  }
+
+  /** 主堡低于保护线时加亮刻度，与 HUD is-protect 高亮对齐。 */
+  private syncProtectMark(hpRatio: number): void {
+    if (!this.protectMark) return;
+    const material = this.protectMark.material;
+    if (!(material instanceof THREE.MeshBasicMaterial)) return;
+    material.color.setHex(hpRatio < this.protectRatio ? HP_PROTECT_MARK_ALERT : HP_PROTECT_MARK_COLOR);
   }
 
   /** 同步单位等级；对象池复用时每帧写入，避免沿用上一名单位的徽章。 */
@@ -812,6 +843,10 @@ function getLevelBadgeTexture(level: number): THREE.CanvasTexture | null {
 
 /** 前景相对底条朝相机方向的偏移，拉开深度差减轻远距 Z-fighting */
 const HP_FILL_Z = 0.05;
+/** 与 HUD `.battle-hp-protect-mark` 同色，方便对照保护线位置。 */
+const HP_PROTECT_MARK_COLOR = 0xf4d27a;
+/** 血量跌破保护线后略提亮，对应 HUD track 的 is-protect 描边。 */
+const HP_PROTECT_MARK_ALERT = 0xffe9a8;
 /** 左右/正背判定的滞回阈值，避免接近侧向时因微小朝向变化频繁换图 */
 const DIRECTION_HYSTERESIS = 0.12;
 /** 每帧复用的相机右向量，避免多单位更新时产生临时对象 */

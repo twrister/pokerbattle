@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   AIR_UNIT_HOVER_HEIGHT,
+  CASTLE_PROTECT_HP,
   Faction,
   UNIT_CONFIGS,
   UnitState,
   World,
   fromFloat,
   takeSnapshot,
+  toFloat,
 } from '@pb/sim';
 import {
   ARENA_H,
@@ -31,7 +33,7 @@ function findHpFillHex(group: THREE.Group): number | undefined {
       const material = nested.material;
       if (!(material instanceof THREE.MeshBasicMaterial)) continue;
       const hex = material.color.getHex();
-      if (hex !== 0x11161f && hex !== 0xffffff) return hex;
+      if (hex !== 0x11161f && hex !== 0xffffff && hex !== 0xf4d27a && hex !== 0xffe9a8) return hex;
     }
   }
   return undefined;
@@ -153,6 +155,30 @@ describe('渲染同步', () => {
     const withoutEffect = takeSnapshot(world);
     view.render(withEffect, withoutEffect, 1, camera);
     expect(scene.children.length).toBe(0);
+  });
+
+  it('主堡血条有保护线刻度，普通单位没有', () => {
+    const castle = new UnitView(Faction.Blue, 'building_base');
+    const grunt = new UnitView(Faction.Blue, 'melee_grunt');
+    const mark = castle.group.getObjectByName('hp-protect-mark');
+    expect(mark).toBeInstanceOf(THREE.Mesh);
+    expect(grunt.group.getObjectByName('hp-protect-mark')).toBeUndefined();
+
+    const maxHp = toFloat(UNIT_CONFIGS.building_base.maxHp);
+    const ratio = CASTLE_PROTECT_HP / maxHp;
+    const barWidth = Math.max(1.2, UNIT_CONFIGS.building_base.footprint * 0.85);
+    expect(mark?.position.x).toBeCloseTo((ratio - 0.5) * barWidth, 5);
+
+    camera.position.set(0, 10, 10);
+    camera.updateMatrixWorld();
+    castle.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
+    expect((mark as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(((mark as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xf4d27a);
+
+    castle.update(0, 0, 0, 1, ratio * 0.5, 1, UnitState.Idle, false, false, false, false, 0, camera);
+    expect(((mark as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xffe9a8);
+    castle.dispose();
+    grunt.dispose();
   });
 
   it('己方血条绿色、对阵血条红色', () => {
