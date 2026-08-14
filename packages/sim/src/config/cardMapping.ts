@@ -6,11 +6,6 @@ import type {
   HandCategory,
 } from './cardFormations.js';
 
-/** 三条兑换小炸弹：基础伤害；最终伤害 = 基础 + 牌力 × 系数。 */
-export const TRIPLE_SMALL_BOMB_DAMAGE_BASE = 300;
-/** 三条兑换小炸弹：每点牌力增加的伤害。 */
-export const TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH = 50;
-
 /** 合法点数集合，供配置校验与预览复用。 */
 export const FORMATION_MATCH_RANKS: readonly CardRank[] = [
   'A',
@@ -27,6 +22,33 @@ export const FORMATION_MATCH_RANKS: readonly CardRank[] = [
   'Q',
   'K',
 ] as const;
+
+/** 引信炸弹伤害档：数字牌 2～10 共用一档，J/Q/K/A 各一档。 */
+export type FuseBombDamageRank = '2-10' | 'J' | 'Q' | 'K' | 'A';
+
+export const FUSE_BOMB_DAMAGE_RANKS: readonly FuseBombDamageRank[] = [
+  '2-10',
+  'J',
+  'Q',
+  'K',
+  'A',
+] as const;
+
+/** 卡组页标签；键与 JSON 档位一致。 */
+export const FUSE_BOMB_DAMAGE_RANK_LABELS: Readonly<Record<FuseBombDamageRank, string>> = {
+  '2-10': '2～10',
+  J: 'J',
+  Q: 'Q',
+  K: 'K',
+  A: 'A',
+};
+
+/** 把牌面点数映射到伤害档；王牌没有点数档。 */
+export function fuseBombDamageRankOf(rank: PlayingCard['rank']): FuseBombDamageRank | null {
+  if (rank === 'JOKER') return null;
+  if (rank === 'J' || rank === 'Q' || rank === 'K' || rank === 'A') return rank;
+  return '2-10';
+}
 
 /** 规则阵型中的单个出兵位；等级由展开逻辑统一赋 1。 */
 export interface MappedFormationUnit {
@@ -97,14 +119,31 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 }
 
 /**
- * 三条兑换小炸弹伤害：300 + 牌力 × 50（牌力 2→400，A→1000）。
- * 仅用于三条小炸弹；四条小炸弹仍走单位配置固定伤。
+ * 按阵型配置查引信炸弹伤害：火箭读固定伤，其余按最强牌点数查表。
+ * 缺档或缺字段时返回 undefined，调用方回落单位配置。
  */
-export function computeTripleSmallBombDamage(cards: readonly PlayingCard[]): Fx {
+export function resolveFuseBombDamage(
+  formation: FuseBombDamageSource,
+  cards: readonly PlayingCard[],
+): Fx | undefined {
+  if (cards.length === 0) return undefined;
+  if (formation.category === 'rocket') {
+    return formation.damage !== undefined ? fromFloat(formation.damage) : undefined;
+  }
   const top = strongestCard(cards);
-  const damage =
-    TRIPLE_SMALL_BOMB_DAMAGE_BASE + getCardStrength(top) * TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH;
-  return fromFloat(damage);
+  const key = fuseBombDamageRankOf(top.rank);
+  if (!key) {
+    return formation.damage !== undefined ? fromFloat(formation.damage) : undefined;
+  }
+  const value = formation.rankDamage?.[key];
+  return value !== undefined ? fromFloat(value) : undefined;
+}
+
+/** 引信炸弹伤害配置来源；与阵型上的可选字段对齐。 */
+export interface FuseBombDamageSource {
+  category: HandCategory;
+  rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
+  damage?: number;
 }
 
 /** 预览用：按牌型决定每个点数生成几张牌。 */
@@ -154,6 +193,8 @@ function previewCardsForNumbersOrAny(
       return [card('8-spades'), card('9-hearts'), card('10-clubs')];
     case 'two_pair':
       return [card('4-spades'), card('4-hearts'), card('5-clubs'), card('5-diamonds')];
+    case 'straight4':
+      return [card('6-spades'), card('7-hearts'), card('8-clubs'), card('9-diamonds')];
     case 'straight5':
       return [
         card('2-spades'),

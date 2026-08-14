@@ -158,7 +158,7 @@ function detectThree(cards: readonly PlayingCard[]): HandCategory[] {
   return [];
 }
 
-/** 四张：炸弹 / 连对（相邻点数的两对）。 */
+/** 四张：炸弹 / 连对（相邻点数的两对） / 四顺。 */
 function detectFour(cards: readonly PlayingCard[]): HandCategory[] {
   if (hasJoker(cards)) return [];
   const groups = rankCounts(cards);
@@ -166,6 +166,7 @@ function detectFour(cards: readonly PlayingCard[]): HandCategory[] {
   if (groups.length === 2 && groups[0] === 2 && groups[1] === 2 && isConsecutivePairRanks(cards)) {
     return ['two_pair'];
   }
+  if (isStraight(cards)) return ['straight4'];
   return [];
 }
 

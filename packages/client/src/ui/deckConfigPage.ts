@@ -1,18 +1,23 @@
 import {
   FORMATION_MATCH_RANKS,
   FORMATION_THUMB_SCALE,
+  FUSE_BOMB_DAMAGE_RANKS,
+  FUSE_BOMB_DAMAGE_RANK_LABELS,
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
+  allocateCopiedFormationIdentity,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
+  cloneFormationDraft,
   createCardFormation,
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
   getPreviewCardsForFormation,
   isBuildingConfig,
   isBuildingOnlyFormation,
+  isFuseBombFormation,
   resolveCardFormation,
   type CardFormation,
   type CardFormationDrafts,
@@ -56,6 +61,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   const tabButton = required<HTMLButtonElement>('#deck-preview-tab-button', root);
   const backButton = required<HTMLButtonElement>('#btn-deck-back', root);
   const addFormationButton = required<HTMLButtonElement>('#btn-deck-add-formation', root);
+  const copyFormationButton = required<HTMLButtonElement>('#btn-deck-copy-formation', root);
   const handOddsButton = required<HTMLButtonElement>('#btn-deck-hand-odds', root);
   const saveButton = required<HTMLButtonElement>('#btn-deck-save', root);
   const resetButton = required<HTMLButtonElement>('#btn-deck-reset', root);
@@ -72,9 +78,10 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   const back = (): void => options.onBack();
   const openHandOdds = (): void => options.onOpenHandOdds?.();
   backButton.addEventListener('click', back);
-  // 新增/编辑/重置/保存/概率工具仅开发服开放；正式服只保留浏览与预览
+  // 新增/复制/编辑/重置/保存/概率工具仅开发服开放；正式服只保留浏览与预览
   if (IS_DEV_SERVER) {
     addFormationButton.addEventListener('click', addFormation);
+    copyFormationButton.addEventListener('click', copyFormation);
     handOddsButton.addEventListener('click', openHandOdds);
     saveButton.addEventListener('click', save);
     resetButton.addEventListener('click', reset);
@@ -226,6 +233,9 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
     editor.appendChild(renderMatchEditor(draft));
     editor.appendChild(renderRowsEditor(draft));
+    if (isFuseBombFormation(draft)) {
+      editor.appendChild(renderBombDamageEditor(draft));
+    }
 
     // 单建筑阵型不需要间距；普通阵型才显示
     if (!buildingOnly) {
@@ -352,6 +362,42 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
+  /** 引信炸弹伤害：三条/四条按 2～10 / J / Q / K / A 五档，火箭用固定伤害。 */
+  function renderBombDamageEditor(draft: FormationDraft): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'deck-rows';
+    const title = document.createElement('div');
+    title.className = 'deck-section-title';
+    title.textContent = category === 'rocket' ? '炸弹伤害' : '点数伤害';
+    section.appendChild(title);
+
+    if (category === 'rocket') {
+      section.appendChild(
+        optionalDamageInput('炸弹伤害', draft.damage, (value) => {
+          if (value === undefined) delete draft.damage;
+          else draft.damage = value;
+        }),
+      );
+      return section;
+    }
+
+    for (const rank of FUSE_BOMB_DAMAGE_RANKS) {
+      const label = FUSE_BOMB_DAMAGE_RANK_LABELS[rank];
+      section.appendChild(
+        optionalDamageInput(`${label} 伤害`, draft.rankDamage?.[rank], (value) => {
+          if (value === undefined) {
+            if (!draft.rankDamage) return;
+            delete draft.rankDamage[rank];
+            if (Object.keys(draft.rankDamage).length === 0) delete draft.rankDamage;
+            return;
+          }
+          draft.rankDamage = { ...draft.rankDamage, [rank]: value };
+        }),
+      );
+    }
+    return section;
+  }
+
   /** 单张站位编辑：增删排/单位，下拉选择兵种。 */
   function renderRowsEditor(draft: FormationDraft): HTMLElement {
     const section = document.createElement('section');
@@ -453,6 +499,26 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       thumbScale: FORMATION_THUMB_SCALE,
     });
     formationIndex = drafts[category].length - 1;
+    renderAll();
+  }
+
+  /** 深拷贝当前阵型并插入到其后，用于快速改 match 或微调站位。 */
+  function copyFormation(): void {
+    const source = selected();
+    if (!source) return;
+    const existingIds = new Set(
+      HAND_CATEGORY_ORDER.flatMap((handCategory) => drafts[handCategory].map((entry) => entry.id)),
+    );
+    const copy = cloneFormationDraft(source);
+    const identity = allocateCopiedFormationIdentity(
+      source,
+      existingIds,
+      drafts[category].map((entry) => entry.name),
+    );
+    copy.id = identity.id;
+    copy.name = identity.name;
+    drafts[category].splice(formationIndex + 1, 0, copy);
+    formationIndex += 1;
     renderAll();
   }
 
@@ -560,6 +626,33 @@ function numberInput(
   input.step = String(step);
   input.value = String(value);
   input.addEventListener('input', () => onChange(Number(input.value)));
+  row.appendChild(input);
+  return row;
+}
+
+/** 炸弹伤害可留空，空值表示回落单位配置。 */
+function optionalDamageInput(
+  label: string,
+  value: number | undefined,
+  onChange: (value: number | undefined) => void,
+): HTMLLabelElement {
+  const row = document.createElement('label');
+  row.className = 'deck-field';
+  row.textContent = label;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.step = '10';
+  input.placeholder = '单位默认';
+  input.value = value === undefined ? '' : String(value);
+  input.addEventListener('input', () => {
+    if (input.value.trim() === '') {
+      onChange(undefined);
+      return;
+    }
+    const next = Number(input.value);
+    if (Number.isFinite(next) && next >= 0) onChange(next);
+  });
   row.appendChild(input);
   return row;
 }

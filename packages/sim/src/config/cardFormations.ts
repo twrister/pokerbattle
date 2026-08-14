@@ -4,7 +4,9 @@ import { Faction } from '../entity/unit.js';
 import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
 import {
   FORMATION_MATCH_RANKS,
+  FUSE_BOMB_DAMAGE_RANKS,
   resolveMappedRows,
+  type FuseBombDamageRank,
   type MappedFormationUnit,
 } from './cardMapping.js';
 import rawCardFormations from './cardFormations.json';
@@ -17,6 +19,7 @@ export type HandCategory =
   | 'triple'
   | 'straight3'
   | 'bomb'
+  | 'straight4'
   | 'two_pair'
   | 'full_house'
   | 'straight5'
@@ -29,6 +32,7 @@ export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [
   'pair',
   'straight3',
   'triple',
+  'straight4',
   'two_pair',
   'straight5',
   'flush',
@@ -46,6 +50,7 @@ export const HAND_CATEGORY_STRENGTH_ORDER: readonly HandCategory[] = [
   'full_house',
   'flush',
   'straight5',
+  'straight4',
   'two_pair',
   'triple',
   'straight3',
@@ -61,6 +66,7 @@ export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
   triple: '三张',
   straight3: '三顺',
   bomb: '炸弹',
+  straight4: '四顺',
   two_pair: '连对',
   full_house: '葫芦',
   straight5: '五顺',
@@ -118,6 +124,10 @@ export interface CardFormation {
   rowSpacing: number;
   /** 按钮缩略图兵种放大倍率；缺省用 FORMATION_THUMB_SCALE。 */
   thumbScale: number;
+  /** 引信炸弹按点数覆盖伤害；缺档回落单位配置。 */
+  rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
+  /** 火箭等无点数炸弹的固定伤害；缺省回落单位配置。 */
+  damage?: number;
 }
 
 /** 解析后的世界坐标出生点（浮点格坐标，出兵前再 fromFloat）。 */
@@ -140,6 +150,10 @@ export interface FormationDraft {
   rowSpacing?: number;
   /** 按钮缩略图放大；缺省 FORMATION_THUMB_SCALE。 */
   thumbScale?: number;
+  /** 引信炸弹按点数覆盖伤害；缺档回落单位配置。 */
+  rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
+  /** 火箭等无点数炸弹的固定伤害；缺省回落单位配置。 */
+  damage?: number;
 }
 
 /** 所有牌型下的阵型草稿集合。 */
@@ -180,6 +194,16 @@ function cloneMatchRule(match: FormationMatchRule): FormationMatchRule {
   return { kind: match.kind };
 }
 
+/** 拷贝引信炸弹伤害字段；缺省不写入，避免普通阵型带上空对象。 */
+function cloneBombDamageFields(
+  source: Pick<FormationDraft, 'rankDamage' | 'damage'>,
+): Pick<FormationDraft, 'rankDamage' | 'damage'> {
+  const out: Pick<FormationDraft, 'rankDamage' | 'damage'> = {};
+  if (source.rankDamage !== undefined) out.rankDamage = { ...source.rankDamage };
+  if (source.damage !== undefined) out.damage = source.damage;
+  return out;
+}
+
 /** 从 JSON 加载并回填 category / slots / units。 */
 function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory, CardFormation[]> {
   const out = {} as Record<HandCategory, CardFormation[]>;
@@ -205,6 +229,7 @@ function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory,
             ? (entry.rowSpacing as number)
             : FORMATION_ROW_SPACING,
         thumbScale: resolveThumbScale(entry.thumbScale),
+        ...cloneBombDamageFields(entry),
       };
     });
   }
@@ -232,6 +257,7 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
         ? (draft.rowSpacing as number)
         : FORMATION_ROW_SPACING,
     thumbScale: resolveThumbScale(draft.thumbScale),
+    ...cloneBombDamageFields(draft),
   };
 }
 
@@ -266,19 +292,72 @@ export const CARD_FORMATIONS: Record<HandCategory, CardFormation[]> = formations
 );
 let defaultDrafts: CardFormationDrafts = dumpCardFormationDrafts();
 
+/** 深拷贝单条草稿，避免复制/编辑时源与副本互相污染。 */
+export function cloneFormationDraft(source: FormationDraft): FormationDraft {
+  return {
+    id: source.id,
+    name: source.name,
+    match: cloneMatchRule(source.match),
+    rows: source.rows.map((row) => [...row]),
+    ...(source.colSpacing === undefined ? {} : { colSpacing: source.colSpacing }),
+    ...(source.rowSpacing === undefined ? {} : { rowSpacing: source.rowSpacing }),
+    ...(source.thumbScale === undefined ? {} : { thumbScale: source.thumbScale }),
+    ...cloneBombDamageFields(source),
+  };
+}
+
+/**
+ * 为副本分配尚未占用的 id / 名称。
+ * 连续复制同一谱系时剥掉已有 `_copy` / `副本` 后缀再递增，避免 `foo_copy_copy`。
+ */
+export function allocateCopiedFormationIdentity(
+  source: FormationDraft,
+  existingIds: ReadonlySet<string>,
+  existingNames: readonly string[],
+): { id: string; name: string } {
+  const names = new Set(existingNames);
+  return {
+    id: nextCopiedLabel(copyIdBase(source.id), '_copy', (n) => `_copy${n}`, (id) => existingIds.has(id)),
+    name: nextCopiedLabel(
+      copyNameBase(source.name),
+      ' 副本',
+      (n) => ` 副本${n}`,
+      (name) => names.has(name),
+    ),
+  };
+}
+
+/** 去掉复制产生的 `_copy` / `_copy2` 后缀，得到可用于再分配的基 id。 */
+function copyIdBase(id: string): string {
+  return id.replace(/_copy\d*$/, '') || id;
+}
+
+/** 去掉复制产生的 `副本` / `副本2` 后缀，得到可用于再分配的基名称。 */
+function copyNameBase(name: string): string {
+  return name.replace(/ 副本\d*$/, '') || name;
+}
+
+/** 先试 `base+firstSuffix`，占用后再试 numbered(2)、numbered(3)… */
+function nextCopiedLabel(
+  base: string,
+  firstSuffix: string,
+  numbered: (n: number) => string,
+  taken: (candidate: string) => boolean,
+): string {
+  const first = `${base}${firstSuffix}`;
+  if (!taken(first)) return first;
+  for (let n = 2; n < Number.MAX_SAFE_INTEGER; n++) {
+    const candidate = `${base}${numbered(n)}`;
+    if (!taken(candidate)) return candidate;
+  }
+  return first;
+}
+
 /** 深拷贝草稿，避免编辑表单直接改动运行时配置。 */
 function cloneDrafts(source: CardFormationDrafts): CardFormationDrafts {
   const out = {} as CardFormationDrafts;
   for (const category of HAND_CATEGORY_ORDER) {
-    out[category] = source[category].map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      match: cloneMatchRule(entry.match),
-      rows: entry.rows.map((row) => [...row]),
-      ...(entry.colSpacing === undefined ? {} : { colSpacing: entry.colSpacing }),
-      ...(entry.rowSpacing === undefined ? {} : { rowSpacing: entry.rowSpacing }),
-      ...(entry.thumbScale === undefined ? {} : { thumbScale: entry.thumbScale }),
-    }));
+    out[category] = source[category].map(cloneFormationDraft);
   }
   return out;
 }
@@ -295,6 +374,7 @@ export function dumpCardFormationDrafts(): CardFormationDrafts {
       colSpacing: formation.colSpacing,
       rowSpacing: formation.rowSpacing,
       thumbScale: formation.thumbScale,
+      ...cloneBombDamageFields(formation),
     }));
   }
   return out;
@@ -333,6 +413,30 @@ function validateMatchRule(id: string, match: FormationMatchRule | undefined): s
     default:
       return `阵型「${id}」牌面匹配类型无效`;
   }
+}
+
+/** 校验引信炸弹伤害表；未配置时跳过，非法键或负数拒绝。 */
+function validateBombDamageFields(
+  id: string,
+  formation: Pick<FormationDraft, 'rankDamage' | 'damage'>,
+): string | null {
+  if (formation.damage !== undefined) {
+    if (!Number.isFinite(formation.damage) || formation.damage < 0) {
+      return `阵型「${id}」炸弹伤害必须是不小于 0 的数字`;
+    }
+  }
+  if (formation.rankDamage === undefined) return null;
+  if (!formation.rankDamage || typeof formation.rankDamage !== 'object' || Array.isArray(formation.rankDamage)) {
+    return `阵型「${id}」点数伤害必须是对象`;
+  }
+  const allowedRanks = new Set<string>(FUSE_BOMB_DAMAGE_RANKS);
+  for (const [rank, value] of Object.entries(formation.rankDamage)) {
+    if (!allowedRanks.has(rank)) return `阵型「${id}」点数伤害包含未知档位「${rank}」`;
+    if (!Number.isFinite(value) || (value as number) < 0) {
+      return `阵型「${id}」档位「${rank}」伤害必须是不小于 0 的数字`;
+    }
+  }
+  return null;
 }
 
 /** 在写入运行时前完整校验草稿，避免半套配置影响对局。 */
@@ -377,6 +481,8 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
       if (formation.thumbScale !== undefined && (!Number.isFinite(formation.thumbScale) || formation.thumbScale <= 0)) {
         return `阵型「${id}」阵型放大必须大于 0`;
       }
+      const bombDamageError = validateBombDamageFields(id, formation);
+      if (bombDamageError) return bombDamageError;
     }
   }
   return null;

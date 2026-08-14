@@ -294,15 +294,29 @@ export class World {
 
   /**
    * 从己方主堡向指定落点投放巨型炸弹。
-   * 主堡不存在时使用己方场边中央，保证沙盒与测试环境也能确定性运行。
+   * damageOverride 用于四条/火箭等按阵型点数表覆盖伤害，缺省走单位配置。
    */
-  spawnGiantBomb(faction: Faction, targetX: Fx, targetY: Fx, level = 1): Projectile {
-    return this.spawnFuseBomb(faction, 'giant_bomb', targetX, targetY, level, BOMB_ARC_APEX * 2);
+  spawnGiantBomb(
+    faction: Faction,
+    targetX: Fx,
+    targetY: Fx,
+    level = 1,
+    damageOverride?: Fx,
+  ): Projectile {
+    return this.spawnFuseBomb(
+      faction,
+      'giant_bomb',
+      targetX,
+      targetY,
+      level,
+      BOMB_ARC_APEX * 2,
+      damageOverride,
+    );
   }
 
   /**
    * 从己方主堡投放小炸弹：伤害与爆炸半径更小，抛物线也更矮。
-   * damageOverride 用于三条兑换等按牌力线性伤，缺省走单位配置。
+   * damageOverride 用于三条兑换等按点数表覆盖伤害，缺省走单位配置。
    */
   spawnSmallBomb(
     faction: Faction,

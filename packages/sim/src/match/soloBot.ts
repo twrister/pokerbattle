@@ -226,7 +226,7 @@ function forEachCombination(cards: readonly PlayingCard[], size: number, visit: 
 }
 
 function categoryStrength(category: string): number {
-  return ['single', 'pair', 'straight3', 'triple', 'two_pair', 'straight5', 'flush', 'full_house', 'rocket', 'bomb', 'straight_flush'].indexOf(category) + 1;
+  return ['single', 'pair', 'straight3', 'triple', 'straight4', 'two_pair', 'straight5', 'flush', 'full_house', 'rocket', 'bomb', 'straight_flush'].indexOf(category) + 1;
 }
 
 function unitValue(typeId: keyof typeof UNIT_CONFIGS, level: number): number {

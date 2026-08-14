@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { findFormationById, isGiantBombFormation } from '../src/config/cardFormations.js';
-import { spawnCommand } from '../src/commands.js';
+import {
+  applyCardFormationDrafts,
+  dumpCardFormationDrafts,
+  findFormationById,
+  isGiantBombFormation,
+  resetCardFormationsToDefault,
+} from '../src/config/cardFormations.js';
+import { playFormationCommand, spawnCommand } from '../src/commands.js';
 import { Faction } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
+import { applyCommands } from '../src/systems/applyCommands.js';
 import { updateProjectiles } from '../src/systems/projectiles.js';
 import { World } from '../src/world.js';
 
@@ -57,5 +64,49 @@ describe('巨型炸弹', () => {
     expect(world.projectiles).toHaveLength(1);
     expect(world.projectiles[0]?.fuseBombKind).toBe('giant_bomb');
     expect(world.projectiles[0]?.visual).toBe('bomb');
+  });
+
+  it('四条按点数查表覆盖伤害', () => {
+    const drafts = dumpCardFormationDrafts();
+    const bomb = drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb')!;
+    bomb.rankDamage = { ...bomb.rankDamage, '2-10': 800 };
+    applyCardFormationDrafts(drafts);
+    try {
+      const play = (cardIds: string[]) => {
+        const world = new World(1);
+        world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+        applyCommands(world, [
+          playFormationCommand(Faction.Blue, 'bomb_giant_bomb', cardIds, fromFloat(9), fromFloat(15)),
+        ]);
+        return toFloat(world.projectiles[0]!.damage);
+      };
+      expect(play(['5-spades', '5-hearts', '5-clubs', '5-diamonds'])).toBeCloseTo(800, 3);
+      expect(play(['A-spades', 'A-hearts', 'A-clubs', 'A-diamonds'])).toBeCloseTo(1500, 3);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+  });
+
+  it('火箭使用阵型固定伤害', () => {
+    const drafts = dumpCardFormationDrafts();
+    const rocket = drafts.rocket.find((entry) => entry.id === 'rocket_bomb')!;
+    rocket.damage = 1500;
+    applyCardFormationDrafts(drafts);
+    try {
+      const world = new World(1);
+      world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+      applyCommands(world, [
+        playFormationCommand(
+          Faction.Blue,
+          'rocket_bomb',
+          ['joker-black', 'joker-red'],
+          fromFloat(9),
+          fromFloat(15),
+        ),
+      ]);
+      expect(toFloat(world.projectiles[0]!.damage)).toBeCloseTo(1500, 3);
+    } finally {
+      resetCardFormationsToDefault();
+    }
   });
 });

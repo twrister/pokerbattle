@@ -83,7 +83,7 @@ describe('牌型识别 detectHandCategories', () => {
     ).toEqual([]);
   });
 
-  it('四顺不再识别为合法牌型', () => {
+  it('四顺命中 straight4；A-2-3-4 与 J-Q-K-A 均成立', () => {
     expect(
       detectHandCategories([
         card('7-spades'),
@@ -91,7 +91,25 @@ describe('牌型识别 detectHandCategories', () => {
         card('9-clubs'),
         card('10-diamonds'),
       ]),
-    ).toEqual([]);
+    ).toEqual(['straight4']);
+
+    expect(
+      detectHandCategories([
+        card('A-spades'),
+        card('2-hearts'),
+        card('3-clubs'),
+        card('4-diamonds'),
+      ]),
+    ).toEqual(['straight4']);
+
+    expect(
+      detectHandCategories([
+        card('J-spades'),
+        card('Q-hearts'),
+        card('K-clubs'),
+        card('A-diamonds'),
+      ]),
+    ).toEqual(['straight4']);
   });
 
   it('葫芦命中 full_house', () => {

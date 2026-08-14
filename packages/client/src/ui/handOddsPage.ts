@@ -27,7 +27,7 @@ type ChartMode = 'bar' | 'line';
 
 const TRIAL_OPTIONS = [1000, 5000, 20000] as const;
 const CHUNK_TRIALS = 200;
-/** 折线图 11 条线的固定色板，与强度序一一对应。 */
+/** 折线图 12 条线的固定色板，与强度序一一对应。 */
 const CATEGORY_COLORS: Readonly<Record<HandCategory, string>> = {
   straight_flush: '#f0c14b',
   bomb: '#ff6b6b',
@@ -35,6 +35,7 @@ const CATEGORY_COLORS: Readonly<Record<HandCategory, string>> = {
   full_house: '#c77dff',
   flush: '#4cc9f0',
   straight5: '#80ed99',
+  straight4: '#99d98c',
   two_pair: '#90e0ef',
   triple: '#adb5bd',
   straight3: '#b8f2e6',

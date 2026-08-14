@@ -65,8 +65,10 @@ export {
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
   HAND_CATEGORY_STRENGTH_ORDER,
+  allocateCopiedFormationIdentity,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
+  cloneFormationDraft,
   createCardFormation,
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
@@ -121,13 +123,16 @@ export {
 export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
 export {
   FORMATION_MATCH_RANKS,
-  TRIPLE_SMALL_BOMB_DAMAGE_BASE,
-  TRIPLE_SMALL_BOMB_DAMAGE_PER_STRENGTH,
+  FUSE_BOMB_DAMAGE_RANKS,
+  FUSE_BOMB_DAMAGE_RANK_LABELS,
   cardsMatchRule,
-  computeTripleSmallBombDamage,
+  fuseBombDamageRankOf,
   getPreviewCardsForFormation,
   layoutMappedUnits,
+  resolveFuseBombDamage,
   resolveMappedRows,
+  type FuseBombDamageRank,
+  type FuseBombDamageSource,
   type MappedFormationUnit,
 } from './config/cardMapping.js';
 export {

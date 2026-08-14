@@ -3,7 +3,9 @@ import {
   CARD_FORMATIONS,
   Faction,
   HAND_CATEGORY_ORDER,
+  allocateCopiedFormationIdentity,
   applyCardFormationDrafts,
+  cloneFormationDraft,
   dumpCardFormationDrafts,
   getFormationBuildingTypeId,
   getFormationsFor,
@@ -13,6 +15,7 @@ import {
   resetCardFormationsToDefault,
   resolveFormationSpawns,
   validateCardFormationDrafts,
+  type FormationDraft,
 } from '../src/index.js';
 
 describe('牌型兵种阵型配置', () => {
@@ -161,6 +164,17 @@ describe('牌型兵种阵型配置', () => {
     ]);
     expect(straight3.slots).toHaveLength(4);
 
+    const straight4 = formationFor(
+      ['straight4'],
+      ['6-spades', '7-hearts', '8-clubs', '9-diamonds'],
+      'straight4_number',
+    );
+    expect(straight4.units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 3 },
+      { typeId: 'ranged_archer', level: 1, count: 3 },
+    ]);
+    expect(straight4.slots).toHaveLength(6);
+
     const triple = formationFor(['triple'], ['10-spades', '10-hearts', '10-clubs'], 'triple_grunt');
     expect(triple.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 6 }]);
 
@@ -290,6 +304,78 @@ describe('牌型兵种阵型配置', () => {
     try {
       const cards = ['8-spades', '9-hearts', '10-clubs'].map((id) => getPokerCardById(id)!);
       const formation = getFormationsFor(['straight3'], cards).find((entry) => entry.id === 'straight3_number')!;
+      expect(formation.rows).toEqual([['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']]);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+  });
+
+  it('四顺按点数段匹配可配置站位，且只展示命中段', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const idsFor = (cardIds: string[]) =>
+      getFormationsFor(['straight4'], cards(...cardIds)).map((formation) => formation.id);
+    const formationFor = (cardIds: string[], id: string) =>
+      getFormationsFor(['straight4'], cards(...cardIds)).find((formation) => formation.id === id)!;
+
+    expect(CARD_FORMATIONS.straight4.map((entry) => entry.id)).toEqual([
+      'straight4_number',
+      'straight4_A234',
+      'straight4_8910J',
+      'straight4_910JQ',
+      'straight4_10JQK',
+      'straight4_JQKA',
+    ]);
+
+    expect(idsFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'])).toEqual(['straight4_number']);
+    expect(formationFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'], 'straight4_number').units).toEqual([
+      { typeId: 'melee_grunt', level: 1, count: 3 },
+      { typeId: 'ranged_archer', level: 1, count: 3 },
+    ]);
+    expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'])).toEqual(['straight4_A234']);
+    expect(formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'], 'straight4_A234').units).toEqual([
+      { typeId: 'melee_cavalry', level: 1, count: 1 },
+      { typeId: 'melee_grunt', level: 1, count: 1 },
+      { typeId: 'ranged_archer', level: 1, count: 2 },
+    ]);
+    expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'])).toEqual(['straight4_8910J']);
+    expect(formationFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'], 'straight4_8910J').rows).toEqual([
+      ['melee_grunt', 'melee_guard'],
+      ['ranged_archer', 'ranged_archer'],
+    ]);
+    expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds'])).toEqual(['straight4_910JQ']);
+    expect(formationFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds'], 'straight4_910JQ').rows).toEqual([
+      ['melee_grunt', 'melee_guard'],
+      ['ranged_archer', 'hero_queen'],
+    ]);
+    expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds'])).toEqual(['straight4_10JQK']);
+    expect(formationFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds'], 'straight4_10JQK').rows).toEqual([
+      ['melee_guard', 'hero_king'],
+      ['hero_queen', 'ranged_archer'],
+    ]);
+    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs', 'A-diamonds'])).toEqual(['straight4_JQKA']);
+    expect(formationFor(['J-spades', 'Q-hearts', 'K-clubs', 'A-diamonds'], 'straight4_JQKA').rows).toEqual([
+      ['hero_king', 'melee_cavalry'],
+      ['hero_queen', 'ranged_archer'],
+    ]);
+  });
+
+  it('四顺尊重配置 rows，不因规则重排站位', () => {
+    const draft = dumpCardFormationDrafts();
+    draft.straight4 = [
+      {
+        id: 'straight4_number',
+        name: '自定义数字四顺',
+        match: { kind: 'numbers' },
+        rows: [['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']],
+        colSpacing: 1.2,
+        rowSpacing: 1.4,
+        thumbScale: 2,
+      },
+    ];
+    applyCardFormationDrafts(draft);
+    try {
+      const cards = ['6-spades', '7-hearts', '8-clubs', '9-diamonds'].map((id) => getPokerCardById(id)!);
+      const formation = getFormationsFor(['straight4'], cards).find((entry) => entry.id === 'straight4_number')!;
       expect(formation.rows).toEqual([['ranged_archer'], ['melee_grunt', 'melee_grunt', 'melee_grunt']]);
     } finally {
       resetCardFormationsToDefault();
@@ -579,6 +665,38 @@ describe('牌型兵种阵型配置', () => {
     expect(validateCardFormationDrafts(badRanks)).toContain('点数匹配不能为空');
   });
 
+  it('dump 保留炸弹点数伤害，非法表被拒绝', () => {
+    const drafts = dumpCardFormationDrafts();
+    const triple = drafts.triple.find((entry) => entry.id === 'triple_small_bomb');
+    expect(triple?.rankDamage?.['2-10']).toBe(600);
+    expect(triple?.rankDamage?.A).toBe(1000);
+    const bomb = drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb');
+    expect(bomb?.rankDamage?.['2-10']).toBe(1200);
+    const rocket = drafts.rocket.find((entry) => entry.id === 'rocket_bomb');
+    expect(rocket?.damage).toBe(1500);
+
+    triple!.rankDamage = { ...triple!.rankDamage, J: 1234 };
+    applyCardFormationDrafts(drafts);
+    try {
+      const dumped = dumpCardFormationDrafts();
+      expect(dumped.triple.find((entry) => entry.id === 'triple_small_bomb')?.rankDamage?.J).toBe(1234);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+
+    const unknownRank = dumpCardFormationDrafts();
+    unknownRank.triple[0]!.rankDamage = { XX: 1 } as never;
+    expect(validateCardFormationDrafts(unknownRank)).toContain('未知档位');
+
+    const negativeRank = dumpCardFormationDrafts();
+    negativeRank.triple.find((entry) => entry.id === 'triple_small_bomb')!.rankDamage = { '2-10': -1 };
+    expect(validateCardFormationDrafts(negativeRank)).toContain('不小于 0');
+
+    const negativeFlat = dumpCardFormationDrafts();
+    negativeFlat.rocket.find((entry) => entry.id === 'rocket_bomb')!.damage = -1;
+    expect(validateCardFormationDrafts(negativeFlat)).toContain('炸弹伤害必须是不小于 0 的数字');
+  });
+
   it('同花与炸弹出兵以配置 rows 为准', () => {
     const drafts = dumpCardFormationDrafts();
     const flushDragon = drafts.flush.find((entry) => entry.id === 'flush_dragon');
@@ -605,5 +723,55 @@ describe('牌型兵种阵型配置', () => {
     } finally {
       resetCardFormationsToDefault();
     }
+  });
+
+  it('cloneFormationDraft 改副本 rows / match 不影响源草稿', () => {
+    const source: FormationDraft = {
+      id: 'single_J',
+      name: '单张 J',
+      match: { kind: 'ranks', ranks: ['J'] },
+      rows: [['melee_guard']],
+      colSpacing: 1.2,
+      rankDamage: { J: 80 },
+    };
+    const copy = cloneFormationDraft(source);
+    copy.rows[0]!.push('melee_grunt');
+    copy.rows.push(['ranged_archer']);
+    if (copy.match.kind === 'ranks') copy.match.ranks.push('Q');
+    copy.rankDamage!.J = 120;
+
+    expect(source.rows).toEqual([['melee_guard']]);
+    expect(source.match).toEqual({ kind: 'ranks', ranks: ['J'] });
+    expect(source.rankDamage).toEqual({ J: 80 });
+    expect(copy.rows).toEqual([['melee_guard', 'melee_grunt'], ['ranged_archer']]);
+  });
+
+  it('allocateCopiedFormationIdentity 在已占用 id 时递增后缀', () => {
+    const source: FormationDraft = {
+      id: 'single_J',
+      name: '单张 J',
+      match: { kind: 'ranks', ranks: ['J'] },
+      rows: [['melee_guard']],
+    };
+    expect(allocateCopiedFormationIdentity(source, new Set(), [])).toEqual({
+      id: 'single_J_copy',
+      name: '单张 J 副本',
+    });
+    expect(
+      allocateCopiedFormationIdentity(source, new Set(['single_J_copy']), ['单张 J 副本']),
+    ).toEqual({
+      id: 'single_J_copy2',
+      name: '单张 J 副本2',
+    });
+    expect(
+      allocateCopiedFormationIdentity(
+        { ...source, id: 'single_J_copy', name: '单张 J 副本' },
+        new Set(['single_J_copy']),
+        ['单张 J 副本'],
+      ),
+    ).toEqual({
+      id: 'single_J_copy2',
+      name: '单张 J 副本2',
+    });
   });
 });
