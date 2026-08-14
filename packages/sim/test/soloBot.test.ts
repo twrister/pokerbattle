@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CommandKind, CASTLE_PROTECT_HP, fromFloat } from '../src/index.js';
 import { Faction } from '../src/entity/unit.js';
 import { MatchState } from '../src/match/matchState.js';
 import { SoloBotController } from '../src/match/soloBot.js';
@@ -21,9 +22,11 @@ describe('SoloBotController', () => {
     const command = bot.decide(match);
 
     expect(command).not.toBeNull();
+    expect(command?.kind).toBe(CommandKind.PlayFormation);
     expect(command?.faction).toBe(Faction.Red);
-    expect(command!.cardIds.length).toBeGreaterThanOrEqual(2);
-    expect(match.validate(command!)).toBe(true);
+    if (command?.kind !== CommandKind.PlayFormation) throw new Error('期望出牌指令');
+    expect(command.cardIds.length).toBeGreaterThanOrEqual(2);
+    expect(match.validate(command)).toBe(true);
     match.step([command!]);
     expect(match.decks[Faction.Red].hand.length).toBeLessThan(before);
   });
@@ -49,6 +52,22 @@ describe('SoloBotController', () => {
     match.step([command!]);
 
     expect(bot.decide(match)).toBeNull();
+  });
+
+  it('有待领取保护卡包时立刻领取，不受攒牌门槛限制', () => {
+    const match = createMatch();
+    const castle = match.world.units.find(
+      (unit) => unit.faction === Faction.Red && unit.typeId === 'building_base',
+    );
+    if (!castle) throw new Error('主堡未生成');
+    castle.hp = fromFloat(CASTLE_PROTECT_HP - 1);
+    match.step();
+    expect(match.getCastlePackState(Faction.Red)).toBe('pending');
+    expect(match.decks[Faction.Red].hand.length).toBeLessThanOrEqual(5);
+
+    const command = new SoloBotController('easy', 77).decide(match);
+    expect(command?.kind).toBe(CommandKind.ClaimCastlePack);
+    expect(command?.faction).toBe(Faction.Red);
   });
 });
 

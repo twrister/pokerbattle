@@ -1,6 +1,6 @@
 import { detectHandCategories } from '../cards/handCategory.js';
 import type { PlayingCard } from '../cards/deck.js';
-import { playFormationCommand, type PlayFormationCommand } from '../commands.js';
+import { claimCastlePackCommand, playFormationCommand, type Command } from '../commands.js';
 import {
   getFormationsFor,
   isBuildingOnlyFormation,
@@ -34,7 +34,7 @@ const MIN_HAND_TO_PLAY = 6;
 
 /**
  * 单机红方的玩家级控制器。
- * 它只生成正常出牌指令，扣牌、落点和阵型合法性始终由 MatchState 统一裁决。
+ * 它只生成正常出牌或领包指令，扣牌、落点和阵型合法性始终由 MatchState 统一裁决。
  */
 export class SoloBotController {
   private readonly rng: Rng;
@@ -57,8 +57,13 @@ export class SoloBotController {
    * 在逻辑帧开始前考虑一次出牌。
    * 手牌不足时继续攒牌凑组合；有牌可出时用延迟与偏好扰动模拟思考，而不是每 tick 完美反应。
    */
-  decide(match: MatchState): PlayFormationCommand | null {
-    if (match.result || match.world.tick < this.nextThinkTick) return null;
+  decide(match: MatchState): Command | null {
+    if (match.result) return null;
+    // 保护卡包优先于出牌思考，不受攒牌门槛和冷却限制
+    if (match.getCastlePackState(this.faction) === 'pending') {
+      return claimCastlePackCommand(this.faction);
+    }
+    if (match.world.tick < this.nextThinkTick) return null;
 
     const hand = match.decks[this.faction].hand;
     // 手牌未超过 5 张时只观察不操作，优先把牌攒成组合

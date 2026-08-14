@@ -1105,8 +1105,9 @@
       }
 
       .battle-hp-track {
+        position: relative;
         height: calc(4 * var(--hu));
-        overflow: hidden;
+        overflow: visible;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.12);
       }
@@ -1115,6 +1116,22 @@
         height: 100%;
         border-radius: inherit;
         transition: width 0.12s linear;
+      }
+
+      .battle-hp-protect-mark {
+        position: absolute;
+        top: -2px;
+        bottom: -2px;
+        width: 2px;
+        margin-left: -1px;
+        background: #f4d27a;
+        box-shadow: 0 0 5px rgba(244, 210, 122, 0.85);
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .battle-hp-track.is-protect {
+        box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.85);
       }
 
       .battle-castle-self .battle-hp-bar { background: var(--blue); }
@@ -3706,7 +3723,10 @@
           <div class="battle-castle battle-castle-self">
             <span id="battle-self-name" class="battle-castle-label">玩家</span>
             <strong id="battle-self-hp" class="battle-hp">0 / 0</strong>
-            <div class="battle-hp-track"><div id="battle-self-bar" class="battle-hp-bar"></div></div>
+            <div class="battle-hp-track" id="battle-self-track">
+              <div id="battle-self-protect-mark" class="battle-hp-protect-mark" title="保护线 2000" aria-hidden="true"></div>
+              <div id="battle-self-bar" class="battle-hp-bar"></div>
+            </div>
           </div>
           <div class="battle-center">
             <span id="battle-phase-label">常规阶段</span>
@@ -3717,7 +3737,10 @@
             <div class="battle-castle battle-castle-opp">
               <span id="battle-opp-name" class="battle-castle-label">电脑</span>
               <strong id="battle-opp-hp" class="battle-hp">0 / 0</strong>
-              <div class="battle-hp-track"><div id="battle-opp-bar" class="battle-hp-bar"></div></div>
+              <div class="battle-hp-track" id="battle-opp-track">
+                <div id="battle-opp-protect-mark" class="battle-hp-protect-mark" title="保护线 2000" aria-hidden="true"></div>
+                <div id="battle-opp-bar" class="battle-hp-bar"></div>
+              </div>
             </div>
             <div id="battle-opp-hand" aria-label="对手手牌 0 张"></div>
           </div>
@@ -3776,6 +3799,7 @@
             <button id="btn-speed" type="button">1x</button>
             <button id="btn-brawl" type="button">开团</button>
             <button id="btn-random-pk" type="button">随机PK</button>
+            <button id="btn-drop-castle-pack" type="button" hidden>掉落卡包</button>
             <button id="btn-clear" type="button">重新开局</button>
           </div>
           <div id="solo-camera-angle-row">

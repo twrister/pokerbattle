@@ -20,6 +20,25 @@ describe('单机扑克牌堆', () => {
     expect(cardImageUrl(cards.find((card) => card.id === 'joker-red')!)).toBe('cards/Joker_2.png');
   });
 
+  it('无视上限抽牌在满手时仍能入手，空堆返回 undefined', () => {
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    deck.drawMany(20);
+    expect(deck.hand).toHaveLength(MAX_HAND_SIZE);
+    expect(deck.draw()).toBeUndefined();
+
+    const extra = deck.drawIgnoringLimit();
+    expect(extra).toBeDefined();
+    expect(deck.hand).toHaveLength(MAX_HAND_SIZE + 1);
+
+    deck.reset();
+    deck.drawMany(54);
+    while (deck.drawIgnoringLimit()) {
+      // 抽尽剩余牌堆
+    }
+    expect(deck.availableCount).toBe(0);
+    expect(deck.drawIgnoringLimit()).toBeUndefined();
+  });
+
   it('抽牌离开有限牌堆且不能突破手牌上限', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const drawn = deck.drawMany(20);

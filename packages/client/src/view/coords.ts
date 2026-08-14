@@ -47,3 +47,32 @@ export function toSimY(sceneZ: number): number {
 export function toSceneFacingZ(simFacingY: number): number {
   return -simFacingY;
 }
+
+const _projectWorld = new THREE.Vector3();
+
+/** 把场景世界坐标投到屏幕客户区，供卡包领牌飞入等 UI 动画使用。 */
+export function projectWorldToClient(
+  camera: THREE.Camera,
+  domElement: HTMLElement,
+  world: THREE.Vector3,
+): { x: number; y: number } | null {
+  const rect = domElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  _projectWorld.copy(world).project(camera);
+  return {
+    x: rect.left + ((_projectWorld.x + 1) / 2) * rect.width,
+    y: rect.top + ((1 - _projectWorld.y) / 2) * rect.height,
+  };
+}
+
+/** 把 sim 平面点（可带高度）投到屏幕客户区坐标，供发牌飞入等 UI 动画使用。 */
+export function projectSimToClient(
+  camera: THREE.Camera,
+  domElement: HTMLElement,
+  simX: number,
+  simY: number,
+  height = 1.2,
+): { x: number; y: number } | null {
+  _projectWorld.set(toSceneX(simX), height, toSceneZ(simY));
+  return projectWorldToClient(camera, domElement, _projectWorld);
+}

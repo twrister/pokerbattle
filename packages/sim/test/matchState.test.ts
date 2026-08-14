@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Faction } from '../src/entity/unit.js';
 import {
+  CASTLE_PROTECT_CARDS,
+  CASTLE_PROTECT_HP,
   DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
   DOUBLE_SPEED_START_TICKS,
   FINAL_DRAW_INTERVAL_TICKS,
@@ -13,6 +15,8 @@ import {
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
   TICK_RATE,
+  claimCastlePackCommand,
+  fromFloat,
 } from '../src/index.js';
 
 describe('MatchState.clear', () => {
@@ -147,6 +151,91 @@ describe('MatchState 对局规则', () => {
 
     stepTo(match, TICK_RATE * 6);
     expect(match.result?.reason).toBe('time_limit');
+  });
+});
+
+describe('MatchState 城堡保护卡包', () => {
+  it('主堡血量低于保护线时掉落卡包，领取后无视上限补 3 张', () => {
+    const match = createMatch();
+    const before = match.decks[Faction.Blue].hand.length;
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 1);
+
+    match.step();
+    expect(match.getCastlePackState(Faction.Blue)).toBe('pending');
+    expect(match.getCastlePackState(Faction.Red)).toBe('none');
+    expect(match.getCastleProtectHp()).toBe(CASTLE_PROTECT_HP);
+
+    match.step([claimCastlePackCommand(Faction.Blue)]);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('claimed');
+    expect(match.decks[Faction.Blue].hand.length).toBe(before + CASTLE_PROTECT_CARDS);
+  });
+
+  it('满手时领取仍能超过阶段上限', () => {
+    const match = createMatch();
+    while (match.decks[Faction.Blue].hand.length < match.getMaxHandSize()) {
+      if (!match.decks[Faction.Blue].draw()) break;
+    }
+    const full = match.decks[Faction.Blue].hand.length;
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 1);
+    match.step();
+    match.step([claimCastlePackCommand(Faction.Blue)]);
+    expect(match.decks[Faction.Blue].hand.length).toBe(full + CASTLE_PROTECT_CARDS);
+  });
+
+  it('领取后回血再掉不再触发', () => {
+    const match = createMatch();
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 1);
+    match.step();
+    match.step([claimCastlePackCommand(Faction.Blue)]);
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP + 500);
+    match.step();
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 100);
+    match.step();
+    expect(match.getCastlePackState(Faction.Blue)).toBe('claimed');
+  });
+
+  it('无待领取卡包时指令无效', () => {
+    const match = createMatch();
+    const before = match.decks[Faction.Blue].hand.length;
+    expect(match.validate(claimCastlePackCommand(Faction.Blue))).toBe(false);
+    match.step([claimCastlePackCommand(Faction.Blue)]);
+    expect(match.decks[Faction.Blue].hand.length).toBe(before);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('none');
+  });
+
+  it('血量恰好等于保护线时不掉包', () => {
+    const match = createMatch();
+    castle(match, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP);
+    match.step();
+    expect(match.getCastlePackState(Faction.Blue)).toBe('none');
+  });
+
+  it('调试掉落可在未受伤时强制出包，领取后也能再掉', () => {
+    const match = createMatch();
+    expect(match.debugDropCastlePack(Faction.Blue)).toBe(true);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('pending');
+    match.step([claimCastlePackCommand(Faction.Blue)]);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('claimed');
+    expect(match.debugDropCastlePack(Faction.Blue)).toBe(true);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('pending');
+  });
+
+  it('clear 重置卡包状态，且 hash 纳入该状态', () => {
+    const left = createMatch();
+    const right = createMatch();
+    left.step();
+    right.step();
+    expect(left.hash()).toBe(right.hash());
+
+    castle(left, Faction.Blue).hp = fromFloat(CASTLE_PROTECT_HP - 1);
+    left.step();
+    right.step();
+    expect(left.getCastlePackState(Faction.Blue)).toBe('pending');
+    expect(left.hash()).not.toBe(right.hash());
+
+    left.clear();
+    left.seedStartingCastles();
+    expect(left.getCastlePackState(Faction.Blue)).toBe('none');
   });
 });
 

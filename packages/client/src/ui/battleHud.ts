@@ -23,6 +23,10 @@ export function createBattleHud(): BattleHudHandle {
   const oppHp = requiredElement<HTMLElement>('#battle-opp-hp');
   const selfBar = requiredElement<HTMLElement>('#battle-self-bar');
   const oppBar = requiredElement<HTMLElement>('#battle-opp-bar');
+  const selfTrack = requiredElement<HTMLElement>('#battle-self-track');
+  const oppTrack = requiredElement<HTMLElement>('#battle-opp-track');
+  const selfMark = requiredElement<HTMLElement>('#battle-self-protect-mark');
+  const oppMark = requiredElement<HTMLElement>('#battle-opp-protect-mark');
   const phaseLabel = requiredElement<HTMLElement>('#battle-phase-label');
   const timerLabel = requiredElement<HTMLElement>('#battle-timer-label');
   const timer = requiredElement<HTMLElement>('#battle-timer');
@@ -47,8 +51,8 @@ export function createBattleHud(): BattleHudHandle {
       const opp = opposingFaction(local);
       selfName.textContent = context.localName || '玩家';
       oppName.textContent = context.opponentName || '对手';
-      updateCastle(local, selfHp, selfBar, match);
-      updateCastle(opp, oppHp, oppBar, match);
+      updateCastle(local, selfHp, selfBar, selfTrack, selfMark, match);
+      updateCastle(opp, oppHp, oppBar, oppTrack, oppMark, match);
 
       const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
       phaseLabel.textContent = phaseText;
@@ -57,7 +61,7 @@ export function createBattleHud(): BattleHudHandle {
       timerLabel.textContent = match.phase === 'final' ? '决胜剩余：' : '剩余时间：';
       timer.textContent = formatTicks(remainingTicks);
 
-      syncOpponentHand(oppHand, match.decks[opp].hand.length, match.getMaxHandSize());
+      syncOpponentHand(oppHand, match.decks[opp].hand.length);
     },
   };
 }
@@ -66,17 +70,23 @@ function updateCastle(
   faction: Faction,
   label: HTMLElement,
   bar: HTMLElement,
+  track: HTMLElement,
+  mark: HTMLElement,
   match: MatchState,
 ): void {
   const hp = toFloat(match.getCastleHp(faction));
   const maxHp = toFloat(match.getCastleMaxHp(faction));
+  const protectHp = match.getCastleProtectHp();
   label.textContent = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
   bar.style.width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
+  mark.style.left = `${maxHp > 0 ? Math.max(0, Math.min(100, (protectHp / maxHp) * 100)) : 0}%`;
+  mark.title = `保护线 ${protectHp}`;
+  track.classList.toggle('is-protect', hp < protectHp);
 }
 
-/** 用缩小牌背数量表示对手手牌数，不展示正面。 */
-function syncOpponentHand(container: HTMLElement, count: number, maxHandSize: number): void {
-  const clamped = Math.max(0, Math.min(maxHandSize, count | 0));
+/** 用缩小牌背数量表示对手手牌数，不展示正面；可超过阶段上限。 */
+function syncOpponentHand(container: HTMLElement, count: number): void {
+  const clamped = Math.max(0, count | 0);
   const current = container.childElementCount;
   if (current === clamped) return;
   if (current > clamped) {

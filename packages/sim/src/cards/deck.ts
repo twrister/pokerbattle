@@ -162,7 +162,32 @@ export class PokerDeck {
 
   /** 按当前整数权重抽一张；抽出的牌离开牌堆直到被打出后回收。 */
   draw(): PlayingCard | undefined {
-    if (this.cardsInHand.size >= this.currentMaxHandSize || this.available.size === 0) return undefined;
+    if (this.cardsInHand.size >= this.currentMaxHandSize) return undefined;
+    return this.drawFromAvailable();
+  }
+
+  /**
+   * 按原权重抽一张，但无视手牌上限。
+   * 城堡保护等奖励补牌用；牌堆空时仍返回 undefined。
+   */
+  drawIgnoringLimit(): PlayingCard | undefined {
+    return this.drawFromAvailable();
+  }
+
+  /** 连续补牌但不突破手牌上限。 */
+  drawMany(count: number): PlayingCard[] {
+    const drawn: PlayingCard[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const card = this.draw();
+      if (!card) break;
+      drawn.push(card);
+    }
+    return drawn;
+  }
+
+  /** 从剩余牌堆按权重抽一张并入手；不做手牌上限检查。 */
+  private drawFromAvailable(): PlayingCard | undefined {
+    if (this.available.size === 0) return undefined;
 
     // 按 id 排序再抽，避免 Map 迭代顺序造成跨端分叉
     const entries = [...this.available.values()].sort((a, b) => (a.card.id < b.card.id ? -1 : 1));
@@ -181,17 +206,6 @@ export class PokerDeck {
     this.available.delete(selected.card.id);
     this.cardsInHand.set(selected.card.id, selected.card);
     return selected.card;
-  }
-
-  /** 连续补牌但不突破手牌上限。 */
-  drawMany(count: number): PlayingCard[] {
-    const drawn: PlayingCard[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const card = this.draw();
-      if (!card) break;
-      drawn.push(card);
-    }
-    return drawn;
   }
 
   /** 将有效手牌放回牌堆并降低权重。 */

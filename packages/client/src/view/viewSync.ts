@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { Faction, type ProjectileVisual, type Snapshot, type UnitSnapshot } from '@pb/sim';
-import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
+import { Faction, type MatchState, type ProjectileVisual, type Snapshot, type UnitSnapshot } from '@pb/sim';
+import { projectWorldToClient, toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey, visualFaction } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
 import { AoeGroundMark } from './aoeGroundMark.js';
+import { CastlePackView } from './castlePackView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -159,6 +160,13 @@ export class BattleView {
   private pickUnits: { id: number; x: number; y: number; radius: number; footprint: number }[] = [];
   /** 本机阵营；画面上己方固定按蓝方着色，对阵方按红方。 */
   private localFaction: Faction = Faction.Blue;
+  /** 仅本机可见的保护卡包；对手 pending 包不创建。 */
+  private castlePack: CastlePackView | null = null;
+  private readonly packRaycaster = new THREE.Raycaster();
+  private readonly packPointer = new THREE.Vector2();
+  /** 领取后卡包已卸下，仍用上一帧位置作为飞入手牌的起点。 */
+  private readonly lastPackWorld = new THREE.Vector3();
+  private hasLastPackWorld = false;
 
   private readonly prevUnits = new Map<number, UnitSnapshot>();
   private prevUnitsTick = -1;
@@ -198,6 +206,61 @@ export class BattleView {
       bestId = unit.id;
     }
     return bestId;
+  }
+
+  /**
+   * 按本机卡包状态同步漂浮面片。
+   * 只渲染 localFaction 的 pending 包，对手的包保持不可见。
+   */
+  syncCastlePack(match: MatchState | null, camera: THREE.Camera): void {
+    const pending = match?.getCastlePackState(this.localFaction) === 'pending';
+    const castle = pending ? match!.getCastlePosition(this.localFaction) : null;
+    if (!pending || !castle) {
+      this.hideCastlePack();
+      return;
+    }
+    const timeSec = performance.now() * 0.001;
+    if (!this.castlePack) {
+      this.castlePack = new CastlePackView();
+      this.scene.add(this.castlePack.group);
+      this.castlePack.appear(castle.x, castle.y, this.localFaction, timeSec);
+    }
+    this.castlePack.update(timeSec, camera);
+    this.lastPackWorld.copy(this.castlePack.group.position);
+    this.hasLastPackWorld = true;
+  }
+
+  /** 调试重放飞出：卸下当前卡包，下一帧 sync 会重新 appear。 */
+  replayCastlePack(): void {
+    this.hideCastlePack();
+  }
+
+  /** 卡包当前或刚领取前的屏幕坐标；没有出现过则返回 null。 */
+  getCastlePackClientPoint(
+    camera: THREE.Camera,
+    domElement: HTMLElement,
+  ): { x: number; y: number } | null {
+    if (this.castlePack) return projectWorldToClient(camera, domElement, this.castlePack.group.position);
+    if (!this.hasLastPackWorld) return null;
+    return projectWorldToClient(camera, domElement, this.lastPackWorld);
+  }
+
+  /** 对卡包 mesh 做屏幕射线拾取。 */
+  pickCastlePack(
+    clientX: number,
+    clientY: number,
+    camera: THREE.Camera,
+    domElement: HTMLElement,
+  ): boolean {
+    if (!this.castlePack) return false;
+    const rect = domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    this.packPointer.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this.packRaycaster.setFromCamera(this.packPointer, camera);
+    return this.packRaycaster.intersectObject(this.castlePack.mesh, false).length > 0;
   }
 
   render(prev: Snapshot, curr: Snapshot, alpha: number, camera: THREE.Camera): void {
@@ -546,6 +609,8 @@ export class BattleView {
     this.selectedUnitId = null;
     this.pickUnits.length = 0;
     if (this.attackRangeMark.group.parent) this.scene.remove(this.attackRangeMark.group);
+    this.hideCastlePack();
+    this.hasLastPackWorld = false;
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
   }
@@ -593,8 +658,18 @@ export class BattleView {
     this.selectedUnitId = null;
     this.pickUnits.length = 0;
     if (this.attackRangeMark.group.parent) this.scene.remove(this.attackRangeMark.group);
+    this.hideCastlePack();
+    this.hasLastPackWorld = false;
     this.prevUnits.clear();
     this.prevUnitsTick = -1;
+  }
+
+  private hideCastlePack(): void {
+    if (!this.castlePack) return;
+    this.lastPackWorld.copy(this.castlePack.group.position);
+    this.hasLastPackWorld = true;
+    this.scene.remove(this.castlePack.group);
+    this.castlePack = null;
   }
 }
 

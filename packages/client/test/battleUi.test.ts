@@ -2,10 +2,12 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  CASTLE_PROTECT_HP,
   DOUBLE_SPEED_START_TICKS,
   Faction,
   FINAL_START_TICKS,
   MatchState,
+  fromFloat,
   opposingFaction,
 } from '@pb/sim';
 import { createBattleHud } from '../src/ui/battleHud.js';
@@ -17,9 +19,17 @@ describe('对局 HUD 与结算弹窗', () => {
       <section id="battle-hud" class="is-hidden">
         <div id="battle-opp-hand"></div>
         <span id="battle-self-name"></span>
-        <strong id="battle-self-hp"></strong><div id="battle-self-bar"></div>
+        <strong id="battle-self-hp"></strong>
+        <div id="battle-self-track" class="battle-hp-track">
+          <div id="battle-self-protect-mark" class="battle-hp-protect-mark"></div>
+          <div id="battle-self-bar"></div>
+        </div>
         <span id="battle-opp-name"></span>
-        <strong id="battle-opp-hp"></strong><div id="battle-opp-bar"></div>
+        <strong id="battle-opp-hp"></strong>
+        <div id="battle-opp-track" class="battle-hp-track">
+          <div id="battle-opp-protect-mark" class="battle-hp-protect-mark"></div>
+          <div id="battle-opp-bar"></div>
+        </div>
         <span id="battle-phase-label"></span>
         <span id="battle-timer-label"></span><strong id="battle-timer"></strong>
       </section>
@@ -62,6 +72,31 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
     expect(document.querySelector('#battle-opp-hand')?.childElementCount).toBe(
       match.decks[Faction.Red].hand.length,
+    );
+    expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('style')).toContain('40%');
+    expect(document.querySelector('#battle-self-track')?.classList.contains('is-protect')).toBe(false);
+  });
+
+  it('主堡低于保护线时血条显示刻度并高亮', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const castle = match.world.units.find(
+      (unit) => unit.faction === Faction.Blue && unit.typeId === 'building_base',
+    );
+    if (!castle) throw new Error('主堡未生成');
+    castle.hp = fromFloat(CASTLE_PROTECT_HP - 1);
+    match.step();
+    const hud = createBattleHud();
+    hud.setContext({
+      localFaction: Faction.Blue,
+      localName: 'Alice',
+      opponentName: '电脑',
+    });
+    hud.update(match);
+
+    expect(document.querySelector('#battle-self-track')?.classList.contains('is-protect')).toBe(true);
+    expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('title')).toBe(
+      `保护线 ${CASTLE_PROTECT_HP}`,
     );
   });
 

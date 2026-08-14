@@ -21,6 +21,7 @@ import {
   isFuseBombFormation,
   isFuseBombTypeId,
   toFloat,
+  claimCastlePackCommand,
   playFormationCommand,
   snapBuildingCenter,
   spawnCommand,
@@ -49,6 +50,7 @@ import {
   screenToSim,
 } from './input/placement.js';
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
+import { enableCastlePackClick } from './input/castlePackClick.js';
 import { enableUnitSelection } from './input/unitSelection.js';
 import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
@@ -271,6 +273,27 @@ function enterBattleSession(mode: BattleMode): () => void {
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
   let disableDebugUnitDrag = (): void => {};
+  let dealFromCastle = false;
+  let prevPackState = loop.match?.getCastlePackState(Faction.Blue) ?? 'none';
+  const disableCastlePackClick = isSolo
+    ? enableCastlePackClick({
+        domElement: sceneContext.renderer.domElement,
+        pickPack: (clientX, clientY) =>
+          battleView.pickCastlePack(
+            clientX,
+            clientY,
+            sceneContext.camera,
+            sceneContext.renderer.domElement,
+          ),
+        onClaim: () => {
+          const match = loop.match;
+          if (!match) return;
+          const command = claimCastlePackCommand(Faction.Blue);
+          if (!match.validate(command)) return;
+          loop.enqueue(command);
+        },
+      })
+    : () => {};
   const disableUnitSelection = enableUnitSelection({
     domElement: sceneContext.renderer.domElement,
     camera: sceneContext.camera,
@@ -489,6 +512,13 @@ function enterBattleSession(mode: BattleMode): () => void {
         getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw() * 1000) / TICK_RATE,
         getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
         getMaxHandSize: () => loop.match!.getMaxHandSize(),
+        getDealOrigin: () => {
+          if (!dealFromCastle) return null;
+          return battleView.getCastlePackClientPoint(
+            sceneContext.camera,
+            sceneContext.renderer.domElement,
+          );
+        },
         onRequestSpawn: requestSpawn,
         canDropAt: (point, formation) => canSpawnAt(formation, point),
         onBuildingDragStart,
@@ -516,6 +546,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   const clearBattlefield = (): void => {
     loop.reset();
     battleView.invalidateUnitViews();
+    dealFromCastle = false;
+    prevPackState = loop.match?.getCastlePackState(Faction.Blue) ?? 'none';
     handPanel?.syncFromDeck();
   };
 
@@ -561,6 +593,13 @@ function enterBattleSession(mode: BattleMode): () => void {
     enableRuntimeControls: runtimeControlsEnabled,
     onRandomPk: runtimeControlsEnabled
       ? () => spawnRandomPk(loop, clearBattlefield)
+      : undefined,
+    onDropCastlePack: isSolo
+      ? () => {
+          const match = loop.match;
+          if (!match?.debugDropCastlePack(Faction.Blue)) return;
+          battleView.replayCastlePack();
+        }
       : undefined,
     ...(debugSpawn ? { lockFaction: Faction.Blue } : {}),
     onBuildingModeChange: debugSpawn
@@ -655,6 +694,14 @@ function enterBattleSession(mode: BattleMode): () => void {
     smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
 
     loop.advance(deltaMs);
+    if (isSolo && loop.match) {
+      const packState = loop.match.getCastlePackState(Faction.Blue);
+      if (loop.world.tick !== lastHandSyncTick) {
+        dealFromCastle = prevPackState === 'pending' && packState === 'claimed';
+        prevPackState = packState;
+      }
+      battleView.syncCastlePack(loop.match, sceneContext.camera);
+    }
     if (handPanel && loop.world.tick !== lastHandSyncTick) {
       lastHandSyncTick = loop.world.tick;
       handPanel.syncFromDeck();
@@ -695,6 +742,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     disableUnitPlacement();
     disableBuildingPlacementFn();
     disableDebugUnitDrag();
+    disableCastlePackClick();
     disableUnitSelection();
     stopSoloBuildingPreview();
     stopPlaceableHighlight();
@@ -886,6 +934,23 @@ function runVersusSession(
   const battleView = sharedBattleView!;
   battleView.reset();
   battleView.setLocalFaction(faction);
+  let dealFromCastle = false;
+  let prevPackState = netLoop.match.getCastlePackState(faction);
+  const disableCastlePackClick = enableCastlePackClick({
+    domElement: sceneContext.renderer.domElement,
+    pickPack: (clientX, clientY) =>
+      battleView.pickCastlePack(
+        clientX,
+        clientY,
+        sceneContext.camera,
+        sceneContext.renderer.domElement,
+      ),
+    onClaim: () => {
+      const command = claimCastlePackCommand(faction);
+      if (!netLoop.match.validate(command)) return;
+      netLoop.sendInput([command]);
+    },
+  });
   const disableUnitSelection = enableUnitSelection({
     domElement: sceneContext.renderer.domElement,
     camera: sceneContext.camera,
@@ -1020,6 +1085,13 @@ function runVersusSession(
     getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw() * 1000) / TICK_RATE,
     getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicks() * 1000) / TICK_RATE,
     getMaxHandSize: () => netLoop.match.getMaxHandSize(),
+    getDealOrigin: () => {
+      if (!dealFromCastle) return null;
+      return battleView.getCastlePackClientPoint(
+        sceneContext.camera,
+        sceneContext.renderer.domElement,
+      );
+    },
     onRequestSpawn: requestSpawn,
     canDropAt: (point, formation) => canSpawnAt(formation, point),
     onBuildingDragStart: (formation) => {
@@ -1101,6 +1173,12 @@ function runVersusSession(
     smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
 
     netLoop.advance(deltaMs);
+    const packState = netLoop.match.getCastlePackState(faction);
+    if (netLoop.world.tick !== lastHandSyncTick) {
+      dealFromCastle = prevPackState === 'pending' && packState === 'claimed';
+      prevPackState = packState;
+    }
+    battleView.syncCastlePack(netLoop.match, sceneContext.camera);
     if (netLoop.world.tick !== lastHandSyncTick) {
       lastHandSyncTick = netLoop.world.tick;
       handPanel.syncFromDeck();
@@ -1139,6 +1217,7 @@ function runVersusSession(
     stopBuildingPreview();
     stopPlaceableHighlight();
     stopAoePreview();
+    disableCastlePackClick();
     disableUnitSelection();
     handPanel.dispose();
     panel.dispose();

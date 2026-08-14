@@ -169,6 +169,8 @@ export {
   type HandCategoryOddsSweepResult,
 } from './cards/handCategoryOdds.js';
 export {
+  CASTLE_PROTECT_CARDS,
+  CASTLE_PROTECT_HP,
   DEFAULT_PHASE_DURATION_SECONDS,
   DEFAULT_PHASE_DURATION_TICKS,
   DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
@@ -179,6 +181,7 @@ export {
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
   defaultMatchRules,
+  type CastlePackState,
   type MatchDrawIntervals,
   type MatchEndReason,
   type MatchHandLimits,
@@ -212,9 +215,11 @@ export {
 export {
   type Command,
   CommandKind,
+  type ClaimCastlePackCommand,
   type PlaceBuildingCommand,
   type PlayFormationCommand,
   type SpawnCommand,
+  claimCastlePackCommand,
   placeBuildingCommand,
   playFormationCommand,
   spawnCommand,

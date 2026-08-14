@@ -41,6 +41,9 @@ export function applyCommands(world: World, commands: readonly Command[]): void 
       case CommandKind.PlayFormation:
         applyPlayFormation(world, command);
         break;
+      case CommandKind.ClaimCastlePack:
+        // 领包只改 MatchState 牌堆，不进入世界
+        break;
     }
   }
 }

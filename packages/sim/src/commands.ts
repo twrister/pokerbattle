@@ -12,6 +12,7 @@ export const CommandKind = {
   Spawn: 0,
   PlaceBuilding: 1,
   PlayFormation: 2,
+  ClaimCastlePack: 3,
 } as const;
 export type CommandKind = (typeof CommandKind)[keyof typeof CommandKind];
 
@@ -45,7 +46,13 @@ export interface PlayFormationCommand {
   y: Fx;
 }
 
-export type Command = SpawnCommand | PlaceBuildingCommand | PlayFormationCommand;
+/** 领取己方城堡保护卡包；无坐标，点击只是本机拾取。 */
+export interface ClaimCastlePackCommand {
+  kind: typeof CommandKind.ClaimCastlePack;
+  faction: Faction;
+}
+
+export type Command = SpawnCommand | PlaceBuildingCommand | PlayFormationCommand | ClaimCastlePackCommand;
 
 export function spawnCommand(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): SpawnCommand {
   return { kind: CommandKind.Spawn, faction, typeId, x, y };
@@ -75,4 +82,8 @@ export function playFormationCommand(
     x,
     y,
   };
+}
+
+export function claimCastlePackCommand(faction: Faction): ClaimCastlePackCommand {
+  return { kind: CommandKind.ClaimCastlePack, faction };
 }

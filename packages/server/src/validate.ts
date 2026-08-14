@@ -15,7 +15,7 @@ export function validateSeatCommand(
   if (command.kind === CommandKind.Spawn || command.kind === CommandKind.PlaceBuilding) {
     return false;
   }
-  if (command.kind === CommandKind.PlayFormation) {
+  if (command.kind === CommandKind.PlayFormation || command.kind === CommandKind.ClaimCastlePack) {
     return match.validate(command);
   }
   return false;

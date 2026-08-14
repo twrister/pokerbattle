@@ -51,6 +51,12 @@ export const MATCH_END_TICKS = DEFAULT_PHASE_DURATION_TICKS * 3;
 export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
 export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
+/** 主堡生命低于该值时触发保护卡包。 */
+export const CASTLE_PROTECT_HP = 2000;
+/** 领取保护卡包时无视上限抽取的张数。 */
+export const CASTLE_PROTECT_CARDS = 3;
+/** 每方每局卡包生命周期：未触发 / 待领取 / 已领取。 */
+export type CastlePackState = 'none' | 'pending' | 'claimed';
 
 /** 三阶段补牌周期。 */
 export interface MatchDrawIntervals {
@@ -125,6 +131,8 @@ export class MatchState {
   private doubleSpeedHandLimit = HAND_LIMIT_DOUBLE_SPEED;
   private finalHandLimit = HAND_LIMIT_FINAL;
   private nextDrawTick = NORMAL_DRAW_INTERVAL_TICKS;
+  private bluePackState: CastlePackState = 'none';
+  private redPackState: CastlePackState = 'none';
 
   constructor(seed = 1) {
     this.world = new World(seed);
@@ -151,6 +159,11 @@ export class MatchState {
         accepted.push(command);
         continue;
       }
+      if (command.kind === CommandKind.ClaimCastlePack) {
+        if (!this.validate(command)) continue;
+        this.claimCastlePack(command.faction);
+        continue;
+      }
       accepted.push(command);
     }
 
@@ -171,6 +184,9 @@ export class MatchState {
    */
   validate(cmd: Command): boolean {
     if (this.result) return false;
+    if (cmd.kind === CommandKind.ClaimCastlePack) {
+      return this.getCastlePackState(cmd.faction) === 'pending';
+    }
     if (cmd.kind !== CommandKind.PlayFormation) return true;
     return this.validatePlayFormation(cmd);
   }
@@ -197,6 +213,8 @@ export class MatchState {
     h = mix(h, this.normalHandLimit);
     h = mix(h, this.doubleSpeedHandLimit);
     h = mix(h, this.finalHandLimit);
+    h = mix(h, packStateCode(this.bluePackState));
+    h = mix(h, packStateCode(this.redPackState));
     return h >>> 0;
   }
 
@@ -211,6 +229,8 @@ export class MatchState {
     this.result = null;
     this.blueCastleId = null;
     this.redCastleId = null;
+    this.bluePackState = 'none';
+    this.redPackState = 'none';
     this.dealStartingHands();
     // 保留调试覆盖的节奏参数，只重置本局倒计时
     this.nextDrawTick = this.normalDrawIntervalTicks;
@@ -250,6 +270,35 @@ export class MatchState {
   getCastleMaxHp(faction: Faction): number {
     const id = faction === Faction.Blue ? this.blueCastleId : this.redCastleId;
     return id ? (this.world.getUnit(id)?.config.maxHp ?? UNIT_CONFIGS.building_base.maxHp) : 0;
+  }
+
+  /** 主堡保护触发线（显示血量），供 HUD 刻度对齐。 */
+  getCastleProtectHp(): number {
+    return CASTLE_PROTECT_HP;
+  }
+
+  /** 指定阵营本局保护卡包状态。 */
+  getCastlePackState(faction: Faction): CastlePackState {
+    return faction === Faction.Blue ? this.bluePackState : this.redPackState;
+  }
+
+  /**
+   * 调试用：强制掉落指定阵营保护卡包。
+   * 已领取后也可再掉，方便反复看飞出与领取，不改主堡血量。
+   */
+  debugDropCastlePack(faction: Faction): boolean {
+    if (this.result) return false;
+    if (!this.getCastlePosition(faction)) return false;
+    this.setCastlePackState(faction, 'pending');
+    return true;
+  }
+
+  /** 主堡 sim 平面坐标；未播种或已清理时返回 null。 */
+  getCastlePosition(faction: Faction): { x: number; y: number } | null {
+    const id = faction === Faction.Blue ? this.blueCastleId : this.redCastleId;
+    const unit = id ? this.world.getUnit(id) : undefined;
+    if (!unit) return null;
+    return { x: toFloat(unit.pos.x), y: toFloat(unit.pos.y) };
   }
 
   /** 当前阶段距离下一张牌的逻辑帧数，结算后为零。 */
@@ -332,6 +381,9 @@ export class MatchState {
       return;
     }
 
+    this.maybeTriggerCastlePack(Faction.Blue, blueHp);
+    this.maybeTriggerCastlePack(Faction.Red, redHp);
+
     if (this.phase === 'normal' && this.world.tick >= this.doubleSpeedStartTick()) {
       this.enterPhase('double_speed');
     }
@@ -409,6 +461,27 @@ export class MatchState {
     return 4;
   }
 
+  /** 主堡仍存活且血量低于保护线时，每方每局只升到 pending 一次。 */
+  private maybeTriggerCastlePack(faction: Faction, hp: number): void {
+    if (this.getCastlePackState(faction) !== 'none') return;
+    if (toFloat(hp) >= CASTLE_PROTECT_HP) return;
+    this.setCastlePackState(faction, 'pending');
+  }
+
+  /** 从剩余牌堆无视上限抽保护牌，并将卡包标为已领取。 */
+  private claimCastlePack(faction: Faction): void {
+    const deck = this.decks[faction];
+    for (let index = 0; index < CASTLE_PROTECT_CARDS; index += 1) {
+      if (!deck.drawIgnoringLimit()) break;
+    }
+    this.setCastlePackState(faction, 'claimed');
+  }
+
+  private setCastlePackState(faction: Faction, state: CastlePackState): void {
+    if (faction === Faction.Blue) this.bluePackState = state;
+    else this.redPackState = state;
+  }
+
   /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠。 */
   private validatePlayFormation(cmd: PlayFormationCommand): boolean {
     const template = findFormationById(cmd.formationId);
@@ -455,6 +528,12 @@ function clampPositiveTicks(ticks: number): number {
 function compareHp(blueHp: number, redHp: number): Faction | null {
   if (blueHp === redHp) return null;
   return blueHp > redHp ? Faction.Blue : Faction.Red;
+}
+
+function packStateCode(state: CastlePackState): number {
+  if (state === 'pending') return 1;
+  if (state === 'claimed') return 2;
+  return 0;
 }
 
 function resultReasonCode(reason: MatchEndReason): number {

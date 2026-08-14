@@ -68,6 +68,11 @@ export interface HandPanelOptions {
   getDrawIntervalMs?: () => number;
   /** 当前阶段手牌上限；未提供时回退到 MAX_HAND_SIZE。 */
   getMaxHandSize?: () => number;
+  /**
+   * 新牌飞入起点（屏幕客户区坐标）。
+   * 返回 null 时仍从牌堆顶飞出；城堡保护领牌时改为卡包屏幕位置。
+   */
+  getDealOrigin?: () => { x: number; y: number } | null;
   /** 请求出兵；返回 false 表示落点非法，手牌不消耗、阵型按钮保留以便重试。 */
   onRequestSpawn?: (request: FormationSpawnRequest) => boolean;
   /**
@@ -625,11 +630,12 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     return deck.hand.map((card) => card.id).join('\0');
   }
 
-  /** 把每张新牌的初始变换定位到牌堆顶牌中心，使布局缩放后动画起点仍准确。 */
+  /** 把每张新牌的初始变换定位到牌堆顶或自定义起点，使布局缩放后动画起点仍准确。 */
   function setDealOrigins(): void {
+    const custom = options.getDealOrigin?.() ?? null;
     const source = drawPileTop.getBoundingClientRect();
-    const sourceX = source.left + source.width / 2;
-    const sourceY = source.top + source.height / 2;
+    const sourceX = custom?.x ?? source.left + source.width / 2;
+    const sourceY = custom?.y ?? source.top + source.height / 2;
     for (const cardElement of cardsElement.querySelectorAll<HTMLElement>('.playing-card.is-dealing')) {
       const target = cardElement.getBoundingClientRect();
       cardElement.style.setProperty('--deal-from-x', `${sourceX - target.left - target.width / 2}px`);
@@ -640,7 +646,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
   }
 
-  /** 重建最多九张牌的轻量 DOM，并只给本次新牌附加翻转发牌动画。 */
+  /** 重建手牌 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
     const previousRects = captureCardRects();
     const fragment = document.createDocumentFragment();

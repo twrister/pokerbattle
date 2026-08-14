@@ -39,6 +39,8 @@ export interface PanelOptions {
   onBrawl?: () => void;
   /** 重新开局后双方各随机一个兵种 1v1 */
   onRandomPk?: () => void;
+  /** 调试强制掉落己方保护卡包；未提供则隐藏按钮。 */
+  onDropCastlePack?: () => void;
   /** 建造模式切换：传入建筑 typeId 进入，null 退出 */
   onBuildingModeChange?: (typeId: UnitTypeId | null) => void;
   /** 单机正交镜头俯仰角；传入后绑定运行控制里的滑条 */
@@ -104,6 +106,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const brawlButton = required<HTMLButtonElement>('#btn-brawl');
   const randomPkButton = required<HTMLButtonElement>('#btn-random-pk');
   const clearButton = required<HTMLButtonElement>('#btn-clear');
+  const dropCastlePackButton = required<HTMLButtonElement>('#btn-drop-castle-pack');
   const cameraAngleInput = required<HTMLInputElement>('#solo-camera-angle');
   const cameraAngleValue = required<HTMLElement>('#solo-camera-angle-value');
   const bottomExtraInput = required<HTMLInputElement>('#solo-view-bottom-extra');
@@ -355,6 +358,12 @@ export function createPanel(options: PanelOptions): PanelHandle {
     speedButton.addEventListener('click', cycleSpeed);
     if (options.onBrawl) brawlButton.addEventListener('click', options.onBrawl);
     if (options.onRandomPk) randomPkButton.addEventListener('click', options.onRandomPk);
+    if (options.onDropCastlePack) {
+      dropCastlePackButton.hidden = false;
+      dropCastlePackButton.addEventListener('click', options.onDropCastlePack);
+    } else {
+      dropCastlePackButton.hidden = true;
+    }
     clearButton.addEventListener('click', options.onClear);
     if (options.soloCameraAngle) {
       cameraAngleInput.value = String(Math.round(options.soloCameraAngle.initial));
@@ -428,6 +437,9 @@ export function createPanel(options: PanelOptions): PanelHandle {
         speedButton.removeEventListener('click', cycleSpeed);
         if (options.onBrawl) brawlButton.removeEventListener('click', options.onBrawl);
         if (options.onRandomPk) randomPkButton.removeEventListener('click', options.onRandomPk);
+        if (options.onDropCastlePack) {
+          dropCastlePackButton.removeEventListener('click', options.onDropCastlePack);
+        }
         clearButton.removeEventListener('click', options.onClear);
         if (options.soloCameraAngle) {
           cameraAngleInput.removeEventListener('input', onCameraAngleInput);
