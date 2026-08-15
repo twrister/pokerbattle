@@ -19,8 +19,8 @@ export type HandCategory =
   | 'triple'
   | 'straight3'
   | 'bomb'
-  | 'straight4'
   | 'two_pair'
+  | 'straight4'
   | 'full_house'
   | 'straight5'
   | 'flush'
@@ -32,8 +32,8 @@ export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [
   'pair',
   'straight3',
   'triple',
-  'straight4',
   'two_pair',
+  'straight4',
   'straight5',
   'flush',
   'full_house',
@@ -66,8 +66,8 @@ export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
   triple: '三张',
   straight3: '三顺',
   bomb: '炸弹',
-  straight4: '四顺',
   two_pair: '连对',
+  straight4: '四顺',
   full_house: '葫芦',
   straight5: '五顺',
   flush: '同花',
