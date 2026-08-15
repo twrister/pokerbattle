@@ -56,6 +56,13 @@ h2 {
   font-size: 0.95rem;
 }
 
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 .trust-banner {
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.45);
@@ -324,6 +331,18 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+table button {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
 .hint {
   color: var(--muted);
   font-size: 0.85rem;
@@ -336,7 +355,7 @@ button:disabled {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 860px;
 }
 
 th,
@@ -420,6 +439,10 @@ th {
 
   .header {
     flex-direction: column;
+  }
+
+  .header-actions {
+    align-items: stretch;
   }
 
   .meta {

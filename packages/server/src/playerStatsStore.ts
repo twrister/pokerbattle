@@ -32,14 +32,14 @@ export interface OpsPlayerRecord extends PlayerStatsRecord {
 export interface OnlinePresence {
   playerId: string | null;
   name: string;
-  location: 'lobby' | 'room';
+  location: 'lobby' | 'room' | 'solo';
   roomId: string | null;
   roomName: string | null;
 }
 
 /** 运维玩家行：当前连接位置或离线 + 历史战绩。 */
 export interface OnlinePlayerView extends OpsPlayerRecord {
-  location: 'lobby' | 'room' | 'offline';
+  location: 'lobby' | 'room' | 'solo' | 'offline';
   roomId: string | null;
   roomName: string | null;
 }
@@ -161,6 +161,23 @@ export class PlayerStatsStore {
   /** 按 ID 取历史战绩；未登记过则返回 null。 */
   lookup(playerId: string): PlayerStatsRecord | null {
     return this.players.get(playerId) ?? null;
+  }
+
+  /** 运维清空单人档案；非法 ID 或未登记返回 false，不写盘。 */
+  deletePlayer(playerId: string): boolean {
+    const id = normalizePlayerId(playerId);
+    if (!id || !this.players.has(id)) return false;
+    this.players.delete(id);
+    this.persist();
+    return true;
+  }
+
+  /** 运维一键清空全部档案，返回删除条数；空表也落盘以免旧文件残留。 */
+  clearAll(): number {
+    const cleared = this.players.size;
+    this.players.clear();
+    this.persist();
+    return cleared;
   }
 
   /** 按场次降序列出全部历史档案（含当前不在线）。 */
@@ -290,7 +307,7 @@ function readNonNegativeInt(value: unknown): number {
 }
 
 /**
- * 输出全部历史档案，叠加上线位置；同一 ID 只留一行，房间席位优先于大厅。
+ * 输出全部历史档案，叠加上线位置；同一 ID 只留一行，房间优先于单机，单机优先于大厅。
  * 排序：当前在线优先，再按上次在线时间降序。
  */
 export function listAllOpsPlayers(
@@ -302,7 +319,7 @@ export function listAllOpsPlayers(
     const key = normalizePlayerId(presence.playerId);
     if (!key) continue;
     const existing = byKey.get(key);
-    if (!existing || (existing.location === 'lobby' && presence.location === 'room')) {
+    if (!existing || presenceRank(presence.location) > presenceRank(existing.location)) {
       byKey.set(key, { ...presence, playerId: key });
     }
   }
@@ -347,6 +364,13 @@ export function listAllOpsPlayers(
     if (b.lastOnlineAt !== a.lastOnlineAt) return b.lastOnlineAt - a.lastOnlineAt;
     return a.displayName.localeCompare(b.displayName, 'zh');
   });
+}
+
+/** 同一设备多连接时：房间 > 单机 > 大厅。 */
+function presenceRank(location: OnlinePresence['location']): number {
+  if (location === 'room') return 3;
+  if (location === 'solo') return 2;
+  return 1;
 }
 
 function readPositiveInt(value: unknown): number {

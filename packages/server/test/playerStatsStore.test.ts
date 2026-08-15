@@ -152,6 +152,28 @@ describe('PlayerStatsStore', () => {
     expect(rows[2]).toMatchObject({ location: 'offline', lastOnlineAt: 100 });
   });
 
+  it('同一 ID 单机优先于大厅，房间仍优先于单机', () => {
+    const store = tempStore();
+    store.upsertPlayer('player-a', '甲');
+    const soloWins = listAllOpsPlayers(
+      [
+        { playerId: 'player-a', name: '甲', location: 'lobby', roomId: null, roomName: null },
+        { playerId: 'player-a', name: '甲', location: 'solo', roomId: null, roomName: null },
+      ],
+      store,
+    );
+    expect(soloWins[0]).toMatchObject({ location: 'solo' });
+
+    const roomWins = listAllOpsPlayers(
+      [
+        { playerId: 'player-a', name: '甲', location: 'solo', roomId: null, roomName: null },
+        { playerId: 'player-a', name: '甲', location: 'room', roomId: '007', roomName: '对局房' },
+      ],
+      store,
+    );
+    expect(roomWins[0]).toMatchObject({ location: 'room', roomId: '007' });
+  });
+
   it('旧档缺 lastOnlineAt 时回退 lastPlayedAt', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
     dirs.push(dir);
@@ -178,6 +200,37 @@ describe('PlayerStatsStore', () => {
       lastPlayedAt: 20,
       lastOnlineAt: 20,
     });
+  });
+
+  it('deletePlayer 删一人并落盘，未知 ID 返回 false', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    const store = new PlayerStatsStore({ filePath, now: () => 100 });
+    store.upsertPlayer('keep-me', '甲');
+    store.upsertPlayer('drop-me', '乙');
+    expect(store.deletePlayer('missing')).toBe(false);
+    expect(store.deletePlayer('')).toBe(false);
+    expect(store.deletePlayer('drop-me')).toBe(true);
+    expect(store.listPlayers().map((row) => row.playerId)).toEqual(['keep-me']);
+
+    const reloaded = new PlayerStatsStore({ filePath, now: () => 200 });
+    expect(reloaded.listPlayers().map((row) => row.playerId)).toEqual(['keep-me']);
+  });
+
+  it('clearAll 清空全部并落盘后再读为空', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    const store = new PlayerStatsStore({ filePath, now: () => 100 });
+    store.upsertPlayer('a', '甲');
+    store.upsertPlayer('b', '乙');
+    expect(store.clearAll()).toBe(2);
+    expect(store.listPlayers()).toEqual([]);
+    expect(store.clearAll()).toBe(0);
+
+    const reloaded = new PlayerStatsStore({ filePath, now: () => 200 });
+    expect(reloaded.listPlayers()).toEqual([]);
   });
 
   it('落盘后新实例能恢复战绩', () => {

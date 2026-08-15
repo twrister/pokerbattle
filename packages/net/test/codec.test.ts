@@ -4,6 +4,7 @@ import {
   decodeClientMessage,
   decodeServerMessage,
   encodeMessage,
+  normalizeLobbyActivity,
   normalizeRoomId,
   normalizeRoomName,
 } from '../src/index.js';
@@ -46,11 +47,17 @@ describe('协议编解码', () => {
     const listRooms = encodeMessage({ type: 'listRooms' });
     expect(decodeClientMessage(listRooms)).toEqual({ type: 'listRooms' });
 
-    const lobby = encodeMessage({ type: 'lobby', name: 'Alice', playerId: 'device-1' });
+    const lobby = encodeMessage({
+      type: 'lobby',
+      name: 'Alice',
+      playerId: 'device-1',
+      activity: 'solo',
+    });
     expect(decodeClientMessage(lobby)).toEqual({
       type: 'lobby',
       name: 'Alice',
       playerId: 'device-1',
+      activity: 'solo',
     });
 
     const rejoin = encodeMessage({
@@ -118,5 +125,12 @@ describe('协议编解码', () => {
     expect(normalizeRoomName('  测试房间  ')).toBe('测试房间');
     expect(normalizeRoomName('')).toBeNull();
     expect(normalizeRoomName('a'.repeat(30))).toHaveLength(24);
+  });
+
+  it('清洗大厅活动，未知值回退大厅', () => {
+    expect(normalizeLobbyActivity('solo')).toBe('solo');
+    expect(normalizeLobbyActivity('lobby')).toBe('lobby');
+    expect(normalizeLobbyActivity('room')).toBe('lobby');
+    expect(normalizeLobbyActivity(undefined)).toBe('lobby');
   });
 });

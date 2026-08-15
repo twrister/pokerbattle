@@ -1,9 +1,12 @@
+import { normalizeLobbyActivity, type LobbyActivity } from '@pb/net';
 import type { WebSocket } from 'ws';
 import { normalizeDisplayName, normalizePlayerId } from './playerStatsStore.js';
 
 export interface LobbyIdentity {
   name: string;
   playerId: string | null;
+  /** 未入房时的页面：大厅或单机，供运维站位置列展示。 */
+  activity: LobbyActivity;
 }
 
 /**
@@ -13,11 +16,12 @@ export interface LobbyIdentity {
 export class LobbyPresence {
   private readonly sockets = new Map<WebSocket, LobbyIdentity>();
 
-  /** 登记一条大厅连接；重复登记会刷新名字/ID。 */
-  add(ws: WebSocket, identity?: { name?: string; playerId?: string }): void {
+  /** 登记一条大厅连接；重复登记会刷新名字/ID/活动。 */
+  add(ws: WebSocket, identity?: { name?: string; playerId?: string; activity?: unknown }): void {
     this.sockets.set(ws, {
       name: normalizeDisplayName(identity?.name),
       playerId: normalizePlayerId(identity?.playerId),
+      activity: normalizeLobbyActivity(identity?.activity),
     });
   }
 

@@ -13,8 +13,11 @@
           <h1>PokerBattle 运维站</h1>
           <p id="ops-subtitle" class="subtitle">监测游戏服与房间活跃状态 · 独立端口 9091</p>
         </div>
-        <div class="trust-banner" title="当前未启用登录鉴权">
-          仅限受信局域网使用 · 无鉴权
+        <div class="header-actions">
+          <button id="btn-restart-ops" type="button" class="secondary">重启运维站</button>
+          <div class="trust-banner" title="当前未启用登录鉴权">
+            仅限受信局域网使用 · 无鉴权
+          </div>
         </div>
       </header>
 
@@ -109,7 +112,11 @@
       <section class="panel">
         <div class="section-head">
           <h2>玩家信息</h2>
-          <span id="player-hint" class="hint">暂无玩家数据</span>
+          <div class="section-actions">
+            <span id="player-hint" class="hint">暂无玩家数据</span>
+            <button id="btn-toggle-clear" type="button" class="secondary">显示清空</button>
+            <button id="btn-clear-players" type="button" class="danger" hidden disabled>清空全部</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -123,6 +130,7 @@
                 <th>负</th>
                 <th>胜率</th>
                 <th>上次在线</th>
+                <th id="player-clear-col" hidden>操作</th>
               </tr>
             </thead>
             <tbody id="player-tbody">

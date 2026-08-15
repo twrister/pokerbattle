@@ -4,6 +4,7 @@ import {
   decodeServerMessage,
   encodeMessage,
   type JoinMode,
+  type LobbyActivity,
   type RoomListEntry,
   type ServerMessage,
 } from '@pb/net';
@@ -332,17 +333,29 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
 export interface LobbyPresenceHandle {
   /** 复用大厅连接查询可加入房间。 */
   listRooms(): Promise<RoomListEntry[]>;
+  /** 切到单机/回大厅时刷新 activity，不断开连接。 */
+  setActivity(activity: LobbyActivity): void;
   /** 离开主菜单时关闭连接，服务端注销大厅计数。 */
   dispose(): void;
 }
+
+/** 大厅 WS 意外断开后的重连间隔；单机中途掉线也要重新登记，否则运维站会看成离线。 */
+const LOBBY_RECONNECT_MS = 800;
+/** 单机中周期性重报，避免首次 setActivity 赶上 CONNECTING 或中途丢包后运维站一直停在大厅。 */
+const LOBBY_SOLO_HEARTBEAT_MS = 4000;
 
 /**
  * 建立大厅 presence：连上后发 lobby；dispose 前保持连接。
  * 口径由应用层决定：未入联机房间即登记（可覆盖卡组/图鉴/单机等页面）。
  */
-export function createLobbyPresence(options: { name?: string; playerId?: string } = {}): LobbyPresenceHandle {
+export function createLobbyPresence(
+  options: { name?: string; playerId?: string; activity?: LobbyActivity } = {},
+): LobbyPresenceHandle {
   let disposed = false;
+  let activity: LobbyActivity = options.activity === 'solo' ? 'solo' : 'lobby';
   let ws: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let openWaiters: Array<{ resolve: (socket: WebSocket) => void; reject: (error: Error) => void }> =
     [];
   let listInflight: Promise<RoomListEntry[]> | null = null;
@@ -379,11 +392,8 @@ export function createLobbyPresence(options: { name?: string; playerId?: string 
     });
   };
 
-  const socket = new WebSocket(buildWsUrl());
-  ws = socket;
-
-  socket.addEventListener('open', () => {
-    if (disposed || ws !== socket) return;
+  /** 把当前名字、设备 ID 和页面活动登记到服务端。 */
+  const sendLobby = (socket: WebSocket): void => {
     const playerName = options.name?.trim() ?? '';
     const playerId = options.playerId?.trim() ?? '';
     socket.send(
@@ -391,32 +401,81 @@ export function createLobbyPresence(options: { name?: string; playerId?: string 
         type: 'lobby',
         ...(playerName ? { name: playerName } : {}),
         ...(playerId ? { playerId } : {}),
+        activity,
       }),
     );
-    resolveOpenWaiters(socket);
-  });
-  socket.addEventListener('error', () => {
-    if (disposed || ws !== socket) return;
-    const error = new Error('无法连接联机服务');
-    rejectOpenWaiters(error);
-    rejectListWaiters(error);
-  });
-  socket.addEventListener('close', () => {
-    if (disposed || ws !== socket) return;
-    const error = new Error('连接已断开');
-    rejectOpenWaiters(error);
-    rejectListWaiters(error);
-  });
-  socket.addEventListener('message', (event) => {
-    if (disposed || ws !== socket) return;
-    const message = decodeServerMessage(String(event.data));
-    if (!message || message.type !== 'roomList') return;
-    const rooms = message.rooms ?? [];
-    const waiters = listWaiters;
-    listWaiters = [];
-    listInflight = null;
-    for (const waiter of waiters) waiter.resolve(rooms);
-  });
+  };
+
+  const clearReconnectTimer = (): void => {
+    if (!reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  };
+
+  const clearHeartbeat = (): void => {
+    if (!heartbeatTimer) return;
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  };
+
+  /** 仅单机页心跳重报；大厅不刷，避免无谓流量。 */
+  const syncHeartbeat = (): void => {
+    if (activity !== 'solo') {
+      clearHeartbeat();
+      return;
+    }
+    if (heartbeatTimer) return;
+    heartbeatTimer = setInterval(() => {
+      if (disposed || activity !== 'solo' || !ws || ws.readyState !== WebSocket.OPEN) return;
+      sendLobby(ws);
+    }, LOBBY_SOLO_HEARTBEAT_MS);
+  };
+
+  /** 非主动断开后稍后重连，重连成功会带上当前 activity。 */
+  const scheduleReconnect = (): void => {
+    if (disposed || reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (disposed) return;
+      attachSocket();
+    }, LOBBY_RECONNECT_MS);
+  };
+
+  const attachSocket = (): void => {
+    const socket = new WebSocket(buildWsUrl());
+    ws = socket;
+    socket.addEventListener('open', () => {
+      if (disposed || ws !== socket) return;
+      sendLobby(socket);
+      syncHeartbeat();
+      resolveOpenWaiters(socket);
+    });
+    socket.addEventListener('error', () => {
+      if (disposed || ws !== socket) return;
+      const error = new Error('无法连接联机服务');
+      rejectOpenWaiters(error);
+      rejectListWaiters(error);
+    });
+    socket.addEventListener('close', () => {
+      if (disposed || ws !== socket) return;
+      const error = new Error('连接已断开');
+      rejectOpenWaiters(error);
+      rejectListWaiters(error);
+      scheduleReconnect();
+    });
+    socket.addEventListener('message', (event) => {
+      if (disposed || ws !== socket) return;
+      const message = decodeServerMessage(String(event.data));
+      if (!message || message.type !== 'roomList') return;
+      const rooms = message.rooms ?? [];
+      const waiters = listWaiters;
+      listWaiters = [];
+      listInflight = null;
+      for (const waiter of waiters) waiter.resolve(rooms);
+    });
+  };
+
+  attachSocket();
 
   return {
     listRooms() {
@@ -434,9 +493,28 @@ export function createLobbyPresence(options: { name?: string; playerId?: string 
       });
       return listInflight;
     },
+    setActivity(next) {
+      const normalized: LobbyActivity = next === 'solo' ? 'solo' : 'lobby';
+      if (activity === normalized) {
+        syncHeartbeat();
+        return;
+      }
+      activity = normalized;
+      syncHeartbeat();
+      if (disposed) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        sendLobby(ws);
+        return;
+      }
+      if (!ws || ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED) {
+        scheduleReconnect();
+      }
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      clearReconnectTimer();
+      clearHeartbeat();
       rejectOpenWaiters(new Error('大厅连接已关闭'));
       rejectListWaiters(new Error('大厅连接已关闭'));
       const active = ws;

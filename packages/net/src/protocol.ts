@@ -64,6 +64,9 @@ export interface ListRoomsMessage {
   type: 'listRooms';
 }
 
+/** 未入联机房时的页面活动，供运维站区分大厅与单机。 */
+export type LobbyActivity = 'lobby' | 'solo';
+
 /** C→S：登记大厅 presence（停在主菜单、尚未入房）。 */
 export interface LobbyMessage {
   type: 'lobby';
@@ -71,6 +74,13 @@ export interface LobbyMessage {
   name?: string;
   /** 设备档案 ID；缺省则运维站仍能看到连接，但不挂战绩。 */
   playerId?: string;
+  /** 缺省视为大厅，兼容旧客户端。 */
+  activity?: LobbyActivity;
+}
+
+/** 清洗大厅活动；未知值回退大厅，避免坏包污染运维表。 */
+export function normalizeLobbyActivity(raw: unknown): LobbyActivity {
+  return raw === 'solo' ? 'solo' : 'lobby';
 }
 
 /** C→S：上报某一逻辑 tick 的输入（通常为当前可见 tick + inputDelay）。 */

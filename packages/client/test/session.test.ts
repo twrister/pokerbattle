@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Faction } from '@pb/sim';
 import { encodeMessage } from '@pb/net';
-import { connectVersusSession } from '../src/net/session.js';
+import { connectVersusSession, createLobbyPresence } from '../src/net/session.js';
 
 type Listener = (event?: { data?: string }) => void;
 
@@ -253,5 +253,66 @@ describe('connectVersusSession', () => {
     expect(onReconnected).toHaveBeenCalled();
     expect(session.loop.lastConfirmedTick).toBe(2);
     close();
+  });
+});
+
+describe('createLobbyPresence', () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket);
+    vi.stubGlobal('location', {
+      protocol: 'http:',
+      host: 'localhost:9081',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('连上后上报 activity，切到单机再发一条 lobby', async () => {
+    const presence = createLobbyPresence({
+      name: 'Tester',
+      playerId: 'device-1',
+      activity: 'lobby',
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({
+      type: 'lobby',
+      name: 'Tester',
+      playerId: 'device-1',
+      activity: 'lobby',
+    });
+
+    presence.setActivity('solo');
+    expect(ws.sent).toHaveLength(2);
+    expect(JSON.parse(ws.sent[1]!)).toMatchObject({ type: 'lobby', activity: 'solo' });
+
+    presence.setActivity('solo');
+    expect(ws.sent).toHaveLength(2);
+    presence.dispose();
+  });
+
+  it('意外断线后重连并带上当前单机 activity', async () => {
+    vi.useFakeTimers();
+    const presence = createLobbyPresence({
+      name: 'Tester',
+      playerId: 'device-1',
+      activity: 'lobby',
+    });
+    await Promise.resolve();
+    const first = MockWebSocket.instances[0]!;
+    presence.setActivity('solo');
+    first.close();
+
+    await vi.advanceTimersByTimeAsync(800);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    const second = MockWebSocket.instances[1]!;
+    await Promise.resolve();
+    expect(JSON.parse(second.sent[0]!)).toMatchObject({ type: 'lobby', activity: 'solo' });
+    presence.dispose();
+    vi.useRealTimers();
   });
 });

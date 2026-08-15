@@ -12,6 +12,14 @@ export interface FetchGamePlayersResult {
   error: string | null;
 }
 
+export interface ClearGamePlayersResult {
+  ok: boolean;
+  cleared: number;
+  playerId?: string;
+  status: number;
+  error: string | null;
+}
+
 /**
  * 拉取游戏服只读状态；失败时归一化为不可达，不抛错到 HTTP 层。
  */
@@ -99,6 +107,64 @@ export async function fetchGamePlayers(
   }
 }
 
+/**
+ * 转发清空玩家档案；不传 playerId 则清全部。
+ * 游戏服不可达或超时归一化为 502，不抛到 HTTP 层。
+ */
+export async function clearGamePlayers(
+  baseUrl: string,
+  playerId?: string,
+  timeoutMs = 3000,
+): Promise<ClearGamePlayersResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const path = playerId
+    ? `/ops/players/${encodeURIComponent(playerId)}/clear`
+    : '/ops/players/clear';
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      ok?: unknown;
+      cleared?: unknown;
+      playerId?: unknown;
+      message?: unknown;
+    };
+    if (!response.ok || data.ok !== true) {
+      const message =
+        typeof data.message === 'string' && data.message
+          ? data.message
+          : `游戏服清空接口返回 HTTP ${response.status}`;
+      return {
+        ok: false,
+        cleared: 0,
+        status: response.status >= 400 ? response.status : 502,
+        error: message,
+      };
+    }
+    return {
+      ok: true,
+      cleared: typeof data.cleared === 'number' ? data.cleared : 0,
+      playerId: typeof data.playerId === 'string' ? data.playerId : undefined,
+      status: 200,
+      error: null,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === 'AbortError'
+          ? '清空玩家数据超时'
+          : error.message
+        : '清空玩家数据失败';
+    return { ok: false, cleared: 0, status: 502, error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** 只保留结构完整的行，避免旧/坏数据把运维表打挂。 */
 function sanitizePlayers(rows: unknown[]): OpsPlayerRecord[] {
   const players: OpsPlayerRecord[] = [];
@@ -122,10 +188,16 @@ function sanitizePlayers(rows: unknown[]): OpsPlayerRecord[] {
           : typeof item.lastPlayedAt === 'number'
             ? item.lastPlayedAt
             : 0,
-      location: item.location === 'room' ? 'room' : item.location === 'offline' ? 'offline' : 'lobby',
+      location: sanitizeLocation(item.location),
       roomId: typeof item.roomId === 'string' ? item.roomId : null,
       roomName: typeof item.roomName === 'string' ? item.roomName : null,
     });
   }
   return players;
+}
+
+/** 只放行已知位置；旧服或坏值回退大厅，避免运维表空白。 */
+function sanitizeLocation(value: unknown): OpsPlayerRecord['location'] {
+  if (value === 'room' || value === 'offline' || value === 'solo') return value;
+  return 'lobby';
 }

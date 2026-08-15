@@ -52,6 +52,15 @@ const httpServer = http.createServer((req, res) => {
     writeJson(res, 200, buildOpsPlayers());
     return;
   }
+  if (method === 'POST' && pathname === '/ops/players/clear') {
+    handleClearPlayers(req, res);
+    return;
+  }
+  const clearOne = pathname.match(/^\/ops\/players\/([^/]+)\/clear$/);
+  if (method === 'POST' && clearOne) {
+    handleClearOnePlayer(req, res, clearOne[1] ?? '');
+    return;
+  }
   if (IS_PROD && isRead) {
     serveStatic(res, DIST_DIR, pathname);
     return;
@@ -85,7 +94,11 @@ wss.on('connection', (ws) => {
     // 大厅 presence：可与 listRooms 共用连接，入房前计入 lobbyPlayers
     if (message.type === 'lobby') {
       if (!handshaked) {
-        lobby.add(ws, { name: message.name, playerId: message.playerId });
+        lobby.add(ws, {
+          name: message.name,
+          playerId: message.playerId,
+          activity: message.activity,
+        });
         bindConnectedPlayer(ws, message.playerId, message.name);
       }
       return;
@@ -159,7 +172,7 @@ function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined,
   playerStats.upsertPlayer(id, displayName);
 }
 
-/** 返回全部历史玩家；在线位置用房间席位补充，离线标 offline。 */
+/** 返回全部历史玩家；在线位置用房间席位或大厅活动补充，离线标 offline。 */
 function buildOpsPlayers(): OpsPlayersStatus {
   const roomById = new Map(
     rooms
@@ -167,17 +180,23 @@ function buildOpsPlayers(): OpsPlayersStatus {
       .filter((entry) => entry.playerId)
       .map((entry) => [entry.playerId as string, entry]),
   );
+  const lobbyById = new Map(
+    lobby
+      .listOnline()
+      .filter((entry) => entry.playerId)
+      .map((entry) => [entry.playerId as string, entry]),
+  );
   const online = connectedPlayers.list().map((entry) => {
     const seated = roomById.get(entry.playerId);
-    return (
-      seated ?? {
-        playerId: entry.playerId,
-        name: entry.name,
-        location: 'lobby' as const,
-        roomId: null,
-        roomName: null,
-      }
-    );
+    if (seated) return seated;
+    const lobbyEntry = lobbyById.get(entry.playerId);
+    return {
+      playerId: entry.playerId,
+      name: entry.name,
+      location: lobbyEntry?.activity === 'solo' ? ('solo' as const) : ('lobby' as const),
+      roomId: null,
+      roomName: null,
+    };
   });
   return { ok: true, players: listAllOpsPlayers(online, playerStats) };
 }
@@ -205,6 +224,51 @@ function requestPath(req: http.IncomingMessage): string {
   } catch {
     return '/';
   }
+}
+
+/** nginx 反代会带这些头；运维站直连 127.0.0.1 没有，用来挡住公网清空。 */
+function isNginxProxied(req: http.IncomingMessage): boolean {
+  const headers = req.headers;
+  return Boolean(headers['x-forwarded-for'] || headers['x-real-ip'] || headers['x-forwarded-prefix']);
+}
+
+/** 运维一键清空全部服务端战绩档案。 */
+function handleClearPlayers(req: http.IncomingMessage, res: http.ServerResponse): void {
+  if (isNginxProxied(req)) {
+    writeJson(res, 403, { ok: false, message: '禁止经公网反代清空玩家数据' });
+    return;
+  }
+  const cleared = playerStats.clearAll();
+  writeJson(res, 200, { ok: true, cleared });
+}
+
+/** 运维清空单个玩家档案；非法 ID 或未登记分别 400/404。 */
+function handleClearOnePlayer(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  rawId: string,
+): void {
+  if (isNginxProxied(req)) {
+    writeJson(res, 403, { ok: false, message: '禁止经公网反代清空玩家数据' });
+    return;
+  }
+  let decoded = rawId;
+  try {
+    decoded = decodeURIComponent(rawId);
+  } catch {
+    writeJson(res, 400, { ok: false, message: '玩家 ID 无效' });
+    return;
+  }
+  const playerId = normalizePlayerId(decoded);
+  if (!playerId) {
+    writeJson(res, 400, { ok: false, message: '玩家 ID 无效' });
+    return;
+  }
+  if (!playerStats.deletePlayer(playerId)) {
+    writeJson(res, 404, { ok: false, message: '未找到该玩家档案' });
+    return;
+  }
+  writeJson(res, 200, { ok: true, cleared: 1, playerId });
 }
 
 /** 写出 JSON 响应，供运维站与健康探测使用。 */

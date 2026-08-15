@@ -21,6 +21,10 @@ const els = {
   btnStop: document.getElementById('btn-stop'),
   btnRestart: document.getElementById('btn-restart'),
   btnDeploy: document.getElementById('btn-deploy'),
+  btnClearPlayers: document.getElementById('btn-clear-players'),
+  btnRestartOps: document.getElementById('btn-restart-ops'),
+  btnToggleClear: document.getElementById('btn-toggle-clear'),
+  playerClearCol: document.getElementById('player-clear-col'),
   deployState: document.getElementById('deploy-state'),
   deployHint: document.getElementById('deploy-hint'),
   subtitle: document.getElementById('ops-subtitle'),
@@ -37,6 +41,14 @@ let latestServices = [];
 let latestOps = null;
 /** 最近一次成功复制的链接与时间，用于轮询重绘后保留按钮反馈。 */
 let lastCopied = { url: '', at: 0 };
+/** 最近一次玩家表行数与游戏服可达性，用来禁用「清空全部」。 */
+let latestPlayerCount = 0;
+let latestGameReachable = false;
+let latestPlayers = [];
+/** 危险清空默认隐藏，点「显示清空」后才露出。 */
+let showClearActions = false;
+/** 清空结果需短暂保留，避免 2s 轮询把失败原因冲掉。 */
+let holdMessageUntil = 0;
 
 /** 相对当前页面目录解析 API/静态资源，兼容 /poker-battle-ops/ 子路径。 */
 function resolveAppUrl(rel) {
@@ -122,16 +134,20 @@ function renderStatus(data) {
 
   if (data.message) {
     showMessage(data.message, data.gameReachable && (state === 'running' || display.key === 'external'));
-  } else if (!busy) {
+  } else if (!busy && Date.now() > holdMessageUntil) {
     hideMessage();
   }
 
   latestOps = data.ops ?? null;
   latestServices = Array.isArray(data.services) ? data.services : [];
+  latestGameReachable = Boolean(data.gameReachable);
+  latestPlayers = playerRows;
+  latestPlayerCount = playerRows.length;
   renderServices(latestServices);
   renderRooms(data.game?.rooms ?? []);
   renderPlayers(playerRows);
   updateButtons(state, process);
+  updateClearPlayersButton();
   renderDeploy(data.deploy);
 }
 
@@ -266,7 +282,7 @@ function renderRooms(rooms) {
     .join('');
 }
 
-/** 渲染全部玩家；场次/胜率来自服务端历史，位置来自大厅、房间或离线。 */
+/** 渲染全部玩家；场次/胜率来自服务端历史，位置来自大厅、单机、房间或离线。 */
 function renderPlayers(players) {
   const rows = Array.isArray(players) ? players : [];
   const onlineCount = rows.filter((player) => player.location && player.location !== 'offline').length;
@@ -275,9 +291,10 @@ function renderPlayers(players) {
       ? `共 ${rows.length} 人 · 在线 ${onlineCount} 人`
       : '暂无玩家数据';
   }
+  const colCount = showClearActions ? 9 : 8;
   if (!els.playerTbody) return;
   if (rows.length === 0) {
-    els.playerTbody.innerHTML = '<tr><td colspan="8" class="empty">暂无玩家数据</td></tr>';
+    els.playerTbody.innerHTML = `<tr><td colspan="${colCount}" class="empty">暂无玩家数据</td></tr>`;
     return;
   }
   els.playerTbody.innerHTML = rows
@@ -287,23 +304,48 @@ function renderPlayers(players) {
         matches > 0 && typeof player.winRate === 'number'
           ? `${(player.winRate * 100).toFixed(1)}%`
           : '—';
+      const playerId = String(player.playerId || '');
+      const disabled = busy || !playerId ? 'disabled' : '';
+      const actionCell = showClearActions
+        ? `<td>
+          <button type="button" class="danger" data-action="clear-player" data-id="${escapeHtml(playerId)}" data-name="${escapeHtml(player.displayName || '')}" ${disabled}>清空</button>
+        </td>`
+        : '';
       return `<tr>
         <td>${escapeHtml(player.displayName)}</td>
         <td>${escapeHtml(formatPlayerLocation(player))}</td>
-        <td class="muted">${escapeHtml(player.playerId || '—')}</td>
+        <td class="muted">${escapeHtml(playerId || '—')}</td>
         <td>${matches}</td>
         <td>${Number(player.wins) || 0}</td>
         <td>${Number(player.losses) || 0}</td>
         <td>${winRate}</td>
         <td>${escapeHtml(formatLastOnline(player))}</td>
+        ${actionCell}
       </tr>`;
     })
     .join('');
 }
 
-/** 大厅、「房号 房间名」或离线，方便运维对照房间表。 */
+/** 同步「显示清空」开关与危险按钮显隐。 */
+function applyClearActionsVisibility() {
+  if (els.btnToggleClear) {
+    els.btnToggleClear.textContent = showClearActions ? '隐藏清空' : '显示清空';
+  }
+  if (els.btnClearPlayers) els.btnClearPlayers.hidden = !showClearActions;
+  if (els.playerClearCol) els.playerClearCol.hidden = !showClearActions;
+}
+
+/** 游戏服不可达或表空时禁用一键清空，避免空操作。 */
+function updateClearPlayersButton() {
+  applyClearActionsVisibility();
+  if (!els.btnClearPlayers) return;
+  els.btnClearPlayers.disabled = busy || !latestGameReachable || latestPlayerCount === 0;
+}
+
+/** 大厅、单机、「房号 房间名」或离线，方便运维对照房间表。 */
 function formatPlayerLocation(player) {
   if (player.location === 'offline') return '离线';
+  if (player.location === 'solo') return '单机模式';
   if (player.location === 'room') {
     const roomId = String(player.roomId ?? '').trim();
     const roomName = String(player.roomName ?? '').trim();
@@ -326,6 +368,7 @@ function updateButtons(state, process = {}) {
   // 仅本站托管且有 pid 时可停/重启；外部占用不强制杀进程
   els.btnStop.disabled = disabled || external || !process.pid;
   els.btnRestart.disabled = disabled || external || !process.pid;
+  updateClearPlayersButton();
 }
 
 /** 展示 pnpm deploy 进度；线上重启运维站后靠 /api/status.deploy 恢复结果。 */
@@ -374,6 +417,58 @@ function hideDeployMessage() {
   els.deployState.classList.remove('info');
 }
 
+/** 重启运维进程；本机不关游戏服，页面轮询到新进程后再恢复。 */
+async function invokeRestartOps() {
+  const ok = window.confirm(
+    '确定重启运维站？页面会短暂断开并自动重连。本机已启动的游戏服不会被关掉，重启后可能显示为外部占用。',
+  );
+  if (!ok) return;
+  if (els.btnRestartOps) els.btnRestartOps.disabled = true;
+  holdMessageUntil = Date.now() + 30_000;
+  showMessage('正在重启运维站…', true);
+  try {
+    const response = await fetch(resolveAppUrl('api/ops/restart'), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    const result = await response.json().catch(() => ({}));
+    showMessage(
+      result.message || (response.ok ? '运维站即将重启' : `重启失败（HTTP ${response.status}）`),
+      response.ok,
+    );
+    if (!response.ok) {
+      if (els.btnRestartOps) els.btnRestartOps.disabled = false;
+      return;
+    }
+  } catch {
+    showMessage('运维站正在重启…', true);
+  }
+  await waitForOpsResume();
+  if (els.btnRestartOps) els.btnRestartOps.disabled = false;
+}
+
+/** 等新运维进程重新监听后再拉状态。 */
+async function waitForOpsResume() {
+  for (let i = 0; i < 40; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const response = await fetch(resolveAppUrl('api/status'), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) continue;
+      holdMessageUntil = Date.now() + 8000;
+      showMessage('运维站已重启', true);
+      await refreshStatus();
+      return;
+    } catch {
+      /* 端口尚未起来 */
+    }
+  }
+  holdMessageUntil = Date.now() + 8000;
+  showMessage('运维站重启超时，请手动刷新或重新执行 pnpm ops', false);
+}
+
 /** 触发发布后继续轮询；线上重启可能导致本次 POST 被掐断。 */
 async function invokeDeploy() {
   deployBusy = true;
@@ -392,6 +487,36 @@ async function invokeDeploy() {
     showDeployMessage('发布进行中，运维站可能短暂重启…', true);
   }
   await refreshStatus();
+}
+
+/** 清空服务端战绩；不传 playerId 则清全部。 */
+async function invokeClearPlayers(playerId = null) {
+  busy = true;
+  updateClearPlayersButton();
+  showMessage('正在清空玩家数据…', true);
+  try {
+    const path = playerId
+      ? `api/players/${encodeURIComponent(playerId)}/clear`
+      : 'api/players/clear';
+    const response = await fetch(resolveAppUrl(path), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    const result = await response.json().catch(() => ({}));
+    let text = result.message || (response.ok ? '已清空玩家数据' : `清空失败（HTTP ${response.status}）`);
+    if (!response.ok && response.status === 404) {
+      text = '清空接口不存在，请重启运维站（pnpm ops）后再试';
+    }
+    holdMessageUntil = Date.now() + 8000;
+    showMessage(text, response.ok);
+    await refreshStatus();
+  } catch (error) {
+    showMessage(error instanceof Error ? error.message : '清空失败', false);
+  } finally {
+    busy = false;
+    updateClearPlayersButton();
+    await refreshStatus();
+  }
 }
 
 /** 调用启停接口，期间禁用按钮避免重复点击。 */
@@ -518,6 +643,31 @@ els.btnStart.addEventListener('click', () => invokeControl('api/server/start'));
 els.btnStop.addEventListener('click', () => invokeControl('api/server/stop'));
 els.btnRestart.addEventListener('click', () => invokeControl('api/server/restart'));
 els.btnDeploy?.addEventListener('click', () => void invokeDeploy());
+els.btnRestartOps?.addEventListener('click', () => void invokeRestartOps());
+els.btnToggleClear?.addEventListener('click', () => {
+  showClearActions = !showClearActions;
+  applyClearActionsVisibility();
+  renderPlayers(latestPlayers);
+  updateClearPlayersButton();
+});
+els.btnClearPlayers?.addEventListener('click', () => {
+  if (busy || !latestGameReachable || latestPlayerCount === 0) return;
+  const ok = window.confirm(
+    `确定清空全部 ${latestPlayerCount} 名玩家的服务端战绩？此操作不可恢复，仅清除联机场次/胜负，不影响客户端本地档案。`,
+  );
+  if (ok) void invokeClearPlayers();
+});
+els.playerTbody?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.getAttribute('data-action') !== 'clear-player') return;
+  if (busy) return;
+  const playerId = target.getAttribute('data-id');
+  if (!playerId) return;
+  const name = target.getAttribute('data-name') || playerId;
+  const ok = window.confirm(`确定清空「${name}」的服务端战绩？此操作不可恢复。`);
+  if (ok) void invokeClearPlayers(playerId);
+});
 
 els.serviceEntries.addEventListener('click', (event) => {
   const target = event.target;

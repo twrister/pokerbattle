@@ -34,6 +34,14 @@ describe('LobbyPresence', () => {
     const lobby = new LobbyPresence();
     const a = new FakeWebSocket() as never;
     lobby.add(a, { name: '甲', playerId: 'device-aaa' });
-    expect(lobby.listOnline()).toEqual([{ name: '甲', playerId: 'device-aaa' }]);
+    expect(lobby.listOnline()).toEqual([{ name: '甲', playerId: 'device-aaa', activity: 'lobby' }]);
+  });
+
+  it('重复登记可把活动从大厅切到单机', () => {
+    const lobby = new LobbyPresence();
+    const a = new FakeWebSocket() as never;
+    lobby.add(a, { name: '甲', playerId: 'device-aaa' });
+    lobby.add(a, { name: '甲', playerId: 'device-aaa', activity: 'solo' });
+    expect(lobby.listOnline()).toEqual([{ name: '甲', playerId: 'device-aaa', activity: 'solo' }]);
   });
 });

@@ -6,8 +6,10 @@ import { spawnSync } from 'node:child_process';
 import { checkBasicAuth, writeUnauthorized } from './basicAuth.js';
 import { buildDashboardStatus, type ServiceDescriptor } from './dashboardStatus.js';
 import { DeployRunner, workspaceReady } from './deployRunner.js';
+import { clearGamePlayers } from './gameStatus.js';
 import { readGameMeta } from './gameMeta.js';
 import { listLanIPv4, writeLanIpsJson } from './lanIps.js';
+import { executeOpsRestart, planOpsRestart } from './opsRestart.js';
 import { ProcessManager } from './processManager.js';
 import type { ServiceController } from './serviceController.js';
 import { SystemdManager } from './systemdManager.js';
@@ -28,6 +30,7 @@ if (IS_PROD && (!OPS_BASIC_USER || !OPS_BASIC_PASSWORD)) {
 const PUBLIC_DIR = resolvePublicDir();
 const runtime = IS_PROD ? createProductionRuntime() : createLocalRuntime();
 const deployRunner = createDeployRunner();
+let opsRestarting = false;
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -82,6 +85,36 @@ process.on('SIGTERM', () => {
   void shutdown();
 });
 
+/**
+ * 重启运维进程本身：先回 202 再执行。
+ * 本机不 dispose 子进程，游戏服/开发服继续跑；线上交给 systemd。
+ */
+async function performOpsRestart(): Promise<void> {
+  const workspaceRoot = IS_PROD
+    ? undefined
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  const plan = planOpsRestart({
+    production: IS_PROD,
+    workspaceRoot,
+    systemdUnit: process.env.OPS_SYSTEMD_UNIT || 'poker-battle-ops',
+    lifecycleEvent: process.env.npm_lifecycle_event,
+  });
+  if (plan.kind !== 'systemd') {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      setTimeout(resolve, 2000).unref();
+    });
+  }
+  const result = executeOpsRestart(plan);
+  if (!result.ok) {
+    console.error('[pb-ops] restart failed', result.message);
+    process.exit(1);
+    return;
+  }
+  if (plan.kind === 'systemd') return;
+  process.exit(0);
+}
+
 /** 处理运维控制 API：状态查询与启停重启。 */
 async function handleApi(
   req: http.IncomingMessage,
@@ -112,10 +145,55 @@ async function handleApi(
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/api/ops/restart') {
+    if (opsRestarting) {
+      writeJson(res, 409, { ok: false, message: '运维站正在重启' });
+      return;
+    }
+    opsRestarting = true;
+    writeJson(res, 202, { ok: true, message: '运维站即将重启' });
+    setTimeout(() => {
+      void performOpsRestart();
+    }, 300);
+    return;
+  }
+
   // 立即 202，发布在后台跑；线上成功后会重启运维站
   if (req.method === 'POST' && pathname === '/api/deploy') {
     const result = deployRunner.start();
     writeJson(res, result.started ? 202 : 409, { ok: result.ok, message: result.message });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/players/clear') {
+    const result = await clearGamePlayers(runtime.resolveGameBaseUrl());
+    writeJson(res, result.ok ? 200 : result.status, {
+      ok: result.ok,
+      cleared: result.cleared,
+      message: result.ok ? `已清空 ${result.cleared} 名玩家档案` : result.error,
+    });
+    return;
+  }
+  const clearOne = pathname.match(/^\/api\/players\/([^/]+)\/clear$/);
+  if (req.method === 'POST' && clearOne) {
+    let playerId = clearOne[1] ?? '';
+    try {
+      playerId = decodeURIComponent(playerId);
+    } catch {
+      writeJson(res, 400, { ok: false, message: '玩家 ID 无效' });
+      return;
+    }
+    if (!playerId.trim()) {
+      writeJson(res, 400, { ok: false, message: '玩家 ID 无效' });
+      return;
+    }
+    const result = await clearGamePlayers(runtime.resolveGameBaseUrl(), playerId);
+    writeJson(res, result.ok ? 200 : result.status, {
+      ok: result.ok,
+      cleared: result.cleared,
+      playerId: result.playerId,
+      message: result.ok ? `已清空 ${result.playerId ?? playerId} 的档案` : result.error,
+    });
     return;
   }
 

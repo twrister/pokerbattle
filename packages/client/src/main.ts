@@ -98,16 +98,23 @@ let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
 /**
  * 应用层大厅 presence：凡未进入联机房间（含卡组/图鉴/单机）都保持登记。
  * 仅 versus 入房期间关闭，避免与 join 连接重复计数。
+ * 单机页会上报 activity=solo，供运维站区分「大厅」与「单机模式」。
  */
 let appLobbyPresence: LobbyPresenceHandle | null = null;
 
+/** 未入房页面里，只有单机对局单独标成 solo。 */
+function lobbyActivityForScreen(screen: AppScreen | null): 'lobby' | 'solo' {
+  return screen === 'solo' ? 'solo' : 'lobby';
+}
+
 /** 确保未入房玩家登记为大厅；幂等。 */
-function ensureAppLobbyPresence(): LobbyPresenceHandle {
+function ensureAppLobbyPresence(activity: 'lobby' | 'solo' = 'lobby'): LobbyPresenceHandle {
   if (!appLobbyPresence) {
     const profile = playerProfile.getProfile();
     appLobbyPresence = createLobbyPresence({
       name: profile.displayName,
       playerId: profile.deviceAccountId,
+      activity,
     });
   }
   return appLobbyPresence;
@@ -119,10 +126,14 @@ function stopAppLobbyPresence(): void {
   appLobbyPresence = null;
 }
 
-/** 按当前页面同步大厅 presence：只有 versus 不算大厅。 */
+/** 按当前页面同步大厅 presence：versus 断开，单机刷新 activity。 */
 function syncLobbyPresenceForScreen(screen: AppScreen): void {
-  if (screen === 'versus') stopAppLobbyPresence();
-  else ensureAppLobbyPresence();
+  if (screen === 'versus') {
+    stopAppLobbyPresence();
+    return;
+  }
+  const activity = lobbyActivityForScreen(screen);
+  ensureAppLobbyPresence(activity).setActivity(activity);
 }
 
 const mainMenu = createMainMenu({
@@ -154,8 +165,9 @@ const mainMenu = createMainMenu({
     playerProfile.setDisplayName(displayName);
     // 大厅连接已带旧名，重连一次让运维站立刻看到新名字。
     if (appLobbyPresence) {
+      const activity = lobbyActivityForScreen(screens.current);
       stopAppLobbyPresence();
-      ensureAppLobbyPresence();
+      ensureAppLobbyPresence(activity);
     }
   },
   listRooms: () => ensureAppLobbyPresence().listRooms(),

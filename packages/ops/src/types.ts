@@ -41,7 +41,7 @@ export interface OpsPlayerRecord {
   firstSeenAt: number;
   lastPlayedAt: number;
   lastOnlineAt: number;
-  location: 'lobby' | 'room' | 'offline';
+  location: 'lobby' | 'room' | 'solo' | 'offline';
   roomId: string | null;
   roomName: string | null;
 }

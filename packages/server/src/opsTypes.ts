@@ -36,7 +36,7 @@ export interface OpsRoomSummary {
 }
 
 /** 玩家当前所在位置；离线档案也出现在全量表。 */
-export type OpsPlayerLocation = 'lobby' | 'room' | 'offline';
+export type OpsPlayerLocation = 'lobby' | 'room' | 'solo' | 'offline';
 
 /** 运维站玩家行：当前连接或离线档案 + 历史战绩。 */
 export interface OpsPlayerRecord {
