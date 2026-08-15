@@ -17,8 +17,9 @@ import {
 } from '@pb/sim';
 import { syncUnitConfigsForBalance } from '../debug/unitConfigDraftUi.js';
 import { renderBalanceReport } from './balanceReportView.js';
+import { createMixMatchupPanel } from './mixMatchupPanel.js';
 
-export type HandVerifyTab = 'odds' | 'balance';
+export type HandVerifyTab = 'odds' | 'balance' | 'mix';
 
 export interface HandOddsPageOptions {
   onBack: () => void;
@@ -68,8 +69,10 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   const backButton = required<HTMLButtonElement>('#btn-hand-odds-back', root);
   const oddsTab = required<HTMLButtonElement>('#hand-odds-tab-odds', root);
   const balanceTab = required<HTMLButtonElement>('#hand-odds-tab-balance', root);
+  const mixTab = required<HTMLButtonElement>('#hand-odds-tab-mix', root);
   const oddsPanel = required<HTMLElement>('#hand-odds-odds-panel', root);
   const balancePanel = required<HTMLElement>('#hand-odds-balance-panel', root);
+  const mixPanelEl = required<HTMLElement>('#hand-odds-mix-panel', root);
   const handSizeInput = required<HTMLInputElement>('#hand-odds-hand-size', root);
   const handSizeLabel = required<HTMLElement>('#hand-odds-hand-size-value', root);
   const trialsSelect = required<HTMLSelectElement>('#hand-odds-trials', root);
@@ -97,11 +100,28 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   let balanceSeq = 0;
   let oddsBusy = false;
   let balanceBusy = false;
+  let mixBusy = false;
+
+  const tabs: ReadonlyArray<{ id: HandVerifyTab; tab: HTMLButtonElement; panel: HTMLElement }> = [
+    { id: 'odds', tab: oddsTab, panel: oddsPanel },
+    { id: 'balance', tab: balanceTab, panel: balancePanel },
+    { id: 'mix', tab: mixTab, panel: mixPanelEl },
+  ];
+
+  const mixPanel = createMixMatchupPanel({
+    root,
+    onBeforeRun: () => options.onBeforeBalance?.(),
+    onBusyChange: (busy) => {
+      mixBusy = busy;
+      setBusy();
+    },
+  });
 
   const back = (): void => options.onBack();
   backButton.addEventListener('click', back);
   oddsTab.addEventListener('click', () => setTab('odds'));
   balanceTab.addEventListener('click', () => setTab('balance'));
+  mixTab.addEventListener('click', () => setTab('mix'));
   handSizeInput.addEventListener('input', () => {
     handSize = clampHandSize(Number(handSizeInput.value));
     handSizeLabel.textContent = String(handSize);
@@ -149,15 +169,16 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   /** 按当前模式关掉用不到的强度参数，避免配了却没跑。 */
   function syncBalanceFieldAvailability(): void {
     const mode = readBalanceMode();
-    seedsInput.disabled = oddsBusy || balanceBusy || mode === 'melee';
-    roundsInput.disabled = oddsBusy || balanceBusy || mode === 'solo';
-    teamSizeInput.disabled = oddsBusy || balanceBusy || mode === 'solo';
-    seedInput.disabled = oddsBusy || balanceBusy;
-    modeSelect.disabled = oddsBusy || balanceBusy;
+    const busy = oddsBusy || balanceBusy || mixBusy;
+    seedsInput.disabled = busy || mode === 'melee';
+    roundsInput.disabled = busy || mode === 'solo';
+    teamSizeInput.disabled = busy || mode === 'solo';
+    seedInput.disabled = busy;
+    modeSelect.disabled = busy;
   }
 
   function setBusy(): void {
-    const busy = oddsBusy || balanceBusy;
+    const busy = oddsBusy || balanceBusy || mixBusy;
     runButton.disabled = busy;
     sweepButton.disabled = busy;
     handSizeInput.disabled = busy;
@@ -165,18 +186,19 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     balanceRunButton.disabled = busy;
     oddsTab.disabled = false;
     balanceTab.disabled = false;
+    mixTab.disabled = false;
+    mixPanel.setDisabled(busy);
     syncBalanceFieldAvailability();
   }
 
-  /** 在概率与强度两栏之间切换，进行中的计算不中断。 */
+  /** 在概率、强度、搭配三栏之间切换，进行中的计算不中断。 */
   function setTab(next: HandVerifyTab): void {
-    const oddsActive = next === 'odds';
-    oddsTab.classList.toggle('is-active', oddsActive);
-    balanceTab.classList.toggle('is-active', !oddsActive);
-    oddsTab.setAttribute('aria-selected', String(oddsActive));
-    balanceTab.setAttribute('aria-selected', String(!oddsActive));
-    oddsPanel.classList.toggle('is-hidden', !oddsActive);
-    balancePanel.classList.toggle('is-hidden', oddsActive);
+    for (const item of tabs) {
+      const active = item.id === next;
+      item.tab.classList.toggle('is-active', active);
+      item.tab.setAttribute('aria-selected', String(active));
+      item.panel.classList.toggle('is-hidden', !active);
+    }
   }
 
   /** 递增 token，使进行中的分片循环自行退出。 */
@@ -561,6 +583,7 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     hide() {
       cancelOddsRun();
       cancelBalance();
+      mixPanel.cancel();
       setBusy();
       root.classList.add('is-hidden');
       root.setAttribute('aria-hidden', 'true');
@@ -568,6 +591,7 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     dispose() {
       cancelOddsRun();
       cancelBalance();
+      mixPanel.dispose();
       backButton.removeEventListener('click', back);
     },
   };

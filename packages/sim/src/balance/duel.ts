@@ -1,9 +1,10 @@
 import { getFuseBombTypeId, resolveFormationSpawnsFx } from '../config/cardFormations.js';
 import { resolveFuseBombDamage } from '../config/cardMapping.js';
 import { TICK_RATE } from '../config/tuning.js';
-import { Faction, isAlive } from '../entity/unit.js';
+import { Faction } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
+import { clamp01, isBattleSettled, remainingHp } from './battleOutcome.js';
 import type { Entry } from './entries.js';
 
 /** 同半场对拆锚点：避开河道，Blue 靠下、Red 靠上。 */
@@ -144,30 +145,6 @@ function finishBattle(
   return toDuelResult(world, factionA, factionB, maxHpA, maxHpB, true);
 }
 
-/** 双方都不再有存活单位，且场上没有未落地弹道，才算分出胜负。 */
-function isBattleSettled(world: World, factionA: Faction, factionB: Faction): boolean {
-  if (world.projectiles.some((projectile) => !projectile.dead)) return false;
-  const aliveA = countAlive(world, factionA);
-  const aliveB = countAlive(world, factionB);
-  return aliveA === 0 || aliveB === 0;
-}
-
-function countAlive(world: World, faction: Faction): number {
-  let n = 0;
-  for (const unit of world.units) {
-    if (unit.faction === faction && isAlive(unit)) n += 1;
-  }
-  return n;
-}
-
-function remainingHp(world: World, faction: Faction): number {
-  let hp = 0;
-  for (const unit of world.units) {
-    if (unit.faction === faction && isAlive(unit)) hp += toFloat(unit.hp);
-  }
-  return hp;
-}
-
 function toDuelResult(
   world: World,
   factionA: Faction,
@@ -221,8 +198,3 @@ function hpFraction(ownMax: number, ownRemain: number, enemyMax: number, enemyRe
   return 0;
 }
 
-function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-}

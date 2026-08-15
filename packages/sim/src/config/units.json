@@ -5,7 +5,7 @@
     "radius": 0.5,
     "bodyScale": 1.1,
     "mass": 2,
-    "maxHp": 400,
+    "maxHp": 450,
     "damage": 60,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -175,7 +175,7 @@
     "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 600,
-    "damage": 80,
+    "damage": 90,
     "attackInterval": 20,
     "attackWindup": 7,
     "range": 0.5,
@@ -189,7 +189,7 @@
     "tag": "振奋",
     "inspire": {
       "radius": 3,
-      "attackIntervalMul": 0.8,
+      "attackIntervalMul": 0.7,
       "moveSpeedMul": 1.3
     }
   },

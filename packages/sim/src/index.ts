@@ -273,3 +273,24 @@ export {
   type SharedViolation,
 } from './balance/rating.js';
 export { renderMatchupCsv, renderStrengthMarkdown, type ReportInput } from './balance/report.js';
+export {
+  DEFAULT_MIX_BASE,
+  DEFAULT_MIX_MATCHUP_OPTIONS,
+  clamp01,
+  countAlive,
+  isBattleSettled,
+  layoutMixedRows,
+  listMixableUnitTypeIds,
+  mixTicksToSeconds,
+  remainingHp,
+  resolveMixOptions,
+  runMixSingleGame,
+  setupMixWorld,
+  summarizeMixWorld,
+  type MixGameRecord,
+  type MixMatchupOptions,
+  type MixReplaySetup,
+  type MixUnitEntry,
+  type MixWinner,
+  type MixWorldSession,
+} from './balance/mixDuel.js';

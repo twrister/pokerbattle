@@ -193,6 +193,24 @@ export interface SpriteMaterials {
 
 const materialCache = new Map<string, SpriteMaterials>();
 const textureCache = new Map<string, THREE.Texture>();
+/** 已加载完成的贴图 URL；同一张图被多个兵种引用时不必重复等待 */
+const loadedTextureUrls = new Set<string>();
+/** 贴图未就绪前创建的材质，加载完成后统一转为可见 */
+const pendingMaterials = new Map<string, THREE.MeshBasicMaterial[]>();
+const textureLoadListeners = new Set<() => void>();
+
+/**
+ * 订阅「有贴图加载完成」。
+ * 只画一帧的静态视图（如搭配对比定格帧）必须借此补一次重绘，
+ * 否则贴图晚于那一次 render 到达，立绘会永远停在隐藏状态。
+ * 返回取消订阅的函数。
+ */
+export function onSpriteTextureLoaded(listener: () => void): () => void {
+  textureLoadListeners.add(listener);
+  return () => {
+    textureLoadListeners.delete(listener);
+  };
+}
 
 /** 按阵营解析正背面贴图 URL；无红方专属图时回退蓝方。 */
 function resolveSpriteUrls(
@@ -256,13 +274,30 @@ function createSpriteMaterial(url: string): THREE.MeshBasicMaterial {
     texture = new THREE.TextureLoader().load(url, (loaded) => {
       loaded.colorSpace = THREE.SRGBColorSpace;
       loaded.magFilter = THREE.NearestFilter;
-      material.visible = true;
-      material.needsUpdate = true;
+      markTextureLoaded(url);
     });
     textureCache.set(url, texture);
-  } else {
-    material.visible = true;
   }
   material.map = texture;
+
+  if (loadedTextureUrls.has(url)) {
+    material.visible = true;
+  } else {
+    // 同一 URL 可能被多个兵种（如三种箭塔）各建一份材质，都要等这张图
+    const waiting = pendingMaterials.get(url);
+    if (waiting) waiting.push(material);
+    else pendingMaterials.set(url, [material]);
+  }
   return material;
+}
+
+/** 贴图就绪：把等这张图的材质全部转可见，并通知静态视图重绘。 */
+function markTextureLoaded(url: string): void {
+  loadedTextureUrls.add(url);
+  for (const material of pendingMaterials.get(url) ?? []) {
+    material.visible = true;
+    material.needsUpdate = true;
+  }
+  pendingMaterials.delete(url);
+  for (const listener of textureLoadListeners) listener();
 }

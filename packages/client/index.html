@@ -2714,7 +2714,8 @@
       .hand-odds-body,
       .hand-odds-status,
       .hand-odds-odds-panel,
-      .hand-odds-balance-panel {
+      .hand-odds-balance-panel,
+      .hand-odds-mix-panel {
         position: relative;
         z-index: 1;
       }
@@ -2827,7 +2828,8 @@
       }
 
       .hand-odds-odds-panel,
-      .hand-odds-balance-panel {
+      .hand-odds-balance-panel,
+      .hand-odds-mix-panel {
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -2835,8 +2837,265 @@
       }
 
       .hand-odds-odds-panel.is-hidden,
-      .hand-odds-balance-panel.is-hidden {
+      .hand-odds-balance-panel.is-hidden,
+      .hand-odds-mix-panel.is-hidden {
         display: none;
+      }
+
+      .hand-mix-groups {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(180px, 1fr));
+        gap: 12px;
+        flex-basis: 100%;
+      }
+
+      .hand-mix-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .hand-mix-group .hand-odds-section-title {
+        margin: 0;
+      }
+
+      .hand-mix-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 34px;
+      }
+
+      .hand-mix-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .hand-mix-row select {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .hand-mix-row input[type='number'] {
+        width: 4.2em;
+      }
+
+      .hand-mix-row .hand-mix-remove {
+        min-width: 34px;
+        padding: 7px 8px;
+      }
+
+      .hand-mix-frames {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .hand-mix-frame {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .hand-mix-frame .hand-odds-section-title {
+        margin: 0;
+      }
+
+      .hand-mix-frame-canvas {
+        width: 100%;
+        height: min(42vh, 360px);
+        min-height: 200px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0a1018;
+      }
+
+      .hand-mix-frame-canvas canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hand-mix-frame-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .hand-mix-frame-meta .hand-odds-legend-note {
+        margin: 0;
+      }
+
+      .hand-mix-hp-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .hand-mix-hp-row {
+        display: grid;
+        grid-template-columns: 1.2em 1fr 4.2em;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-dim, #9aabbc);
+      }
+
+      .hand-mix-hp-name {
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .hand-mix-hp-row.is-a .hand-mix-hp-name { color: var(--blue, #5aa8ff); }
+      .hand-mix-hp-row.is-b .hand-mix-hp-name { color: var(--red, #ff6b6b); }
+
+      .hand-mix-hp-track {
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .hand-mix-hp-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: inherit;
+        transition: width 0.2s ease-out;
+      }
+
+      .hand-mix-hp-row.is-a .hand-mix-hp-bar { background: var(--blue, #5aa8ff); }
+      .hand-mix-hp-row.is-b .hand-mix-hp-bar { background: var(--red, #ff6b6b); }
+
+      .hand-mix-hp-label {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--text, #e8eef4);
+      }
+
+      .hand-mix-frame-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+
+      .hand-mix-replay-open {
+        min-height: 34px;
+        padding: 7px 14px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .hand-mix-replay {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+
+      .hand-mix-replay.is-hidden {
+        display: none;
+      }
+
+      .hand-mix-replay-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(6, 10, 16, 0.72);
+      }
+
+      .hand-mix-replay-dialog {
+        position: relative;
+        z-index: 1;
+        width: min(960px, 100%);
+        max-height: min(92vh, 860px);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid var(--panel-border);
+        border-radius: 14px;
+        background: #101820;
+        overflow: auto;
+      }
+
+      .hand-mix-replay-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .hand-mix-replay-header h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .hand-mix-replay-meta,
+      .hand-mix-replay-hud {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+
+      .hand-mix-replay-hud {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .hand-mix-replay-hud-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+      }
+
+      .hand-mix-replay-canvas {
+        width: 100%;
+        height: min(52vh, 420px);
+        min-height: 220px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0a1018;
+      }
+
+      .hand-mix-replay-canvas canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hand-mix-replay-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .hand-mix-replay-controls button,
+      .hand-mix-replay-controls select,
+      .hand-mix-replay-header button {
+        min-height: 34px;
+        padding: 7px 12px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .hand-mix-replay-controls input[type='range'] {
+        flex: 1 1 180px;
+        min-width: 120px;
       }
 
       .hand-odds-body {
@@ -3468,6 +3727,22 @@
         .hand-odds-header {
           flex-wrap: wrap;
         }
+
+        .hand-mix-groups {
+          grid-template-columns: 1fr;
+        }
+
+        .hand-mix-frames {
+          grid-template-columns: 1fr;
+        }
+
+        .hand-mix-replay-dialog {
+          padding: 10px;
+        }
+
+        .hand-mix-replay-canvas {
+          height: min(42vh, 320px);
+        }
       }
 
       @media (max-height: 700px) {
@@ -3817,6 +4092,16 @@
             >
               强度验证
             </button>
+            <button
+              id="hand-odds-tab-mix"
+              class="hand-odds-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="hand-odds-mix-panel"
+            >
+              搭配对比
+            </button>
           </div>
         </header>
         <section id="hand-odds-odds-panel" class="hand-odds-odds-panel" role="tabpanel" aria-labelledby="hand-odds-tab-odds">
@@ -3897,6 +4182,124 @@
           <div id="hand-balance-progress" class="hand-odds-status" role="status" aria-live="polite"></div>
           <div id="hand-balance-body" class="hand-odds-balance-body"></div>
         </section>
+        <section
+          id="hand-odds-mix-panel"
+          class="hand-odds-mix-panel is-hidden"
+          role="tabpanel"
+          aria-labelledby="hand-odds-tab-mix"
+        >
+          <section class="hand-odds-controls" aria-label="搭配对比参数">
+            <div class="hand-mix-groups">
+              <div class="hand-mix-group">
+                <h2 class="hand-odds-section-title">基础阵容（双方共用）</h2>
+                <div id="hand-mix-base-list" class="hand-mix-list"></div>
+                <button id="btn-hand-mix-base-add" type="button">添加兵种</button>
+              </div>
+              <div class="hand-mix-group">
+                <h2 class="hand-odds-section-title">A 方混入</h2>
+                <div id="hand-mix-a-list" class="hand-mix-list"></div>
+                <button id="btn-hand-mix-a-add" type="button">添加兵种</button>
+              </div>
+              <div class="hand-mix-group">
+                <h2 class="hand-odds-section-title">B 方混入</h2>
+                <div id="hand-mix-b-list" class="hand-mix-list"></div>
+                <button id="btn-hand-mix-b-add" type="button">添加兵种</button>
+              </div>
+            </div>
+            <label class="hand-odds-field">
+              随机种子
+              <input id="hand-mix-seed" type="number" min="1" max="1000000000" step="1" value="1" />
+            </label>
+            <label class="hand-odds-field">
+              超时 tick
+              <input id="hand-mix-max-ticks" type="number" min="1" max="8000" step="1" value="1200" />
+            </label>
+            <label class="hand-odds-field">
+              每排人数
+              <input id="hand-mix-row-width" type="number" min="1" max="12" step="1" value="5" />
+            </label>
+            <label class="hand-odds-field">
+              平局阈值%
+              <input id="hand-mix-draw-threshold" type="number" min="0" max="100" step="1" value="5" />
+            </label>
+            <div class="hand-odds-actions">
+              <button id="btn-hand-mix-run" type="button">开始对比</button>
+            </div>
+            <p class="hand-odds-hint">
+              双方先部署同一套基础阵容，再各自额外混入兵种。点开始对比后只跑正手一局，并排显示开局与结束画面，可点「回放本局」观看全过程。
+            </p>
+          </section>
+          <div id="hand-mix-progress" class="hand-odds-status" role="status" aria-live="polite"></div>
+          <div id="hand-mix-body" class="hand-odds-balance-body"></div>
+        </section>
+        <div
+          id="hand-mix-replay"
+          class="hand-mix-replay is-hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-hidden="true"
+          aria-labelledby="hand-mix-replay-title"
+        >
+          <div class="hand-mix-replay-backdrop" data-replay-close="1"></div>
+          <div class="hand-mix-replay-dialog">
+            <header class="hand-mix-replay-header">
+              <h2 id="hand-mix-replay-title">对局回放</h2>
+              <button id="btn-hand-mix-replay-close" type="button">关闭</button>
+            </header>
+            <p id="hand-mix-replay-meta" class="hand-mix-replay-meta"></p>
+            <p class="hand-odds-hint">
+              回放使用当前运行时单位参数；若对比后改过数值，画面可能与统计不一致。
+            </p>
+            <div id="hand-mix-replay-canvas" class="hand-mix-replay-canvas"></div>
+            <div class="hand-mix-replay-hud">
+              <div class="hand-mix-replay-hud-top">
+                <span id="hand-mix-replay-alive"></span>
+                <span id="hand-mix-replay-time"></span>
+              </div>
+              <div class="hand-mix-hp-bars">
+                <div class="hand-mix-hp-row is-a">
+                  <span class="hand-mix-hp-name">A</span>
+                  <div
+                    class="hand-mix-hp-track"
+                    role="progressbar"
+                    aria-label="A 方剩余血量"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    <div id="hand-mix-replay-bar-a" class="hand-mix-hp-bar"></div>
+                  </div>
+                  <span id="hand-mix-replay-label-a" class="hand-mix-hp-label"></span>
+                </div>
+                <div class="hand-mix-hp-row is-b">
+                  <span class="hand-mix-hp-name">B</span>
+                  <div
+                    class="hand-mix-hp-track"
+                    role="progressbar"
+                    aria-label="B 方剩余血量"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    <div id="hand-mix-replay-bar-b" class="hand-mix-hp-bar"></div>
+                  </div>
+                  <span id="hand-mix-replay-label-b" class="hand-mix-hp-label"></span>
+                </div>
+              </div>
+            </div>
+            <div class="hand-mix-replay-controls">
+              <button id="btn-hand-mix-replay-play" type="button">播放</button>
+              <label class="hand-odds-field">
+                倍速
+                <select id="hand-mix-replay-speed" aria-label="回放倍速">
+                  <option value="0.5">0.5x</option>
+                  <option value="1" selected>1x</option>
+                  <option value="2">2x</option>
+                  <option value="4">4x</option>
+                </select>
+              </label>
+              <input id="hand-mix-replay-seek" type="range" min="0" max="1" step="1" value="0" aria-label="回放进度" />
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
