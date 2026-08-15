@@ -28,6 +28,7 @@ describe('卡组阵型配置页', () => {
         <button id="btn-deck-save"></button>
         <button id="btn-deck-reset"></button>
         <div id="deck-category-list"></div>
+        <div id="deck-situation-list"></div>
         <div id="deck-formation-list"></div>
         <div id="deck-editor"></div>
         <div id="deck-status"></div>
@@ -59,6 +60,31 @@ describe('卡组阵型配置页', () => {
     expect(onBack).toHaveBeenCalledOnce();
     page.dispose();
     expect(preview.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('单张默认情况为数字牌，阵型只列出该组方案', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    expect(situationNames()).toEqual(['数字牌 2～10', 'J', 'Q', 'K', 'A', '小王', '大王']);
+    expect(document.querySelector('.deck-situation.is-active')?.textContent).toBe('数字牌 2～10');
+    expect(formationNames()).toEqual(['单民兵', '单弓手']);
+
+    clickSituation('J');
+    expect(formationNames()).toEqual(['单张 J']);
+
+    page.dispose();
+  });
+
+  it('同花顺只有任意情况，其下列出全部阵型', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    clickCategory('同花顺');
+    expect(situationNames()).toEqual(['任意']);
+    expect(formationNames()).toEqual(['石头人', '巨龙', '箭塔']);
+
+    page.dispose();
   });
 
   it('可切换到按钮显示并复用阵型缩略图', async () => {
@@ -94,9 +120,10 @@ describe('卡组阵型配置页', () => {
     page.show();
     preview.render.mockClear();
 
-    // 默认牌型即为单张；选中「单张 J」
-    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
-    const jButton = formationButtons.find((button) => button.textContent === '单张 J');
+    clickSituation('J');
+    const jButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '单张 J',
+    );
     expect(jButton).toBeDefined();
     jButton!.click();
 
@@ -124,15 +151,13 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const pairCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '对子',
-    );
-    expect(pairCategory).toBeDefined();
-    pairCategory!.click();
+    clickCategory('对子');
+    clickSituation('J');
     preview.render.mockClear();
 
-    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
-    const jButton = formationButtons.find((button) => button.textContent === '对子 J');
+    const jButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '对子 J',
+    );
     expect(jButton).toBeDefined();
     jButton!.click();
 
@@ -157,15 +182,13 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const tripleCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '三张',
-    );
-    expect(tripleCategory).toBeDefined();
-    tripleCategory!.click();
+    clickCategory('三张');
+    clickSituation('J');
     preview.render.mockClear();
 
-    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
-    const jButton = formationButtons.find((button) => button.textContent === '三条 J');
+    const jButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '三条 J',
+    );
     expect(jButton).toBeDefined();
     jButton!.click();
 
@@ -190,22 +213,11 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const straight3Category = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '三顺',
-    );
-    expect(straight3Category).toBeDefined();
-    straight3Category!.click();
+    clickCategory('三顺');
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3', '9-10-J', '10-J-Q', 'J-Q-K', 'Q-K-A']);
 
-    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
-      (button) => button.textContent,
-    );
-    expect(names).toEqual(['数字三顺', 'A-2-3', '9-10-J', '10-J-Q', 'J-Q-K', 'Q-K-A']);
-
-    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
-      (button) => button.textContent === 'J-Q-K',
-    );
-    expect(segmentButton).toBeDefined();
-    segmentButton!.click();
+    clickSituation('J-Q-K');
+    expect(formationNames()).toEqual(['J-Q-K']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -230,22 +242,11 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const twoPairCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '连对',
-    );
-    expect(twoPairCategory).toBeDefined();
-    twoPairCategory!.click();
+    clickCategory('连对');
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A']);
 
-    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
-      (button) => button.textContent,
-    );
-    expect(names).toEqual(['数字连对', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A']);
-
-    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
-      (button) => button.textContent === 'Q-K',
-    );
-    expect(segmentButton).toBeDefined();
-    segmentButton!.click();
+    clickSituation('Q-K');
+    expect(formationNames()).toEqual(['Q-K']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -270,22 +271,11 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const straight4Category = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '四顺',
-    );
-    expect(straight4Category).toBeDefined();
-    straight4Category!.click();
+    clickCategory('四顺');
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3-4', '8-9-10-J', '9-10-J-Q', '10-J-Q-K', 'J-Q-K-A']);
 
-    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
-      (button) => button.textContent,
-    );
-    expect(names).toEqual(['数字四顺', 'A-2-3-4', '8-9-10-J', '9-10-J-Q', '10-J-Q-K', 'J-Q-K-A']);
-
-    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
-      (button) => button.textContent === 'J-Q-K-A',
-    );
-    expect(segmentButton).toBeDefined();
-    segmentButton!.click();
+    clickSituation('J-Q-K-A');
+    expect(formationNames()).toEqual(['J-Q-K-A']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -310,22 +300,11 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const straight5Category = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '五顺',
-    );
-    expect(straight5Category).toBeDefined();
-    straight5Category!.click();
+    clickCategory('五顺');
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3-4-5', '9-10-J-Q-K', '10-J-Q-K-A', '任意']);
 
-    const names = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].map(
-      (button) => button.textContent,
-    );
-    expect(names).toEqual(['数字五顺', 'A-2-3-4-5', '9-10-J-Q-K', '10-J-Q-K-A', '箭塔', '战车']);
-
-    const segmentButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
-      (button) => button.textContent === '10-J-Q-K-A',
-    );
-    expect(segmentButton).toBeDefined();
-    segmentButton!.click();
+    clickSituation('10-J-Q-K-A');
+    expect(formationNames()).toEqual(['10-J-Q-K-A']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -350,12 +329,8 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const tripleCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '三张',
-    );
-    expect(tripleCategory).toBeDefined();
-    tripleCategory!.click();
-
+    clickCategory('三张');
+    clickSituation('任意');
     const bombButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
       (button) => button.textContent === '小炸弹',
     );
@@ -376,7 +351,7 @@ describe('卡组阵型配置页', () => {
     );
     expect(aRow).toBeDefined();
     const input = aRow!.querySelector('input')!;
-    expect(input.value).toBe('1000');
+    expect(input.value).toBe('800');
     input.value = '1230';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(input.value).toBe('1230');
@@ -388,11 +363,8 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const rocketCategory = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
-      (button) => button.textContent === '王炸',
-    );
-    expect(rocketCategory).toBeDefined();
-    rocketCategory!.click();
+    clickCategory('王炸');
+    expect(situationNames()).toEqual(['任意']);
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
     expect(titles).toContain('炸弹伤害');
@@ -402,7 +374,7 @@ describe('卡组阵型配置页', () => {
     );
     expect(row).toBeDefined();
     const input = row!.querySelector('input')!;
-    expect(input.value).toBe('1500');
+    expect(input.value).toBe('1200');
     input.value = '1600';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(input.value).toBe('1600');
@@ -414,8 +386,10 @@ describe('卡组阵型配置页', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
 
-    const formationButtons = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')];
-    const jButton = formationButtons.find((button) => button.textContent === '单张 J');
+    clickSituation('J');
+    const jButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '单张 J',
+    );
     expect(jButton).toBeDefined();
     jButton!.click();
 
@@ -453,4 +427,32 @@ function editorFieldValue(label: string): string | undefined {
     el.textContent?.startsWith(label),
   );
   return row?.querySelector('input')?.value;
+}
+
+/** 当前情况列文案，按渲染顺序。 */
+function situationNames(): string[] {
+  return [...document.querySelectorAll('.deck-situation')].map((el) => el.textContent ?? '');
+}
+
+/** 当前阵型列文案，按渲染顺序。 */
+function formationNames(): string[] {
+  return [...document.querySelectorAll('.deck-formation')].map((el) => el.textContent ?? '');
+}
+
+/** 点选牌型按钮。 */
+function clickCategory(name: string): void {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('.deck-category')].find(
+    (item) => item.textContent === name,
+  );
+  expect(button, `缺少牌型按钮：${name}`).toBeDefined();
+  button!.click();
+}
+
+/** 点选情况按钮。 */
+function clickSituation(name: string): void {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('.deck-situation')].find(
+    (item) => item.textContent === name,
+  );
+  expect(button, `缺少情况按钮：${name}`).toBeDefined();
+  button!.click();
 }

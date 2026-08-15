@@ -15,6 +15,7 @@ import {
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
   getPreviewCardsForFormation,
+  groupFormationsByMatch,
   isBuildingConfig,
   isBuildingOnlyFormation,
   isFuseBombFormation,
@@ -23,6 +24,7 @@ import {
   type CardFormationDrafts,
   type CardRank,
   type FormationDraft,
+  type FormationMatchGroup,
   type FormationMatchRule,
   type HandCategory,
   type UnitTypeId,
@@ -54,6 +56,7 @@ export interface DeckConfigPageHandle {
 export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfigPageHandle {
   const root = required<HTMLElement>('#deck-config');
   const categoryList = required<HTMLElement>('#deck-category-list', root);
+  const situationList = required<HTMLElement>('#deck-situation-list', root);
   const formationList = required<HTMLElement>('#deck-formation-list', root);
   const editor = required<HTMLElement>('#deck-editor', root);
   const previewRoot = required<HTMLElement>('#deck-preview', root);
@@ -69,6 +72,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   let drafts = dumpCardFormationDrafts();
   let category: HandCategory = HAND_CATEGORY_ORDER[0]!;
+  let situationKey = '';
   let formationIndex = 0;
   let preview: FormationPreviewHandle | null = null;
   let previewMode: PreviewMode = '3d';
@@ -93,6 +97,40 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   /** 返回当前编辑项；牌型可能被清空，因此允许没有选中阵型。 */
   function selected(): FormationDraft | null {
     return drafts[category][formationIndex] ?? null;
+  }
+
+  /** 当前牌型按 match 收成的情况组。 */
+  function situationGroups(): FormationMatchGroup[] {
+    return groupFormationsByMatch(drafts[category]);
+  }
+
+  /**
+   * 校正情况/阵型选中：编辑 match 后跟到新组，删除后留在原组或回第一组。
+   */
+  function ensureSelection(): void {
+    const groups = situationGroups();
+    if (groups.length === 0) {
+      situationKey = '';
+      formationIndex = 0;
+      return;
+    }
+
+    const currentGroup = groups.find((group) => group.key === situationKey);
+    if (currentGroup?.indices.includes(formationIndex)) return;
+
+    const owner = groups.find((group) => group.indices.includes(formationIndex));
+    if (owner) {
+      situationKey = owner.key;
+      return;
+    }
+
+    if (currentGroup) {
+      formationIndex = currentGroup.indices[0]!;
+      return;
+    }
+
+    situationKey = groups[0]!.key;
+    formationIndex = groups[0]!.indices[0]!;
   }
 
   /** 切换 3D / 按钮预览页签，并刷新当前模式内容。 */
@@ -174,6 +212,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
         button.classList.toggle('is-active', id === category);
         button.addEventListener('click', () => {
           category = id;
+          situationKey = '';
           formationIndex = 0;
           renderAll();
         });
@@ -182,9 +221,33 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     );
   }
 
+  function renderSituationList(): void {
+    situationList.replaceChildren(
+      ...situationGroups().map((group) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'deck-situation';
+        button.classList.toggle('is-active', group.key === situationKey);
+        button.textContent = group.label;
+        button.addEventListener('click', () => {
+          situationKey = group.key;
+          formationIndex = group.indices[0] ?? 0;
+          renderSituationList();
+          renderFormationList();
+          if (IS_DEV_SERVER) renderEditor();
+          refreshPreview();
+        });
+        return button;
+      }),
+    );
+  }
+
   function renderFormationList(): void {
+    const group = situationGroups().find((item) => item.key === situationKey);
+    const indices = group?.indices ?? [];
     formationList.replaceChildren(
-      ...drafts[category].map((formation, index) => {
+      ...indices.map((index) => {
+        const formation = drafts[category][index]!;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'deck-formation';
@@ -209,7 +272,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     editor.replaceChildren();
     const draft = selected();
     if (!draft) {
-      editor.textContent = '该牌型暂无可选方案。';
+      editor.textContent = '该情况下暂无可选方案。';
       return;
     }
 
@@ -305,8 +368,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       else if (kind === 'any') draft.match = { kind: 'any' };
       else if (kind === 'joker') draft.match = { kind: 'joker', joker: 'black' };
       else draft.match = { kind: 'ranks', ranks: ['5'] };
-      if (IS_DEV_SERVER) renderEditor();
-      refreshPreview();
+      renderAll();
     });
     kindRow.appendChild(kindSelect);
     section.appendChild(kindRow);
@@ -328,7 +390,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       }
       jokerSelect.addEventListener('change', () => {
         draft.match = { kind: 'joker', joker: jokerSelect.value as 'black' | 'red' };
-        refreshPreview();
+        refreshNavAfterMatchChange();
       });
       jokerRow.appendChild(jokerSelect);
       section.appendChild(jokerRow);
@@ -353,7 +415,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
             kind: 'ranks',
             ranks: FORMATION_MATCH_RANKS.filter((item) => next.has(item)),
           };
-          refreshPreview();
+          refreshNavAfterMatchChange();
         });
         label.append(input, document.createTextNode(rank));
         ranksBox.appendChild(label);
@@ -491,10 +553,11 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   function addFormation(): void {
     const number = drafts[category].length + 1;
+    const group = situationGroups().find((item) => item.key === situationKey);
     drafts[category].push({
       id: `${category}_custom_${number}`,
       name: `${HAND_CATEGORY_NAMES[category]}阵型 ${number}`,
-      match: { kind: 'any' },
+      match: copyMatchRule(group?.match ?? { kind: 'any' }),
       rows: [[DEFAULT_MOBILE_TYPE_ID]],
       colSpacing: 1.2,
       rowSpacing: 1.4,
@@ -561,13 +624,24 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   function reset(): void {
     drafts = dumpDefaultCardFormationDrafts();
+    situationKey = '';
     formationIndex = 0;
     setStatus('已恢复为最近一次配置文件快照', false);
     renderAll();
   }
 
+  /** 改 match 后情况组可能变化，只刷新导航与预览，避免拆掉正在编辑的表单。 */
+  function refreshNavAfterMatchChange(): void {
+    ensureSelection();
+    renderSituationList();
+    renderFormationList();
+    refreshPreview();
+  }
+
   function renderAll(): void {
+    ensureSelection();
     renderCategories();
+    renderSituationList();
     renderFormationList();
     if (IS_DEV_SERVER) renderEditor();
     else editor.replaceChildren();
@@ -711,6 +785,13 @@ async function persist(drafts: CardFormationDrafts): Promise<{ ok: true } | { ok
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** 新增阵型时拷贝当前情况的 match，避免和分组对象共享引用。 */
+function copyMatchRule(match: FormationMatchRule): FormationMatchRule {
+  if (match.kind === 'ranks') return { kind: 'ranks', ranks: [...match.ranks] };
+  if (match.kind === 'joker') return { kind: 'joker', joker: match.joker };
+  return { kind: match.kind };
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

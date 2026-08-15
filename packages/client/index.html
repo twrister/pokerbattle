@@ -2186,6 +2186,7 @@
       .deck-toolbar button,
       .deck-footer button,
       .deck-category,
+      .deck-situation,
       .deck-formation,
       .deck-mini-button,
       .deck-icon-button,
@@ -2225,7 +2226,7 @@
       .deck-content {
         display: grid;
         flex: 1;
-        grid-template-columns: minmax(86px, 0.55fr) minmax(120px, 0.8fr) minmax(0, 2fr);
+        grid-template-columns: minmax(86px, 0.5fr) minmax(100px, 0.65fr) minmax(120px, 0.75fr) minmax(0, 2fr);
         /* 首行高度跟牌型列表；编辑区吃剩余空间 */
         grid-template-rows: auto minmax(0, 1fr);
         gap: 10px;
@@ -2259,12 +2260,14 @@
       }
 
       .deck-category,
+      .deck-situation,
       .deck-formation {
         padding: 8px;
         text-align: left;
       }
 
       .deck-category.is-active,
+      .deck-situation.is-active,
       .deck-formation.is-active {
         border-color: rgba(99, 214, 138, 0.8);
         background: rgba(51, 104, 87, 0.7);
@@ -3415,14 +3418,18 @@
 
         .deck-content {
           grid-template-columns: 1fr 1fr;
-          /* 首行仍由牌型列表定高，预览/编辑各占后续行 */
-          grid-template-rows: auto auto minmax(280px, 1.3fr);
+          /* 牌型+情况一行，阵型折到下一行，预览/编辑各占后续行 */
+          grid-template-rows: auto auto auto minmax(280px, 1.3fr);
         }
 
-        /* 正式服无编辑区：预览行单独给最小可视高度 */
+        #deck-formation-list {
+          grid-column: 1 / -1;
+        }
+
+        /* 正式服无编辑区：阵型行之后直接接预览 */
         html:not(.is-dev) .deck-content {
           flex: 1;
-          grid-template-rows: auto minmax(280px, 1.3fr);
+          grid-template-rows: auto auto minmax(280px, 1.3fr);
         }
 
         .deck-editor-panel,
@@ -3655,8 +3662,8 @@
         </header>
         <section class="deck-toolbar">
           <div class="deck-toolbar-copy">
-            <span class="dev-only">选择牌型与阵型，前排朝向敌方；编辑会实时更新 2D 站位与 3D 预览。</span>
-            <span class="prod-only">选择牌型与阵型，前排朝向敌方；可切换 3D / 按钮预览。</span>
+            <span class="dev-only">选择牌型、情况与阵型，前排朝向敌方；编辑会实时更新 2D 站位与 3D 预览。</span>
+            <span class="prod-only">选择牌型、情况与阵型，前排朝向敌方；可切换 3D / 按钮预览。</span>
           </div>
           <div class="deck-toolbar-actions">
             <button id="btn-deck-hand-odds" class="dev-only" type="button">牌型概率</button>
@@ -3666,6 +3673,7 @@
         </section>
         <section class="deck-content">
           <nav id="deck-category-list" class="deck-column" aria-label="牌型"></nav>
+          <nav id="deck-situation-list" class="deck-column" aria-label="牌型情况"></nav>
           <nav id="deck-formation-list" class="deck-column" aria-label="阵型列表"></nav>
           <section class="deck-preview-panel" aria-label="阵型预览">
             <div class="deck-preview-header">

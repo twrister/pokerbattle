@@ -9,6 +9,9 @@ import {
   cloneFormationDraft,
   dumpCardFormationDrafts,
   dumpUnitConfigDrafts,
+  formatMatchRuleLabel,
+  groupFormationsByMatch,
+  matchRuleKey,
   getExclusiveFormationUnitTag,
   getFormationBuildingTypeId,
   getFormationsFor,
@@ -801,5 +804,41 @@ describe('牌型兵种阵型配置', () => {
     } finally {
       resetUnitConfigsToDefault();
     }
+  });
+
+  it('matchRuleKey 对 ranks 顺序不敏感，label 按点数表展示', () => {
+    expect(matchRuleKey({ kind: 'any' })).toBe('any');
+    expect(matchRuleKey({ kind: 'numbers' })).toBe('numbers');
+    expect(matchRuleKey({ kind: 'joker', joker: 'black' })).toBe('joker:black');
+    expect(matchRuleKey({ kind: 'ranks', ranks: ['3', 'A', '2'] })).toBe(
+      matchRuleKey({ kind: 'ranks', ranks: ['A', '2', '3'] }),
+    );
+    expect(formatMatchRuleLabel({ kind: 'any' })).toBe('任意');
+    expect(formatMatchRuleLabel({ kind: 'numbers' })).toBe('数字牌 2～10');
+    expect(formatMatchRuleLabel({ kind: 'joker', joker: 'red' })).toBe('大王');
+    expect(formatMatchRuleLabel({ kind: 'ranks', ranks: ['Q', 'K', 'A'] })).toBe('Q-K-A');
+  });
+
+  it('groupFormationsByMatch 按首次出现顺序合并同一 match', () => {
+    const drafts = dumpCardFormationDrafts();
+    const single = groupFormationsByMatch(drafts.single);
+    expect(single.map((group) => group.label)).toEqual([
+      '数字牌 2～10',
+      'J',
+      'Q',
+      'K',
+      'A',
+      '小王',
+      '大王',
+    ]);
+    expect(single[0]!.indices.map((index) => drafts.single[index]!.name)).toEqual([
+      '单民兵',
+      '单弓手',
+    ]);
+
+    const flush = groupFormationsByMatch(drafts.straight_flush);
+    expect(flush).toHaveLength(1);
+    expect(flush[0]!.label).toBe('任意');
+    expect(flush[0]!.indices).toHaveLength(drafts.straight_flush.length);
   });
 });

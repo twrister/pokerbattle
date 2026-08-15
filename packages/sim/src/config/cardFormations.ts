@@ -194,6 +194,72 @@ function cloneMatchRule(match: FormationMatchRule): FormationMatchRule {
   return { kind: match.kind };
 }
 
+/** 卡组页按 match 分组后的一条「情况」。 */
+export interface FormationMatchGroup {
+  key: string;
+  label: string;
+  match: FormationMatchRule;
+  /** 该组在原 drafts 数组中的下标，保持首次出现顺序。 */
+  indices: number[];
+}
+
+/** 把 ranks 收到点数表顺序，避免同一组因勾选顺序不同被拆开。 */
+function sortMatchRanks(ranks: readonly CardRank[]): CardRank[] {
+  return FORMATION_MATCH_RANKS.filter((rank) => ranks.includes(rank));
+}
+
+/** 把 match 收成稳定键，供情况列去重。 */
+export function matchRuleKey(match: FormationMatchRule): string {
+  switch (match.kind) {
+    case 'any':
+      return 'any';
+    case 'numbers':
+      return 'numbers';
+    case 'joker':
+      return `joker:${match.joker}`;
+    case 'ranks':
+      return `ranks:${sortMatchRanks(match.ranks).join(',')}`;
+  }
+}
+
+/** 情况列展示名，与配置页 match 编辑器文案对齐。 */
+export function formatMatchRuleLabel(match: FormationMatchRule): string {
+  switch (match.kind) {
+    case 'any':
+      return '任意';
+    case 'numbers':
+      return '数字牌 2～10';
+    case 'joker':
+      return match.joker === 'black' ? '小王' : '大王';
+    case 'ranks':
+      // 展示沿用配置顺序（如 Q-K-A），不要按点数表重排成 A-Q-K。
+      return match.ranks.join('-');
+  }
+}
+
+/** 按首次出现顺序把阵型草稿收成情况组。 */
+export function groupFormationsByMatch(drafts: readonly FormationDraft[]): FormationMatchGroup[] {
+  const groups: FormationMatchGroup[] = [];
+  const byKey = new Map<string, FormationMatchGroup>();
+  drafts.forEach((draft, index) => {
+    const key = matchRuleKey(draft.match);
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.indices.push(index);
+      return;
+    }
+    const group: FormationMatchGroup = {
+      key,
+      label: formatMatchRuleLabel(draft.match),
+      match: cloneMatchRule(draft.match),
+      indices: [index],
+    };
+    byKey.set(key, group);
+    groups.push(group);
+  });
+  return groups;
+}
+
 /** 拷贝引信炸弹伤害字段；缺省不写入，避免普通阵型带上空对象。 */
 function cloneBombDamageFields(
   source: Pick<FormationDraft, 'rankDamage' | 'damage'>,
