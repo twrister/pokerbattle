@@ -95,6 +95,11 @@ export interface Unit {
    */
   castFxLeft: number;
   /**
+   * 刚吃到战斗伤害的表现剩余逻辑帧。仅驱动快照 `hit`，
+   * 供渲染层区分「挨打」与箭塔自然掉血。
+   */
+  hitFxLeft: number;
+  /**
    * 刚吃到范围伤害的表现剩余逻辑帧。仅驱动快照 `aoeHit`，
    * 供渲染层同步加强闪红与轻抖。
    */
@@ -158,6 +163,7 @@ export function createUnit(
     detonateWindupLeft: 0,
     detonated: false,
     castFxLeft: 0,
+    hitFxLeft: 0,
     aoeHitFxLeft: 0,
     base,
     stats: attributesFromConfig(config),
@@ -175,4 +181,17 @@ export function createUnit(
 
 export function isAlive(unit: Unit | undefined): unit is Unit {
   return unit !== undefined && !unit.dead && unit.hp > 0;
+}
+
+/** 受击表现持续逻辑帧，与 aoeHitFxLeft 对齐，保证当帧快照能读到。 */
+const HIT_FX_TICKS = 2;
+
+/**
+ * 战斗扣血并标记受击表现。
+ * 箭塔自然掉血必须直接改 hp，不能走这里，否则客户端会误闪红。
+ */
+export function applyCombatDamage(unit: Unit, amount: Fx, aoe = false): void {
+  unit.hp -= amount;
+  unit.hitFxLeft = HIT_FX_TICKS;
+  if (aoe) unit.aoeHitFxLeft = HIT_FX_TICKS;
 }

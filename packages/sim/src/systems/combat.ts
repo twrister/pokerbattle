@@ -1,7 +1,7 @@
 import { ONE } from '../math/fixed.js';
 import { MAX_UNIT_RADIUS, canBuildingAttack, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
-import { type Unit, UnitState, isAlive } from '../entity/unit.js';
+import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import {
   canAttackTarget,
@@ -85,7 +85,7 @@ function resolveAttack(world: World, unit: Unit): void {
   if (!isInAttackRangeBand(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
   if (attack.kind === 'melee') {
-    target.hp -= unit.stats.damage;
+    applyCombatDamage(target, unit.stats.damage);
     return;
   }
   // 对空只打单体：范围弹道打到空中目标时关掉落地爆炸
@@ -122,9 +122,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
 
     if (!isWithinAttackReach(unit, other, ATTACK_RANGE_TOLERANCE)) continue;
 
-    other.hp -= unit.stats.damage;
-    // 标记范围受击，渲染层据此同步加强闪红
-    other.aoeHitFxLeft = 2;
+    applyCombatDamage(other, unit.stats.damage, true);
     hitAny = true;
   }
 

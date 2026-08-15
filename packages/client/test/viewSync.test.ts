@@ -7,7 +7,9 @@ import {
   UNIT_CONFIGS,
   UnitState,
   World,
+  applyCombatDamage,
   fromFloat,
+  fromInt,
   takeSnapshot,
 } from '@pb/sim';
 import {
@@ -427,4 +429,42 @@ describe('渲染同步', () => {
     expect(view.pickUnitAtSim(8.3, 10)).toBe(near.id);
     expect(view.pickUnitAtSim(9, 20)).toBeNull();
   });
+
+  it('箭塔自然掉血不闪红，战斗受击才闪红', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    const spawned = takeSnapshot(world);
+    view.render(spawned, spawned, 1, camera);
+    expect(findTowerBodyHex(scene)).toBe(0xffffff);
+
+    world.step();
+    const decayed = takeSnapshot(world);
+    expect(decayed.units[0]!.hpRatio).toBeLessThan(spawned.units[0]!.hpRatio);
+    expect(decayed.units[0]!.hit).toBe(false);
+    view.render(spawned, decayed, 1, camera);
+    expect(findTowerBodyHex(scene)).toBe(0xffffff);
+
+    applyCombatDamage(tower, fromInt(80));
+    const hit = takeSnapshot(world);
+    expect(hit.units[0]!.hit).toBe(true);
+    view.render(decayed, hit, 1, camera);
+    expect(findTowerBodyHex(scene)).not.toBe(0xffffff);
+  });
 });
+
+/** 取出箭塔本体贴图 tint；未受击为白，闪红后偏离白色。 */
+function findTowerBodyHex(scene: THREE.Scene): number | undefined {
+  for (const child of scene.children) {
+    if (!(child instanceof THREE.Group)) continue;
+    for (const nested of child.children) {
+      if (!(nested instanceof THREE.Group)) continue;
+      const mesh = nested.children.find((node) => node instanceof THREE.Mesh);
+      if (!(mesh instanceof THREE.Mesh)) continue;
+      const material = mesh.material;
+      if (material instanceof THREE.MeshBasicMaterial) return material.color.getHex();
+    }
+  }
+  return undefined;
+}

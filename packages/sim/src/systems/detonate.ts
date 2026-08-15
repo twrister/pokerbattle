@@ -1,7 +1,7 @@
 import { type Fx, ONE, fromFloat, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
 import { isBuildingConfig } from '../config/units.js';
-import { type Unit, UnitState, isAlive } from '../entity/unit.js';
+import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
 
@@ -67,8 +67,7 @@ function resolveDetonate(world: World, unit: Unit): void {
     // 爆炸只伤地面；飞行单位需被其它攻击锁定才吃伤害
     if (other.config.movementLayer === 'air') continue;
     if (!isInsideDetonateRadius(unit, other, radiusSq)) continue;
-    other.hp -= damage;
-    other.aoeHitFxLeft = 2;
+    applyCombatDamage(other, damage, true);
   }
 
   world.spawnExplosionEffect(unit.pos.x, unit.pos.y, radius);

@@ -197,7 +197,7 @@ export { SoloBotController, type SoloDifficulty } from './match/soloBot.js';
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';
 
-export { Faction, NO_TARGET, type Unit, UnitState, isAlive, opposingFaction } from './entity/unit.js';
+export { Faction, NO_TARGET, type Unit, UnitState, applyCombatDamage, isAlive, opposingFaction } from './entity/unit.js';
 export {
   type Projectile,
   type ProjectileImpactFx,

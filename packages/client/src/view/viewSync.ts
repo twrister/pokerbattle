@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   Faction,
+  isArcherTowerId,
   type MatchState,
   type ProjectileSnapshot,
   type ProjectileVisual,
@@ -307,8 +308,10 @@ export class BattleView {
         this.scene.add(view.group);
       }
 
-      // 逻辑血量下降时闪红；同 tick 内 hpRatio 不变，不会每渲染帧重复触发
-      if (unit.hpRatio < view.lastHpRatio) view.flashHit(timeSec, unit.aoeHit);
+      // 逻辑血量下降时闪红；箭塔自然掉血不带 hit，避免每秒持续闪
+      if (unit.hpRatio < view.lastHpRatio && shouldFlashHit(unit)) {
+        view.flashHit(timeSec, unit.aoeHit);
+      }
       view.lastHpRatio = unit.hpRatio;
 
       // 刚出场的单位在上一帧不存在，直接用当前值，不然会从原点飞过来
@@ -685,4 +688,9 @@ export class BattleView {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+/** 箭塔只有战斗受击才闪红；自然掉血只走血条。 */
+function shouldFlashHit(unit: UnitSnapshot): boolean {
+  return !isArcherTowerId(unit.typeId) || unit.hit;
 }

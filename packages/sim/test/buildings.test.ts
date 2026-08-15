@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../src/config/arena.js';
 import { TICK_RATE, TOWER_HP_DECAY_PER_SECOND, TOWER_HP_DECAY_PER_TICK } from '../src/config/tuning.js';
 import { getUnitConfig } from '../src/config/units.js';
-import { Faction, UnitState, type Unit } from '../src/entity/unit.js';
+import { applyCombatDamage, Faction, UnitState, type Unit } from '../src/entity/unit.js';
 import { fromFloat, fromInt, mul, toFloat } from '../src/math/fixed.js';
 import { buildingCellRange, snapBuildingCenter } from '../src/nav/buildingGrid.js';
 import { CommandKind, placeBuildingCommand } from '../src/commands.js';
+import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
 /** 圆心是否严格落在建筑方形占地内部（贴边不算）。 */
@@ -184,6 +185,18 @@ describe('建筑系统', () => {
     expect(advanced.hp).toBe(advanced.stats.maxHp - decayed);
     expect(triple.hp).toBe(triple.stats.maxHp - decayed);
     expect(base.hp).toBe(baseHp);
+  });
+
+  it('箭塔自然掉血不标记受击，战斗伤害才标记', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    world.step();
+    expect(tower.hitFxLeft).toBe(0);
+    expect(takeSnapshot(world).units.find((u) => u.id === tower.id)?.hit).toBe(false);
+
+    applyCombatDamage(tower, fromInt(50));
+    expect(tower.hitFxLeft).toBeGreaterThan(0);
+    expect(takeSnapshot(world).units.find((u) => u.id === tower.id)?.hit).toBe(true);
   });
 
   it('箭塔损耗至 0 后死亡并解除寻路阻挡', () => {

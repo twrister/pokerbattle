@@ -3,7 +3,7 @@ import { distSq, lengthOf } from '../math/vec2.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { isBuildingConfig } from '../config/units.js';
 import type { ExplosionEffect } from '../entity/effect.js';
-import { isAlive, type Faction, type Unit } from '../entity/unit.js';
+import { applyCombatDamage, isAlive, type Faction, type Unit } from '../entity/unit.js';
 import type { Projectile } from '../entity/projectile.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
@@ -116,7 +116,7 @@ function resolveSingleImpact(
     distSq(projectile.impactPos.x, projectile.impactPos.y, target.pos.x, target.pos.y)
       <= mul(projectile.targetRadius, projectile.targetRadius);
   const hits = projectile.homing ? !!target : inLockRadius;
-  if (hits && target) target.hp -= projectile.damage;
+  if (hits && target) applyCombatDamage(target, projectile.damage);
   // 追踪弹仅在打到目标时播特效；非追踪弹无论命中都在锁定点落地
   if (!hits && projectile.homing) return;
   const kind = explosionKindFromImpact(projectile.impactFx, hitBuilding);
@@ -139,8 +139,7 @@ function resolveFuseBomb(world: World, projectile: Projectile): void {
       ? distSqToBuildingFootprint(projectile.impactPos.x, projectile.impactPos.y, unit) <= radiusSq
       : distSq(projectile.impactPos.x, projectile.impactPos.y, unit.pos.x, unit.pos.y) <= radiusSq;
     if (!inside) continue;
-    unit.hp -= projectile.damage;
-    unit.aoeHitFxLeft = 2;
+    applyCombatDamage(unit, projectile.damage, true);
   }
   // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列，不走弹道命中特效开关
   const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
@@ -192,8 +191,7 @@ function resolveProjectileAoe(
     // 落地爆炸只伤地面单位，空中单位需被直接锁定才吃单体弹
     if (unit.config.movementLayer === 'air') continue;
     if (distSq(x, y, unit.pos.x, unit.pos.y) > radiusSq) continue;
-    unit.hp -= damage;
-    unit.aoeHitFxLeft = 2;
+    applyCombatDamage(unit, damage, true);
   }
   // 仅 pulse 播地面环；爆炸类在关闭开关或无映射时不回退成脉冲
   if (impactFx === 'pulse') {

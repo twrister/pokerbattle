@@ -33,6 +33,8 @@ export interface UnitSnapshot {
   inspired: boolean;
   /** 正在施放技能（冲刺 / 治疗 / 召唤前摇），渲染层播放施法特效 */
   casting: boolean;
+  /** 本帧刚吃到战斗伤害，渲染层据此闪红；箭塔自然掉血不会置位 */
+  hit: boolean;
   /** 本帧刚吃到范围伤害，渲染层同步加强闪红与轻抖 */
   aoeHit: boolean;
 }
@@ -140,6 +142,7 @@ function writeUnitSnapshots(world: World, units: UnitSnapshot[]): void {
     slot.inspired = unit.inspired;
     // 冲刺前摇与英雄技能前摇共用同一施法表现通道（特效从前摇开始播）
     slot.casting = unit.chargeWindupLeft > 0 || unit.castFxLeft > 0 || unit.detonateWindupLeft > 0;
+    slot.hit = unit.hitFxLeft > 0;
     slot.aoeHit = unit.aoeHitFxLeft > 0;
     n++;
   }

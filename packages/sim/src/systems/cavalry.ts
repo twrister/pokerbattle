@@ -3,7 +3,7 @@ import { distSq, lengthOf, normalize, set, vec } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
-import { type Unit, UnitState, isAlive } from '../entity/unit.js';
+import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { isUntargetableBomb } from './combatRange.js';
 
@@ -98,8 +98,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     const forward = mul(dx, unit.chargeDir.x) + mul(dy, unit.chargeDir.y);
     if (forward < 0) continue;
 
-    other.hp -= charge.hitDamage;
-    other.aoeHitFxLeft = 2;
+    applyCombatDamage(other, charge.hitDamage, true);
     applyLateralKnockback(unit, other, charge.knockback);
     unit.chargeHits.push(other.id);
     hitAny = true;

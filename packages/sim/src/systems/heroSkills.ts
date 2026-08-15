@@ -46,6 +46,7 @@ export function tickPresentationFx(world: World): void {
   }
   for (const unit of world.units) {
     if (unit.castFxLeft > 0) unit.castFxLeft--;
+    if (unit.hitFxLeft > 0) unit.hitFxLeft--;
     if (unit.aoeHitFxLeft > 0) unit.aoeHitFxLeft--;
   }
 }

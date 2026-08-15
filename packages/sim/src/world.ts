@@ -566,6 +566,7 @@ export class World {
       h = mix(h, unit.detonateWindupLeft);
       h = mix(h, unit.detonated ? 1 : 0);
       h = mix(h, unit.castFxLeft);
+      h = mix(h, unit.hitFxLeft);
       h = mix(h, unit.aoeHitFxLeft);
     }
     for (const projectile of this.projectiles) {
