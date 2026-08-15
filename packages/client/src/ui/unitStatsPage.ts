@@ -11,9 +11,12 @@ import {
   PRE_ATTACK_NUMERIC_KEYS,
   PRIMARY_NUMERIC_KEYS,
   formatDraftNumber,
+  clearRememberedUnitDrafts,
   loadUnitDrafts,
+  peekRememberedUnitDrafts,
   presentSkillGroups,
   readControlsIntoDrafts,
+  rememberUnitDrafts,
   saveUnitDrafts,
   type UnitDraftMap,
 } from '../debug/unitConfigDraftUi.js';
@@ -47,6 +50,8 @@ export interface UnitStatsPageHandle {
   hide(): void;
   setOnApplied(onApplied: () => void): void;
   refreshFromRuntime(): void;
+  /** 把当前表单/未保存草稿刷进暂存，供强度验证读取。 */
+  flushPending(): void;
   dispose(): void;
 }
 
@@ -62,6 +67,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
 
   const catalog = getUnitCatalogEntries();
   let drafts: UnitDraftMap = loadUnitDrafts();
+  let snapshotJson = JSON.stringify(drafts);
   let saveSeq = 0;
   let onApplied = options.onApplied ?? (() => {});
   let overlayMode = false;
@@ -84,8 +90,14 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     const result = await saveUnitDrafts(drafts);
     if (seq !== saveSeq) return;
     onApplied();
-    if (result.ok) setStatus('已保存并写回 units.json', false);
-    else setStatus(`已应用到运行时（未能写回文件：${result.error}）`, true);
+    if (result.ok) {
+      clearRememberedUnitDrafts();
+      captureSnapshot();
+      setStatus('已保存并写回 units.json', false);
+    } else {
+      rememberUnitDrafts(drafts);
+      setStatus(`已应用到运行时（未能写回文件：${result.error}）`, true);
+    }
     render();
   }
 
@@ -224,7 +236,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.value = formatDraftNumber(value);
     input.setAttribute('aria-label', meta.label);
     input.addEventListener('change', () => {
-      readControlsIntoDrafts(panelRoot, drafts);
+      stashDirtyDrafts();
       // 改主属性后刷新相对条与 DPS，避免表内数字不同步
       renderOverview();
     });
@@ -258,7 +270,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       select.appendChild(option);
     }
     select.addEventListener('change', () => {
-      readControlsIntoDrafts(panelRoot, drafts);
+      stashDirtyDrafts();
       render();
     });
     cell.appendChild(select);
@@ -292,7 +304,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.value = formatDraftNumber(value);
     input.setAttribute('aria-label', meta.label);
     input.addEventListener('change', () => {
-      readControlsIntoDrafts(panelRoot, drafts);
+      stashDirtyDrafts();
       renderOverview();
     });
     const ratio = value / Math.max(maxima[key], 1e-6);
@@ -445,17 +457,38 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     root.classList.remove('is-hidden');
     root.setAttribute('aria-hidden', 'false');
     backButton.textContent = asOverlay ? '关闭' : '返回图鉴';
-    drafts = loadUnitDrafts();
+    const remembered = peekRememberedUnitDrafts();
+    drafts = remembered
+      ? (JSON.parse(JSON.stringify(remembered)) as UnitDraftMap)
+      : loadUnitDrafts();
+    captureSnapshot();
     setStatus(asOverlay ? '战场模式：保存后将应用到当前对局' : '改完点保存写回配置文件', false);
     render();
   }
 
   function hide(): void {
-    readControlsIntoDrafts(panelRoot, drafts);
+    stashDirtyDrafts();
     root.classList.add('is-hidden');
     root.setAttribute('aria-hidden', 'true');
     root.classList.remove('is-overlay');
     overlayMode = false;
+  }
+
+  /** 对照打开时的快照，有改动才暂存，避免未编辑时挡住磁盘同步。 */
+  function stashDirtyDrafts(): void {
+    if (panelRoot.querySelector('[data-field]')) {
+      readControlsIntoDrafts(panelRoot, drafts);
+    }
+    if (!isDirty()) return;
+    rememberUnitDrafts(drafts);
+  }
+
+  function captureSnapshot(): void {
+    snapshotJson = JSON.stringify(drafts);
+  }
+
+  function isDirty(): boolean {
+    return JSON.stringify(drafts) !== snapshotJson;
   }
 
   return {
@@ -470,8 +503,15 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       onApplied = next;
     },
     refreshFromRuntime() {
-      drafts = loadUnitDrafts();
+      const remembered = peekRememberedUnitDrafts();
+      drafts = remembered
+        ? (JSON.parse(JSON.stringify(remembered)) as UnitDraftMap)
+        : loadUnitDrafts();
+      captureSnapshot();
       if (!root.classList.contains('is-hidden')) render();
+    },
+    flushPending() {
+      stashDirtyDrafts();
     },
     dispose() {
       backButton.removeEventListener('click', back);

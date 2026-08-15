@@ -15,12 +15,15 @@ import {
   type HandCategory,
   type HandCategoryOddsResult,
 } from '@pb/sim';
+import { syncUnitConfigsForBalance } from '../debug/unitConfigDraftUi.js';
 import { renderBalanceReport } from './balanceReportView.js';
 
 export type HandVerifyTab = 'odds' | 'balance';
 
 export interface HandOddsPageOptions {
   onBack: () => void;
+  /** 对拆前把单位参数页未保存草稿刷进暂存。 */
+  onBeforeBalance?: () => void;
 }
 
 export interface HandOddsPageHandle {
@@ -279,8 +282,13 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     setBusy();
     balanceBody.replaceChildren();
     const analysis = readBalanceOptions();
-    balanceProgress.textContent = '正在开始对拆…';
+    balanceProgress.textContent = '正在同步单位配置…';
     try {
+      // 先刷单位参数页草稿，再同步运行时，避免对拆用到过期民兵等数值。
+      options.onBeforeBalance?.();
+      await syncUnitConfigsForBalance();
+      if (seq !== balanceSeq) return;
+      balanceProgress.textContent = '正在开始对拆…';
       const report = await runBalanceAnalysis(analysis, {
         onProgress: (progress) => {
           if (seq !== balanceSeq) return;

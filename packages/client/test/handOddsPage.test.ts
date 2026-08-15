@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BALANCE_OPTIONS } from '@pb/sim';
 import { createHandOddsPage } from '../src/ui/handOddsPage.js';
 
-const { runBalanceAnalysis } = vi.hoisted(() => ({
+const { runBalanceAnalysis, syncUnitConfigsForBalance } = vi.hoisted(() => ({
   runBalanceAnalysis: vi.fn(),
+  syncUnitConfigsForBalance: vi.fn(),
 }));
 
 vi.mock('@pb/sim', async (importOriginal) => {
@@ -15,6 +16,10 @@ vi.mock('@pb/sim', async (importOriginal) => {
     runBalanceAnalysis,
   };
 });
+
+vi.mock('../src/debug/unitConfigDraftUi.js', () => ({
+  syncUnitConfigsForBalance,
+}));
 
 function mountDom(): void {
   document.body.innerHTML = `
@@ -53,6 +58,8 @@ describe('牌型验证页', () => {
   beforeEach(() => {
     mountDom();
     runBalanceAnalysis.mockReset();
+    syncUnitConfigsForBalance.mockReset();
+    syncUnitConfigsForBalance.mockResolvedValue({ applied: true });
     runBalanceAnalysis.mockResolvedValue({
       entries: [],
       soloRatings: null,
@@ -142,6 +149,49 @@ describe('牌型验证页', () => {
     await vi.waitFor(() => {
       expect(document.querySelector('#hand-balance-progress')?.textContent).toContain('完成');
     });
+    page.dispose();
+  });
+
+  it('开始验证前先刷草稿并同步单位配置，再跑对拆', async () => {
+    let resolveSync: (value: { applied: true }) => void = () => {};
+    syncUnitConfigsForBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSync = resolve;
+      }),
+    );
+    const onBeforeBalance = vi.fn();
+    const page = createHandOddsPage({ onBack: vi.fn(), onBeforeBalance });
+    page.show('balance');
+
+    document.querySelector<HTMLButtonElement>('#btn-hand-balance-run')!.click();
+    await Promise.resolve();
+    expect(onBeforeBalance).toHaveBeenCalledOnce();
+    expect(syncUnitConfigsForBalance).toHaveBeenCalledOnce();
+    expect(onBeforeBalance.mock.invocationCallOrder[0]).toBeLessThan(
+      syncUnitConfigsForBalance.mock.invocationCallOrder[0]!,
+    );
+    expect(runBalanceAnalysis).not.toHaveBeenCalled();
+    expect(document.querySelector('#hand-balance-progress')?.textContent).toBe('正在同步单位配置…');
+
+    resolveSync({ applied: true });
+    await vi.waitFor(() => {
+      expect(runBalanceAnalysis).toHaveBeenCalledOnce();
+    });
+    page.dispose();
+  });
+
+  it('同步单位配置失败时停止验证并展示原因', async () => {
+    syncUnitConfigsForBalance.mockRejectedValue(new Error('读取单位配置失败：units.json is not valid JSON'));
+    const page = createHandOddsPage({ onBack: vi.fn() });
+    page.show('balance');
+
+    document.querySelector<HTMLButtonElement>('#btn-hand-balance-run')!.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('#hand-balance-progress')?.textContent).toBe(
+        '验证失败：读取单位配置失败：units.json is not valid JSON',
+      );
+    });
+    expect(runBalanceAnalysis).not.toHaveBeenCalled();
     page.dispose();
   });
 });

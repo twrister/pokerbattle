@@ -188,8 +188,11 @@ const deckConfigPage = createDeckConfigPage({
   onBack: () => screens.show('menu'),
   onOpenHandOdds: () => screens.show('hand-odds'),
 });
-const handOddsPage = createHandOddsPage({ onBack: () => screens.show('deck-config') });
 const unitStatsPage = createUnitStatsPage({ onBack: () => screens.show('codex') });
+const handOddsPage = createHandOddsPage({
+  onBack: () => screens.show('deck-config'),
+  onBeforeBalance: () => unitStatsPage.flushPending(),
+});
 const sceneConfigPage = createSceneConfigPage({ onBack: () => screens.show('codex') });
 const codexPage = createCodexPage({
   onBack: () => screens.show('menu'),

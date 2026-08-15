@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   UNIT_CONFIGS,
   applyUnitConfigDrafts,
@@ -8,6 +8,11 @@ import {
   dumpUnitConfigDrafts,
   resetUnitConfigsToDefault,
 } from '@pb/sim';
+import {
+  applyRememberedUnitDrafts,
+  clearRememberedUnitDrafts,
+  peekRememberedUnitDrafts,
+} from '../src/debug/unitConfigDraftUi.js';
 import { createUnitStatsPage } from '../src/ui/unitStatsPage.js';
 
 function mountDom(): void {
@@ -25,6 +30,13 @@ describe('单位参数页', () => {
   beforeEach(() => {
     mountDom();
     vi.restoreAllMocks();
+    clearRememberedUnitDrafts();
+    resetUnitConfigsToDefault();
+  });
+
+  afterEach(() => {
+    clearRememberedUnitDrafts();
+    resetUnitConfigsToDefault();
   });
 
   it('总览表展示绝对值与相对短条', () => {
@@ -109,8 +121,28 @@ describe('单位参数页', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/__pb/unit-configs');
     expect(dumpUnitConfigDrafts().melee_grunt.maxHp).toBe(999);
 
+    expect(peekRememberedUnitDrafts()).toBeNull();
     resetUnitConfigsToDefault();
     expect(UNIT_CONFIGS.melee_grunt.maxHp).not.toBe(999);
+    page.dispose();
+  });
+
+  it('修改生命后不保存，离开页面仍把草稿留给强度验证', () => {
+    const page = createUnitStatsPage({ onBack: vi.fn() });
+    page.show();
+
+    const hpInput = document.querySelector<HTMLInputElement>(
+      'input[data-unit="melee_grunt"][data-field="maxHp"]',
+    );
+    hpInput!.value = '888';
+    hpInput!.dispatchEvent(new Event('change'));
+    page.hide();
+
+    expect(peekRememberedUnitDrafts()?.melee_grunt.maxHp).toBe(888);
+    expect(applyRememberedUnitDrafts()).toBe(true);
+    expect(dumpUnitConfigDrafts().melee_grunt.maxHp).toBe(888);
+
+    resetUnitConfigsToDefault();
     page.dispose();
   });
 

@@ -174,6 +174,107 @@ export async function saveUnitDrafts(
   return result;
 }
 
+export type SyncUnitConfigsResult =
+  | { applied: true }
+  | { applied: false; reason: 'unavailable' };
+
+/** 单位参数页未保存草稿；验证时优先于磁盘，避免 GET 把界面改动盖掉。 */
+let pendingUnitDrafts: UnitDraftMap | null = null;
+
+/** 深拷贝草稿，避免页面后续编辑污染已暂存的验证快照。 */
+function cloneDrafts(drafts: UnitDraftMap): UnitDraftMap {
+  return JSON.parse(JSON.stringify(drafts)) as UnitDraftMap;
+}
+
+/** 记下单位参数页的未保存草稿，供强度验证覆盖运行时。 */
+export function rememberUnitDrafts(drafts: UnitDraftMap): void {
+  pendingUnitDrafts = cloneDrafts(drafts);
+}
+
+/** 保存成功且已写盘后清掉暂存，让后续验证改读磁盘。 */
+export function clearRememberedUnitDrafts(): void {
+  pendingUnitDrafts = null;
+}
+
+/** 读取当前暂存草稿；没有则返回 null。 */
+export function peekRememberedUnitDrafts(): UnitDraftMap | null {
+  return pendingUnitDrafts;
+}
+
+/** 把暂存草稿应用到运行时；没有暂存则返回 false。 */
+export function applyRememberedUnitDrafts(): boolean {
+  if (!pendingUnitDrafts) return false;
+  applyUnitConfigDrafts(pendingUnitDrafts);
+  return true;
+}
+
+/**
+ * 强度验证前同步单位配置：未保存的参数页草稿优先，否则读盘。
+ * preview/build 下没有读盘接口时沿用当前运行时，不阻断验证。
+ */
+export async function syncUnitConfigsForBalance(): Promise<SyncUnitConfigsResult> {
+  if (pendingUnitDrafts) {
+    applyUnitConfigDrafts(pendingUnitDrafts);
+    return { applied: true };
+  }
+  return syncUnitConfigsFromDevServer();
+}
+
+/**
+ * 从开发服拉取磁盘上最新 units.json 并应用到运行时。
+ * preview/build 下接口不存在（404），沿用当前打包配置，不阻断验证。
+ */
+export async function syncUnitConfigsFromDevServer(): Promise<SyncUnitConfigsResult> {
+  const res = await fetch('/__pb/unit-configs');
+  if (res.status === 404) {
+    return { applied: false, reason: 'unavailable' };
+  }
+  if (!res.ok) {
+    throw new Error(`读取单位配置失败：${await readHttpError(res)}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = await res.json();
+  } catch {
+    throw new Error('读取单位配置失败：响应不是合法 JSON');
+  }
+  applyUnitConfigDrafts(parseUnitDraftMap(parsed));
+  return { applied: true };
+}
+
+/** 校验开发服返回的草稿表，缺兵种或关键战斗字段则拒绝应用。 */
+function parseUnitDraftMap(value: unknown): UnitDraftMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('读取单位配置失败：响应必须是对象');
+  }
+  const drafts = value as Record<string, unknown>;
+  for (const id of UNIT_TYPE_IDS) {
+    const draft = drafts[id];
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+      throw new Error(`读取单位配置失败：缺少兵种 ${id}`);
+    }
+    const rec = draft as Record<string, unknown>;
+    if (typeof rec.maxHp !== 'number' || !Number.isFinite(rec.maxHp)) {
+      throw new Error(`读取单位配置失败：${id}.maxHp 非法`);
+    }
+    if (typeof rec.damage !== 'number' || !Number.isFinite(rec.damage)) {
+      throw new Error(`读取单位配置失败：${id}.damage 非法`);
+    }
+  }
+  return drafts as UnitDraftMap;
+}
+
+/** 优先用服务端 error 字段，非 JSON 体时回落 HTTP 状态。 */
+async function readHttpError(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string };
+    if (body.error) return body.error;
+  } catch {
+    // 非 JSON 错误体时沿用 status
+  }
+  return `HTTP ${res.status}`;
+}
+
 /** POST 到 Vite 开发中间件写盘；preview/build 下接口不存在。 */
 export async function persistDraftsToFile(
   drafts: UnitDraftMap,

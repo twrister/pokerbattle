@@ -13,13 +13,34 @@ const cardFormationsJsonPath = path.resolve(clientDir, '../sim/src/config/cardFo
 /** monorepo 内场景配置的唯一落盘路径 */
 const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
 
-/** 开发服务器：接收面板 POST，覆盖 units.json */
+/** 开发服务器：GET 读盘最新 units.json，POST 覆盖写回。 */
 function unitConfigWritePlugin(): Plugin {
   return {
     name: 'pb-unit-config-write',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (req.url !== '/__pb/unit-configs' || req.method !== 'POST') {
+        if (req.url !== '/__pb/unit-configs') {
+          next();
+          return;
+        }
+        if (req.method === 'GET') {
+          try {
+            const text = fs.readFileSync(unitsJsonPath, 'utf8');
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              sendJson(res, 500, { error: 'units.json is not valid JSON' });
+              return;
+            }
+            sendJson(res, 200, parsed);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          }
+          return;
+        }
+        if (req.method !== 'POST') {
           next();
           return;
         }
