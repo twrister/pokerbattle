@@ -449,7 +449,7 @@
     "aoeRadius": 0,
     "tag": "召唤",
     "summon": {
-      "cooldown": 60,
+      "cooldown": 90,
       "unitTypeId": "summoned_skeleton"
     },
     "levels": {

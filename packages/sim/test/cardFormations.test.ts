@@ -3,6 +3,7 @@ import {
   CARD_FORMATIONS,
   Faction,
   HAND_CATEGORY_ORDER,
+  HAND_CATEGORY_STRENGTH_ORDER,
   allocateCopiedFormationIdentity,
   applyCardFormationDrafts,
   applyUnitConfigDrafts,
@@ -26,6 +27,24 @@ import {
 } from '../src/index.js';
 
 describe('牌型兵种阵型配置', () => {
+  it('牌型强度序为同花顺到单张的指定全序，卡组页为其反转', () => {
+    expect(HAND_CATEGORY_STRENGTH_ORDER).toEqual([
+      'straight_flush',
+      'bomb',
+      'rocket',
+      'flush',
+      'full_house',
+      'straight5',
+      'two_pair',
+      'triple',
+      'straight4',
+      'straight3',
+      'pair',
+      'single',
+    ]);
+    expect(HAND_CATEGORY_ORDER).toEqual([...HAND_CATEGORY_STRENGTH_ORDER].reverse());
+  });
+
   it('所有牌型都有搭配，且 rows 能展开为 slots / units', () => {
     for (const category of HAND_CATEGORY_ORDER) {
       const formations = CARD_FORMATIONS[category];

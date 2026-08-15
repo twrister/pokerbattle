@@ -2,10 +2,12 @@ import { detectHandCategories } from '../cards/handCategory.js';
 import type { PlayingCard } from '../cards/deck.js';
 import { claimCastlePackCommand, playFormationCommand, type Command } from '../commands.js';
 import {
+  HAND_CATEGORY_STRENGTH_ORDER,
   getFormationsFor,
   isBuildingOnlyFormation,
   isFuseBombFormation,
   type CardFormation,
+  type HandCategory,
 } from '../config/cardFormations.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { halfCourtSafeAnchor, halfCourtYRange, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
@@ -230,8 +232,10 @@ function forEachCombination(cards: readonly PlayingCard[], size: number, visit: 
   walk(0);
 }
 
+/** 牌型越强分数越高，与 HAND_CATEGORY_STRENGTH_ORDER 一致。 */
 function categoryStrength(category: string): number {
-  return ['single', 'pair', 'straight3', 'triple', 'two_pair', 'straight4', 'straight5', 'flush', 'full_house', 'rocket', 'bomb', 'straight_flush'].indexOf(category) + 1;
+  const rank = HAND_CATEGORY_STRENGTH_ORDER.indexOf(category as HandCategory);
+  return rank < 0 ? 0 : HAND_CATEGORY_STRENGTH_ORDER.length - rank;
 }
 
 function unitValue(typeId: keyof typeof UNIT_CONFIGS, level: number): number {

@@ -50,7 +50,7 @@ describe('卡组阵型配置页', () => {
     const categoryNames = [...document.querySelectorAll('.deck-category')].map((el) => el.textContent);
     expect(categoryNames).toHaveLength(12);
     expect(categoryNames.indexOf('连对')).toBeGreaterThan(-1);
-    expect(categoryNames.indexOf('连对')).toBeLessThan(categoryNames.indexOf('四顺'));
+    expect(categoryNames.indexOf('四顺')).toBeLessThan(categoryNames.indexOf('连对'));
     expect(preview.resize).toHaveBeenCalledOnce();
     expect(preview.render).toHaveBeenCalled();
 

@@ -26,37 +26,24 @@ export type HandCategory =
   | 'flush'
   | 'straight_flush';
 
-/** 卡组页选项顺序：单张在上，同花顺在下。 */
-export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [
-  'single',
-  'pair',
-  'straight3',
-  'triple',
-  'two_pair',
-  'straight4',
-  'straight5',
-  'flush',
-  'full_house',
-  'rocket',
-  'bomb',
-  'straight_flush',
-] as const;
-
 /** 牌型强度降序：同花顺最强，单张最弱；出牌比对与阵型并集按此顺序。 */
 export const HAND_CATEGORY_STRENGTH_ORDER: readonly HandCategory[] = [
   'straight_flush',
   'bomb',
   'rocket',
-  'full_house',
   'flush',
+  'full_house',
   'straight5',
-  'straight4',
   'two_pair',
   'triple',
+  'straight4',
   'straight3',
   'pair',
   'single',
 ] as const;
+
+/** 卡组页选项顺序：单张在上，同花顺在下，由强度序反转派生。 */
+export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [...HAND_CATEGORY_STRENGTH_ORDER].reverse();
 
 /** 牌型中文名，供 UI 与调试展示。 */
 export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
