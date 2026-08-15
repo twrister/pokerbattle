@@ -42,7 +42,7 @@ type PreviewMode = '3d' | 'button';
 
 export interface DeckConfigPageOptions {
   onBack: () => void;
-  /** 开发服：打开牌型概率工具。 */
+  /** 开发服：打开牌型概率/强度验证页。 */
   onOpenHandOdds?: () => void;
 }
 
@@ -81,9 +81,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   let saveSeq = 0;
 
   const back = (): void => options.onBack();
-  const openHandOdds = (): void => options.onOpenHandOdds?.();
   backButton.addEventListener('click', back);
-  // 新增/复制/编辑/重置/保存/概率工具仅开发服开放；正式服只保留浏览与预览
+  // 新增/复制/编辑/重置/保存/验证工具仅开发服开放；正式服只保留浏览与预览
   if (IS_DEV_SERVER) {
     addFormationButton.addEventListener('click', addFormation);
     copyFormationButton.addEventListener('click', copyFormation);
@@ -630,6 +629,17 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     renderAll();
   }
 
+  /** 先把未保存草稿应用到运行时，再进验证页，避免对拆用到过期阵型。 */
+  function openHandOdds(): void {
+    try {
+      applyCardFormationDrafts(drafts);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error), true);
+      return;
+    }
+    options.onOpenHandOdds?.();
+  }
+
   /** 改 match 后情况组可能变化，只刷新导航与预览，避免拆掉正在编辑的表单。 */
   function refreshNavAfterMatchChange(): void {
     ensureSelection();
@@ -793,6 +803,7 @@ function copyMatchRule(match: FormationMatchRule): FormationMatchRule {
   if (match.kind === 'joker') return { kind: 'joker', joker: match.joker };
   return { kind: match.kind };
 }
+
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {
   const element = root.querySelector<T>(selector);

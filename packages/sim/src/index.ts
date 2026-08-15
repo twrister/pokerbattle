@@ -246,3 +246,35 @@ export {
   type HealEffect,
 } from './entity/effect.js';
 export { World } from './world.js';
+export {
+  DEFAULT_BALANCE_OPTIONS,
+  runBalanceAnalysis,
+  yieldToUi,
+  type BalanceAnalysisHooks,
+  type BalanceAnalysisOptions,
+  type BalanceMode,
+  type BalanceProgress,
+  type BalanceReport,
+} from './balance/runBalance.js';
+export {
+  NUMBERS_FLAT_NOTE,
+  RANK_TIER_LABELS,
+  formatRankTier,
+  listBalanceEntries,
+  rankTierOfCardRank,
+  rankTierOfMatch,
+  type Entry as BalanceEntry,
+} from './balance/entries.js';
+export {
+  aggregatePairs,
+  categoryMedians,
+  checkMonotonicity,
+  fitMeleeRatings,
+  fitSoloRatings,
+  intersectViolations,
+  type EntryRating,
+  type MonotonicityViolation,
+  type PairAggregate,
+  type SharedViolation,
+} from './balance/rating.js';
+export { renderMatchupCsv, renderStrengthMarkdown, type ReportInput } from './balance/report.js';

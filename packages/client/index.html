@@ -2732,9 +2732,12 @@
       }
 
       .hand-odds-header,
+      .hand-odds-tabs,
       .hand-odds-controls,
       .hand-odds-body,
-      .hand-odds-status {
+      .hand-odds-status,
+      .hand-odds-odds-panel,
+      .hand-odds-balance-panel {
         position: relative;
         z-index: 1;
       }
@@ -2751,9 +2754,32 @@
         font-size: clamp(22px, 3.3vh, 34px);
       }
 
+      .hand-odds-tabs {
+        display: inline-flex;
+        gap: 6px;
+      }
+
+      .hand-odds-tab {
+        min-height: 34px;
+        padding: 7px 14px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text-dim);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .hand-odds-tab.is-active {
+        border-color: rgba(99, 214, 138, 0.8);
+        background: rgba(51, 104, 87, 0.7);
+        color: var(--text);
+      }
+
       .hand-odds-back,
       .hand-odds-controls button,
-      .hand-odds-controls select {
+      .hand-odds-controls select,
+      .hand-odds-controls input[type='number'] {
         border: 1px solid var(--panel-border);
         border-radius: 8px;
         background: rgba(39, 54, 71, 0.78);
@@ -2762,6 +2788,11 @@
         cursor: pointer;
         min-height: 34px;
         padding: 7px 12px;
+      }
+
+      .hand-odds-controls input[type='number'] {
+        width: 5.5em;
+        cursor: text;
       }
 
       .hand-odds-controls button:disabled,
@@ -2810,6 +2841,27 @@
         line-height: 1.5;
       }
 
+      .hand-odds-hint {
+        margin: 0;
+        flex-basis: 100%;
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .hand-odds-odds-panel,
+      .hand-odds-balance-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .hand-odds-odds-panel.is-hidden,
+      .hand-odds-balance-panel.is-hidden {
+        display: none;
+      }
+
       .hand-odds-body {
         display: grid;
         grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.6fr);
@@ -2818,12 +2870,49 @@
       }
 
       .hand-odds-table-wrap,
-      .hand-odds-chart-wrap {
+      .hand-odds-chart-wrap,
+      .hand-odds-balance-body {
         border: 1px solid var(--panel-border);
         border-radius: 12px;
         background: rgba(18, 27, 38, 0.84);
         padding: 12px;
         min-width: 0;
+      }
+
+      .hand-odds-balance-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .balance-report-section h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+
+      .balance-report-section ul {
+        margin: 0;
+        padding-left: 1.2em;
+        line-height: 1.6;
+      }
+
+      .balance-report-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .balance-report-table th,
+      .balance-report-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        text-align: left;
+      }
+
+      .balance-report-table th.is-num,
+      .balance-report-table td.is-num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
       }
 
       .hand-odds-section-title {
@@ -3398,6 +3487,10 @@
         .hand-odds-actions {
           margin-left: 0;
         }
+
+        .hand-odds-header {
+          flex-wrap: wrap;
+        }
       }
 
       @media (max-height: 700px) {
@@ -3666,7 +3759,7 @@
             <span class="prod-only">选择牌型、情况与阵型，前排朝向敌方；可切换 3D / 按钮预览。</span>
           </div>
           <div class="deck-toolbar-actions">
-            <button id="btn-deck-hand-odds" class="dev-only" type="button">牌型概率</button>
+            <button id="btn-deck-hand-odds" class="dev-only" type="button">牌型验证</button>
             <button id="btn-deck-add-formation" type="button">新增阵型</button>
             <button id="btn-deck-copy-formation" type="button">复制阵型</button>
           </div>
@@ -3725,42 +3818,107 @@
       <div class="lobby-shell hand-odds-shell">
         <header class="hand-odds-header">
           <button id="btn-hand-odds-back" class="hand-odds-back" type="button">返回卡组阵型</button>
-          <h1>牌型概率</h1>
+          <h1>牌型验证</h1>
+          <div class="hand-odds-tabs" role="tablist" aria-label="验证工具">
+            <button
+              id="hand-odds-tab-odds"
+              class="hand-odds-tab is-active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="hand-odds-odds-panel"
+            >
+              牌型概率
+            </button>
+            <button
+              id="hand-odds-tab-balance"
+              class="hand-odds-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="hand-odds-balance-panel"
+            >
+              强度验证
+            </button>
+          </div>
         </header>
-        <section class="hand-odds-controls" aria-label="计算参数">
-          <label class="hand-odds-field">
-            手牌张数
-            <input id="hand-odds-hand-size" type="range" min="5" max="12" step="1" value="10" />
-            <strong id="hand-odds-hand-size-value">10</strong>
-          </label>
-          <label class="hand-odds-field">
-            抽样次数
-            <select id="hand-odds-trials" aria-label="抽样次数"></select>
-          </label>
-          <div class="hand-odds-actions">
-            <button id="btn-hand-odds-run" type="button">开始计算</button>
-            <button id="btn-hand-odds-sweep" type="button">对比 5–12 张</button>
-          </div>
+        <section id="hand-odds-odds-panel" class="hand-odds-odds-panel" role="tabpanel" aria-labelledby="hand-odds-tab-odds">
+          <section class="hand-odds-controls" aria-label="计算参数">
+            <label class="hand-odds-field">
+              手牌张数
+              <input id="hand-odds-hand-size" type="range" min="5" max="12" step="1" value="10" />
+              <strong id="hand-odds-hand-size-value">10</strong>
+            </label>
+            <label class="hand-odds-field">
+              抽样次数
+              <select id="hand-odds-trials" aria-label="抽样次数"></select>
+            </label>
+            <div class="hand-odds-actions">
+              <button id="btn-hand-odds-run" type="button">开始计算</button>
+              <button id="btn-hand-odds-sweep" type="button">对比 5–12 张</button>
+            </div>
+          </section>
+          <div id="hand-odds-status" class="hand-odds-status" role="status" aria-live="polite"></div>
+          <section class="hand-odds-body">
+            <div class="hand-odds-table-wrap">
+              <h2 class="hand-odds-section-title">各牌型可打出概率</h2>
+              <table class="hand-odds-table">
+                <thead>
+                  <tr>
+                    <th scope="col">牌型</th>
+                    <th scope="col">概率</th>
+                  </tr>
+                </thead>
+                <tbody id="hand-odds-table-body"></tbody>
+              </table>
+            </div>
+            <div class="hand-odds-chart-wrap">
+              <h2 class="hand-odds-section-title">概率对比图</h2>
+              <div id="hand-odds-chart" aria-live="polite"></div>
+              <div id="hand-odds-legend" class="hand-odds-legend"></div>
+            </div>
+          </section>
         </section>
-        <div id="hand-odds-status" class="hand-odds-status" role="status" aria-live="polite"></div>
-        <section class="hand-odds-body">
-          <div class="hand-odds-table-wrap">
-            <h2 class="hand-odds-section-title">各牌型可打出概率</h2>
-            <table class="hand-odds-table">
-              <thead>
-                <tr>
-                  <th scope="col">牌型</th>
-                  <th scope="col">概率</th>
-                </tr>
-              </thead>
-              <tbody id="hand-odds-table-body"></tbody>
-            </table>
-          </div>
-          <div class="hand-odds-chart-wrap">
-            <h2 class="hand-odds-section-title">概率对比图</h2>
-            <div id="hand-odds-chart" aria-live="polite"></div>
-            <div id="hand-odds-legend" class="hand-odds-legend"></div>
-          </div>
+        <section
+          id="hand-odds-balance-panel"
+          class="hand-odds-balance-panel is-hidden"
+          role="tabpanel"
+          aria-labelledby="hand-odds-tab-balance"
+        >
+          <section class="hand-odds-controls" aria-label="验证参数">
+            <label class="hand-odds-field">
+              模式
+              <select id="hand-balance-mode" aria-label="验证模式">
+                <option value="all">独立+混战</option>
+                <option value="solo">仅独立</option>
+                <option value="melee">仅混战</option>
+              </select>
+            </label>
+            <label class="hand-odds-field">
+              独立种子数
+              <input id="hand-balance-seeds" type="number" min="1" max="50" step="1" value="6" />
+            </label>
+            <label class="hand-odds-field">
+              混战轮次
+              <input id="hand-balance-rounds" type="number" min="1" max="4000" step="1" value="400" />
+            </label>
+            <label class="hand-odds-field">
+              混战人数
+              <input id="hand-balance-team-size" type="number" min="1" max="8" step="1" value="3" />
+            </label>
+            <label class="hand-odds-field">
+              随机种子
+              <input id="hand-balance-seed" type="number" min="1" max="1000000000" step="1" value="1" />
+            </label>
+            <div class="hand-odds-actions">
+              <button id="btn-hand-balance-run" type="button">开始验证</button>
+            </div>
+            <p class="hand-odds-hint">
+              独立种子数再乘双向换边；混战轮次越大越稳、越慢。进入本页时会应用卡组页未保存草稿，不写盘。
+            </p>
+          </section>
+          <div id="hand-balance-progress" class="hand-odds-status" role="status" aria-live="polite"></div>
+          <div id="hand-balance-body" class="hand-odds-balance-body"></div>
         </section>
       </div>
     </main>

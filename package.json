@@ -15,6 +15,7 @@
     "official:online": "pnpm build && concurrently -k -n preview,server -c cyan,magenta \"pnpm --filter @pb/client preview\" \"pnpm --filter @pb/server start\"",
     "test": "pnpm -r test",
     "check": "pnpm -r check",
+    "balance": "pnpm --filter @pb/sim balance",
     "build:prod": "node scripts/build-prod.mjs",
     "deploy": "node scripts/deploy.mjs"
   },

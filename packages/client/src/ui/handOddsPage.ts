@@ -1,4 +1,5 @@
 import {
+  DEFAULT_BALANCE_OPTIONS,
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_STRENGTH_ORDER,
   HAND_ODDS_DEFAULT_TRIALS,
@@ -7,18 +8,23 @@ import {
   Rng,
   createHitCounters,
   createPokerCards,
+  runBalanceAnalysis,
   runHandCategoryOddsChunk,
   toProbabilities,
+  type BalanceMode,
   type HandCategory,
   type HandCategoryOddsResult,
 } from '@pb/sim';
+import { renderBalanceReport } from './balanceReportView.js';
+
+export type HandVerifyTab = 'odds' | 'balance';
 
 export interface HandOddsPageOptions {
   onBack: () => void;
 }
 
 export interface HandOddsPageHandle {
-  show(): void;
+  show(tab?: HandVerifyTab): void;
   hide(): void;
   dispose(): void;
 }
@@ -27,6 +33,14 @@ type ChartMode = 'bar' | 'line';
 
 const TRIAL_OPTIONS = [1000, 5000, 20000] as const;
 const CHUNK_TRIALS = 200;
+const SEEDS_MIN = 1;
+const SEEDS_MAX = 50;
+const ROUNDS_MIN = 1;
+const ROUNDS_MAX = 4000;
+const TEAM_SIZE_MIN = 1;
+const TEAM_SIZE_MAX = 8;
+const SEED_MIN = 1;
+const SEED_MAX = 1_000_000_000;
 /** 折线图 12 条线的固定色板，与强度序一一对应。 */
 const CATEGORY_COLORS: Readonly<Record<HandCategory, string>> = {
   straight_flush: '#f0c14b',
@@ -44,11 +58,15 @@ const CATEGORY_COLORS: Readonly<Record<HandCategory, string>> = {
 };
 
 /**
- * 开发服牌型概率工具页：蒙特卡洛估计各牌型可打出频率，并用 SVG 柱状/折线对比。
+ * 开发服牌型验证页：牌型概率蒙特卡洛 + 阵型强度对拆，共用同一入口。
  */
 export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHandle {
   const root = required<HTMLElement>('#hand-odds');
   const backButton = required<HTMLButtonElement>('#btn-hand-odds-back', root);
+  const oddsTab = required<HTMLButtonElement>('#hand-odds-tab-odds', root);
+  const balanceTab = required<HTMLButtonElement>('#hand-odds-tab-balance', root);
+  const oddsPanel = required<HTMLElement>('#hand-odds-odds-panel', root);
+  const balancePanel = required<HTMLElement>('#hand-odds-balance-panel', root);
   const handSizeInput = required<HTMLInputElement>('#hand-odds-hand-size', root);
   const handSizeLabel = required<HTMLElement>('#hand-odds-hand-size-value', root);
   const trialsSelect = required<HTMLSelectElement>('#hand-odds-trials', root);
@@ -58,6 +76,14 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   const tableBody = required<HTMLElement>('#hand-odds-table-body', root);
   const chartRoot = required<HTMLElement>('#hand-odds-chart', root);
   const legendRoot = required<HTMLElement>('#hand-odds-legend', root);
+  const modeSelect = required<HTMLSelectElement>('#hand-balance-mode', root);
+  const seedsInput = required<HTMLInputElement>('#hand-balance-seeds', root);
+  const roundsInput = required<HTMLInputElement>('#hand-balance-rounds', root);
+  const teamSizeInput = required<HTMLInputElement>('#hand-balance-team-size', root);
+  const seedInput = required<HTMLInputElement>('#hand-balance-seed', root);
+  const balanceRunButton = required<HTMLButtonElement>('#btn-hand-balance-run', root);
+  const balanceProgress = required<HTMLElement>('#hand-balance-progress', root);
+  const balanceBody = required<HTMLElement>('#hand-balance-body', root);
 
   let handSize = 10;
   let trials = HAND_ODDS_DEFAULT_TRIALS;
@@ -65,9 +91,14 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   let barResult: HandCategoryOddsResult | null = null;
   let sweepResults: HandCategoryOddsResult[] | null = null;
   let runToken = 0;
+  let balanceSeq = 0;
+  let oddsBusy = false;
+  let balanceBusy = false;
 
   const back = (): void => options.onBack();
   backButton.addEventListener('click', back);
+  oddsTab.addEventListener('click', () => setTab('odds'));
+  balanceTab.addEventListener('click', () => setTab('balance'));
   handSizeInput.addEventListener('input', () => {
     handSize = clampHandSize(Number(handSizeInput.value));
     handSizeLabel.textContent = String(handSize);
@@ -77,9 +108,18 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   });
   runButton.addEventListener('click', () => void startBarRun());
   sweepButton.addEventListener('click', () => void startSweepRun());
+  modeSelect.addEventListener('change', syncBalanceFieldAvailability);
+  seedsInput.addEventListener('change', () => clampNumberInput(seedsInput, SEEDS_MIN, SEEDS_MAX));
+  roundsInput.addEventListener('change', () => clampNumberInput(roundsInput, ROUNDS_MIN, ROUNDS_MAX));
+  teamSizeInput.addEventListener('change', () =>
+    clampNumberInput(teamSizeInput, TEAM_SIZE_MIN, TEAM_SIZE_MAX),
+  );
+  seedInput.addEventListener('change', () => clampNumberInput(seedInput, SEED_MIN, SEED_MAX));
+  balanceRunButton.addEventListener('click', () => void startBalance());
 
   syncControlsFromState();
   renderIdle();
+  setTab('odds');
 
   /** 同步控件默认值到当前状态。 */
   function syncControlsFromState(): void {
@@ -95,25 +135,65 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
       if (optionTrials === trials) option.selected = true;
       trialsSelect.appendChild(option);
     }
+    modeSelect.value = DEFAULT_BALANCE_OPTIONS.mode;
+    seedsInput.value = String(DEFAULT_BALANCE_OPTIONS.seeds);
+    roundsInput.value = String(DEFAULT_BALANCE_OPTIONS.rounds);
+    teamSizeInput.value = String(DEFAULT_BALANCE_OPTIONS.teamSize);
+    seedInput.value = String(DEFAULT_BALANCE_OPTIONS.seed);
+    syncBalanceFieldAvailability();
   }
 
-  function setBusy(busy: boolean): void {
+  /** 按当前模式关掉用不到的强度参数，避免配了却没跑。 */
+  function syncBalanceFieldAvailability(): void {
+    const mode = readBalanceMode();
+    seedsInput.disabled = oddsBusy || balanceBusy || mode === 'melee';
+    roundsInput.disabled = oddsBusy || balanceBusy || mode === 'solo';
+    teamSizeInput.disabled = oddsBusy || balanceBusy || mode === 'solo';
+    seedInput.disabled = oddsBusy || balanceBusy;
+    modeSelect.disabled = oddsBusy || balanceBusy;
+  }
+
+  function setBusy(): void {
+    const busy = oddsBusy || balanceBusy;
     runButton.disabled = busy;
     sweepButton.disabled = busy;
     handSizeInput.disabled = busy;
     trialsSelect.disabled = busy;
+    balanceRunButton.disabled = busy;
+    oddsTab.disabled = false;
+    balanceTab.disabled = false;
+    syncBalanceFieldAvailability();
+  }
+
+  /** 在概率与强度两栏之间切换，进行中的计算不中断。 */
+  function setTab(next: HandVerifyTab): void {
+    const oddsActive = next === 'odds';
+    oddsTab.classList.toggle('is-active', oddsActive);
+    balanceTab.classList.toggle('is-active', !oddsActive);
+    oddsTab.setAttribute('aria-selected', String(oddsActive));
+    balanceTab.setAttribute('aria-selected', String(!oddsActive));
+    oddsPanel.classList.toggle('is-hidden', !oddsActive);
+    balancePanel.classList.toggle('is-hidden', oddsActive);
   }
 
   /** 递增 token，使进行中的分片循环自行退出。 */
-  function cancelRun(): void {
+  function cancelOddsRun(): void {
     runToken += 1;
+    oddsBusy = false;
+  }
+
+  /** 作废进行中的对拆，避免切走后旧报告覆盖新结果。 */
+  function cancelBalance(): void {
+    balanceSeq += 1;
+    balanceBusy = false;
   }
 
   /** 单档手牌张数柱状图计算。 */
   async function startBarRun(): Promise<void> {
-    cancelRun();
+    cancelOddsRun();
     const token = runToken;
-    setBusy(true);
+    oddsBusy = true;
+    setBusy();
     chartMode = 'bar';
     sweepResults = null;
     status.textContent = '计算中…';
@@ -140,14 +220,16 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     };
     status.textContent = `完成：手牌 ${handSize} 张，抽样 ${trials} 次`;
     renderResults();
-    setBusy(false);
+    oddsBusy = false;
+    setBusy();
   }
 
   /** 5～12 张扫一遍，画折线对比。 */
   async function startSweepRun(): Promise<void> {
-    cancelRun();
+    cancelOddsRun();
     const token = runToken;
-    setBusy(true);
+    oddsBusy = true;
+    setBusy();
     chartMode = 'line';
     barResult = null;
     status.textContent = '对比计算中…';
@@ -186,7 +268,70 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     sweepResults = results;
     status.textContent = `对比完成：手牌 ${HAND_ODDS_MIN_SIZE}～${HAND_ODDS_MAX_SIZE} 张，每档抽样 ${trials} 次`;
     renderResults();
-    setBusy(false);
+    oddsBusy = false;
+    setBusy();
+  }
+
+  /** 用当前运行时阵型跑独立/混战对拆；参数来自本页控件。 */
+  async function startBalance(): Promise<void> {
+    const seq = ++balanceSeq;
+    balanceBusy = true;
+    setBusy();
+    balanceBody.replaceChildren();
+    const analysis = readBalanceOptions();
+    balanceProgress.textContent = '正在开始对拆…';
+    try {
+      const report = await runBalanceAnalysis(analysis, {
+        onProgress: (progress) => {
+          if (seq !== balanceSeq) return;
+          const label = progress.phase === 'solo' ? '独立对拆' : '混战';
+          balanceProgress.textContent = `${label} ${progress.done}/${progress.total}`;
+        },
+      });
+      if (seq !== balanceSeq) return;
+      renderBalanceReport(balanceBody, report);
+      const shared = report.sharedViolations.length;
+      const total = report.soloViolations.length + report.meleeViolations.length;
+      balanceProgress.textContent =
+        `完成：独立 ${report.seeds} 种子，混战 ${report.meleeRounds} 轮。双侧违例 ${shared} 条，分模式违例 ${total} 条。`;
+    } catch (error) {
+      if (seq !== balanceSeq) return;
+      const message = error instanceof Error ? error.message : String(error);
+      balanceProgress.textContent = `验证失败：${message}`;
+    } finally {
+      if (seq === balanceSeq) {
+        balanceBusy = false;
+        setBusy();
+      }
+    }
+  }
+
+  /** 从控件读出对拆参数；非法值回落到 CLI 默认。 */
+  function readBalanceOptions(): {
+    mode: BalanceMode;
+    seeds: number;
+    rounds: number;
+    teamSize: number;
+    seed: number;
+  } {
+    return {
+      mode: readBalanceMode(),
+      seeds: readClampedInt(seedsInput, DEFAULT_BALANCE_OPTIONS.seeds, SEEDS_MIN, SEEDS_MAX),
+      rounds: readClampedInt(roundsInput, DEFAULT_BALANCE_OPTIONS.rounds, ROUNDS_MIN, ROUNDS_MAX),
+      teamSize: readClampedInt(
+        teamSizeInput,
+        DEFAULT_BALANCE_OPTIONS.teamSize,
+        TEAM_SIZE_MIN,
+        TEAM_SIZE_MAX,
+      ),
+      seed: readClampedInt(seedInput, DEFAULT_BALANCE_OPTIONS.seed, SEED_MIN, SEED_MAX),
+    };
+  }
+
+  function readBalanceMode(): BalanceMode {
+    const value = modeSelect.value;
+    if (value === 'solo' || value === 'melee' || value === 'all') return value;
+    return DEFAULT_BALANCE_OPTIONS.mode;
   }
 
   function renderIdle(): void {
@@ -194,6 +339,8 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
     tableBody.replaceChildren();
     chartRoot.replaceChildren();
     legendRoot.replaceChildren();
+    balanceProgress.textContent = '配置模式、轮次等参数后开始验证';
+    balanceBody.replaceChildren();
   }
 
   function renderResults(): void {
@@ -398,18 +545,21 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
   }
 
   return {
-    show() {
+    show(nextTab) {
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
+      if (nextTab) setTab(nextTab);
     },
     hide() {
-      cancelRun();
-      setBusy(false);
+      cancelOddsRun();
+      cancelBalance();
+      setBusy();
       root.classList.add('is-hidden');
       root.setAttribute('aria-hidden', 'true');
     },
     dispose() {
-      cancelRun();
+      cancelOddsRun();
+      cancelBalance();
       backButton.removeEventListener('click', back);
     },
   };
@@ -418,6 +568,19 @@ export function createHandOddsPage(options: HandOddsPageOptions): HandOddsPageHa
 function clampHandSize(value: number): number {
   if (!Number.isFinite(value)) return 10;
   return Math.min(HAND_ODDS_MAX_SIZE, Math.max(HAND_ODDS_MIN_SIZE, Math.round(value)));
+}
+
+/** 失焦时把非法/越界数字写回合法值，避免控件显示与实际跑的不一致。 */
+function clampNumberInput(input: HTMLInputElement, min: number, max: number): void {
+  const fallback = Number(input.defaultValue) || min;
+  const value = readClampedInt(input, fallback, min, max);
+  input.value = String(value);
+}
+
+function readClampedInt(input: HTMLInputElement, fallback: number, min: number, max: number): number {
+  const value = Number(input.value);
+  if (!Number.isInteger(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
 }
 
 function formatPercent(value: number): string {

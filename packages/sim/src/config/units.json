@@ -123,7 +123,7 @@
     "bodyScale": 0.8000030517578125,
     "mass": 2,
     "maxHp": 240,
-    "damage": 70,
+    "damage": 60,
     "attackInterval": 20,
     "attackWindup": 9,
     "range": 4,
@@ -470,7 +470,7 @@
         "projectileSpeed": 9,
         "aoeRadius": 0,
         "summon": {
-          "cooldown": 60,
+          "cooldown": 90,
           "unitTypeId": "summoned_skeleton"
         }
       }

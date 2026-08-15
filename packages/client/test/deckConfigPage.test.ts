@@ -21,21 +21,23 @@ describe('卡组阵型配置页', () => {
     vi.mocked(getFormationThumbnail).mockClear();
     document.body.innerHTML = `
       <main id="deck-config" class="is-hidden">
-        <button id="btn-deck-back"></button>
-        <button id="btn-deck-hand-odds"></button>
-        <button id="btn-deck-add-formation"></button>
-        <button id="btn-deck-copy-formation"></button>
-        <button id="btn-deck-save"></button>
-        <button id="btn-deck-reset"></button>
-        <div id="deck-category-list"></div>
-        <div id="deck-situation-list"></div>
-        <div id="deck-formation-list"></div>
-        <div id="deck-editor"></div>
-        <div id="deck-status"></div>
-        <button id="deck-preview-tab-3d" class="is-active" aria-selected="true"></button>
-        <button id="deck-preview-tab-button" aria-selected="false"></button>
-        <div id="deck-preview"></div>
-        <div id="deck-preview-button" class="is-hidden"></div>
+        <div class="deck-shell">
+          <button id="btn-deck-back"></button>
+          <button id="btn-deck-hand-odds"></button>
+          <button id="btn-deck-add-formation"></button>
+          <button id="btn-deck-copy-formation"></button>
+          <button id="btn-deck-save"></button>
+          <button id="btn-deck-reset"></button>
+          <div id="deck-category-list"></div>
+          <div id="deck-situation-list"></div>
+          <div id="deck-formation-list"></div>
+          <div id="deck-editor"></div>
+          <div id="deck-status"></div>
+          <button id="deck-preview-tab-3d" class="is-active" aria-selected="true"></button>
+          <button id="deck-preview-tab-button" aria-selected="false"></button>
+          <div id="deck-preview"></div>
+          <div id="deck-preview-button" class="is-hidden"></div>
+        </div>
       </main>
     `;
   });
@@ -47,8 +49,8 @@ describe('卡组阵型配置页', () => {
     page.show();
     const categoryNames = [...document.querySelectorAll('.deck-category')].map((el) => el.textContent);
     expect(categoryNames).toHaveLength(12);
-    expect(categoryNames.indexOf('四顺')).toBeGreaterThan(-1);
-    expect(categoryNames.indexOf('四顺')).toBeLessThan(categoryNames.indexOf('连对'));
+    expect(categoryNames.indexOf('连对')).toBeGreaterThan(-1);
+    expect(categoryNames.indexOf('连对')).toBeLessThan(categoryNames.indexOf('四顺'));
     expect(preview.resize).toHaveBeenCalledOnce();
     expect(preview.render).toHaveBeenCalled();
 
@@ -60,6 +62,15 @@ describe('卡组阵型配置页', () => {
     expect(onBack).toHaveBeenCalledOnce();
     page.dispose();
     expect(preview.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('牌型验证入口会通知页面控制器', () => {
+    const onOpenHandOdds = vi.fn();
+    const page = createDeckConfigPage({ onBack: vi.fn(), onOpenHandOdds });
+    page.show();
+    document.querySelector<HTMLButtonElement>('#btn-deck-hand-odds')!.click();
+    expect(onOpenHandOdds).toHaveBeenCalledOnce();
+    page.dispose();
   });
 
   it('单张默认情况为数字牌，阵型只列出该组方案', () => {

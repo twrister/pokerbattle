@@ -11,9 +11,12 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && tsc --noEmit -p tools/tsconfig.json",
+    "balance": "tsx tools/balance/main.ts"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.20.5",
     "vitest": "^4.1.10"
   }
 }

@@ -12,3 +12,4 @@ dist-ops/
 .history/
 packages/ops/public/lan-ips.json
 packages/server/data/
+packages/sim/tools/balance/out/

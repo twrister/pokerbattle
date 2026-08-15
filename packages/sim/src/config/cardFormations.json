@@ -574,170 +574,6 @@
       }
     }
   ],
-  "straight4": [
-    {
-      "id": "straight4_number",
-      "name": "数字四顺",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_grunt",
-          "melee_grunt"
-        ],
-        [
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_A234",
-      "name": "A-2-3-4",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "A",
-          "2",
-          "3",
-          "4"
-        ]
-      },
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_cavalry",
-          "melee_grunt"
-        ],
-        [
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 1.8
-    },
-    {
-      "id": "straight4_8910J",
-      "name": "8-9-10-J",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "8",
-          "9",
-          "10",
-          "J"
-        ]
-      },
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_guard",
-          "melee_grunt"
-        ],
-        [
-          "ranged_archer",
-          "ranged_archer",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_910JQ",
-      "name": "9-10-J-Q",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "9",
-          "10",
-          "J",
-          "Q"
-        ]
-      },
-      "rows": [
-        [
-          "melee_grunt",
-          "melee_guard",
-          "melee_grunt"
-        ],
-        [
-          "ranged_archer",
-          "hero_queen",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_10JQK",
-      "name": "10-J-Q-K",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "10",
-          "J",
-          "Q",
-          "K"
-        ]
-      },
-      "rows": [
-        [
-          "melee_grunt",
-          "hero_king",
-          "melee_guard"
-        ],
-        [
-          "ranged_archer",
-          "hero_queen",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_JQKA",
-      "name": "J-Q-K-A",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "hero_king",
-          "melee_cavalry",
-          "melee_guard"
-        ],
-        [
-          "ranged_archer",
-          "hero_queen",
-          "ranged_archer"
-        ]
-      ],
-      "colSpacing": 1.5,
-      "rowSpacing": 2,
-      "thumbScale": 1.8
-    }
-  ],
   "two_pair": [
     {
       "id": "two_pair_number",
@@ -896,6 +732,170 @@
           "ranged_archer",
           "ranged_archer",
           "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    }
+  ],
+  "straight4": [
+    {
+      "id": "straight4_number",
+      "name": "数字四顺",
+      "match": {
+        "kind": "numbers"
+      },
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_grunt",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "straight4_A234",
+      "name": "A-2-3-4",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "A",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_cavalry",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 1.8
+    },
+    {
+      "id": "straight4_8910J",
+      "name": "8-9-10-J",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "8",
+          "9",
+          "10",
+          "J"
+        ]
+      },
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_guard",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "ranged_archer",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "straight4_910JQ",
+      "name": "9-10-J-Q",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "9",
+          "10",
+          "J",
+          "Q"
+        ]
+      },
+      "rows": [
+        [
+          "melee_grunt",
+          "melee_guard",
+          "melee_grunt"
+        ],
+        [
+          "ranged_archer",
+          "hero_queen",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "straight4_10JQK",
+      "name": "10-J-Q-K",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "10",
+          "J",
+          "Q",
+          "K"
+        ]
+      },
+      "rows": [
+        [
+          "melee_grunt",
+          "hero_king",
+          "melee_guard"
+        ],
+        [
+          "ranged_archer",
+          "hero_queen",
+          "ranged_archer"
+        ]
+      ],
+      "colSpacing": 1.5,
+      "rowSpacing": 2,
+      "thumbScale": 2
+    },
+    {
+      "id": "straight4_JQKA",
+      "name": "J-Q-K-A",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "J",
+          "Q",
+          "K",
+          "A"
+        ]
+      },
+      "rows": [
+        [
+          "hero_king",
+          "melee_cavalry",
+          "melee_guard"
+        ],
+        [
+          "ranged_archer",
+          "hero_queen",
           "ranged_archer"
         ]
       ],
