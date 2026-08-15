@@ -902,6 +902,36 @@
       "colSpacing": 1.5,
       "rowSpacing": 2,
       "thumbScale": 1.8
+    },
+    {
+      "id": "two_pair_chariot",
+      "name": "战车",
+      "match": {
+        "kind": "any"
+      },
+      "rows": [
+        [
+          "ranged_chariot"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
+    },
+    {
+      "id": "two_pair_custom_8",
+      "name": "箭塔",
+      "match": {
+        "kind": "any"
+      },
+      "rows": [
+        [
+          "building_tower"
+        ]
+      ],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2
     }
   ],
   "straight5": [

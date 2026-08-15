@@ -254,7 +254,7 @@ describe('卡组阵型配置页', () => {
     page.show();
 
     clickCategory('连对');
-    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A']);
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A', '任意']);
 
     clickSituation('Q-K');
     expect(formationNames()).toEqual(['Q-K']);

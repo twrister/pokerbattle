@@ -505,7 +505,7 @@ describe('牌型兵种阵型配置', () => {
     }
   });
 
-  it('连对按点数段匹配可配置站位，且只展示命中段', () => {
+  it('连对按点数段匹配可配置站位，且战车全局可选', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const idsFor = (cardIds: string[]) =>
       getFormationsFor(['two_pair'], cards(...cardIds)).map((formation) => formation.id);
@@ -519,35 +519,57 @@ describe('牌型兵种阵型配置', () => {
       'two_pair_JQ',
       'two_pair_QK',
       'two_pair_KA',
+      'two_pair_chariot',
     ]);
 
-    expect(idsFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'])).toEqual(['two_pair_number']);
+    expect(idsFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'])).toEqual([
+      'two_pair_number',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'], 'two_pair_number').rows).toEqual([
       ['melee_grunt', 'melee_grunt', 'melee_grunt', 'melee_grunt'],
       ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
+    expect(formationFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'], 'two_pair_chariot').rows).toEqual([
+      ['ranged_chariot'],
+    ]);
 
-    expect(idsFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'])).toEqual(['two_pair_A2']);
+    expect(idsFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'])).toEqual([
+      'two_pair_A2',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'], 'two_pair_A2').rows).toEqual([
       ['melee_grunt', 'melee_cavalry', 'melee_cavalry', 'melee_grunt'],
       ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
-    expect(idsFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'])).toEqual(['two_pair_10J']);
+    expect(idsFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'])).toEqual([
+      'two_pair_10J',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'], 'two_pair_10J').rows).toEqual([
       ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
       ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
-    expect(idsFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'])).toEqual(['two_pair_JQ']);
+    expect(idsFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'])).toEqual([
+      'two_pair_JQ',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'], 'two_pair_JQ').rows).toEqual([
       ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
       ['ranged_archer', 'hero_queen', 'hero_queen', 'ranged_archer'],
     ]);
-    expect(idsFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'])).toEqual(['two_pair_QK']);
+    expect(idsFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'])).toEqual([
+      'two_pair_QK',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'], 'two_pair_QK').rows).toEqual([
       ['melee_grunt', 'hero_king', 'hero_king', 'melee_grunt'],
       ['ranged_archer', 'hero_queen', 'hero_queen', 'ranged_archer'],
     ]);
-    expect(idsFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'])).toEqual(['two_pair_KA']);
+    expect(idsFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'])).toEqual([
+      'two_pair_KA',
+      'two_pair_chariot',
+    ]);
     expect(formationFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'], 'two_pair_KA').rows).toEqual([
       ['hero_king', 'melee_cavalry', 'melee_cavalry', 'hero_king'],
       ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
