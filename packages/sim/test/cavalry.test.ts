@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { TOWER_HP_DECAY_PER_TICK } from '../src/config/tuning.js';
 import { Faction, UnitState } from '../src/entity/unit.js';
-import { fromFloat, toFloat } from '../src/math/fixed.js';
+import { fromInt, fromFloat, mul, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
+
+/** 箭塔仅因持续损耗应剩余的生命，用来和普攻/溅射伤害区分。 */
+function towerHpAfterDecay(maxHp: number, ticks: number): number {
+  return maxHp - mul(TOWER_HP_DECAY_PER_TICK, fromInt(ticks));
+}
 
 describe('皇家骑士冲刺', () => {
   it('CD 就绪且目标在 2～2.5 格时进入冲刺并前进约 3 格', () => {
@@ -197,15 +203,20 @@ describe('皇家骑士冲刺', () => {
     expect(tower).not.toBeNull();
 
     let sawCharge = false;
+    let sawMeleeHit = false;
     for (let i = 0; i < 80; i++) {
       world.step();
       if (cavalry.state === UnitState.Charge) sawCharge = true;
-      if (tower!.hp < tower!.stats.maxHp) break;
+      // 持续损耗也会掉血，必须低于「只掉寿命」才算普攻打中
+      if (tower!.hp < towerHpAfterDecay(tower!.stats.maxHp, world.tick)) {
+        sawMeleeHit = true;
+        break;
+      }
     }
 
     expect(sawCharge).toBe(false);
     expect(cavalry.chargeCooldown).toBe(0);
-    expect(tower!.hp).toBeLessThan(tower!.stats.maxHp);
+    expect(sawMeleeHit).toBe(true);
   });
 
   it('冲锋命中单位后，溅射不对建筑造成伤害或击退', () => {
@@ -216,11 +227,13 @@ describe('皇家骑士冲刺', () => {
 
     // 锁定单位并进入冲锋后再放塔，避免索敌改锁建筑
     let tower = null as ReturnType<World['spawnBuilding']>;
+    let towerSpawnTick = 0;
     let charged = false;
     for (let i = 0; i < 60; i++) {
       world.step();
       if (!tower && cavalry.state === UnitState.Charge) {
         tower = world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(10), fromFloat(13));
+        towerSpawnTick = world.tick;
       }
       if (cavalry.state === UnitState.Charge && cavalry.chargeWindupLeft <= 0) charged = true;
       if (charged && cavalry.state !== UnitState.Charge) break;
@@ -231,7 +244,8 @@ describe('皇家骑士冲刺', () => {
     expect(cavalry.chargeHits).toContain(target.id);
     expect(cavalry.chargeHits).not.toContain(tower!.id);
     expect(target.hp).toBeLessThan(targetHp);
-    expect(tower!.hp).toBe(tower!.stats.maxHp);
+    // 溅射不伤建筑；放置后只应扣除箭塔持续损耗
+    expect(tower!.hp).toBe(towerHpAfterDecay(tower!.stats.maxHp, world.tick - towerSpawnTick));
     expect(toFloat(tower!.pos.x)).toBeCloseTo(10, 5);
     expect(toFloat(tower!.pos.y)).toBeCloseTo(13, 5);
   });

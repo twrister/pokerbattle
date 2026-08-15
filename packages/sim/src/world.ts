@@ -52,6 +52,7 @@ import { updateProjectiles } from './systems/projectiles.js';
 import { updateDetonate } from './systems/detonate.js';
 import { tickPresentationFx, updateHeroSkills } from './systems/heroSkills.js';
 import { cleanup } from './systems/cleanup.js';
+import { updateTowerDecay } from './systems/towerDecay.js';
 
 const NO_COMMANDS: readonly Command[] = [];
 
@@ -483,6 +484,8 @@ export class World {
     updateProjectiles(this);
     // 在 cleanup 前引爆，保证死亡当帧仍能结算 AOE 与特效
     updateDetonate(this);
+    // 箭塔损耗放在出手之后，生命耗尽的当帧仍能射完这一轮
+    updateTowerDecay(this);
     cleanup(this);
   }
 

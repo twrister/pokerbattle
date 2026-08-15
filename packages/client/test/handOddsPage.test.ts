@@ -291,6 +291,23 @@ describe('牌型验证页', () => {
     page.dispose();
   });
 
+  it('搭配对比兵种下拉含三种箭塔', () => {
+    const page = createHandOddsPage({ onBack: vi.fn() });
+    page.show('mix');
+
+    const options = [...document.querySelectorAll('#hand-mix-base-list .hand-mix-type option')].map(
+      (option) => (option as HTMLOptionElement).value,
+    );
+    expect(options).toContain('building_tower');
+    expect(options).toContain('building_tower_advanced');
+    expect(options).toContain('building_tower_triple');
+    expect(options.indexOf('building_tower')).toBeLessThan(options.indexOf('building_tower_advanced'));
+    expect(options.indexOf('building_tower_advanced')).toBeLessThan(options.indexOf('building_tower_triple'));
+    expect(options).not.toContain('building_base');
+    expect(options).not.toContain('giant_bomb');
+    page.dispose();
+  });
+
   it('可切到搭配对比，并带出默认基底与参数', () => {
     const page = createHandOddsPage({ onBack: vi.fn() });
     page.show();

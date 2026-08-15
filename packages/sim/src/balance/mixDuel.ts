@@ -4,9 +4,10 @@ import {
   isFuseBombTypeId,
 } from '../config/cardFormations.js';
 import { TICK_RATE } from '../config/tuning.js';
-import { getUnitConfig, isBuildingConfig, UNIT_TYPE_IDS, type UnitTypeId } from '../config/units.js';
-import { Faction } from '../entity/unit.js';
+import { getUnitConfig, isArcherTowerId, isBuildingConfig, UNIT_TYPE_IDS, type UnitTypeId } from '../config/units.js';
+import { Faction, type Unit } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
+import { snapBuildingCenter } from '../nav/buildingGrid.js';
 import { World } from '../world.js';
 import { clamp01, countAlive, isBattleSettled, remainingHp } from './battleOutcome.js';
 import { DEFAULT_MAX_TICKS, SOLO_BLUE_ANCHOR, SOLO_RED_ANCHOR } from './duel.js';
@@ -84,6 +85,10 @@ export const DEFAULT_MIX_MATCHUP_OPTIONS = {
 
 const MIX_ROW_WIDTH_MIN = 1;
 const MIX_ROW_WIDTH_MAX = 12;
+/** 箭塔占地为 2，间距小于此值吸附后会重叠。 */
+const MIX_TOWER_SPACING = 2;
+/** 占格失败时在锚点附近搜索的切比雪夫半径，避免整局因单座塔抛错。 */
+const MIX_TOWER_RETRY_RADIUS = 8;
 
 export type MixWinner = 'a' | 'b' | 'draw';
 
@@ -95,14 +100,16 @@ interface MixDuelResult {
   ticks: number;
 }
 
-/** 可混编的地面作战单位，排除建筑与引信炸弹。 */
+/** 可混编的地面作战单位 + 三种箭塔；基地与引信炸弹仍排除。 */
 export function listMixableUnitTypeIds(): UnitTypeId[] {
-  return UNIT_TYPE_IDS.filter((id) => isDeployableUnit(id));
+  const mobile = UNIT_TYPE_IDS.filter((id) => isMobileMixUnit(id));
+  const towers = UNIT_TYPE_IDS.filter((id) => isArcherTowerId(id));
+  return [...mobile, ...towers];
 }
 
 /**
  * 按攻击类型将近战排在前、远程排在后，每排最多 rowWidth 人。
- * 建筑与炸弹会被丢掉，避免混编站位无法落地。
+ * 箭塔单独部署，不进地面阵列；炸弹仍丢掉。
  */
 export function layoutMixedRows(
   units: readonly MixUnitEntry[],
@@ -111,7 +118,7 @@ export function layoutMixedRows(
   const width = clampInt(rowWidth, MIX_ROW_WIDTH_MIN, MIX_ROW_WIDTH_MAX);
   const melee: UnitTypeId[] = [];
   const ranged: UnitTypeId[] = [];
-  for (const typeId of expandEntries(units)) {
+  for (const typeId of expandMobileEntries(units)) {
     const attack = getUnitConfig(typeId).attack.kind;
     (attack === 'melee' || attack === 'melee_aoe' ? melee : ranged).push(typeId);
   }
@@ -304,6 +311,19 @@ function deployMixedArmy(
     const unit = world.spawnUnit(faction, point.typeId, fromFloat(point.x), fromFloat(point.y));
     maxHp += toFloat(unit.hp);
   }
+  // 箭塔占 2 格，不能跟地面兵共用 1.2 间距，否则吸附后重叠抛错。
+  const towerPoints = resolveTowerSpawns(
+    expandTowerEntries(units),
+    rows.length,
+    faction,
+    anchorX,
+    anchorY,
+    rowWidth,
+  );
+  for (const point of towerPoints) {
+    const building = trySpawnTower(world, faction, point.typeId, point.x, point.y);
+    if (building) maxHp += toFloat(building.hp);
+  }
   return maxHp;
 }
 
@@ -335,10 +355,93 @@ function resolveMixedSpawns(
   return points;
 }
 
-function expandEntries(entries: readonly MixUnitEntry[]): UnitTypeId[] {
+/** 箭塔排在地面阵最后一排之后，间距用占地边长，避免与对射侧重叠。 */
+function resolveTowerSpawns(
+  towers: readonly UnitTypeId[],
+  unitRowCount: number,
+  faction: Faction,
+  anchorX: number,
+  anchorY: number,
+  rowWidth: number,
+): Array<{ typeId: UnitTypeId; x: number; y: number }> {
+  if (towers.length === 0) return [];
+  const width = clampInt(rowWidth, MIX_ROW_WIDTH_MIN, MIX_ROW_WIDTH_MAX);
+  const towerRows = chunk(towers, width);
+  const facingForward = faction === Faction.Blue ? 1 : -1;
+  const facingRight = faction === Faction.Blue ? 1 : -1;
+  const points: Array<{ typeId: UnitTypeId; x: number; y: number }> = [];
+  // 有地面兵时贴在最后一排后方；纯塔则整块以锚点为中心，避免空阵时全挤到场外。
+  const unitBackLocal = unitRowCount === 0
+    ? 0
+    : -((unitRowCount - 1) * FORMATION_ROW_SPACING) / 2;
+  towerRows.forEach((row, rowIndex) => {
+    const localForward = unitRowCount === 0
+      ? ((towerRows.length - 1) * MIX_TOWER_SPACING) / 2 - rowIndex * MIX_TOWER_SPACING
+      : unitBackLocal - (rowIndex + 1) * MIX_TOWER_SPACING;
+    row.forEach((typeId, col) => {
+      const localRight = (col - (row.length - 1) / 2) * MIX_TOWER_SPACING;
+      points.push({
+        typeId,
+        x: anchorX + facingRight * localRight,
+        y: anchorY + facingForward * localForward,
+      });
+    });
+  });
+  return points;
+}
+
+/** 先试目标格，失败则按切比雪夫环外扩；仍放不下就跳过，保持对局可跑。 */
+function trySpawnTower(
+  world: World,
+  faction: Faction,
+  typeId: UnitTypeId,
+  x: number,
+  y: number,
+): Unit | null {
+  const footprint = getUnitConfig(typeId).footprint;
+  const originX = snapBuildingCenter(x, footprint);
+  const originY = snapBuildingCenter(y, footprint);
+  for (const [dx, dy] of chebyshevRings(MIX_TOWER_RETRY_RADIUS)) {
+    const building = world.spawnBuilding(
+      faction,
+      typeId,
+      fromFloat(originX + dx),
+      fromFloat(originY + dy),
+    );
+    if (building) return building;
+  }
+  return null;
+}
+
+/** 从 (0,0) 起按半径分层枚举整数偏移，顺序固定以保证回放确定性。 */
+function chebyshevRings(maxRadius: number): Array<readonly [number, number]> {
+  const out: Array<readonly [number, number]> = [[0, 0]];
+  for (let radius = 1; radius <= maxRadius; radius += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        out.push([dx, dy]);
+      }
+    }
+  }
+  return out;
+}
+
+function expandMobileEntries(entries: readonly MixUnitEntry[]): UnitTypeId[] {
+  return expandEntries(entries, (typeId) => isMobileMixUnit(typeId));
+}
+
+function expandTowerEntries(entries: readonly MixUnitEntry[]): UnitTypeId[] {
+  return expandEntries(entries, (typeId) => isArcherTowerId(typeId));
+}
+
+function expandEntries(
+  entries: readonly MixUnitEntry[],
+  accept: (typeId: UnitTypeId) => boolean,
+): UnitTypeId[] {
   const out: UnitTypeId[] = [];
   for (const entry of entries) {
-    if (!isDeployableUnit(entry.typeId)) continue;
+    if (!accept(entry.typeId)) continue;
     const count = Math.max(0, Math.floor(entry.count));
     for (let i = 0; i < count; i += 1) out.push(entry.typeId);
   }
@@ -347,11 +450,18 @@ function expandEntries(entries: readonly MixUnitEntry[]): UnitTypeId[] {
 
 function normalizeEntries(entries: readonly MixUnitEntry[]): MixUnitEntry[] {
   return entries
-    .filter((entry) => isDeployableUnit(entry.typeId) && Number.isFinite(entry.count) && entry.count > 0)
+    .filter((entry) => isMixableType(entry.typeId) && Number.isFinite(entry.count) && entry.count > 0)
     .map((entry) => ({ typeId: entry.typeId, count: Math.floor(entry.count) }));
 }
 
-function isDeployableUnit(typeId: UnitTypeId): boolean {
+/** 地面作战单位或三种箭塔；基地与炸弹不能混编落地。 */
+function isMixableType(typeId: UnitTypeId): boolean {
+  if (isFuseBombTypeId(typeId)) return false;
+  if (isArcherTowerId(typeId)) return true;
+  return !isBuildingConfig(getUnitConfig(typeId));
+}
+
+function isMobileMixUnit(typeId: UnitTypeId): boolean {
   if (isFuseBombTypeId(typeId)) return false;
   return !isBuildingConfig(getUnitConfig(typeId));
 }

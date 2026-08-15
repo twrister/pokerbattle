@@ -1,7 +1,9 @@
 import {
   TICK_RATE,
+  TOWER_HP_DECAY_PER_SECOND,
   UNIT_CONFIGS,
   getUnitConfig,
+  isArcherTowerId,
   toFloat,
   type UnitConfig,
 } from '@pb/sim';
@@ -218,6 +220,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
 /** 提供适合详情标题下方的简短战斗定位。 */
 function getSummary(config: UnitConfig): string {
   const range = toFloat(config.range);
+  if (isArcherTowerId(config.id)) return '固定防御建筑，部署后会持续损耗生命。';
   if (config.movementLayer === 'air') return '空中单位，可越过地面部队进行范围打击。';
   if (config.charge) return '重装突击单位，能在合适距离发动冲锋。';
   if (range >= 4) return '远程支援单位，适合在队伍后方持续输出。';
@@ -264,6 +267,12 @@ function getSkill(config: UnitConfig): { title: string; description: string } {
     };
   }
   if (config.detonate) return { title: '自爆', description: '接近目标后点燃引信，对范围内敌人造成爆炸伤害。' };
+  if (isArcherTowerId(config.id)) {
+    return {
+      title: '持续损耗',
+      description: `部署后每秒自动损失 ${TOWER_HP_DECAY_PER_SECOND} 点生命，生命耗尽后倒塌。`,
+    };
+  }
   if (config.attack.kind === 'projectile_aoe') return { title: '范围攻击', description: '弹道命中后会对落点附近敌人造成范围伤害。' };
   if (config.attack.kind === 'melee_aoe') return { title: '横扫', description: '每次近战攻击都会伤害攻击范围内的多个敌人。' };
   return { title: '常规攻击', description: '持续攻击当前目标，适合编入阵型参与正面交战。' };

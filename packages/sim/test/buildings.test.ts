@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../src/config/arena.js';
+import { TICK_RATE, TOWER_HP_DECAY_PER_SECOND, TOWER_HP_DECAY_PER_TICK } from '../src/config/tuning.js';
 import { getUnitConfig } from '../src/config/units.js';
 import { Faction, UnitState, type Unit } from '../src/entity/unit.js';
-import { fromFloat, toFloat } from '../src/math/fixed.js';
+import { fromFloat, fromInt, mul, toFloat } from '../src/math/fixed.js';
 import { buildingCellRange, snapBuildingCenter } from '../src/nav/buildingGrid.js';
 import { CommandKind, placeBuildingCommand } from '../src/commands.js';
 import { World } from '../src/world.js';
@@ -164,6 +165,35 @@ describe('建筑系统', () => {
     for (let i = 0; i < 500; i++) world.step();
     expect(archer.state).toBe(UnitState.Attack);
     expect(toFloat(archer.pos.x)).toBeLessThanOrEqual(toFloat(base.pos.x));
+  });
+
+  it('箭塔每秒掉 20 点血，基地不掉', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    const advanced = world.spawnBuilding(Faction.Blue, 'building_tower_advanced', fromFloat(12), fromFloat(10))!;
+    const triple = world.spawnBuilding(Faction.Blue, 'building_tower_triple', fromFloat(16), fromFloat(10))!;
+    const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(16))!;
+    const baseHp = base.hp;
+
+    for (let i = 0; i < TICK_RATE; i++) world.step();
+
+    const decayed = mul(TOWER_HP_DECAY_PER_TICK, fromInt(TICK_RATE));
+    expect(TOWER_HP_DECAY_PER_SECOND).toBe(20);
+    expect(toFloat(decayed)).toBe(20);
+    expect(tower.hp).toBe(tower.stats.maxHp - decayed);
+    expect(advanced.hp).toBe(advanced.stats.maxHp - decayed);
+    expect(triple.hp).toBe(triple.stats.maxHp - decayed);
+    expect(base.hp).toBe(baseHp);
+  });
+
+  it('箭塔损耗至 0 后死亡并解除寻路阻挡', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    expect(world.nav.isBlockedAt(fromFloat(8), fromFloat(10))).toBe(true);
+    tower.hp = TOWER_HP_DECAY_PER_TICK;
+    world.step();
+    expect(world.getUnit(tower.id)).toBeUndefined();
+    expect(world.nav.isBlockedAt(fromFloat(8), fromFloat(10))).toBe(false);
   });
 
   it('防御塔在射程内以投射物攻击敌军', () => {

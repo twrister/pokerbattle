@@ -1,4 +1,4 @@
-import { type Fx, fromFloat } from '../math/fixed.js';
+import { type Fx, div, fromFloat } from '../math/fixed.js';
 
 /** 逻辑帧率。所有「每秒」的配置都按这个换算成每 tick 增量。 */
 export const TICK_RATE = 20;
@@ -64,6 +64,13 @@ export const AIR_UNIT_HOVER_HEIGHT = 1.4;
 export const GROUND_PROJECTILE_HEIGHT = 0.9;
 /** 防御塔箭矢出生高度：接近塔顶弓手位置，避免从塔底射出。 */
 export const TOWER_PROJECTILE_HEIGHT = 2.0;
+/**
+ * 箭塔部署后的持续损耗（点/秒）。三种箭塔共用，基地不掉。
+ * 用来限制占场时间，避免无限防守。
+ */
+export const TOWER_HP_DECAY_PER_SECOND = 20;
+/** 每逻辑帧扣除的箭塔生命；由每秒损耗按帧率换算，避免 tick 循环里做浮点除法。 */
+export const TOWER_HP_DECAY_PER_TICK: Fx = div(fromFloat(TOWER_HP_DECAY_PER_SECOND), TICK_RATE_FX);
 /**
  * 空中单位弹道出生高度：约等于悬浮高度 + 巨龙头相对脚底的位置，
  * 让火球从巨龙头吐出而不是脚底。
