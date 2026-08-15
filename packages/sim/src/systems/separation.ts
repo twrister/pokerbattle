@@ -3,6 +3,7 @@ import { lengthOf } from '../math/vec2.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import { isBuildingConfig } from '../config/units.js';
 import { evictionDeltaOutOfAabb } from '../nav/buildingEvict.js';
+import { evictUnitFromRiver } from '../nav/riverEvict.js';
 import {
   ATTACK_PUSH_DEEP_RATIO,
   ATTACK_PUSH_SCALE,
@@ -75,6 +76,11 @@ export function resolveSeparation(world: World): void {
       unit.pos.x = clampToArena(unit.pos.x + unit.push.x, ARENA_WIDTH, unit.config.radius);
       unit.pos.y = clampToArena(unit.pos.y + unit.push.y, ARENA_HEIGHT, unit.config.radius);
       moved = true;
+    }
+    // 冲刺者不参与软推挤，但仍可能被自己冲进河里；硬约束对所有地面单位生效
+    for (let i = 0; i < units.length; i++) {
+      const unit = units[i]!;
+      if (evictUnitFromRiver(unit, world.nav)) moved = true;
     }
     // 无人位移则下一轮会看到同一批位置，再算一遍结果不变
     if (!moved) break;

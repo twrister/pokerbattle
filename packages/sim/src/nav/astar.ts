@@ -53,7 +53,18 @@ export class PathFinder {
       return true;
     }
 
-    const startCell = grid.index(grid.cellX(sx), grid.cellY(sy));
+    let startCx = grid.cellX(sx);
+    let startCy = grid.cellY(sy);
+    let startRelocated = false;
+    // 被推进河道后起点本身是障碍；不换到最近可走格，邻居全挡时搜索直接失败
+    if (grid.isBlockedCell(startCx, startCy)) {
+      const relocated = this.findNearestFreeCell(startCx, startCy);
+      if (relocated < 0) return false;
+      startCx = relocated % grid.cols;
+      startCy = (relocated / grid.cols) | 0;
+      startRelocated = true;
+    }
+    const startCell = grid.index(startCx, startCy);
     let goalCx = grid.cellX(gx);
     let goalCy = grid.cellY(gy);
     if (grid.isBlockedCell(goalCx, goalCy)) {
@@ -63,7 +74,10 @@ export class PathFinder {
       goalCy = (relocated / grid.cols) | 0;
     }
     const goalCell = grid.index(goalCx, goalCy);
+    const exitX = startRelocated ? grid.centerX(startCx) : sx;
+    const exitY = startRelocated ? grid.centerY(startCy) : sy;
     if (startCell === goalCell) {
+      if (startRelocated) out.push(vec(exitX, exitY));
       out.push(vec(gx, gy));
       return true;
     }
@@ -71,7 +85,9 @@ export class PathFinder {
     if (!this.search(startCell, goalCell, goalCx, goalCy)) return false;
 
     this.buildRawPoints(goalCell, gx, gy);
-    this.smooth(sx, sy, out);
+    this.smooth(exitX, exitY, out);
+    // 先走到岸上/桥面，避免从河心直连目标时再次切过河道
+    if (startRelocated) out.unshift(vec(exitX, exitY));
     return out.length > 0;
   }
 

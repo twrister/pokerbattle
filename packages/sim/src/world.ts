@@ -30,6 +30,7 @@ import {
 } from './entity/effect.js';
 import { Faction, type Unit, createUnit } from './entity/unit.js';
 import { evictionDeltaOutOfAabb } from './nav/buildingEvict.js';
+import { evictUnitFromRiver } from './nav/riverEvict.js';
 import {
   buildingCellRange,
   isBuildingRectInsideArena,
@@ -151,6 +152,8 @@ export class World {
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
     // 生成前挤出已有建筑，避免靠墙落点当帧卡在占地内
     this.evictUnitFromBuildings(unit);
+    // 阵型允许贴边溢出，圆心可能落进河道；对局 Nav 有河时立刻挤回岸/桥
+    evictUnitFromRiver(unit, this.nav);
     this.units.push(unit);
     this.unitsById.set(unit.id, unit);
     this.markUnitGridDirty();

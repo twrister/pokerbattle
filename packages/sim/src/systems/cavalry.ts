@@ -5,6 +5,7 @@ import { MAX_UNIT_RADIUS, isBuildingConfig } from '../config/units.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
+import { evictUnitFromRiver, isGroundBlockedAt } from '../nav/riverEvict.js';
 import { isUntargetableBomb } from './combatRange.js';
 
 /** 复用邻居缓冲，避免每帧分配 */
@@ -52,6 +53,14 @@ function advanceCharge(world: World, unit: Unit): void {
   unit.pos.y += mul(unit.chargeDir.y, step);
   unit.pos.x = clampToArena(unit.pos.x, ARENA_WIDTH, unit.config.radius);
   unit.pos.y = clampToArena(unit.pos.y, ARENA_HEIGHT, unit.config.radius);
+  // 冲刺无视软碰撞，不拦河道就会直线冲进河里
+  if (isGroundBlockedAt(world.nav, unit, unit.pos.x, unit.pos.y)) {
+    unit.pos.x = prevX;
+    unit.pos.y = prevY;
+    endCharge(unit);
+    resolveChargeHits(world, unit);
+    return;
+  }
 
   // 被边界卡住则提前结束冲刺
   const moved = lengthOf(unit.pos.x - prevX, unit.pos.y - prevY);
@@ -99,7 +108,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     if (forward < 0) continue;
 
     applyCombatDamage(other, charge.hitDamage, true);
-    applyLateralKnockback(unit, other, charge.knockback);
+    applyLateralKnockback(world, unit, other, charge.knockback);
     unit.chargeHits.push(other.id);
     hitAny = true;
   }
@@ -150,7 +159,7 @@ function canChargeAffect(other: Unit): boolean {
  * 横向击退：垂直于冲刺方向。
  * 叉积 (dir × offset) 的符号决定推到左侧还是右侧，保证被撞单位往冲刺线外侧飞。
  */
-function applyLateralKnockback(charger: Unit, victim: Unit, distance: Fx): void {
+function applyLateralKnockback(world: World, charger: Unit, victim: Unit, distance: Fx): void {
   const dx = victim.pos.x - charger.pos.x;
   const dy = victim.pos.y - charger.pos.y;
   // 2D 叉积 dir×offset：>0 表示受害者在冲刺方向左侧
@@ -172,6 +181,7 @@ function applyLateralKnockback(charger: Unit, victim: Unit, distance: Fx): void 
   victim.pos.y += mul(lateral.y, distance);
   victim.pos.x = clampToArena(victim.pos.x, ARENA_WIDTH, victim.config.radius);
   victim.pos.y = clampToArena(victim.pos.y, ARENA_HEIGHT, victim.config.radius);
+  evictUnitFromRiver(victim, world.nav);
 }
 
 function endCharge(unit: Unit): void {

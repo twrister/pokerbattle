@@ -10,7 +10,9 @@ export {
   ARENA_RIVER_MIN_Y,
   applyArenaTerrain,
   centeredRiverRange,
+  riverBlockedRects,
   type ArenaBridge,
+  type ArenaRect,
 } from './config/arenaTerrain.js';
 export {
   applyArenaConfigDraft,
