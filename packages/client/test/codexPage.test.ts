@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UNIT_LEVELS_ENABLED } from '@pb/sim';
 import { createCodexPage } from '../src/ui/codexPage.js';
 
 describe('兵种图鉴页', () => {
@@ -62,50 +61,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
   });
 
-  it('等级关闭时不展示等级切换；开启后民兵与弓手可切换等级', () => {
+  it('详情不展示等级切换', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
-
-    const levelButtons = (): HTMLButtonElement[] =>
-      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-level'));
-
-    if (!UNIT_LEVELS_ENABLED) {
-      expect(levelButtons()).toHaveLength(0);
-      page.dispose();
-      return;
-    }
-
-    const hpFillWidth = (): string =>
-      document.querySelector('.codex-stat-bar span')?.getAttribute('style') ?? '';
-
-    expect(levelButtons().map((button) => button.textContent)).toEqual([
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '10',
-      '11',
-      '12',
-    ]);
-    expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
-    const levelOneHp = hpFillWidth();
-
-    levelButtons()[8]?.click();
-    expect(levelButtons()[8]?.classList.contains('is-active')).toBe(true);
-    expect(hpFillWidth()).not.toBe(levelOneHp);
-
-    const archer = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
-      (button) => button.textContent?.includes('弓手'),
-    );
-    archer?.click();
-    expect(levelButtons()[0]?.classList.contains('is-active')).toBe(true);
-    expect(levelButtons()).toHaveLength(12);
-
+    expect(document.querySelectorAll('.codex-level')).toHaveLength(0);
     page.dispose();
   });
 

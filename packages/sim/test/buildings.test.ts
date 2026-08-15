@@ -262,7 +262,7 @@ describe('建筑系统', () => {
     expect(isInsideArenaMargin(unit)).toBe(true);
   });
 
-  it('基地在射程内以投射物攻击敌军（同 1 级箭塔）', () => {
+  it('基地在射程内以投射物攻击敌军（同箭塔）', () => {
     const world = new World(1);
     // 基地占地 4，中心 (9,16)；敌军放在射程内正西
     const base = world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(16))!;

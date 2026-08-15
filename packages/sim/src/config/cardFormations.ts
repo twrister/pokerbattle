@@ -71,7 +71,6 @@ export const FORMATION_THUMB_SCALE = 2;
 /** 搭配中的单个兵种条目（由 rows 汇总，供 UI 统计）。 */
 export interface FormationUnitEntry {
   typeId: UnitTypeId;
-  level: number;
   count: number;
 }
 
@@ -81,7 +80,6 @@ export interface FormationUnitEntry {
  */
 export interface FormationSlot {
   typeId: UnitTypeId;
-  level: number;
   row: number;
   col: number;
 }
@@ -120,7 +118,6 @@ export interface CardFormation {
 /** 解析后的世界坐标出生点（浮点格坐标，出兵前再 fromFloat）。 */
 export interface FormationSpawnPoint {
   typeId: UnitTypeId;
-  level: number;
   x: number;
   y: number;
   row: number;
@@ -151,7 +148,7 @@ function slotsFromRows(rows: readonly (readonly UnitTypeId[])[]): FormationSlot[
   const slots: FormationSlot[] = [];
   rows.forEach((row, rowIndex) => {
     row.forEach((typeId, colIndex) => {
-      slots.push({ typeId, level: 1, row: rowIndex, col: colIndex });
+      slots.push({ typeId, row: rowIndex, col: colIndex });
     });
   });
   return slots;
@@ -159,14 +156,13 @@ function slotsFromRows(rows: readonly (readonly UnitTypeId[])[]): FormationSlot[
 
 /** 按出现顺序汇总各兵种数量。 */
 function unitsFromSlots(slots: readonly FormationSlot[]): FormationUnitEntry[] {
-  const counts = new Map<string, number>();
+  const counts = new Map<UnitTypeId, number>();
   const order: FormationUnitEntry[] = [];
   for (const slot of slots) {
-    const key = `${slot.typeId}:${slot.level}`;
-    if (!counts.has(key)) order.push({ typeId: slot.typeId, level: slot.level, count: 0 });
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (!counts.has(slot.typeId)) order.push({ typeId: slot.typeId, count: 0 });
+    counts.set(slot.typeId, (counts.get(slot.typeId) ?? 0) + 1);
   }
-  return order.map((entry) => ({ ...entry, count: counts.get(`${entry.typeId}:${entry.level}`)! }));
+  return order.map((entry) => ({ ...entry, count: counts.get(entry.typeId)! }));
 }
 
 /** 解析阵型按钮放大倍率；非法或未配置时回落默认。 */
@@ -334,7 +330,7 @@ function formationFromMappedRows(
 ): CardFormation {
   const rows = mappedRows.map((row) => row.map((unit) => unit.typeId));
   const slots = mappedRows.flatMap((row, rowIndex) =>
-    row.map((unit, col) => ({ typeId: unit.typeId, level: unit.level, row: rowIndex, col })),
+    row.map((unit, col) => ({ typeId: unit.typeId, row: rowIndex, col })),
   );
   return { ...source, rows, slots, units: unitsFromSlots(slots) };
 }
@@ -693,7 +689,6 @@ export function resolveFormationSpawns(
     const localForward = forwardCenter - slot.row * rowSpacing;
     return {
       typeId: slot.typeId,
-      level: slot.level,
       x: anchorX + facingRight * localRight,
       y: anchorY + facingForward * localForward,
       row: slot.row,
@@ -708,11 +703,10 @@ export function resolveFormationSpawnsFx(
   faction: Faction,
   anchorX: Fx,
   anchorY: Fx,
-): Array<{ typeId: UnitTypeId; level: number; x: Fx; y: Fx; row: number; col: number }> {
+): Array<{ typeId: UnitTypeId; x: Fx; y: Fx; row: number; col: number }> {
   return resolveFormationSpawns(formation, faction, toFloat(anchorX), toFloat(anchorY)).map(
     (point) => ({
       typeId: point.typeId,
-      level: point.level,
       x: fromFloat(point.x),
       y: fromFloat(point.y),
       row: point.row,

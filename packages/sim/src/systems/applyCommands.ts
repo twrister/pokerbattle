@@ -63,17 +63,16 @@ function applyPlayFormation(
   if (isBuildingOnlyFormation(formation)) {
     const typeId = getFormationBuildingTypeId(formation);
     if (!typeId) return;
-    world.spawnBuilding(command.faction, typeId, command.x, command.y, formation.slots[0]!.level);
+    world.spawnBuilding(command.faction, typeId, command.x, command.y);
     return;
   }
   if (isFuseBombFormation(formation)) {
     const bombType = getFuseBombTypeId(formation)!;
-    const level = formation.slots[0]!.level;
     const damageOverride = resolveFuseBombDamage(formation, cards as PlayingCard[]);
     if (bombType === 'small_bomb') {
-      world.spawnSmallBomb(command.faction, command.x, command.y, level, damageOverride);
+      world.spawnSmallBomb(command.faction, command.x, command.y, damageOverride);
     } else {
-      world.spawnGiantBomb(command.faction, command.x, command.y, level, damageOverride);
+      world.spawnGiantBomb(command.faction, command.x, command.y, damageOverride);
     }
     return;
   }
@@ -81,6 +80,6 @@ function applyPlayFormation(
   const points = resolveFormationSpawnsFx(formation, command.faction, command.x, command.y);
   for (const point of points) {
     if (isBuildingConfig(getUnitConfig(point.typeId))) continue;
-    world.spawnUnit(command.faction, point.typeId, point.x, point.y, point.level);
+    world.spawnUnit(command.faction, point.typeId, point.x, point.y);
   }
 }

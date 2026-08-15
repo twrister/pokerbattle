@@ -80,8 +80,8 @@ describe('牌型兵种阵型配置', () => {
       'melee_grunt',
     ]);
     expect(layoutMappedUnits([
-      { typeId: 'ranged_archer', level: 1 },
-      { typeId: 'melee_grunt', level: 1 },
+      { typeId: 'ranged_archer' },
+      { typeId: 'melee_grunt' },
     ]).map((row) => row.map((unit) => unit.typeId))).toEqual([
       ['melee_grunt'],
       ['ranged_archer'],
@@ -144,8 +144,8 @@ describe('牌型兵种阵型配置', () => {
     applyCardFormationDrafts(drafts);
 
     expect(CARD_FORMATIONS.pair[0]!.slots).toEqual([
-      { typeId: 'ranged_archer', level: 1, row: 0, col: 0 },
-      { typeId: 'melee_grunt', level: 1, row: 1, col: 0 },
+      { typeId: 'ranged_archer', row: 0, col: 0 },
+      { typeId: 'melee_grunt', row: 1, col: 0 },
     ]);
     expect(CARD_FORMATIONS.pair[0]!.colSpacing).toBe(2);
     expect(CARD_FORMATIONS.pair[0]!.thumbScale).toBe(2.5);
@@ -172,21 +172,21 @@ describe('牌型兵种阵型配置', () => {
     expect(validateCardFormationDrafts(multiBuilding)).toContain('只能配置单个建筑');
   });
 
-  it('按选中牌面推导数字牌组合的数量；等级关闭时一律为 1 级', () => {
+  it('按选中牌面推导数字牌组合的数量', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const formationFor = (category: Parameters<typeof getFormationsFor>[0], ids: string[], id: string) =>
       getFormationsFor(category, cards(...ids)).find((formation) => formation.id === id)!;
 
     const single = formationFor(['single'], ['10-spades'], 'single_grunt');
-    expect(single.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 1 }]);
+    expect(single.units).toEqual([{ typeId: 'melee_grunt', count: 1 }]);
 
     const pair = formationFor(['pair'], ['10-spades', '10-hearts'], 'pair_grunt');
-    expect(pair.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 3 }]);
+    expect(pair.units).toEqual([{ typeId: 'melee_grunt', count: 3 }]);
 
     const straight3 = formationFor(['straight3'], ['8-spades', '9-hearts', '10-clubs'], 'straight3_number');
     expect(straight3.units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 2 },
-      { typeId: 'ranged_archer', level: 1, count: 2 },
+      { typeId: 'melee_grunt', count: 2 },
+      { typeId: 'ranged_archer', count: 2 },
     ]);
     expect(straight3.slots).toHaveLength(4);
 
@@ -196,13 +196,13 @@ describe('牌型兵种阵型配置', () => {
       'straight4_number',
     );
     expect(straight4.units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 3 },
-      { typeId: 'ranged_archer', level: 1, count: 3 },
+      { typeId: 'melee_grunt', count: 3 },
+      { typeId: 'ranged_archer', count: 3 },
     ]);
     expect(straight4.slots).toHaveLength(6);
 
     const triple = formationFor(['triple'], ['10-spades', '10-hearts', '10-clubs'], 'triple_grunt');
-    expect(triple.units).toEqual([{ typeId: 'melee_grunt', level: 1, count: 6 }]);
+    expect(triple.units).toEqual([{ typeId: 'melee_grunt', count: 6 }]);
 
     const twoPair = formationFor(
       ['two_pair'],
@@ -210,17 +210,9 @@ describe('牌型兵种阵型配置', () => {
       'two_pair_number',
     );
     expect(twoPair.units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 4 },
-      { typeId: 'ranged_archer', level: 1, count: 4 },
+      { typeId: 'melee_grunt', count: 4 },
+      { typeId: 'ranged_archer', count: 4 },
     ]);
-
-    for (const rank of ['3', '5', '10'] as const) {
-      const entry = formationFor(['single'], [`${rank}-spades`], 'single_grunt');
-      expect(entry.slots.every((slot) => slot.level === 1)).toBe(true);
-      expect(resolveFormationSpawns(entry, Faction.Blue, 9, 8).every((point) => point.level === 1)).toBe(
-        true,
-      );
-    }
   });
 
   it('三条按点数匹配可配置站位，并可兑换小炸弹', () => {
@@ -246,12 +238,12 @@ describe('牌型兵种阵型配置', () => {
       'triple_small_bomb',
     ]);
     expect(formationFor(['5-spades', '5-hearts', '5-clubs'], 'triple_grunt').units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 6 },
+      { typeId: 'melee_grunt', count: 6 },
     ]);
     expect(idsFor(['J-spades', 'J-hearts', 'J-clubs'])).toEqual(['triple_J', 'triple_small_bomb']);
     expect(formationFor(['J-spades', 'J-hearts', 'J-clubs'], 'triple_J').units).toEqual([
-      { typeId: 'melee_guard', level: 1, count: 3 },
-      { typeId: 'ranged_archer', level: 1, count: 3 },
+      { typeId: 'melee_guard', count: 3 },
+      { typeId: 'ranged_archer', count: 3 },
     ]);
     expect(idsFor(['A-spades', 'A-hearts', 'A-clubs'])).toEqual(['triple_A', 'triple_small_bomb']);
     expect(formationFor(['A-spades', 'A-hearts', 'A-clubs'], 'triple_A').rows).toEqual([
@@ -260,7 +252,7 @@ describe('牌型兵种阵型配置', () => {
     ]);
 
     const smallBomb = formationFor(['2-spades', '2-hearts', '2-clubs'], 'triple_small_bomb');
-    expect(smallBomb.slots).toEqual([{ typeId: 'small_bomb', level: 1, row: 0, col: 0 }]);
+    expect(smallBomb.slots).toEqual([{ typeId: 'small_bomb', row: 0, col: 0 }]);
   });
 
   it('三顺按点数段匹配可配置站位，且只展示命中段', () => {
@@ -281,20 +273,20 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['3-spades', '4-hearts', '5-clubs'])).toEqual(['straight3_number']);
     expect(formationFor(['3-spades', '4-hearts', '5-clubs'], 'straight3_number').units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 2 },
-      { typeId: 'ranged_archer', level: 1, count: 2 },
+      { typeId: 'melee_grunt', count: 2 },
+      { typeId: 'ranged_archer', count: 2 },
     ]);
     expect(idsFor(['A-spades', '2-hearts', '3-clubs'])).toEqual(['straight3_A23']);
     expect(formationFor(['A-spades', '2-hearts', '3-clubs'], 'straight3_A23').units).toEqual([
-      { typeId: 'melee_cavalry', level: 1, count: 1 },
-      { typeId: 'melee_grunt', level: 1, count: 1 },
-      { typeId: 'ranged_archer', level: 1, count: 2 },
+      { typeId: 'melee_cavalry', count: 1 },
+      { typeId: 'melee_grunt', count: 1 },
+      { typeId: 'ranged_archer', count: 2 },
     ]);
     expect(idsFor(['9-spades', '10-hearts', 'J-clubs'])).toEqual(['straight3_910J']);
     expect(formationFor(['9-spades', '10-hearts', 'J-clubs'], 'straight3_910J').units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 1 },
-      { typeId: 'melee_guard', level: 1, count: 1 },
-      { typeId: 'ranged_archer', level: 1, count: 2 },
+      { typeId: 'melee_grunt', count: 1 },
+      { typeId: 'melee_guard', count: 1 },
+      { typeId: 'ranged_archer', count: 2 },
     ]);
     expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs'])).toEqual(['straight3_10JQ']);
     expect(formationFor(['10-spades', 'J-hearts', 'Q-clubs'], 'straight3_10JQ').rows).toEqual([
@@ -354,14 +346,14 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'])).toEqual(['straight4_number']);
     expect(formationFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'], 'straight4_number').units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 3 },
-      { typeId: 'ranged_archer', level: 1, count: 3 },
+      { typeId: 'melee_grunt', count: 3 },
+      { typeId: 'ranged_archer', count: 3 },
     ]);
     expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'])).toEqual(['straight4_A234']);
     expect(formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'], 'straight4_A234').units).toEqual([
-      { typeId: 'melee_cavalry', level: 1, count: 1 },
-      { typeId: 'melee_grunt', level: 1, count: 1 },
-      { typeId: 'ranged_archer', level: 1, count: 2 },
+      { typeId: 'melee_cavalry', count: 1 },
+      { typeId: 'melee_grunt', count: 1 },
+      { typeId: 'ranged_archer', count: 2 },
     ]);
     expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'])).toEqual(['straight4_8910J']);
     expect(formationFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'], 'straight4_8910J').rows).toEqual([
@@ -432,8 +424,8 @@ describe('牌型兵种阵型配置', () => {
     expect(
       formationFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'], 'straight5_number').units,
     ).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 4 },
-      { typeId: 'ranged_archer', level: 1, count: 4 },
+      { typeId: 'melee_grunt', count: 4 },
+      { typeId: 'ranged_archer', count: 4 },
     ]);
 
     expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'])).toEqual([
@@ -613,10 +605,10 @@ describe('牌型兵种阵型配置', () => {
       getFormationsFor(category, cards(...cardIds)).map((formation) => formation.id);
 
     expect(formationFor(['single'], ['joker-black'], 'single_joker_black')?.units).toEqual([
-      { typeId: 'hero_mage', level: 1, count: 1 },
+      { typeId: 'hero_mage', count: 1 },
     ]);
     expect(formationFor(['single'], ['joker-red'], 'single_joker_red')?.units).toEqual([
-      { typeId: 'hero_archmage', level: 1, count: 1 },
+      { typeId: 'hero_archmage', count: 1 },
     ]);
     expect(idsFor(['single'], ['J-spades'])).toEqual(['single_J']);
     expect(idsFor(['single'], ['Q-hearts'])).toEqual(['single_Q']);
@@ -640,14 +632,14 @@ describe('牌型兵种阵型配置', () => {
     );
     expect(formation?.rows).toEqual([['melee_grunt', 'ranged_archer']]);
     expect(formation?.units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 1 },
-      { typeId: 'ranged_archer', level: 1, count: 1 },
+      { typeId: 'melee_grunt', count: 1 },
+      { typeId: 'ranged_archer', count: 1 },
     ]);
     // J 不受 A 配置影响
     expect(
       getFormationsFor(['single'], [getPokerCardById('J-spades')!]).find((entry) => entry.id === 'single_J')
         ?.units,
-    ).toEqual([{ typeId: 'melee_guard', level: 1, count: 1 }]);
+    ).toEqual([{ typeId: 'melee_guard', count: 1 }]);
 
     resetCardFormationsToDefault();
   });
@@ -674,8 +666,8 @@ describe('牌型兵种阵型配置', () => {
     );
     expect(formation?.rows).toEqual([['melee_grunt'], ['ranged_archer']]);
     expect(formation?.units).toEqual([
-      { typeId: 'melee_grunt', level: 1, count: 1 },
-      { typeId: 'ranged_archer', level: 1, count: 1 },
+      { typeId: 'melee_grunt', count: 1 },
+      { typeId: 'ranged_archer', count: 1 },
     ]);
 
     resetCardFormationsToDefault();

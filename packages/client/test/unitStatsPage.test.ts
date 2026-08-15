@@ -107,7 +107,7 @@ describe('单位参数页', () => {
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/__pb/unit-configs');
-    expect(dumpUnitConfigDrafts().melee_grunt.levels?.['1']?.maxHp).toBe(999);
+    expect(dumpUnitConfigDrafts().melee_grunt.maxHp).toBe(999);
 
     resetUnitConfigsToDefault();
     expect(UNIT_CONFIGS.melee_grunt.maxHp).not.toBe(999);
@@ -143,7 +143,7 @@ describe('单位参数页', () => {
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
-    expect(dumpUnitConfigDrafts().melee_cavalry.levels?.['1']?.charge?.hitDamage).toBe(77);
+    expect(dumpUnitConfigDrafts().melee_cavalry.charge?.hitDamage).toBe(77);
 
     resetUnitConfigsToDefault();
     expect(UNIT_CONFIGS.melee_cavalry.charge).toBeTruthy();
@@ -173,7 +173,6 @@ describe('单位参数页', () => {
       expect(fetchMock).toHaveBeenCalled();
     });
     expect(dumpUnitConfigDrafts().melee_grunt.tag).toBe('先锋');
-    expect(dumpUnitConfigDrafts().melee_grunt.levels?.['1']).not.toHaveProperty('tag');
 
     const drafts = dumpUnitConfigDrafts();
     drafts.melee_grunt.tag = '近战';

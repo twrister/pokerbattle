@@ -32,7 +32,7 @@ export interface Entry {
 
 /** 数字牌 2～10 在当前配置下无内部梯度，报表固定提示此说明。 */
 export const NUMBERS_FLAT_NOTE =
-  '当前配置下数字牌 2～10 共用同一套兵种与 1 级属性，本工具将其视为单一牌位组，内部无梯度。';
+  '当前配置下数字牌 2～10 共用同一套兵种与单位属性，本工具将其视为单一牌位组，内部无梯度。';
 
 /** 枚举全部阵型条目；引信炸弹按 rankDamage 档位拆成多条。 */
 export function listBalanceEntries(): Entry[] {

@@ -13,8 +13,6 @@ import type { World } from './world.js';
 export interface UnitSnapshot {
   id: number;
   typeId: UnitTypeId;
-  /** 单位出生等级，供战场与调试视图展示。 */
-  level: number;
   faction: Faction;
   state: UnitState;
   x: number;
@@ -121,7 +119,6 @@ function writeUnitSnapshots(world: World, units: UnitSnapshot[]): void {
     const slot = units[n] ?? (units[n] = {} as UnitSnapshot);
     slot.id = unit.id;
     slot.typeId = unit.typeId;
-    slot.level = unit.level;
     slot.faction = unit.faction;
     slot.state = unit.state;
     slot.x = toFloat(unit.pos.x);

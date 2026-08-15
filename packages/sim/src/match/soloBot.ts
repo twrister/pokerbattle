@@ -179,7 +179,7 @@ export class SoloBotController {
     const categoryScore = category ? categoryStrength(category) : 0;
     // 张数与牌型权重抬高，鼓励对子及以上组合而不是散出单张
     const comboScore = cards.length * 14 + (cards.length >= 3 ? 12 : 0);
-    const unitScore = formation.slots.reduce((sum, slot) => sum + unitValue(slot.typeId, slot.level), 0);
+    const unitScore = formation.slots.reduce((sum, slot) => sum + unitValue(slot.typeId), 0);
     const selfUnits = match.world.units.filter((unit) => !unit.dead && unit.faction === this.faction).length;
     const enemyUnits = match.world.units.filter((unit) => !unit.dead && unit.faction !== this.faction).length;
     const { minY, maxY } = halfCourtYRange(this.faction);
@@ -238,9 +238,9 @@ function categoryStrength(category: string): number {
   return rank < 0 ? 0 : HAND_CATEGORY_STRENGTH_ORDER.length - rank;
 }
 
-function unitValue(typeId: keyof typeof UNIT_CONFIGS, level: number): number {
+function unitValue(typeId: keyof typeof UNIT_CONFIGS): number {
   const config = UNIT_CONFIGS[typeId];
-  return Math.max(1, Math.round((toFloat(config.maxHp) + toFloat(config.damage) * 8) * (1 + level * 0.12) / 30));
+  return Math.max(1, Math.round((toFloat(config.maxHp) + toFloat(config.damage) * 8) / 30));
 }
 
 function predictedThreat(cards: readonly PlayingCard[]): number {

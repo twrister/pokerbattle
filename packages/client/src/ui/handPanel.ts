@@ -9,7 +9,6 @@ import {
   MAX_HAND_SIZE,
   PokerDeck,
   UNIT_CONFIGS,
-  UNIT_LEVELS_ENABLED,
   type CardFormation,
   type PlayingCard,
   type UnitTypeId,
@@ -721,7 +720,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
           .map((formation) =>
             [
               formation.id,
-              formation.slots.map((slot) => `${slot.typeId}:${slot.level}:${slot.row}:${slot.col}`).join(','),
+              formation.slots.map((slot) => `${slot.typeId}:${slot.row}:${slot.col}`).join(','),
               getExclusiveFormationUnitTag(formation),
             ].join('#'),
           )
@@ -935,20 +934,16 @@ function formatFormationUnits(formation: CardFormation): string {
 
 /** 单排兵种短标签，如「民兵x2 · 弓手x1」。 */
 function formatRowUnits(formation: CardFormation, rowIndex: number): string {
-  const counts = new Map<string, number>();
-  const order: Array<{ typeId: UnitTypeId; level: number }> = [];
+  const counts = new Map<UnitTypeId, number>();
+  const order: UnitTypeId[] = [];
   for (const slot of formation.slots.filter((entry) => entry.row === rowIndex)) {
-    const key = `${slot.typeId}:${slot.level}`;
-    if (!counts.has(key)) order.push({ typeId: slot.typeId, level: slot.level });
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (!counts.has(slot.typeId)) order.push(slot.typeId);
+    counts.set(slot.typeId, (counts.get(slot.typeId) ?? 0) + 1);
   }
   return order
-    .map(({ typeId, level }) => {
+    .map((typeId) => {
       const name = UNIT_CONFIGS[typeId]?.name.replace(/（.*?）/, '') ?? typeId;
-      // 等级关闭时不展示「N级」前缀，避免全是 1 级的噪音。
-      return UNIT_LEVELS_ENABLED
-        ? `${level}级${name}x${counts.get(`${typeId}:${level}`)}`
-        : `${name}x${counts.get(`${typeId}:${level}`)}`;
+      return `${name}x${counts.get(typeId)}`;
     })
     .join(' · ');
 }

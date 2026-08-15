@@ -1,9 +1,7 @@
 import {
   TICK_RATE,
   UNIT_CONFIGS,
-  UNIT_LEVELS_ENABLED,
   type UnitConfigDraft,
-  type UnitLevelConfigDraft,
   type UnitTypeId,
 } from '@pb/sim';
 import {
@@ -13,7 +11,6 @@ import {
   PRE_ATTACK_NUMERIC_KEYS,
   PRIMARY_NUMERIC_KEYS,
   formatDraftNumber,
-  getLevelDraft,
   loadUnitDrafts,
   presentSkillGroups,
   readControlsIntoDrafts,
@@ -65,7 +62,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
 
   const catalog = getUnitCatalogEntries();
   let drafts: UnitDraftMap = loadUnitDrafts();
-  let selectedLevels = new Map<UnitTypeId, number>();
   let saveSeq = 0;
   let onApplied = options.onApplied ?? (() => {});
   let overlayMode = false;
@@ -121,7 +117,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     };
     appendHead('兵种', 'name');
     appendHead('标签', 'tag');
-    if (UNIT_LEVELS_ENABLED) appendHead('等级', 'level');
     for (const key of PRIMARY_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
     for (const key of POST_MOVE_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
     for (const key of PRE_ATTACK_NUMERIC_KEYS) appendHead(fieldLabel(key), key);
@@ -135,7 +130,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    const maxima = computeOverviewMaxima(catalog, drafts, selectedLevels);
+    const maxima = computeOverviewMaxima(catalog, drafts);
     for (const entry of catalog) {
       tbody.appendChild(makeOverviewRow(entry, maxima));
     }
@@ -150,8 +145,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   ): HTMLTableRowElement {
     const typeId = entry.typeId;
     const draft = drafts[typeId];
-    const level = selectedLevels.get(typeId) ?? 1;
-    const levelDraft = getLevelDraft(draft, level);
     const row = document.createElement('tr');
     row.dataset.unit = typeId;
 
@@ -180,67 +173,35 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     tagCell.appendChild(tagInput);
     row.appendChild(tagCell);
 
-    if (UNIT_LEVELS_ENABLED) {
-      const levelCell = document.createElement('td');
-      levelCell.appendChild(makeLevelSelect(typeId, draft, level));
-      row.appendChild(levelCell);
-    }
-
     for (const key of PRIMARY_NUMERIC_KEYS) {
-      row.appendChild(makeNumericCell(typeId, level, levelDraft, key, maxima));
+      row.appendChild(makeNumericCell(typeId, draft, key, maxima));
     }
     for (const key of POST_MOVE_NUMERIC_KEYS) {
-      row.appendChild(makeNumericCell(typeId, level, levelDraft, key, maxima));
+      row.appendChild(makeNumericCell(typeId, draft, key, maxima));
     }
     for (const key of PRE_ATTACK_NUMERIC_KEYS) {
-      row.appendChild(makeNumericCell(typeId, level, levelDraft, key, maxima));
+      row.appendChild(makeNumericCell(typeId, draft, key, maxima));
     }
 
     const dpsCell = document.createElement('td');
     dpsCell.className = 'unit-stats-readonly';
-    const dps = computeStat(levelDraft, 'dps');
+    const dps = computeStat(draft, 'dps');
     dpsCell.appendChild(makeValueWithBar(formatDraftNumber(dps), dps / Math.max(maxima.dps, 1e-6)));
     row.appendChild(dpsCell);
 
-    row.appendChild(makeAttackKindCell(typeId, level, levelDraft.attackKind));
+    row.appendChild(makeAttackKindCell(typeId, draft.attackKind));
     for (const key of AOE_NUMERIC_KEYS) {
-      row.appendChild(makeAoeRadiusCell(typeId, level, levelDraft, key, maxima));
+      row.appendChild(makeAoeRadiusCell(typeId, draft, key, maxima));
     }
-    row.appendChild(makeMovementLayerCell(typeId, level, levelDraft.movementLayer));
-    row.appendChild(makeMoreCell(typeId, level, levelDraft));
-    row.appendChild(makeSkillCell(typeId, level, levelDraft));
+    row.appendChild(makeMovementLayerCell(typeId, draft.movementLayer));
+    row.appendChild(makeMoreCell(typeId, draft));
+    row.appendChild(makeSkillCell(typeId, draft));
     return row;
-  }
-
-  function makeLevelSelect(
-    typeId: UnitTypeId,
-    draft: UnitDraftMap[UnitTypeId],
-    selectedLevel: number,
-  ): HTMLSelectElement {
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', '等级');
-    const levels = Object.keys(draft.levels ?? { 1: getLevelDraft(draft, 1) })
-      .map(Number)
-      .sort((a, b) => a - b);
-    for (const level of levels) {
-      const option = document.createElement('option');
-      option.value = String(level);
-      option.textContent = String(level);
-      option.selected = level === selectedLevel;
-      select.appendChild(option);
-    }
-    select.addEventListener('change', () => {
-      readControlsIntoDrafts(panelRoot, drafts);
-      selectedLevels.set(typeId, Number(select.value) || 1);
-      render();
-    });
-    return select;
   }
 
   function makeNumericCell(
     typeId: UnitTypeId,
-    level: number,
-    levelDraft: UnitLevelConfigDraft,
+    draft: UnitConfigDraft,
     key:
       | (typeof PRIMARY_NUMERIC_KEYS)[number]
       | (typeof POST_MOVE_NUMERIC_KEYS)[number]
@@ -250,7 +211,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     const cell = document.createElement('td');
     cell.dataset.field = key;
     const meta = NUMERIC_FIELDS.find((field) => field.key === key);
-    const value = levelDraft[key as keyof UnitLevelConfigDraft];
+    const value = draft[key as keyof UnitConfigDraft];
     if (typeof value !== 'number' || !meta) {
       cell.textContent = '—';
       return cell;
@@ -259,7 +220,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.type = 'number';
     input.step = meta.step;
     input.dataset.unit = typeId;
-    input.dataset.level = String(level);
     input.dataset.field = key;
     input.value = formatDraftNumber(value);
     input.setAttribute('aria-label', meta.label);
@@ -270,8 +230,8 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     });
     // 主战斗属性走对比键（如攻击间隔→攻速）；半径/体型/前摇按自身值相对全库上限
     const compareKey = primaryToCompareKey(key);
-    const barValue = compareKey ? computeStat(levelDraft, compareKey) : value;
-    const barMax = compareKey ? maxima[compareKey] : maxima[key];
+    const barValue = compareKey ? computeStat(draft, compareKey) : value;
+    const barMax = compareKey ? maxima[compareKey] : maxima[key as OverviewBarKey];
     const ratio = barValue / Math.max(barMax, 1e-6);
     cell.appendChild(makeValueWithBar(input, ratio));
     return cell;
@@ -279,13 +239,11 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
 
   function makeAttackKindCell(
     typeId: UnitTypeId,
-    level: number,
     kind: UnitConfigDraft['attackKind'],
   ): HTMLTableCellElement {
     const cell = document.createElement('td');
     const select = document.createElement('select');
     select.dataset.unit = typeId;
-    select.dataset.level = String(level);
     select.dataset.field = 'attackKind';
     for (const [value, text] of [
       ['melee', '近战'],
@@ -310,19 +268,18 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   /** 落点范围弹才可编辑爆炸范围；其它攻击方式显示破折号。 */
   function makeAoeRadiusCell(
     typeId: UnitTypeId,
-    level: number,
-    levelDraft: UnitLevelConfigDraft,
+    draft: UnitConfigDraft,
     key: (typeof AOE_NUMERIC_KEYS)[number],
     maxima: Record<OverviewBarKey, number>,
   ): HTMLTableCellElement {
     const cell = document.createElement('td');
     cell.dataset.field = key;
-    if (levelDraft.attackKind !== 'projectile_aoe') {
+    if (draft.attackKind !== 'projectile_aoe') {
       cell.textContent = '—';
       return cell;
     }
     const meta = NUMERIC_FIELDS.find((field) => field.key === key);
-    const value = levelDraft[key];
+    const value = draft[key];
     if (typeof value !== 'number' || !meta) {
       cell.textContent = '—';
       return cell;
@@ -331,7 +288,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     input.type = 'number';
     input.step = meta.step;
     input.dataset.unit = typeId;
-    input.dataset.level = String(level);
     input.dataset.field = key;
     input.value = formatDraftNumber(value);
     input.setAttribute('aria-label', meta.label);
@@ -346,13 +302,11 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
 
   function makeMovementLayerCell(
     typeId: UnitTypeId,
-    level: number,
     layer: UnitConfigDraft['movementLayer'],
   ): HTMLTableCellElement {
     const cell = document.createElement('td');
     const select = document.createElement('select');
     select.dataset.unit = typeId;
-    select.dataset.level = String(level);
     select.dataset.field = 'movementLayer';
     for (const [value, text] of [
       ['ground', '地面'],
@@ -371,8 +325,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   /** 次要字段折叠在 details 内，避免总览过宽。 */
   function makeMoreCell(
     typeId: UnitTypeId,
-    level: number,
-    levelDraft: UnitLevelConfigDraft,
+    draft: UnitConfigDraft,
   ): HTMLTableCellElement {
     const cell = document.createElement('td');
     const details = document.createElement('details');
@@ -392,12 +345,12 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     for (const field of secondary) {
       if (
         field.key === 'projectileSpeed' &&
-        levelDraft.attackKind !== 'projectile' &&
-        levelDraft.attackKind !== 'projectile_aoe'
+        draft.attackKind !== 'projectile' &&
+        draft.attackKind !== 'projectile_aoe'
       ) {
         continue;
       }
-      const value = levelDraft[field.key as keyof UnitLevelConfigDraft];
+      const value = draft[field.key as keyof UnitConfigDraft];
       if (typeof value !== 'number') continue;
       const label = document.createElement('label');
       label.className = 'unit-stats-more-row';
@@ -407,7 +360,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       input.type = 'number';
       input.step = field.step;
       input.dataset.unit = typeId;
-      input.dataset.level = String(level);
       input.dataset.field = field.key;
       input.value = formatDraftNumber(value);
       label.append(caption, input);
@@ -421,12 +373,11 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   /** 有技能块时折叠编辑；无技能显示破折号。 */
   function makeSkillCell(
     typeId: UnitTypeId,
-    level: number,
-    levelDraft: UnitLevelConfigDraft,
+    draft: UnitConfigDraft,
   ): HTMLTableCellElement {
     const cell = document.createElement('td');
     cell.dataset.field = 'skill';
-    const groups = presentSkillGroups(levelDraft);
+    const groups = presentSkillGroups(draft);
     if (groups.length === 0) {
       cell.textContent = '—';
       return cell;
@@ -439,7 +390,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     const list = document.createElement('div');
     list.className = 'unit-stats-more-fields';
     for (const group of groups) {
-      const block = levelDraft[group.key];
+      const block = draft[group.key];
       if (!block) continue;
       const title = document.createElement('div');
       title.className = 'unit-stats-skill-group';
@@ -453,7 +404,6 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
         if (field.kind === 'select') {
           const select = document.createElement('select');
           select.dataset.unit = typeId;
-          select.dataset.level = String(level);
           select.dataset.skill = group.key;
           select.dataset.field = field.key;
           const current =
@@ -469,13 +419,12 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
           }
           label.append(caption, select);
         } else {
-          const raw = (block as Record<string, unknown>)[field.key];
+          const raw = (block as unknown as Record<string, unknown>)[field.key];
           if (typeof raw !== 'number') continue;
           const input = document.createElement('input');
           input.type = 'number';
           input.step = field.step;
           input.dataset.unit = typeId;
-          input.dataset.level = String(level);
           input.dataset.skill = group.key;
           input.dataset.field = field.key;
           input.value = formatDraftNumber(raw);
@@ -561,24 +510,24 @@ function primaryToCompareKey(
   }
 }
 
-/** 从等级草稿计算对比用属性值。 */
-function computeStat(levelDraft: UnitLevelConfigDraft, key: CompareStatKey): number {
-  const interval = Math.max(levelDraft.attackInterval, 1e-6);
+/** 从草稿计算对比用属性值。 */
+function computeStat(draft: UnitConfigDraft, key: CompareStatKey): number {
+  const interval = Math.max(draft.attackInterval, 1e-6);
   switch (key) {
     case 'maxHp':
-      return levelDraft.maxHp;
+      return draft.maxHp;
     case 'damage':
-      return levelDraft.damage;
+      return draft.damage;
     case 'attackSpeed':
       return TICK_RATE / interval;
     case 'dps':
-      return levelDraft.damage * (TICK_RATE / interval);
+      return draft.damage * (TICK_RATE / interval);
     case 'range':
-      return levelDraft.range;
+      return draft.range;
     case 'moveSpeed':
-      return levelDraft.moveSpeed;
+      return draft.moveSpeed;
     case 'sightRange':
-      return levelDraft.sightRange;
+      return draft.sightRange;
     default:
       return 0;
   }
@@ -588,7 +537,6 @@ function computeStat(levelDraft: UnitLevelConfigDraft, key: CompareStatKey): num
 function computeCompareMaxima(
   catalog: readonly UnitCatalogEntry[],
   drafts: UnitDraftMap,
-  selectedLevels: Map<UnitTypeId, number>,
 ): Record<CompareStatKey, number> {
   const maxima: Record<CompareStatKey, number> = {
     maxHp: 0,
@@ -600,10 +548,9 @@ function computeCompareMaxima(
     sightRange: 0,
   };
   for (const entry of catalog) {
-    const level = selectedLevels.get(entry.typeId) ?? 1;
-    const levelDraft = getLevelDraft(drafts[entry.typeId], level);
+    const draft = drafts[entry.typeId];
     for (const key of Object.keys(maxima) as CompareStatKey[]) {
-      maxima[key] = Math.max(maxima[key], computeStat(levelDraft, key));
+      maxima[key] = Math.max(maxima[key], computeStat(draft, key));
     }
   }
   return maxima;
@@ -613,24 +560,22 @@ function computeCompareMaxima(
 function computeOverviewMaxima(
   catalog: readonly UnitCatalogEntry[],
   drafts: UnitDraftMap,
-  selectedLevels: Map<UnitTypeId, number>,
 ): Record<OverviewBarKey, number> {
   const maxima: Record<OverviewBarKey, number> = {
-    ...computeCompareMaxima(catalog, drafts, selectedLevels),
+    ...computeCompareMaxima(catalog, drafts),
     radius: 0,
     bodyScale: 0,
     attackWindup: 0,
     aoeRadius: 0,
   };
   for (const entry of catalog) {
-    const level = selectedLevels.get(entry.typeId) ?? 1;
-    const levelDraft = getLevelDraft(drafts[entry.typeId], level);
+    const draft = drafts[entry.typeId];
     for (const key of [...POST_MOVE_NUMERIC_KEYS, ...PRE_ATTACK_NUMERIC_KEYS]) {
-      maxima[key] = Math.max(maxima[key], levelDraft[key]);
+      maxima[key] = Math.max(maxima[key], draft[key]);
     }
     // 仅统计落点范围弹的爆炸范围，避免近战兵种的 0 拉低相对条
-    if (levelDraft.attackKind === 'projectile_aoe') {
-      maxima.aoeRadius = Math.max(maxima.aoeRadius, levelDraft.aoeRadius);
+    if (draft.attackKind === 'projectile_aoe') {
+      maxima.aoeRadius = Math.max(maxima.aoeRadius, draft.aoeRadius);
     }
   }
   return maxima;

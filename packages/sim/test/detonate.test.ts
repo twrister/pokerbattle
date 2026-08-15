@@ -79,7 +79,7 @@ describe('炸弹兵自爆', () => {
     const archmage = world.spawnUnit(Faction.Blue, 'hero_archmage', fromFloat(8), fromFloat(8));
 
     world.step();
-    // 与 units.json 1 级 summon.cooldown 对齐
+    // 与 units.json summon.cooldown 对齐
     expect(archmage.summonCooldown).toBe(fromFloat(60));
     expect(archmage.summonWindupLeft).toBeGreaterThan(0);
     expect(world.units).toHaveLength(1);

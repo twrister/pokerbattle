@@ -15,11 +15,10 @@ const PREVIEW_HALF_H = 6;
 /** 正交相机半高；略大于旧值以露出更多格子，同时单位仍够大便于辨认。 */
 const PREVIEW_ORTHO_HALF_HEIGHT = 6.5;
 
-/** 预览单位：保留站位、兵种与等级，便于贴图就绪后再次 update 同步可见性。 */
+/** 预览单位：保留站位与兵种，便于贴图就绪后再次 update 同步可见性。 */
 interface PreviewUnit {
   view: UnitView;
   typeId: UnitTypeId;
-  level: number;
   x: number;
   z: number;
 }
@@ -86,7 +85,6 @@ export function createFormationPreview(container: HTMLElement): FormationPreview
         0,
         1,
         1,
-        unit.level,
         UnitState.Idle,
         false,
         false,
@@ -137,8 +135,8 @@ export function createFormationPreview(container: HTMLElement): FormationPreview
         const view = new UnitView(Faction.Blue, point.typeId);
         const x = point.x;
         const z = -point.y;
-        view.update(x, z, 0, 1, 1, point.level, UnitState.Idle, false, false, false, false, 0, camera);
-        units.push({ view, typeId: point.typeId, level: point.level, x, z });
+        view.update(x, z, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
+        units.push({ view, typeId: point.typeId, x, z });
         scene.add(view.group);
       }
     }

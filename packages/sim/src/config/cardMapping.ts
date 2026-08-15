@@ -50,13 +50,12 @@ export function fuseBombDamageRankOf(rank: PlayingCard['rank']): FuseBombDamageR
   return '2-10';
 }
 
-/** 规则阵型中的单个出兵位；等级由展开逻辑统一赋 1。 */
+/** 规则阵型中的单个出兵位。 */
 export interface MappedFormationUnit {
   typeId: UnitTypeId;
-  level: number;
 }
 
-/** 判断点数是否走民兵/弓手的 1～9 级阶梯。 */
+/** 判断点数是否为数字牌 2～10。 */
 function isNumberRank(card: PlayingCard): boolean {
   return !card.joker && ['2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(card.rank);
 }
@@ -88,7 +87,6 @@ export function cardsMatchRule(cards: readonly PlayingCard[], match: FormationMa
 
 /**
  * 校验牌面匹配后，按配置 rows 展开站位。
- * 阵型不再单独配等级规则，出兵统一 1 级。
  * 不适用时返回 null，调用方不应向玩家展示。
  */
 export function resolveMappedRows(
@@ -97,7 +95,7 @@ export function resolveMappedRows(
   cards: readonly PlayingCard[],
 ): MappedFormationUnit[][] | null {
   if (!cardsMatchRule(cards, match)) return null;
-  return rows.map((row) => row.map((typeId) => ({ typeId, level: 1 })));
+  return rows.map((row) => row.map((typeId) => ({ typeId })));
 }
 
 /** 按攻击类型将近战排在前、远程排在后，每排最多三名以控制阵型宽度。 */

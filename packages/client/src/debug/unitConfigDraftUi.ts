@@ -10,8 +10,6 @@ import {
   type HealConfigDraft,
   type InspireConfigDraft,
   type UnitConfigDraft,
-  type UnitLevelConfigDraft,
-  type UnitTypeConfigDraft,
   type UnitTypeId,
 } from '@pb/sim';
 
@@ -125,8 +123,8 @@ export const SKILL_GROUPS: readonly SkillGroupMeta[] = [
 ];
 
 /** 草稿上已存在的技能分组（用于渲染，不创建新块）。 */
-export function presentSkillGroups(levelDraft: UnitLevelConfigDraft): SkillGroupMeta[] {
-  return SKILL_GROUPS.filter((group) => levelDraft[group.key] != null);
+export function presentSkillGroups(draft: UnitConfigDraft): SkillGroupMeta[] {
+  return SKILL_GROUPS.filter((group) => draft[group.key] != null);
 }
 
 /** 总览表优先展示的战斗向字段（其余仍可在「更多」列编辑）。 */
@@ -153,7 +151,7 @@ export const AOE_NUMERIC_KEYS = ['aoeRadius'] as const satisfies ReadonlyArray<
   keyof UnitConfigDraft
 >;
 
-export type UnitDraftMap = Record<UnitTypeId, UnitTypeConfigDraft>;
+export type UnitDraftMap = Record<UnitTypeId, UnitConfigDraft>;
 
 /** 从运行时拉取当前草稿。 */
 export function loadUnitDrafts(): UnitDraftMap {
@@ -206,23 +204,9 @@ export async function persistDraftsToFile(
   }
 }
 
-/** 取得当前等级参数；旧配置首次编辑时自动迁移成完整的一级配置。 */
-export function getLevelDraft(draft: UnitTypeConfigDraft, level: number): UnitLevelConfigDraft {
-  if (!draft.levels) {
-    const { id: _id, name: _name, tag: _tag, levels: _levels, ...levelOne } = draft;
-    draft.levels = { 1: levelOne };
-  }
-  const current = draft.levels[String(level)];
-  if (current) return current;
-  const fallback = draft.levels['1'];
-  if (!fallback) throw new Error('兵种至少需要保留一个等级');
-  draft.levels[String(level)] = { ...fallback };
-  return draft.levels[String(level)]!;
-}
-
 /** 只接受数值字段，避免把 name/attackKind/技能块误写成 number。 */
 export function assignNumericField(
-  draft: UnitLevelConfigDraft,
+  draft: UnitConfigDraft,
   field: keyof UnitConfigDraft,
   value: number,
 ): void {
@@ -252,7 +236,7 @@ export function assignNumericField(
  * 各 case 收窄嵌套类型，防止误写 unitTypeId 等非数值键。
  */
 export function assignSkillNumericField(
-  draft: UnitLevelConfigDraft,
+  draft: UnitConfigDraft,
   skill: SkillBlockKey,
   field: string,
   value: number,
@@ -348,7 +332,7 @@ function assignDetonateNumeric(block: DetonateConfigDraft, field: string, value:
 
 /** 写入召唤目标兵种；仅当召唤块已存在且选项合法时生效。 */
 export function assignSummonUnitTypeId(
-  draft: UnitLevelConfigDraft,
+  draft: UnitConfigDraft,
   unitTypeId: string,
 ): void {
   const block = draft.summon;
@@ -373,10 +357,9 @@ export function readControlsIntoDrafts(
     if (!typeId || !field) continue;
     const draft = drafts[typeId];
     if (!draft) continue;
-    const levelDraft = getLevelDraft(draft, Number(el.dataset.level) || 1);
     const skill = el.dataset.skill as SkillBlockKey | undefined;
     if (skill) {
-      readSkillControl(levelDraft, skill, field, el.value);
+      readSkillControl(draft, skill, field, el.value);
       continue;
     }
     if (field === 'name') {
@@ -390,7 +373,7 @@ export function readControlsIntoDrafts(
       continue;
     }
     if (field === 'attackKind') {
-      levelDraft.attackKind =
+      draft.attackKind =
         el.value === 'projectile_aoe'
           ? 'projectile_aoe'
           : el.value === 'projectile'
@@ -401,27 +384,27 @@ export function readControlsIntoDrafts(
       continue;
     }
     if (field === 'movementLayer') {
-      levelDraft.movementLayer = el.value === 'air' ? 'air' : 'ground';
+      draft.movementLayer = el.value === 'air' ? 'air' : 'ground';
       continue;
     }
     const num = Number(el.value);
     if (!Number.isFinite(num)) continue;
-    assignNumericField(levelDraft, field as keyof UnitConfigDraft, num);
+    assignNumericField(draft, field as keyof UnitConfigDraft, num);
   }
 }
 
 /** 按技能块类型写回控件值；summon.unitTypeId 走下拉，其余走数值。 */
 function readSkillControl(
-  levelDraft: UnitLevelConfigDraft,
+  draft: UnitConfigDraft,
   skill: SkillBlockKey,
   field: string,
   raw: string,
 ): void {
   if (skill === 'summon' && field === 'unitTypeId') {
-    assignSummonUnitTypeId(levelDraft, raw);
+    assignSummonUnitTypeId(draft, raw);
     return;
   }
   const num = Number(raw);
   if (!Number.isFinite(num)) return;
-  assignSkillNumericField(levelDraft, skill, field, num);
+  assignSkillNumericField(draft, skill, field, num);
 }

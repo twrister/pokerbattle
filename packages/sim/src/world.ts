@@ -129,11 +129,11 @@ export class World {
     this.rebuildUnitGrid(true);
   }
 
-  spawnUnit(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx, level = 1): Unit {
-    const config = getUnitConfig(typeId, level);
+  spawnUnit(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): Unit {
+    const config = getUnitConfig(typeId);
     // 建筑必须走 spawnBuilding，保证占格与寻路阻挡同步写入
     if (isBuildingConfig(config)) {
-      const building = this.spawnBuilding(faction, typeId, x, y, level);
+      const building = this.spawnBuilding(faction, typeId, x, y);
       if (!building) {
         throw new Error(`无法在 (${toFloat(x)}, ${toFloat(y)}) 放置建筑 ${typeId}`);
       }
@@ -145,7 +145,6 @@ export class World {
       faction,
       clampToArena(x, ARENA_WIDTH, config.radius),
       clampToArena(y, ARENA_HEIGHT, config.radius),
-      config.level,
     );
     // 按 id 打散首次索敌时机；锁定后不周期重选（换火见 targeting）
     unit.retargetIn = unit.id % RETARGET_INTERVAL;
@@ -178,14 +177,14 @@ export class World {
    * 放置建筑：吸附格子 → 写占格/Nav 阻挡 → 挤开区域内单位。
    * 非法落点返回 null（指令层静默丢弃，保持确定性）。
    */
-  spawnBuilding(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx, level = 1): Unit | null {
-    const config = getUnitConfig(typeId, level);
+  spawnBuilding(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): Unit | null {
+    const config = getUnitConfig(typeId);
     if (!isBuildingConfig(config)) return null;
     const snappedX = fromFloat(snapBuildingCenter(toFloat(x), config.footprint));
     const snappedY = fromFloat(snapBuildingCenter(toFloat(y), config.footprint));
     if (!this.canPlaceBuilding(typeId, snappedX, snappedY)) return null;
 
-    const unit = createUnit(this.nextEntityId++, typeId, faction, snappedX, snappedY, config.level);
+    const unit = createUnit(this.nextEntityId++, typeId, faction, snappedX, snappedY);
     unit.retargetIn = 0;
     this.setBuildingOccupation(unit, true);
     this.evictUnitsFromBuilding(unit);
@@ -327,7 +326,6 @@ export class World {
     faction: Faction,
     targetX: Fx,
     targetY: Fx,
-    level = 1,
     damageOverride?: Fx,
   ): Projectile {
     return this.spawnFuseBomb(
@@ -335,7 +333,6 @@ export class World {
       'giant_bomb',
       targetX,
       targetY,
-      level,
       BOMB_ARC_APEX * 2,
       damageOverride,
     );
@@ -349,7 +346,6 @@ export class World {
     faction: Faction,
     targetX: Fx,
     targetY: Fx,
-    level = 1,
     damageOverride?: Fx,
   ): Projectile {
     return this.spawnFuseBomb(
@@ -357,7 +353,6 @@ export class World {
       'small_bomb',
       targetX,
       targetY,
-      level,
       BOMB_ARC_APEX,
       damageOverride,
     );
@@ -369,11 +364,10 @@ export class World {
     typeId: 'giant_bomb' | 'small_bomb',
     targetX: Fx,
     targetY: Fx,
-    level: number,
     arcApex: number,
     damageOverride?: Fx,
   ): Projectile {
-    const config = getUnitConfig(typeId, level);
+    const config = getUnitConfig(typeId);
     const base = this.units.find(
       (unit) => unit.faction === faction && unit.typeId === 'building_base' && !unit.dead,
     );

@@ -3,7 +3,7 @@
     "id": "melee_grunt",
     "name": "民兵",
     "radius": 0.5,
-    "bodyScale": 1.100006103515625,
+    "bodyScale": 1.1,
     "mass": 2,
     "maxHp": 400,
     "damage": 60,
@@ -11,38 +11,19 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 1.8000030517578125,
+    "moveSpeed": 1.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
-    "tag": "近战",
-    "levels": {
-      "1": {
-        "radius": 0.5,
-        "bodyScale": 1.1,
-        "mass": 2,
-        "maxHp": 400,
-        "damage": 60,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 1.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0
-      }
-    }
+    "tag": "近战"
   },
   "melee_guard": {
     "id": "melee_guard",
     "name": "卫士",
-    "radius": 0.5500030517578125,
-    "bodyScale": 1.399993896484375,
+    "radius": 0.55,
+    "bodyScale": 1.4,
     "mass": 2,
     "maxHp": 500,
     "damage": 80,
@@ -50,38 +31,19 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 1.8000030517578125,
+    "moveSpeed": 1.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
-    "tag": "近战",
-    "levels": {
-      "1": {
-        "radius": 0.55,
-        "bodyScale": 1.4,
-        "mass": 2,
-        "maxHp": 500,
-        "damage": 80,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 1.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0
-      }
-    }
+    "tag": "近战"
   },
   "melee_golem": {
     "id": "melee_golem",
     "name": "石头人",
-    "radius": 0.8000030517578125,
-    "bodyScale": 1.8000030517578125,
+    "radius": 0.8,
+    "bodyScale": 1.8,
     "mass": 3,
     "maxHp": 8000,
     "damage": 80,
@@ -89,38 +51,19 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 0.8000030517578125,
+    "moveSpeed": 0.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
     "projectileSpeed": 9,
     "aoeRadius": 0,
-    "tag": "坦克",
-    "levels": {
-      "1": {
-        "radius": 0.8,
-        "bodyScale": 1.8,
-        "mass": 3,
-        "maxHp": 8000,
-        "damage": 80,
-        "attackInterval": 30,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 0.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0
-      }
-    }
+    "tag": "坦克"
   },
   "ranged_archer": {
     "id": "ranged_archer",
     "name": "弓手",
     "radius": 0.5,
-    "bodyScale": 0.8000030517578125,
+    "bodyScale": 0.8,
     "mass": 2,
     "maxHp": 240,
     "damage": 60,
@@ -128,38 +71,19 @@
     "attackWindup": 9,
     "range": 4,
     "minRange": 0,
-    "moveSpeed": 1.8000030517578125,
+    "moveSpeed": 1.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
-    "tag": "远程",
-    "levels": {
-      "1": {
-        "radius": 0.5,
-        "bodyScale": 0.8,
-        "mass": 2,
-        "maxHp": 240,
-        "damage": 60,
-        "attackInterval": 20,
-        "attackWindup": 9,
-        "range": 4,
-        "minRange": 0,
-        "moveSpeed": 1.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0
-      }
-    }
+    "tag": "远程"
   },
   "ranged_chariot": {
     "id": "ranged_chariot",
     "name": "战车",
-    "radius": 0.8000030517578125,
-    "bodyScale": 1.1999969482421875,
+    "radius": 0.8,
+    "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 1200,
     "damage": 120,
@@ -173,26 +97,7 @@
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 2,
-    "tag": "超远程",
-    "levels": {
-      "1": {
-        "radius": 0.8,
-        "bodyScale": 1.2,
-        "mass": 2,
-        "maxHp": 1200,
-        "damage": 120,
-        "attackInterval": 40,
-        "attackWindup": 12,
-        "range": 12,
-        "minRange": 0,
-        "moveSpeed": 0.5,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile_aoe",
-        "projectileSpeed": 9,
-        "aoeRadius": 2
-      }
-    }
+    "tag": "超远程"
   },
   "giant_bomb": {
     "id": "giant_bomb",
@@ -211,26 +116,7 @@
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 20,
-    "aoeRadius": 6,
-    "levels": {
-      "1": {
-        "radius": 1,
-        "bodyScale": 2,
-        "mass": 9999,
-        "maxHp": 1,
-        "damage": 600,
-        "attackInterval": 15,
-        "attackWindup": 0,
-        "range": 0,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 0,
-        "movementLayer": "ground",
-        "attackKind": "projectile_aoe",
-        "projectileSpeed": 20,
-        "aoeRadius": 6
-      }
-    }
+    "aoeRadius": 6
   },
   "small_bomb": {
     "id": "small_bomb",
@@ -249,40 +135,21 @@
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 20,
-    "aoeRadius": 2,
-    "levels": {
-      "1": {
-        "radius": 0.5,
-        "bodyScale": 1,
-        "mass": 9999,
-        "maxHp": 1,
-        "damage": 500,
-        "attackInterval": 10,
-        "attackWindup": 0,
-        "range": 0,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 0,
-        "movementLayer": "ground",
-        "attackKind": "projectile_aoe",
-        "projectileSpeed": 20,
-        "aoeRadius": 2
-      }
-    }
+    "aoeRadius": 2
   },
   "melee_cavalry": {
     "id": "melee_cavalry",
     "name": "皇家骑士",
-    "radius": 0.6999969482421875,
-    "bodyScale": 1.399993896484375,
+    "radius": 0.7,
+    "bodyScale": 1.4,
     "mass": 2,
     "maxHp": 800,
     "damage": 80,
     "attackInterval": 20,
     "attackWindup": 7,
-    "range": 0.600006103515625,
+    "range": 0.6,
     "minRange": 0,
-    "moveSpeed": 2.1999969482421875,
+    "moveSpeed": 2.2,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee_aoe",
@@ -299,43 +166,13 @@
       "hitDamage": 50,
       "knockback": 1,
       "aoeRadius": 1.5
-    },
-    "levels": {
-      "1": {
-        "radius": 0.7,
-        "bodyScale": 1.4,
-        "mass": 2,
-        "maxHp": 800,
-        "damage": 80,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.6,
-        "minRange": 0,
-        "moveSpeed": 2.2,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee_aoe",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "charge": {
-          "cooldown": 100,
-          "windup": 10,
-          "distance": 4,
-          "speedMul": 2,
-          "triggerMin": 3,
-          "triggerMax": 3.5,
-          "hitDamage": 50,
-          "knockback": 1,
-          "aoeRadius": 1.5
-        }
-      }
     }
   },
   "hero_king": {
     "id": "hero_king",
     "name": "国王",
-    "radius": 0.600006103515625,
-    "bodyScale": 1.1999969482421875,
+    "radius": 0.6,
+    "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 600,
     "damage": 80,
@@ -343,7 +180,7 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 1.8000030517578125,
+    "moveSpeed": 1.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
@@ -352,38 +189,14 @@
     "tag": "振奋",
     "inspire": {
       "radius": 3,
-      "attackIntervalMul": 0.8000030517578125,
-      "moveSpeedMul": 1.3000030517578125
-    },
-    "levels": {
-      "1": {
-        "radius": 0.6,
-        "bodyScale": 1.2,
-        "mass": 2,
-        "maxHp": 600,
-        "damage": 80,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 1.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "inspire": {
-          "radius": 3,
-          "attackIntervalMul": 0.8,
-          "moveSpeedMul": 1.3
-        }
-      }
+      "attackIntervalMul": 0.8,
+      "moveSpeedMul": 1.3
     }
   },
   "hero_queen": {
     "id": "hero_queen",
     "name": "女王",
-    "radius": 0.600006103515625,
+    "radius": 0.6,
     "bodyScale": 1,
     "mass": 2,
     "maxHp": 400,
@@ -392,7 +205,7 @@
     "attackWindup": 9,
     "range": 4.5,
     "minRange": 0,
-    "moveSpeed": 1.1999969482421875,
+    "moveSpeed": 1.2,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -403,37 +216,13 @@
       "cooldown": 1,
       "targetRange": 5,
       "amount": 50
-    },
-    "levels": {
-      "1": {
-        "radius": 0.6,
-        "bodyScale": 1,
-        "mass": 2,
-        "maxHp": 400,
-        "damage": 100,
-        "attackInterval": 20,
-        "attackWindup": 9,
-        "range": 4.5,
-        "minRange": 0,
-        "moveSpeed": 1.2,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "heal": {
-          "cooldown": 1,
-          "targetRange": 5,
-          "amount": 50
-        }
-      }
     }
   },
   "hero_mage": {
     "id": "hero_mage",
     "name": "法师",
-    "radius": 0.600006103515625,
-    "bodyScale": 1.1999969482421875,
+    "radius": 0.6,
+    "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 500,
     "damage": 110,
@@ -441,7 +230,7 @@
     "attackWindup": 9,
     "range": 4.5,
     "minRange": 0,
-    "moveSpeed": 0.8000030517578125,
+    "moveSpeed": 0.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -451,36 +240,13 @@
     "summon": {
       "cooldown": 90,
       "unitTypeId": "summoned_skeleton"
-    },
-    "levels": {
-      "1": {
-        "radius": 0.6,
-        "bodyScale": 1.2,
-        "mass": 2,
-        "maxHp": 500,
-        "damage": 110,
-        "attackInterval": 20,
-        "attackWindup": 9,
-        "range": 4.5,
-        "minRange": 0,
-        "moveSpeed": 0.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "summon": {
-          "cooldown": 90,
-          "unitTypeId": "summoned_skeleton"
-        }
-      }
     }
   },
   "hero_archmage": {
     "id": "hero_archmage",
     "name": "大法师",
-    "radius": 0.600006103515625,
-    "bodyScale": 1.1999969482421875,
+    "radius": 0.6,
+    "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 550,
     "damage": 110,
@@ -488,7 +254,7 @@
     "attackWindup": 9,
     "range": 4.5,
     "minRange": 0,
-    "moveSpeed": 0.8000030517578125,
+    "moveSpeed": 0.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -498,36 +264,13 @@
     "summon": {
       "cooldown": 60,
       "unitTypeId": "summoned_bomber"
-    },
-    "levels": {
-      "1": {
-        "radius": 0.6,
-        "bodyScale": 1.2,
-        "mass": 2,
-        "maxHp": 550,
-        "damage": 110,
-        "attackInterval": 20,
-        "attackWindup": 9,
-        "range": 4.5,
-        "minRange": 0,
-        "moveSpeed": 0.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "summon": {
-          "cooldown": 60,
-          "unitTypeId": "summoned_bomber"
-        }
-      }
     }
   },
   "dragon": {
     "id": "dragon",
     "name": "巨龙",
-    "radius": 0.8000030517578125,
-    "bodyScale": 1.3000030517578125,
+    "radius": 0.8,
+    "bodyScale": 1.3,
     "mass": 2,
     "maxHp": 4000,
     "damage": 120,
@@ -541,32 +284,13 @@
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 2,
-    "tag": "飞行",
-    "levels": {
-      "1": {
-        "radius": 0.8,
-        "bodyScale": 1.3,
-        "mass": 2,
-        "maxHp": 4000,
-        "damage": 120,
-        "attackInterval": 20,
-        "attackWindup": 10,
-        "range": 2,
-        "minRange": 0,
-        "moveSpeed": 1.5,
-        "sightRange": 40,
-        "movementLayer": "air",
-        "attackKind": "projectile_aoe",
-        "projectileSpeed": 9,
-        "aoeRadius": 2
-      }
-    }
+    "tag": "飞行"
   },
   "summoned_skeleton": {
     "id": "summoned_skeleton",
     "name": "骷髅兵",
-    "radius": 0.3000030517578125,
-    "bodyScale": 0.600006103515625,
+    "radius": 0.3,
+    "bodyScale": 0.6,
     "mass": 2,
     "maxHp": 200,
     "damage": 40,
@@ -574,37 +298,18 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 1.8000030517578125,
+    "moveSpeed": 1.8,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
     "projectileSpeed": 9,
-    "aoeRadius": 0,
-    "levels": {
-      "1": {
-        "radius": 0.3,
-        "bodyScale": 0.6,
-        "mass": 2,
-        "maxHp": 200,
-        "damage": 40,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 1.8,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0
-      }
-    }
+    "aoeRadius": 0
   },
   "summoned_bomber": {
     "id": "summoned_bomber",
     "name": "炸弹兵",
-    "radius": 0.3000030517578125,
-    "bodyScale": 0.600006103515625,
+    "radius": 0.3,
+    "bodyScale": 0.6,
     "mass": 2,
     "maxHp": 200,
     "damage": 100,
@@ -612,7 +317,7 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 2.1999969482421875,
+    "moveSpeed": 2.2,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
@@ -621,29 +326,6 @@
     "detonate": {
       "fuse": 10,
       "aoeRadius": 2
-    },
-    "levels": {
-      "1": {
-        "radius": 0.3,
-        "bodyScale": 0.6,
-        "mass": 2,
-        "maxHp": 200,
-        "damage": 100,
-        "attackInterval": 20,
-        "attackWindup": 7,
-        "range": 0.5,
-        "minRange": 0,
-        "moveSpeed": 2.2,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "melee",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "detonate": {
-          "fuse": 10,
-          "aoeRadius": 2
-        }
-      }
     }
   },
   "building_base": {
@@ -664,27 +346,7 @@
     "attackKind": "projectile",
     "projectileSpeed": 9,
     "aoeRadius": 0,
-    "footprint": 4,
-    "levels": {
-      "1": {
-        "radius": 2,
-        "bodyScale": 4,
-        "mass": 9999,
-        "maxHp": 5000,
-        "damage": 120,
-        "attackInterval": 10,
-        "attackWindup": 9,
-        "range": 6,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "footprint": 4
-      }
-    }
+    "footprint": 4
   },
   "building_tower": {
     "id": "building_tower",
@@ -705,27 +367,7 @@
     "projectileSpeed": 9,
     "aoeRadius": 0,
     "tag": "防御",
-    "footprint": 2,
-    "levels": {
-      "1": {
-        "radius": 1,
-        "bodyScale": 2,
-        "mass": 9999,
-        "maxHp": 1400,
-        "damage": 100,
-        "attackInterval": 12,
-        "attackWindup": 9,
-        "range": 5.5,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "footprint": 2
-      }
-    }
+    "footprint": 2
   },
   "building_tower_advanced": {
     "id": "building_tower_advanced",
@@ -746,27 +388,7 @@
     "projectileSpeed": 9,
     "aoeRadius": 0,
     "tag": "防御",
-    "footprint": 2,
-    "levels": {
-      "1": {
-        "radius": 1,
-        "bodyScale": 2,
-        "mass": 9999,
-        "maxHp": 1600,
-        "damage": 120,
-        "attackInterval": 10,
-        "attackWindup": 6,
-        "range": 5.5,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "footprint": 2
-      }
-    }
+    "footprint": 2
   },
   "building_tower_triple": {
     "id": "building_tower_triple",
@@ -787,26 +409,6 @@
     "projectileSpeed": 9,
     "aoeRadius": 0,
     "tag": "防御",
-    "footprint": 2,
-    "levels": {
-      "1": {
-        "radius": 1,
-        "bodyScale": 2,
-        "mass": 9999,
-        "maxHp": 1800,
-        "damage": 140,
-        "attackInterval": 8,
-        "attackWindup": 4,
-        "range": 5.5,
-        "minRange": 0,
-        "moveSpeed": 0,
-        "sightRange": 40,
-        "movementLayer": "ground",
-        "attackKind": "projectile",
-        "projectileSpeed": 9,
-        "aoeRadius": 0,
-        "footprint": 2
-      }
-    }
+    "footprint": 2
   }
 }

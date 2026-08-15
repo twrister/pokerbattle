@@ -9,7 +9,6 @@ import {
   World,
   fromFloat,
   takeSnapshot,
-  toFloat,
 } from '@pb/sim';
 import {
   ARENA_H,
@@ -170,11 +169,11 @@ describe('渲染同步', () => {
 
     camera.position.set(0, 10, 10);
     camera.updateMatrixWorld();
-    castle.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
+    castle.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, camera);
     expect((mark as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(((mark as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xf4d27a);
 
-    castle.update(0, 0, 0, 1, ratio * 0.5, 1, UnitState.Idle, false, false, false, false, 0, camera);
+    castle.update(0, 0, 0, 1, ratio * 0.5, UnitState.Idle, false, false, false, false, 0, camera);
     expect(((mark as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xffe9a8);
     castle.dispose();
     grunt.dispose();
@@ -251,14 +250,14 @@ describe('渲染同步', () => {
     blueCam.position.set(0, 10, 10);
     blueCam.lookAt(0, 0, 0);
     blueCam.updateMatrixWorld();
-    unitView.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, blueCam);
+    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, blueCam);
     expect(findBillboard()?.position.z).toBeCloseTo(half, 5);
 
     const redCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
     redCam.position.set(0, 10, -10);
     redCam.lookAt(0, 0, 0);
     redCam.updateMatrixWorld();
-    unitView.update(0, 0, 0, 1, 1, 1, UnitState.Idle, false, false, false, false, 0, redCam);
+    unitView.update(0, 0, 0, 1, 1, UnitState.Idle, false, false, false, false, 0, redCam);
     expect(findBillboard()?.position.z).toBeCloseTo(-half, 5);
     unitView.dispose();
   });
@@ -277,7 +276,6 @@ describe('渲染同步', () => {
       0,
       1,
       0,
-      1,
       1,
       UnitState.Idle,
       false,

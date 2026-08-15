@@ -109,8 +109,8 @@ function deployEntry(
     const damage = resolveFuseBombDamage(entry.formation, entry.cards);
     const tx = fromFloat(enemyX);
     const ty = fromFloat(enemyY);
-    if (bombType === 'giant_bomb') world.spawnGiantBomb(faction, tx, ty, 1, damage);
-    else world.spawnSmallBomb(faction, tx, ty, 1, damage);
+    if (bombType === 'giant_bomb') world.spawnGiantBomb(faction, tx, ty, damage);
+    else world.spawnSmallBomb(faction, tx, ty, damage);
     return 0;
   }
   const points = resolveFormationSpawnsFx(
@@ -121,7 +121,7 @@ function deployEntry(
   );
   let maxHp = 0;
   for (const point of points) {
-    const unit = world.spawnUnit(faction, point.typeId, point.x, point.y, point.level);
+    const unit = world.spawnUnit(faction, point.typeId, point.x, point.y);
     maxHp += toFloat(unit.hp);
   }
   return maxHp;

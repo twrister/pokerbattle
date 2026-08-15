@@ -5,7 +5,6 @@ import {
   CASTLE_PROTECT_HP_RATIO,
   Faction,
   UNIT_CONFIGS,
-  UNIT_LEVELS_ENABLED,
   UnitState,
   isArcherTowerId,
   type UnitTypeId,
@@ -46,9 +45,6 @@ export class UnitView {
   private readonly protectMark: THREE.Mesh | null = null;
   /** 保护线占最大血量的比例，供掉血后高亮刻度。 */
   private readonly protectRatio: number = 0;
-  /** 血条左侧等级徽章；贴图按等级共享，避免每个单位创建 Canvas。 */
-  private readonly levelBadge: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  private displayedLevel = 1;
   /** 已写入网格的血量比例；未变化则跳过 scale/刻度写入 */
   private displayedHpRatio = -1;
   private displayedInspired = false;
@@ -378,18 +374,10 @@ export class UnitView {
       this.protectMark.position.set((this.protectRatio - 0.5) * this.barWidth, 0, HP_FILL_Z + 0.02);
       this.protectMark.renderOrder = 5;
     }
-    this.levelBadge = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.4, 0.4),
-      createLevelBadgeMaterial(1),
-    );
-    this.levelBadge.position.set(-(this.barWidth + 0.2) / 2, 0, HP_FILL_Z + 0.01);
-    this.levelBadge.renderOrder = 4;
-    // 等级关闭时隐藏徽章；保留 mesh 与 setLevel，便于重新启用。
-    this.levelBadge.visible = UNIT_LEVELS_ENABLED;
     this.hpBaseY = topY + (this.isBuilding ? 0.45 : 0.35);
     // 血条跟建筑贴图一起落到近端格边上方；符号在 update 里与贴图同步
     this.hpAnchor.position.set(0, this.hpBaseY, this.buildingBaseOffsetMag);
-    this.hpAnchor.add(hpBack, this.hpFill, this.levelBadge);
+    this.hpAnchor.add(hpBack, this.hpFill);
     if (this.protectMark) this.hpAnchor.add(this.protectMark);
 
     this.group.add(this.inspireAura, this.hpAnchor);
@@ -409,7 +397,6 @@ export class UnitView {
     facingX: number,
     facingZ: number,
     hpRatio: number,
-    level: number,
     state: UnitState,
     attacking: boolean,
     charging: boolean,
@@ -455,7 +442,6 @@ export class UnitView {
     this.updateFlightHeight(timeSec);
 
     const ratio = Math.max(0, Math.min(1, hpRatio));
-    this.setLevel(level);
     if (ratio !== this.displayedHpRatio) {
       this.displayedHpRatio = ratio;
       this.hpFill.scale.x = Math.max(ratio, 0.0001);
@@ -487,17 +473,6 @@ export class UnitView {
     if (this.displayedProtectAlert === alert) return;
     this.displayedProtectAlert = alert;
     material.color.setHex(alert ? HP_PROTECT_MARK_ALERT : HP_PROTECT_MARK_COLOR);
-  }
-
-  /** 同步单位等级；对象池复用时每帧写入，避免沿用上一名单位的徽章。 */
-  setLevel(level: number): void {
-    if (!UNIT_LEVELS_ENABLED) return;
-    const normalized = Math.max(1, Math.floor(level));
-    if (normalized === this.displayedLevel) return;
-    this.displayedLevel = normalized;
-    const material = this.levelBadge.material;
-    material.map = getLevelBadgeTexture(normalized);
-    material.needsUpdate = true;
   }
 
   /** 让空中角色缓慢悬浮，同时保持地面圈和阴影不离地，便于判断实际战斗位置。 */
@@ -749,7 +724,6 @@ export class UnitView {
     this.displayedHpRatio = -1;
     this.displayedInspired = false;
     this.displayedProtectAlert = null;
-    this.setLevel(1);
     this.inspireAura.visible = false;
     if (this.castFx) this.castFx.visible = false;
     this.applyHitTint(0);
@@ -812,48 +786,6 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
 /** 画面己方（蓝皮）用绿色，对阵方用红色；颜色跟仿真阵营无关，只看映射后的画面阵营。 */
 function hpColor(faction: Faction): number {
   return faction === Faction.Blue ? 0x63d68a : 0xf2604f;
-}
-
-/** 等级徽章纹理缓存；测试环境无 DOM 时回退为纯色方块。 */
-const LEVEL_BADGE_TEXTURES = new Map<number, THREE.CanvasTexture>();
-
-function createLevelBadgeMaterial(level: number): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
-    map: getLevelBadgeTexture(level),
-    color: 0xffffff,
-    transparent: true,
-    depthWrite: false,
-  });
-}
-
-/** 为一个等级生成共享数字纹理，避免密集阵型产生大量 CanvasTexture。 */
-function getLevelBadgeTexture(level: number): THREE.CanvasTexture | null {
-  if (typeof document === 'undefined') return null;
-  const cached = LEVEL_BADGE_TEXTURES.get(level);
-  if (cached) return cached;
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const context = canvas.getContext('2d');
-  if (!context) return null;
-  context.fillStyle = '#1c2738';
-  context.beginPath();
-  context.roundRect(2, 2, 60, 60, 12);
-  context.fill();
-  context.lineWidth = 5;
-  context.strokeStyle = '#f5d26b';
-  context.stroke();
-  context.fillStyle = '#ffffff';
-  context.font = 'bold 50px sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(String(level), 32, 34);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.LinearFilter;
-  LEVEL_BADGE_TEXTURES.set(level, texture);
-  return texture;
 }
 
 /** 前景相对底条朝相机方向的偏移，拉开深度差减轻远距 Z-fighting */
