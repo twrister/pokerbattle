@@ -1,4 +1,3 @@
-import { normalizeRoomId, normalizeRoomName, type JoinMode, type RoomListEntry } from '@pb/net';
 import {
   hasPromptedFirstPlayRename,
   markFirstPlayRenamePrompted,
@@ -13,29 +12,19 @@ const RENAME_TITLE_FIRST_PLAY = '请先设置玩家名称';
 /** 略长于收起动画，避免 animationend 丢失时弹层卡在半透明。 */
 const RENAME_CLOSE_ANIM_MS = 280;
 
-/** 大厅发起联机时的入房参数。 */
-export interface VersusJoinRequest {
-  mode: JoinMode;
-  roomId?: string;
-  roomName?: string;
-}
-
 export interface MainMenuOptions {
   onStartSandbox: () => void;
   onStartSolo: (difficulty: SoloDifficulty) => void;
   /** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置。 */
   onStartSoloDebug: () => void;
-  onStartVersus: (request: VersusJoinRequest) => void;
-  /** 匹配等待中取消：编排层应离开 versus 并断连。 */
-  onCancelVersus: () => void;
+  /** 进入独立联机大厅页。 */
+  onOpenOnline: () => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
   /** 读取当前设备档案，供大厅展示。 */
   getProfile: () => PlayerProfile;
   /** 改名成功后由编排层持久化；失败应抛错。 */
   onRename: (displayName: string) => void;
-  /** 复用应用层大厅 presence 拉取可加入房间。 */
-  listRooms: () => Promise<RoomListEntry[]>;
 }
 
 export interface MainMenuHandle {
@@ -43,8 +32,6 @@ export interface MainMenuHandle {
   hide(): void;
   /** 档案变更后刷新名字/等级展示。 */
   refreshProfile(): void;
-  /** 匹配等待时显示大厅状态旁的取消按钮。 */
-  setRoomWaitingCancelVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -58,20 +45,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
   const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
   const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
-  const onlineQuickButton = required<HTMLButtonElement>('#btn-online-quick', root);
-  const onlineRoomButton = required<HTMLButtonElement>('#btn-online-room', root);
-  const onlineRoomPanel = required<HTMLElement>('#online-room-panel', root);
-  const onlineRoomNameInput = required<HTMLInputElement>('#online-room-name-input', root);
-  const onlineRoomInput = required<HTMLInputElement>('#online-room-input', root);
-  const onlineRoomError = required<HTMLElement>('#online-room-error', root);
-  const onlineRoomCreateButton = required<HTMLButtonElement>('#btn-online-room-create', root);
-  const onlineRoomJoinButton = required<HTMLButtonElement>('#btn-online-room-join', root);
-  const onlineRoomRefreshButton = required<HTMLButtonElement>('#btn-online-room-refresh', root);
-  const onlineRoomList = required<HTMLElement>('#online-room-list', root);
-  const lobbyRoomCancelButton = required<HTMLButtonElement>('#btn-lobby-room-cancel', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
-  const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
-  const onlineDialogTitle = required<HTMLElement>('#mode-online-title', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
   const renamePanel = required<HTMLElement>('.mode-dialog-panel', renameDialog);
   const renameTitle = required<HTMLElement>('#rename-title', renameDialog);
@@ -94,7 +68,6 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     root.querySelectorAll<HTMLButtonElement>('[data-rename-close]'),
   );
 
-  let roomListRequestId = 0;
   /** 默认名点开局时记下目标模式，改名成功并收起后再打开。 */
   let pendingPlayAction: (() => void) | null = null;
   /** 主动改名本会话只弹一次；关页后再进仍会引导。 */
@@ -105,8 +78,6 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
-    hideDialog(onlineDialog);
-    hideRoomPanel();
   };
 
   /** 仍是建档默认名则拦截开局，引导先改名。 */
@@ -181,52 +152,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     closeRenameDialog();
   };
 
-  /** 收起房间视图，恢复快速匹配/房间入口。 */
-  const hideRoomPanel = (): void => {
-    onlineRoomPanel.classList.add('is-hidden');
-    onlineDialog.classList.remove('is-room');
-    onlineDialogTitle.textContent = '多人联机';
-    onlineRoomError.textContent = '';
-    onlineRoomError.classList.remove('is-visible');
-  };
-
-  /** 房间视图先退回联机选项；否则关弹层。 */
   const handleModeClose = (): void => {
-    if (!onlineRoomPanel.classList.contains('is-hidden')) {
-      hideRoomPanel();
-      return;
-    }
     closeModeDialogs();
-  };
-
-  /** 显示/隐藏大厅房间等待取消按钮。 */
-  const setRoomWaitingCancelVisible = (visible: boolean): void => {
-    lobbyRoomCancelButton.classList.toggle('is-hidden', !visible);
-  };
-
-  /** 大厅状态旁取消：离开匹配中的房间。 */
-  const cancelLobbyRoomWaiting = (): void => {
-    setRoomWaitingCancelVisible(false);
-    status.classList.remove('is-visible');
-    options.onCancelVersus();
-  };
-
-  /** 展示房间面板错误文案。 */
-  const showRoomError = (message: string): void => {
-    onlineRoomError.textContent = message;
-    onlineRoomError.classList.add('is-visible');
-  };
-
-  /** 清空房间面板错误。 */
-  const clearRoomError = (): void => {
-    onlineRoomError.textContent = '';
-    onlineRoomError.classList.remove('is-visible');
-  };
-
-  /** 默认房间名：当前展示名 + 「的房间」。 */
-  const defaultRoomName = (): string => {
-    const displayName = options.getProfile().displayName.trim() || '玩家';
-    return `${displayName}的房间`;
   };
 
   /** 把档案写到大厅玩家卡片。 */
@@ -247,16 +174,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
 
   const openSoloDialog = (): void => {
     hideRenameDialogInstant();
-    hideDialog(onlineDialog);
-    hideRoomPanel();
     showDialog(soloDialog);
   };
 
-  const openOnlineDialog = (): void => {
+  const openOnlinePage = (): void => {
     hideRenameDialogInstant();
-    hideDialog(soloDialog);
-    hideRoomPanel();
-    showDialog(onlineDialog);
+    closeModeDialogs();
+    options.onOpenOnline();
   };
 
   /** 从玩家卡片展开改名弹层；首次开局引导换标题。 */
@@ -299,7 +223,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const requestSoloDialog = (): void => requestPlayDialog(openSoloDialog);
-  const requestOnlineDialog = (): void => requestPlayDialog(openOnlineDialog);
+  const requestOnlinePage = (): void => requestPlayDialog(openOnlinePage);
 
   /** 开发服进入沙盒；正式服仅提示不可进入，入口仍保留。 */
   const startSandbox = (): void => {
@@ -325,118 +249,6 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     }
     options.onStartSoloDebug();
   };
-  /** 关弹层后发起快速匹配，等待态与主动创建房间相同（大厅状态 + 取消）。 */
-  const startOnlineQuick = (): void => {
-    closeModeDialogs();
-    options.onStartVersus({ mode: 'quick' });
-  };
-
-  /** 渲染可加入房间列表。 */
-  const renderRoomList = (rooms: RoomListEntry[]): void => {
-    onlineRoomList.replaceChildren();
-    if (rooms.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'online-room-list-empty';
-      empty.textContent = '暂无可加入房间';
-      onlineRoomList.append(empty);
-      return;
-    }
-
-    for (const room of rooms) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'online-room-list-item';
-      button.setAttribute('role', 'listitem');
-      button.dataset.roomId = room.roomId;
-
-      const id = document.createElement('span');
-      id.className = 'online-room-list-id';
-      id.textContent = room.roomId;
-
-      const name = document.createElement('span');
-      name.className = 'online-room-list-name';
-      name.textContent = room.roomName;
-
-      const count = document.createElement('span');
-      count.className = 'online-room-list-count';
-      count.textContent = `${room.playerCount}/${room.maxPlayers}`;
-
-      button.append(id, name, count);
-      button.addEventListener('click', () => {
-        closeModeDialogs();
-        options.onStartVersus({ mode: 'room', roomId: room.roomId });
-      });
-      onlineRoomList.append(button);
-    }
-  };
-
-  /** 拉取并刷新可加入房间列表。 */
-  const refreshRoomList = (): void => {
-    const requestId = ++roomListRequestId;
-    onlineRoomList.replaceChildren();
-    const loading = document.createElement('div');
-    loading.className = 'online-room-list-empty';
-    loading.textContent = '加载中…';
-    onlineRoomList.append(loading);
-
-    void options
-      .listRooms()
-      .then((rooms) => {
-        if (requestId !== roomListRequestId) return;
-        renderRoomList(rooms);
-      })
-      .catch((error: unknown) => {
-        if (requestId !== roomListRequestId) return;
-        onlineRoomList.replaceChildren();
-        const failed = document.createElement('div');
-        failed.className = 'online-room-list-empty';
-        failed.textContent = error instanceof Error ? error.message : '加载房间列表失败';
-        onlineRoomList.append(failed);
-      });
-  };
-
-  /** 展开房间视图：隐藏入口按钮并放大内容区。 */
-  const showRoomPanel = (): void => {
-    clearRoomError();
-    if (!onlineRoomNameInput.value.trim()) {
-      onlineRoomNameInput.value = defaultRoomName();
-    }
-    onlineDialog.classList.add('is-room');
-    onlineDialogTitle.textContent = '房间';
-    onlineRoomPanel.classList.remove('is-hidden');
-    onlineRoomNameInput.focus();
-    onlineRoomNameInput.select();
-    refreshRoomList();
-  };
-
-  /** 展开房间视图；再次调用可收起（入口隐藏后主要由关闭键退回）。 */
-  const toggleRoomPanel = (): void => {
-    if (!onlineRoomPanel.classList.contains('is-hidden')) {
-      hideRoomPanel();
-      return;
-    }
-    showRoomPanel();
-  };
-
-  /** 用当前房间名创建房间。 */
-  const startOnlineCreate = (): void => {
-    clearRoomError();
-    const roomName = normalizeRoomName(onlineRoomNameInput.value) ?? defaultRoomName();
-    closeModeDialogs();
-    options.onStartVersus({ mode: 'create', roomName });
-  };
-
-  /** 校验三位房号后加入已有房间。 */
-  const startOnlineRoom = (): void => {
-    const roomId = normalizeRoomId(onlineRoomInput.value);
-    if (!roomId) {
-      showRoomError('房间号须为 3 位数字');
-      return;
-    }
-    closeModeDialogs();
-    options.onStartVersus({ mode: 'room', roomId });
-  };
-
   const openDeckConfig = (): void => options.onOpenDeckConfig();
   const openCodex = (): void => options.onOpenCodex();
 
@@ -459,30 +271,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   soloButton.addEventListener('click', requestSoloDialog);
-  matchButton.addEventListener('click', requestOnlineDialog);
+  matchButton.addEventListener('click', requestOnlinePage);
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
   soloAiButton.addEventListener('click', startSoloAi);
   soloDebugButton.addEventListener('click', startSoloDebug);
-  onlineQuickButton.addEventListener('click', startOnlineQuick);
-  onlineRoomButton.addEventListener('click', toggleRoomPanel);
-  onlineRoomCreateButton.addEventListener('click', startOnlineCreate);
-  onlineRoomJoinButton.addEventListener('click', startOnlineRoom);
-  onlineRoomRefreshButton.addEventListener('click', refreshRoomList);
-  lobbyRoomCancelButton.addEventListener('click', cancelLobbyRoomWaiting);
-  onlineRoomInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      startOnlineRoom();
-    }
-  });
-  onlineRoomNameInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      startOnlineCreate();
-    }
-  });
   profileButton.addEventListener('click', openRenameFromProfile);
   renameForm.addEventListener('submit', submitRename);
   for (const button of placeholderButtons) {
@@ -503,7 +297,6 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
       status.classList.remove('is-visible');
-      setRoomWaitingCancelVisible(false);
       closeModeDialogs();
       hideRenameDialogInstant();
       refreshProfile();
@@ -511,26 +304,18 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     hide() {
       root.classList.add('is-hidden');
       root.setAttribute('aria-hidden', 'true');
-      setRoomWaitingCancelVisible(false);
       closeModeDialogs();
       hideRenameDialogInstant();
     },
     refreshProfile,
-    setRoomWaitingCancelVisible,
     dispose() {
       soloButton.removeEventListener('click', requestSoloDialog);
-      matchButton.removeEventListener('click', requestOnlineDialog);
+      matchButton.removeEventListener('click', requestOnlinePage);
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
       soloAiButton.removeEventListener('click', startSoloAi);
       soloDebugButton.removeEventListener('click', startSoloDebug);
-      onlineQuickButton.removeEventListener('click', startOnlineQuick);
-      onlineRoomButton.removeEventListener('click', toggleRoomPanel);
-      onlineRoomCreateButton.removeEventListener('click', startOnlineCreate);
-      onlineRoomJoinButton.removeEventListener('click', startOnlineRoom);
-      onlineRoomRefreshButton.removeEventListener('click', refreshRoomList);
-      lobbyRoomCancelButton.removeEventListener('click', cancelLobbyRoomWaiting);
       profileButton.removeEventListener('click', openRenameFromProfile);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {

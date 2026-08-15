@@ -56,7 +56,16 @@ import {
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
 import { enableCastlePackClick } from './input/castlePackClick.js';
 import { enableUnitSelection } from './input/unitSelection.js';
-import { connectVersusSession, createLobbyPresence, type LobbyPresenceHandle } from './net/session.js';
+import {
+  connectRoomSession,
+  createLobbyPresence,
+  type LobbyPresenceHandle,
+  type RoomConnecting,
+  type RoomJoinRequest,
+  type RoomSession,
+} from './net/session.js';
+import type { RoomStateMessage } from '@pb/net';
+import type { NetSimLoop } from './net/netLoop.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
 import { createBattleAnnounce } from './ui/battleAnnounce.js';
@@ -65,7 +74,9 @@ import { createBattleResult } from './ui/battleResult.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
-import { createMainMenu, type VersusJoinRequest } from './ui/mainMenu.js';
+import { createMainMenu } from './ui/mainMenu.js';
+import { createOnlineLobbyPage } from './ui/onlineLobbyPage.js';
+import { createOnlineRoomPage } from './ui/onlineRoomPage.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
 import { createSceneConfigPage } from './ui/sceneConfigPage.js';
@@ -80,7 +91,6 @@ import { BattleView } from './view/viewSync.js';
 const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
 const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
-const lobbyStatus = document.querySelector<HTMLElement>('#lobby-status');
 
 // 供 CSS 区分开发服 / 正式服可见功能
 document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
@@ -93,11 +103,18 @@ let screens: ScreenController;
 let selectedSoloDifficulty: SoloDifficulty = 'hard';
 /** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置；正常人机必须保持 false。 */
 let selectedSoloDebugSpawn = false;
-/** 进入 versus 前暂存入房参数，因 ScreenController 不携带 payload。 */
-let pendingVersusJoin: VersusJoinRequest = { mode: 'quick' };
+/** 房间会话跨 room/versus 复用；切屏时靠 keepRoomSession 避免误关 WS。 */
+let activeRoomSession: RoomSession | null = null;
+let joiningRoom: RoomConnecting | null = null;
+let latestRoomState: RoomStateMessage | null = null;
+let pendingMatch: { loop: NetSimLoop; faction: Faction; opponentName: string } | null = null;
+let keepRoomSession = false;
+/** 对局中对手离开时置位，避免中途退出被记成 abandoned。 */
+let versusPeerLeft = false;
+let reconnectBanner: ReturnType<typeof createReconnectBanner> | null = null;
 /**
  * 应用层大厅 presence：凡未进入联机房间（含卡组/图鉴/单机）都保持登记。
- * 仅 versus 入房期间关闭，避免与 join 连接重复计数。
+ * 仅 room / versus 入房期间关闭，避免与 join 连接重复计数。
  * 单机页会上报 activity=solo，供运维站区分「大厅」与「单机模式」。
  */
 let appLobbyPresence: LobbyPresenceHandle | null = null;
@@ -126,9 +143,9 @@ function stopAppLobbyPresence(): void {
   appLobbyPresence = null;
 }
 
-/** 按当前页面同步大厅 presence：versus 断开，单机刷新 activity。 */
+/** 按当前页面同步大厅 presence：入房页断开，单机刷新 activity。 */
 function syncLobbyPresenceForScreen(screen: AppScreen): void {
-  if (screen === 'versus') {
+  if (screen === 'versus' || screen === 'room') {
     stopAppLobbyPresence();
     return;
   }
@@ -153,11 +170,7 @@ const mainMenu = createMainMenu({
     selectedSoloDebugSpawn = true;
     screens.show('solo');
   },
-  onStartVersus: (request) => {
-    pendingVersusJoin = request;
-    screens.show('versus');
-  },
-  onCancelVersus: () => screens.show('menu'),
+  onOpenOnline: () => screens.show('online'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
   getProfile: () => playerProfile.getProfile(),
@@ -170,7 +183,6 @@ const mainMenu = createMainMenu({
       ensureAppLobbyPresence(activity);
     }
   },
-  listRooms: () => ensureAppLobbyPresence().listRooms(),
 });
 const deckConfigPage = createDeckConfigPage({
   onBack: () => screens.show('menu'),
@@ -186,7 +198,135 @@ const codexPage = createCodexPage({
 });
 const battleHud = createBattleHud();
 const battleAnnounce = createBattleAnnounce();
-const battleResult = createBattleResult(() => screens.show('menu'));
+const battleResult = createBattleResult(() => {
+  if (activeRoomSession) {
+    keepRoomSession = true;
+    screens.show('room');
+    return;
+  }
+  screens.show('menu');
+});
+const onlineLobbyPage = createOnlineLobbyPage({
+  onBack: () => screens.show('menu'),
+  onJoinRoom: (request) => beginJoinRoom(request),
+  getDefaultRoomName: () => {
+    const displayName = playerProfile.getProfile().displayName.trim() || '玩家';
+    return `${displayName}的房间`;
+  },
+  listRooms: () => ensureAppLobbyPresence().listRooms(),
+});
+const onlineRoomPage = createOnlineRoomPage({
+  onLeave: () => {
+    keepRoomSession = false;
+    screens.show('online');
+  },
+  onStartMatch: () => {
+    activeRoomSession?.sendStartMatch();
+  },
+  onSetReady: (ready) => {
+    activeRoomSession?.sendSetReady(ready);
+  },
+});
+
+/** 关闭入房中的连接，避免重复占席。 */
+function cancelJoiningRoom(): void {
+  joiningRoom?.close();
+  joiningRoom = null;
+}
+
+/** 主动离房：关会话并清掉房间快照。 */
+function disposeRoomSession(): void {
+  cancelJoiningRoom();
+  activeRoomSession?.close();
+  activeRoomSession = null;
+  latestRoomState = null;
+  pendingMatch = null;
+}
+
+/** 创建或加入房间，成功后进入房间页。 */
+function beginJoinRoom(request: RoomJoinRequest): void {
+  cancelJoiningRoom();
+  stopAppLobbyPresence();
+  onlineLobbyPage.showError(
+    request.mode === 'create' ? '正在创建房间…' : `正在加入房间 ${request.roomId ?? ''}…`,
+  );
+  const connecting = connectRoomSession({
+    name: playerProfile.getProfile().displayName,
+    playerId: playerProfile.getProfile().deviceAccountId,
+    mode: request.mode,
+    roomId: request.roomId,
+    roomName: request.roomName,
+    onStatus: (text) => {
+      if (screens.current === 'online') onlineLobbyPage.showError(text);
+      else onlineRoomPage.showStatus(text);
+    },
+    onRoomState: (state) => {
+      latestRoomState = state;
+      if (activeRoomSession && screens.current === 'room') {
+        onlineRoomPage.applyRoomState(state, activeRoomSession.seat);
+      }
+    },
+    onMatchStart: (loop, faction, opponentName) => {
+      pendingMatch = { loop, faction, opponentName };
+      keepRoomSession = true;
+      screens.show('versus');
+    },
+    onMatchEnd: () => {
+      // 结算展示与记账由对局循环处理，避免重复写入档案
+    },
+    onPeerDisconnected: () => {
+      reconnectBanner?.showPeerDisconnected();
+    },
+    onPeerReconnected: () => {
+      reconnectBanner?.showPeerReconnected();
+    },
+    onReconnecting: (remainingMs) => {
+      reconnectBanner?.showReconnecting(remainingMs);
+    },
+    onReconnected: () => {
+      reconnectBanner?.showRestored();
+    },
+    onPeerLeft: () => {
+      versusPeerLeft = true;
+      keepRoomSession = false;
+      disposeRoomSession();
+      onlineLobbyPage.showError('对手已离开');
+      screens.show('online');
+    },
+    onDisconnected: (reason) => {
+      keepRoomSession = false;
+      disposeRoomSession();
+      onlineLobbyPage.showError(reason);
+      screens.show('online');
+    },
+    onReconnectFailed: (reason) => {
+      keepRoomSession = false;
+      disposeRoomSession();
+      onlineLobbyPage.showError(reason);
+      screens.show('online');
+    },
+  });
+  joiningRoom = connecting;
+  void connecting.done
+    .then((session) => {
+      if (joiningRoom !== connecting) {
+        session.close();
+        return;
+      }
+      joiningRoom = null;
+      activeRoomSession = session;
+      screens.show('room');
+    })
+    .catch((error: unknown) => {
+      if (joiningRoom !== connecting) return;
+      joiningRoom = null;
+      const message = error instanceof Error ? error.message : String(error);
+      if (screens.current === 'online') {
+        ensureAppLobbyPresence('lobby');
+        onlineLobbyPage.showError(message);
+      }
+    });
+}
 const openUnitStatsButton = document.querySelector<HTMLButtonElement>('#btn-open-unit-stats');
 const openSceneConfigButton = document.querySelector<HTMLButtonElement>('#btn-open-scene-config');
 
@@ -250,6 +390,7 @@ function enterBattleSession(mode: BattleMode): () => void {
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
   if (isSolo) {
+    battleResult.setReturnLabel('返回主界面');
     battleResult.hide();
     battleAnnounce.reset();
     battleHud.setContext({
@@ -843,27 +984,28 @@ function enterBattleSession(mode: BattleMode): () => void {
 
 /** 联机对战：等人齐后用 NetSimLoop 帧驱动。 */
 function enterVersus(): () => void {
-  let disposed = false;
-  let leave: (() => void) | null = null;
-  let cancelled = false;
-  let localFaction: Faction | null = null;
-  /** 对局已真正开始后才可能记 abandoned；匹配期退出不计。 */
-  let matchStarted = false;
-  /** 会话内只记一笔：权威结算优先，主动退出次之。 */
-  let battleRecorded = false;
-  /** 对手离开不记本方失败。 */
-  let peerLeft = false;
-  const joinRequest = pendingVersusJoin;
-  const reconnectBanner = createReconnectBanner(hud);
+  const match = pendingMatch;
+  pendingMatch = null;
+  if (!match || !activeRoomSession) {
+    queueMicrotask(() => screens.show(activeRoomSession ? 'room' : 'online'));
+    return () => {};
+  }
 
-  /** 权威结算写入档案；重复调用会被会话标记挡住。 */
+  let leave: (() => void) | null = null;
+  let localFaction: Faction = match.faction;
+  let matchStarted = true;
+  let battleRecorded = false;
+  const peerLeft = versusPeerLeft;
+  versusPeerLeft = false;
+  reconnectBanner = createReconnectBanner(hud);
+  battleResult.setReturnLabel('返回房间');
+
   const recordVersusResult = (result: MatchResult, faction: Faction): void => {
     if (battleRecorded) return;
     battleRecorded = true;
     recordLocalBattle(result, faction, 'versus');
   };
 
-  /** 本机中途退出：记一次 abandoned 失败。 */
   const recordVersusAbandonedIfNeeded = (): void => {
     if (!shouldRecordVersusAbandon({ matchStarted, battleRecorded, peerLeft })) return;
     battleRecorded = true;
@@ -879,104 +1021,31 @@ function enterVersus(): () => void {
     }
   };
 
-  container.classList.add('is-solo', 'is-versus');
-  hud.classList.add('is-solo', 'is-versus');
-  // 匹配期仍留在大厅层：状态文案与取消按钮都走 #lobby-status 行
-  const initialStatus =
-    joinRequest.mode === 'create'
-      ? '正在创建房间…'
-      : joinRequest.mode === 'room'
-        ? `正在加入房间 ${joinRequest.roomId}…`
-        : '正在匹配联机对手…';
-  mainMenu.show();
-  setLobbyStatus(initialStatus);
-  mainMenu.setRoomWaitingCancelVisible(true);
-  const reportMatchStatus = (text: string): void => {
-    setLobbyStatus(text);
-  };
-
-  const connecting = connectVersusSession({
-    name: playerProfile.getProfile().displayName,
-    playerId: playerProfile.getProfile().deviceAccountId,
-    mode: joinRequest.mode,
-    roomId: joinRequest.roomId,
-    roomName: joinRequest.roomName,
-    onStatus: reportMatchStatus,
-    onDesync: (tick, serverHash) => {
-      console.error(`[desync] tick=${tick} serverHash=${serverHash}`);
-      reportMatchStatus(`不同步：tick ${tick}`);
+  leave = runVersusSession(
+    match.loop,
+    match.faction,
+    () => {},
+    {
+      onOfficialResult: (result) => recordVersusResult(result, localFaction),
+      onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
     },
-    onPeerLeft: () => {
-      peerLeft = true;
-      reconnectBanner.hide();
-      reportMatchStatus('对手已离开');
-      screens.show('menu');
+    {
+      localName: playerProfile.getProfile().displayName,
+      opponentName: match.opponentName || activeRoomSession.opponentName || '对手',
     },
-    onPeerDisconnected: () => {
-      reconnectBanner.showPeerDisconnected();
-    },
-    onPeerReconnected: () => {
-      reconnectBanner.showPeerReconnected();
-    },
-    onReconnecting: (remainingMs) => {
-      reconnectBanner.showReconnecting(remainingMs);
-    },
-    onReconnected: () => {
-      reconnectBanner.showRestored();
-    },
-    onReconnectFailed: (reason) => {
-      reconnectBanner.showFailed(reason);
-      reportMatchStatus(reason);
-      screens.show('menu');
-    },
-    onMatchEnd: (result) => {
-      if (localFaction === null) return;
-      recordVersusResult(result, localFaction);
-      battleResult.show(result, localFaction);
-    },
-  });
-
-  void connecting.done
-    .then((session) => {
-      if (cancelled) {
-        session.close();
-        return;
-      }
-      localFaction = session.faction;
-      matchStarted = true;
-      leave = runVersusSession(
-        session.loop,
-        session.faction,
-        session.close,
-        {
-          onOfficialResult: (result) => recordVersusResult(result, session.faction),
-          onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
-        },
-        {
-          localName: playerProfile.getProfile().displayName,
-          opponentName: session.opponentName || '对手',
-        },
-      );
-    })
-    .catch((error: unknown) => {
-      if (cancelled) return;
-      const message = error instanceof Error ? error.message : String(error);
-      reportMatchStatus(message);
-      screens.show('menu');
-    });
+  );
 
   return () => {
-    cancelled = true;
-    disposed = true;
-    // 匹配期也必须断连，否则关闭弹窗后仍占匹配房
-    connecting.close();
     leave?.();
     leave = null;
-    reconnectBanner.dispose();
-    // 匹配阶段返回大厅时也清掉联机标记，避免残留样式
+    reconnectBanner?.dispose();
+    reconnectBanner = null;
     hud.classList.remove('is-versus');
     container.classList.remove('is-versus');
-    void disposed;
+    if (!keepRoomSession) {
+      disposeRoomSession();
+    }
+    keepRoomSession = false;
   };
 }
 
@@ -984,7 +1053,7 @@ function enterVersus(): () => void {
 function runVersusSession(
   netLoop: import('./net/netLoop.js').NetSimLoop,
   faction: Faction,
-  closeSocket: () => void,
+  _closeSocket: () => void,
   accountHooks: {
     onOfficialResult: (result: MatchResult) => void;
     onLeaveWithoutResult: () => void;
@@ -1240,7 +1309,8 @@ function runVersusSession(
 
   const returnToMenu = (): void => {
     sceneConfigPage.hide();
-    screens.show('menu');
+    keepRoomSession = false;
+    screens.show('online');
   };
   backButton.addEventListener('click', returnToMenu);
 
@@ -1306,7 +1376,6 @@ function runVersusSession(
     panel.dispose();
     unbindSceneConfig();
     battleView.reset();
-    closeSocket();
   };
 }
 
@@ -1318,12 +1387,41 @@ function enterSolo(): () => void {
   return enterBattleSession('solo');
 }
 
+function enterOnline(): () => void {
+  syncLobbyPresenceForScreen('online');
+  onlineLobbyPage.show();
+  return () => {
+    onlineLobbyPage.hide();
+    if (!activeRoomSession) cancelJoiningRoom();
+  };
+}
+
+function enterRoom(): () => void {
+  syncLobbyPresenceForScreen('room');
+  onlineRoomPage.show();
+  if (activeRoomSession) {
+    onlineRoomPage.setRoomInfo(activeRoomSession.roomId, activeRoomSession.roomName);
+    if (latestRoomState) {
+      onlineRoomPage.applyRoomState(latestRoomState, activeRoomSession.seat);
+    }
+  }
+  return () => {
+    onlineRoomPage.hide();
+    if (!keepRoomSession) {
+      disposeRoomSession();
+    }
+    keepRoomSession = false;
+  };
+}
+
 screens = createScreenController({
   menu: () => {
     syncLobbyPresenceForScreen('menu');
     mainMenu.show();
     return () => mainMenu.hide();
   },
+  online: () => enterOnline(),
+  room: () => enterRoom(),
   'deck-config': () => {
     syncLobbyPresenceForScreen('deck-config');
     deckConfigPage.show();
@@ -1378,6 +1476,9 @@ function disposeApp(): void {
   sharedScene?.dispose();
   sharedScene = null;
   disposeFormationThumbnailRenderer();
+  disposeRoomSession();
+  onlineLobbyPage.dispose();
+  onlineRoomPage.dispose();
   mainMenu.dispose();
   deckConfigPage.dispose();
   handOddsPage.dispose();
@@ -1387,13 +1488,6 @@ function disposeApp(): void {
 }
 
 window.addEventListener('pagehide', disposeApp, { once: true });
-
-/** 距下次 tick 抽牌的剩余毫秒。 */
-function setLobbyStatus(text: string): void {
-  if (!lobbyStatus) return;
-  lobbyStatus.textContent = text;
-  lobbyStatus.classList.add('is-visible');
-}
 
 /** 把权威结算写入设备档案，并刷新大厅展示。 */
 function recordLocalBattle(

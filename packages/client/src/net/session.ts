@@ -3,41 +3,53 @@ import {
   RECONNECT_TIMEOUT_MS,
   decodeServerMessage,
   encodeMessage,
-  type JoinMode,
   type LobbyActivity,
   type RoomListEntry,
+  type RoomStateMessage,
   type ServerMessage,
 } from '@pb/net';
 import type { Faction, MatchResult } from '@pb/sim';
 import { NetSimLoop } from './netLoop.js';
 
-export interface VersusSession {
-  loop: NetSimLoop;
-  faction: Faction;
-  seat: number;
+/** 创建或加入已有房间；不再提供快速匹配。 */
+export interface RoomJoinRequest {
+  mode: 'create' | 'room';
+  roomId?: string;
+  roomName?: string;
+}
+
+/** 已入座的长连接房间会话；对局开始后仍复用同一条 WS。 */
+export interface RoomSession {
   roomId: string;
   roomName: string;
-  /** 对手显示名；welcome 未带时为空串。 */
+  seat: number;
+  faction: Faction;
+  isHost: boolean;
   opponentName: string;
+  /** 房主请求开局；服务端校验未通过时走 onStatus。 */
+  sendStartMatch(): void;
+  /** 非房主切换准备状态。 */
+  sendSetReady(ready: boolean): void;
   close: () => void;
 }
 
-export interface ConnectVersusOptions {
+export interface ConnectRoomOptions {
   name?: string;
   /** 设备档案 ID，供服务端按设备记账；缺省则服务端跳过该席。 */
   playerId?: string;
-  /** 加入模式；默认 quick。 */
-  mode?: JoinMode;
-  /** 已有房间号；mode=room 时必填。 */
+  mode?: 'create' | 'room';
   roomId?: string;
-  /** 创建房间时的显示名；mode=create 时可选。 */
   roomName?: string;
   onStatus?: (text: string) => void;
+  onRoomState?: (state: RoomStateMessage) => void;
+  onMatchStart?: (loop: NetSimLoop, faction: Faction, opponentName: string) => void;
+  onMatchEnd?: (result: MatchResult) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
   onPeerDisconnected?: () => void;
   onPeerReconnected?: () => void;
-  onMatchEnd?: (result: MatchResult) => void;
+  /** 等待期意外断线（非对局重连窗口）。 */
+  onDisconnected?: (reason: string) => void;
   /** 本端意外断线并进入自动重连时回调。 */
   onReconnecting?: (remainingMs: number) => void;
   /** 重连成功后回调。 */
@@ -46,30 +58,29 @@ export interface ConnectVersusOptions {
   onReconnectFailed?: (reason: string) => void;
 }
 
-/** 联机连接句柄：done 等开局，close 可在匹配期立刻断连离房。 */
-export interface VersusConnecting {
-  done: Promise<VersusSession>;
-  /** 匹配未开局时关闭 WS 离开房间；开局后等同 session.close。 */
+/** 入房连接句柄：done 等 welcome，close 可在入房前立刻断连。 */
+export interface RoomConnecting {
+  done: Promise<RoomSession>;
   close: () => void;
 }
 
 /**
- * 连接同源 /ws（经 vite 代理到权威服），完成入座后返回 NetSimLoop。
- * 对局中意外断线会在重连窗口内自动恢复并补帧；主动 close 不重连。
+ * 连接同源 /ws，入座后即返回房间会话；开局与回房都不断开连接。
+ * 仅对局中意外断线会在重连窗口内自动恢复；主动 close 不重连。
  */
-export function connectVersusSession(options: ConnectVersusOptions = {}): VersusConnecting {
+export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnecting {
   const status = options.onStatus ?? (() => {});
-  const mode: JoinMode = options.mode ?? 'quick';
+  const mode = options.mode === 'room' ? 'room' : 'create';
   const joinRoomId = options.roomId ?? '';
   const joinRoomName = options.roomName ?? '';
   const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
   const playerId = options.playerId?.trim() ?? '';
 
-  /** 开局后指向会话 close；匹配期由外层 close 直接断连。 */
   let sessionClose: (() => void) | null = null;
   let rejectPending: ((error: Error) => void) | null = null;
   let settled = false;
   let intentionalClose = false;
+  let inMatch = false;
   let activeWs: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -79,7 +90,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
     reconnectTimer = null;
   };
 
-  /** 匹配中或对局中主动离开：关 WS，服务端会释放房间席位。 */
+  /** 主动离开房间：关 WS，服务端会释放席位。 */
   const close = (): void => {
     intentionalClose = true;
     clearReconnectTimer();
@@ -90,18 +101,19 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
       } catch {
         /* ignore */
       }
-      rejectPending?.(new Error('已取消匹配'));
+      rejectPending?.(new Error('已取消入房'));
       rejectPending = null;
       return;
     }
     sessionClose?.();
   };
 
-  const done = new Promise<VersusSession>((resolve, reject) => {
+  const done = new Promise<RoomSession>((resolve, reject) => {
     rejectPending = reject;
     let loop: NetSimLoop | null = null;
     let faction: Faction | null = null;
     let seat = 0;
+    let hostSeat = 0;
     let roomId = '';
     let roomName = '';
     let opponentName = '';
@@ -125,30 +137,103 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
       reject(error);
     };
 
-    const finish = (active: NetSimLoop, side: Faction): void => {
+    const shutdownSocket = (): void => {
+      intentionalClose = true;
+      clearReconnectTimer();
+      loop?.setInputPaused(false);
+      try {
+        activeWs?.close();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const session: RoomSession = {
+      get roomId() {
+        return roomId;
+      },
+      get roomName() {
+        return roomName;
+      },
+      get seat() {
+        return seat;
+      },
+      get faction() {
+        return faction ?? (0 as Faction);
+      },
+      get isHost() {
+        return hostSeat === seat;
+      },
+      get opponentName() {
+        return opponentName;
+      },
+      sendStartMatch() {
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+        activeWs.send(encodeMessage({ type: 'startMatch' }));
+      },
+      sendSetReady(ready) {
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+        activeWs.send(encodeMessage({ type: 'setReady', ready }));
+      },
+      close: shutdownSocket,
+    };
+
+    sessionClose = shutdownSocket;
+
+    /** 入座成功即交给房间页，不等开局。 */
+    const finishJoin = (): void => {
       if (settled) return;
       settled = true;
       rejectPending = null;
-      status(`对局开始（房间 ${roomId}${roomName ? ` · ${roomName}` : ''}）`);
-      sessionClose = () => {
-        intentionalClose = true;
-        clearReconnectTimer();
-        active.setInputPaused(false);
-        try {
-          activeWs?.close();
-        } catch {
-          /* ignore */
-        }
-      };
-      resolve({
-        loop: active,
+      const label = roomName ? `${roomId} · ${roomName}` : roomId;
+      status(`已入座房间 ${label}`);
+      resolve(session);
+    };
+
+    /** 收到带种子的 welcome 后建 loop；start 再通知外层切到对局。 */
+    const ensureMatchLoop = (seed: number, side: Faction, delay: number): NetSimLoop => {
+      loop = new NetSimLoop({
+        seed,
         faction: side,
-        seat,
-        roomId,
-        roomName,
-        opponentName,
-        close: sessionClose,
+        inputDelay: delay || DEFAULT_INPUT_DELAY,
+        send: (text) => {
+          if (activeWs && activeWs.readyState === WebSocket.OPEN) activeWs.send(text);
+        },
+        onDesync: options.onDesync,
+        onPeerLeft: () => options.onPeerLeft?.(),
+        onPeerDisconnected: () => options.onPeerDisconnected?.(),
+        onPeerReconnected: () => options.onPeerReconnected?.(),
+        onMatchEnd: (result) => {
+          inMatch = false;
+          options.onMatchEnd?.(result);
+        },
       });
+      for (const queued of pending.splice(0)) {
+        applyServerMessage(queued);
+      }
+      return loop;
+    };
+
+    const applyServerMessage = (message: ServerMessage): void => {
+      if (message.type === 'roomState') {
+        hostSeat = message.hostSeat;
+        roomId = message.roomId || roomId;
+        roomName = message.roomName || roomName;
+        const peer = message.members.find((member) => member.seat !== seat);
+        opponentName = peer?.name ?? '';
+        options.onRoomState?.(message);
+        return;
+      }
+
+      if (message.type === 'start' && loop && faction !== null) {
+        inMatch = true;
+        reconnectDeadline = 0;
+        reconnectAttempt = 0;
+        status(`对局开始（房间 ${roomId}${roomName ? ` · ${roomName}` : ''}）`);
+        options.onMatchStart?.(loop, faction, opponentName);
+      }
+
+      loop?.handleServerMessage(message);
     };
 
     const attachSocket = (ws: WebSocket, kind: 'join' | 'rejoin'): void => {
@@ -156,9 +241,7 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
 
       ws.addEventListener('open', () => {
         if (kind === 'join') {
-          if (mode === 'quick') {
-            status('已连接，正在匹配对手…');
-          } else if (mode === 'create') {
+          if (mode === 'create') {
             status('已连接，正在创建房间…');
           } else {
             status(`已连接，正在加入房间 ${joinRoomId}…`);
@@ -200,9 +283,13 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
         if (activeWs === ws) activeWs = null;
         if (intentionalClose) return;
 
-        // 尚未开局就断开：直接失败
-        if (!loop || !settled) {
-          if (!settled) fail(new Error('连接已断开'));
+        // 尚未入座或已不在对局：直接失败 / 通知房间页
+        if (!settled) {
+          fail(new Error('连接已断开'));
+          return;
+        }
+        if (!inMatch || !loop) {
+          options.onDisconnected?.('连接已断开');
           return;
         }
 
@@ -222,7 +309,11 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
             options.onReconnectFailed?.(message.message);
             return;
           }
-          fail(new Error(message.message));
+          if (!settled) {
+            fail(new Error(message.message));
+            return;
+          }
+          status(message.message);
           return;
         }
 
@@ -235,15 +326,14 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
           if (typeof message.opponentName === 'string') {
             opponentName = message.opponentName;
           }
+          finishJoin();
 
           if (message.seed === 0) {
-            const label = roomName ? `${roomId} · ${roomName}` : roomId;
-            status(`已入座房间 ${label}（${message.faction === 0 ? '蓝方' : '红方'}），等待对手…`);
             return;
           }
 
           // 重连：复用已有 NetSimLoop，只换发送通道并消化补帧
-          if (loop) {
+          if (loop && inMatch) {
             clearReconnectTimer();
             reconnectAttempt = 0;
             loop.setSend((text) => {
@@ -255,34 +345,17 @@ export function connectVersusSession(options: ConnectVersusOptions = {}): Versus
             return;
           }
 
-          status('对手已就绪，正在开局…');
-          loop = new NetSimLoop({
-            seed: message.seed,
-            faction: message.faction,
-            inputDelay: message.inputDelay || DEFAULT_INPUT_DELAY,
-            send: (text) => {
-              if (ws.readyState === WebSocket.OPEN) ws.send(text);
-            },
-            onDesync: options.onDesync,
-            onPeerLeft: () => options.onPeerLeft?.(),
-            onPeerDisconnected: () => options.onPeerDisconnected?.(),
-            onPeerReconnected: () => options.onPeerReconnected?.(),
-            onMatchEnd: options.onMatchEnd,
-          });
-          for (const queued of pending.splice(0)) {
-            loop.handleServerMessage(queued);
-            if (queued.type === 'start' && faction !== null) finish(loop, faction);
-          }
+          status('正在开局…');
+          ensureMatchLoop(message.seed, message.faction, message.inputDelay);
           return;
         }
 
-        if (!loop) {
+        if (!loop && (message.type === 'frame' || message.type === 'start' || message.type === 'matchEnd')) {
           pending.push(message);
           return;
         }
 
-        loop.handleServerMessage(message);
-        if (message.type === 'start' && faction !== null) finish(loop, faction);
+        applyServerMessage(message);
       });
     };
 

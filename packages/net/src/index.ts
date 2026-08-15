@@ -30,7 +30,12 @@ export {
   type RoomErrorCode,
   type RoomListEntry,
   type RoomListMessage,
+  type RoomMember,
+  type RoomPhase,
+  type RoomStateMessage,
   type ServerMessage,
+  type SetReadyMessage,
+  type StartMatchMessage,
   type StartMessage,
   type WelcomeMessage,
 } from './protocol.js';

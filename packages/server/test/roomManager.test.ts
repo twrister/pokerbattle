@@ -80,10 +80,14 @@ describe('RoomManager 多房间', () => {
     expect(latestWelcome(a).roomName).toBe('测试房间');
 
     expect(manager.join(b as never, { type: 'join', mode: 'room', roomId, name: 'B' }).ok).toBe(true);
+    expect(a.messages().some((m) => m.type === 'start')).toBe(false);
+    expect(a.messages().some((m) => m.type === 'roomState')).toBe(true);
+
     const third = manager.join(c as never, { type: 'join', mode: 'room', roomId, name: 'C' });
     expect(third.ok).toBe(false);
     expect(third.error?.code).toBe('already_started');
 
+    hostStart(a);
     expect(a.messages().some((m) => m.type === 'start')).toBe(true);
     expect(b.messages().some((m) => m.type === 'start')).toBe(true);
     manager.dispose();
@@ -229,6 +233,7 @@ describe('RoomManager 多房间', () => {
     });
     const playingId = welcomeRoom(b);
     manager.join(c as never, { type: 'join', mode: 'room', roomId: playingId, name: 'Red' });
+    hostStart(b);
 
     const snapshots = manager.listOpsSnapshots();
     expect(snapshots).toHaveLength(2);
@@ -273,6 +278,7 @@ describe('RoomManager 多房间', () => {
     });
     const roomA = welcomeRoom(a1);
     manager.join(a2 as never, { type: 'join', mode: 'room', roomId: roomA, name: 'A2' });
+    hostStart(a1);
     manager.join(b1 as never, {
       type: 'join',
       mode: 'create',
@@ -282,6 +288,7 @@ describe('RoomManager 多房间', () => {
     });
     const roomB = welcomeRoom(b1);
     manager.join(b2 as never, { type: 'join', mode: 'room', roomId: roomB, name: 'B2' });
+    hostStart(b1);
 
     const before = countFrames(b1);
     a1.close();
@@ -304,6 +311,7 @@ describe('MatchRoom 断线重连', () => {
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
     room.handleJoin(b as never, 'B');
+    hostStart(a);
 
     vi.advanceTimersByTime(250); // 约 5 帧
     const token = latestWelcome(a).reconnectToken;
@@ -343,6 +351,7 @@ describe('MatchRoom 断线重连', () => {
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
     room.handleJoin(b as never, 'B');
+    hostStart(a);
 
     a.close();
     const bad = new FakeWebSocket();
@@ -366,6 +375,7 @@ describe('MatchRoom 断线重连', () => {
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
     room.handleJoin(b as never, 'B');
+    hostStart(a);
 
     a.close();
     b.close();
@@ -394,6 +404,7 @@ describe('MatchRoom 断线重连', () => {
     const b = new FakeWebSocket();
     room.handleJoin(a as never, 'A');
     room.handleJoin(b as never, 'B');
+    hostStart(a);
 
     const tokenA = latestWelcome(a).reconnectToken;
     a.close();
@@ -408,7 +419,63 @@ describe('MatchRoom 断线重连', () => {
     expect(room.toOpsSnapshot().phase).toBe('playing');
     room.dispose();
   });
+
+  it('非房主或人数未齐时拒绝 startMatch，房主离开后移交主持', () => {
+    const room = new MatchRoom({ roomId: '005', roomName: '主持房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    a.receive({ type: 'startMatch' });
+    expect(a.messages().some((m) => m.type === 'error' && m.code === 'not_ready')).toBe(true);
+
+    room.handleJoin(b as never, 'B');
+    b.receive({ type: 'startMatch' });
+    expect(b.messages().some((m) => m.type === 'error' && m.code === 'not_host')).toBe(true);
+    expect(room.toOpsSnapshot().phase).toBe('waiting');
+
+    a.close();
+    const state = b.messages().filter((m) => m.type === 'roomState').at(-1);
+    expect(state && state.type === 'roomState' && state.hostSeat).toBe(1);
+    expect(state && state.type === 'roomState' && state.members[0]?.isHost).toBe(true);
+
+    const c = new FakeWebSocket();
+    room.handleJoin(c as never, 'C');
+    hostStart(b);
+    expect(b.messages().some((m) => m.type === 'start')).toBe(true);
+    expect(room.toOpsSnapshot().phase).toBe('playing');
+    room.dispose();
+  });
+
+  it('非房主可取消准备，取消后房主无法开局', () => {
+    const room = new MatchRoom({ roomId: '006', roomName: '准备房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+
+    a.receive({ type: 'setReady', ready: false });
+    expect(a.messages().some((m) => m.type === 'error' && m.code === 'is_host')).toBe(true);
+
+    b.receive({ type: 'setReady', ready: false });
+    const state = b.messages().filter((m) => m.type === 'roomState').at(-1);
+    expect(state && state.type === 'roomState' && state.members.find((m) => m.seat === 1)?.ready).toBe(
+      false,
+    );
+
+    hostStart(a);
+    expect(a.messages().some((m) => m.type === 'error' && m.code === 'not_ready')).toBe(true);
+    expect(room.toOpsSnapshot().phase).toBe('waiting');
+
+    b.receive({ type: 'setReady', ready: true });
+    hostStart(a);
+    expect(a.messages().some((m) => m.type === 'start')).toBe(true);
+    room.dispose();
+  });
 });
+
+function hostStart(ws: FakeWebSocket): void {
+  ws.receive({ type: 'startMatch' });
+}
 
 function welcomeRoom(ws: FakeWebSocket): string {
   const welcome = ws.messages().find((m) => m.type === 'welcome');

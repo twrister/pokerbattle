@@ -1,5 +1,7 @@
 export type AppScreen =
   | 'menu'
+  | 'online'
+  | 'room'
   | 'deck-config'
   | 'hand-odds'
   | 'codex'

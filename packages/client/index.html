@@ -69,7 +69,9 @@
         grid-template-rows: auto;
       }
 
-      #main-menu {
+      #main-menu,
+      #online-lobby,
+      #online-room {
         position: fixed;
         inset: 0;
         z-index: 10;
@@ -595,116 +597,22 @@
         color: rgba(222, 255, 235, 0.68);
       }
 
-      #mode-online-dialog .mode-option-ready {
-        border-color: rgba(153, 207, 237, 0.5);
-        background: linear-gradient(135deg, #3d718f, #294c68);
-        box-shadow: 0 calc(10 * var(--hu)) calc(22 * var(--hu)) rgba(17, 57, 82, 0.28);
-        color: #f7fbfd;
+      .online-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(10 * var(--hu));
+        margin-bottom: calc(18 * var(--hu));
       }
 
-      #mode-online-dialog .mode-option-ready small {
-        color: rgba(232, 245, 251, 0.66);
-      }
-
-      .online-room-panel {
-        display: grid;
-        gap: calc(14 * var(--hu));
-        margin-top: calc(4 * var(--hu));
-        padding: calc(12 * var(--hu));
-        border: 1px solid rgba(153, 207, 237, 0.22);
-        border-radius: calc(12 * var(--hu));
-        background: rgba(8, 18, 28, 0.55);
-      }
-
-      .online-room-panel.is-hidden {
-        display: none;
-      }
-
-      /* 进入房间视图：隐藏快速匹配/房间入口，并把面板与列表撑大 */
-      #mode-online-dialog.is-room .mode-dialog-options {
-        display: none;
-      }
-
-      #mode-online-dialog.is-room .mode-dialog-panel {
-        width: min(100%, calc(440 * var(--hu)));
-      }
-
-      #mode-online-dialog.is-room .online-room-panel {
-        margin-top: 0;
-        padding: calc(14 * var(--hu));
-        gap: calc(16 * var(--hu));
-      }
-
-      #mode-online-dialog.is-room #online-room-list {
-        max-height: calc(360 * var(--hu));
-      }
-
-      .online-room-section {
-        display: grid;
-        gap: calc(8 * var(--hu));
-      }
-
-      .online-room-section-title {
+      .online-page-header h1 {
         margin: 0;
-        color: #c5d7e6;
-        font-size: calc(13 * var(--hu));
-        font-weight: 600;
+        font-size: calc(22 * var(--hu));
+        letter-spacing: 0.08em;
       }
 
-      /* 输入框与操作按钮并排，按钮固定宽度避免挤压占位 */
-      .online-room-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: calc(8 * var(--hu));
-        align-items: stretch;
-      }
-
-      #online-room-name-input,
-      #online-room-input {
-        width: 100%;
-        min-width: 0;
-        box-sizing: border-box;
-        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
-        border: 1px solid rgba(169, 198, 220, 0.28);
-        border-radius: calc(10 * var(--hu));
-        background: rgba(8, 14, 22, 0.88);
-        color: #f2f5f7;
-        font: inherit;
-        font-size: calc(16 * var(--hu));
-        letter-spacing: 0.04em;
-      }
-
-      #online-room-name-input:focus,
-      #online-room-input:focus {
-        outline: 1px solid rgba(153, 207, 237, 0.55);
-        outline-offset: 1px;
-      }
-
-      #online-room-error {
-        min-height: 1.2em;
-        color: transparent;
-        font-size: calc(12 * var(--hu));
-      }
-
-      #online-room-error.is-visible {
-        color: #ef8b8b;
-      }
-
-      #btn-online-room-create,
-      #btn-online-room-join {
-        width: auto;
-        min-width: calc(88 * var(--hu));
-        padding: calc(12 * var(--hu)) calc(16 * var(--hu));
-        border-radius: calc(10 * var(--hu));
-        font-size: calc(15 * var(--hu));
-        font-weight: 700;
-        border: 1px solid rgba(153, 207, 237, 0.5);
-        background: linear-gradient(135deg, #3d718f, #294c68);
-        color: #f7fbfd;
-        white-space: nowrap;
-      }
-
-      #btn-online-room-refresh {
+      .online-page-back,
+      .online-page-refresh {
         width: auto;
         padding: calc(8 * var(--hu)) calc(12 * var(--hu));
         border-radius: calc(10 * var(--hu));
@@ -716,36 +624,31 @@
         white-space: nowrap;
       }
 
-      .online-room-list-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: calc(8 * var(--hu));
-      }
-
-      #online-room-list {
+      #online-lobby-list {
         display: grid;
-        gap: calc(6 * var(--hu));
-        max-height: calc(220 * var(--hu));
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+        flex: 1;
+        align-content: start;
+        min-height: calc(280 * var(--hu));
         overflow: auto;
       }
 
-      .online-room-list-empty {
-        padding: calc(10 * var(--hu)) 0;
+      .online-lobby-empty {
+        grid-column: 1 / -1;
+        padding: calc(28 * var(--hu)) 0;
         color: #7f92a6;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(14 * var(--hu));
         text-align: center;
       }
 
-      .online-room-list-item {
+      .online-room-card {
         display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: calc(8 * var(--hu));
-        align-items: center;
-        width: 100%;
-        padding: calc(10 * var(--hu)) calc(12 * var(--hu));
+        gap: calc(6 * var(--hu));
+        min-height: calc(92 * var(--hu));
+        padding: calc(14 * var(--hu));
         border: 1px solid rgba(153, 207, 237, 0.22);
-        border-radius: calc(10 * var(--hu));
+        border-radius: calc(14 * var(--hu));
         background: rgba(12, 24, 36, 0.72);
         color: #eef5fa;
         font: inherit;
@@ -753,29 +656,165 @@
         cursor: pointer;
       }
 
-      .online-room-list-item:hover,
-      .online-room-list-item:active {
+      .online-room-card:hover,
+      .online-room-card:active {
         border-color: rgba(153, 207, 237, 0.55);
         background: rgba(28, 52, 74, 0.88);
       }
 
-      .online-room-list-id {
+      .online-room-card-id {
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.12em;
         color: #9fd0ef;
+        font-size: calc(18 * var(--hu));
       }
 
-      .online-room-list-name {
+      .online-room-card-name {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-size: calc(14 * var(--hu));
       }
 
-      .online-room-list-count {
+      .online-room-card-count {
         color: #8aa0b4;
         font-size: calc(12 * var(--hu));
-        white-space: nowrap;
+      }
+
+      .online-lobby-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+        margin-top: calc(16 * var(--hu));
+      }
+
+      #btn-online-lobby-create,
+      #btn-online-lobby-join,
+      #btn-online-create-confirm,
+      #btn-online-join-confirm,
+      #btn-online-room-start,
+      #btn-online-room-ready {
+        width: 100%;
+        padding: calc(16 * var(--hu)) calc(12 * var(--hu));
+        border-radius: calc(12 * var(--hu));
+        font-size: calc(16 * var(--hu));
+        font-weight: 700;
+        border: 1px solid rgba(153, 207, 237, 0.5);
+        background: linear-gradient(135deg, #3d718f, #294c68);
+        color: #f7fbfd;
+      }
+
+      #btn-online-room-start:disabled {
+        opacity: 0.45;
+      }
+
+      #btn-online-room-ready.is-ready {
+        border-color: rgba(139, 165, 184, 0.36);
+        background: rgba(255, 255, 255, 0.06);
+        color: #d5e2ec;
+      }
+
+      #online-lobby-status,
+      #online-room-status {
+        min-height: 1.4em;
+        margin-top: calc(10 * var(--hu));
+        color: transparent;
+        font-size: calc(13 * var(--hu));
+        text-align: center;
+      }
+
+      #online-lobby-status.is-visible,
+      #online-room-status.is-visible {
+        color: #8192a4;
+      }
+
+      #online-create-name-input,
+      #online-join-id-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(169, 198, 220, 0.28);
+        border-radius: calc(10 * var(--hu));
+        background: rgba(8, 14, 22, 0.88);
+        color: #f2f5f7;
+        font: inherit;
+        font-size: calc(16 * var(--hu));
+      }
+
+      #online-create-error,
+      #online-join-error {
+        min-height: 1.2em;
+        color: transparent;
+        font-size: calc(12 * var(--hu));
+      }
+
+      #online-create-error.is-visible,
+      #online-join-error.is-visible {
+        color: #ef8b8b;
+      }
+
+      .online-room-meta {
+        display: grid;
+        gap: calc(4 * var(--hu));
+        margin-bottom: calc(18 * var(--hu));
+        text-align: center;
+      }
+
+      #online-room-id {
+        font-size: calc(28 * var(--hu));
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: #9fd0ef;
+      }
+
+      #online-room-name {
+        color: #c5d7e6;
+        font-size: calc(16 * var(--hu));
+      }
+
+      #online-room-members {
+        display: grid;
+        gap: calc(10 * var(--hu));
+        flex: 1;
+        align-content: start;
+      }
+
+      .online-room-member {
+        padding: calc(16 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.22);
+        border-radius: calc(14 * var(--hu));
+        background: rgba(12, 24, 36, 0.72);
+      }
+
+      .online-room-member.is-host {
+        border-color: rgba(153, 207, 237, 0.55);
+      }
+
+      .online-room-member-name {
+        font-size: calc(18 * var(--hu));
+        font-weight: 650;
+      }
+
+      .online-room-member-meta {
+        margin-top: calc(6 * var(--hu));
+        color: #8aa0b4;
+        font-size: calc(13 * var(--hu));
+      }
+
+      .online-room-actions {
+        display: grid;
+        gap: calc(10 * var(--hu));
+        margin-top: calc(16 * var(--hu));
+      }
+
+      #btn-online-room-leave {
+        width: 100%;
+        padding: calc(14 * var(--hu));
+        border-radius: calc(12 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+        color: #d5e2ec;
       }
 
       .reconnect-banner {
@@ -3481,68 +3520,6 @@
           </div>
         </div>
 
-        <div id="mode-online-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="mode-online-title">
-          <button class="mode-dialog-backdrop" type="button" aria-label="关闭多人联机选择" data-mode-close></button>
-          <div class="mode-dialog-panel">
-            <header class="mode-dialog-header">
-              <h2 id="mode-online-title" class="mode-dialog-title">多人联机</h2>
-              <button class="mode-dialog-close" type="button" aria-label="关闭" data-mode-close>×</button>
-            </header>
-            <div class="mode-dialog-options">
-              <button id="btn-online-quick" class="mode-option mode-option-ready" type="button">
-                快速匹配
-                <small>自动分配房间</small>
-              </button>
-              <button id="btn-online-room" class="mode-option mode-option-ready" type="button">
-                房间
-                <small>创建、加入或浏览列表</small>
-              </button>
-            </div>
-            <div id="online-room-panel" class="online-room-panel is-hidden">
-              <section class="online-room-section" aria-labelledby="online-room-create-title">
-                <h3 id="online-room-create-title" class="online-room-section-title">创建房间</h3>
-                <div class="online-room-row">
-                  <input
-                    id="online-room-name-input"
-                    type="text"
-                    maxlength="24"
-                    autocomplete="off"
-                    spellcheck="false"
-                    placeholder="房间名，例如 小明的房间"
-                    aria-label="联机房间名"
-                  />
-                  <button id="btn-online-room-create" type="button">创建</button>
-                </div>
-              </section>
-              <section class="online-room-section" aria-labelledby="online-room-join-title">
-                <h3 id="online-room-join-title" class="online-room-section-title">加入房间</h3>
-                <div class="online-room-row">
-                  <input
-                    id="online-room-input"
-                    type="text"
-                    maxlength="3"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    autocomplete="off"
-                    spellcheck="false"
-                    placeholder="三位房号，如 042"
-                    aria-label="联机房间号"
-                  />
-                  <button id="btn-online-room-join" type="button">加入</button>
-                </div>
-              </section>
-              <div id="online-room-error" role="alert"></div>
-              <section class="online-room-section online-room-section-list" aria-labelledby="online-room-list-title">
-                <div class="online-room-list-header">
-                  <h3 id="online-room-list-title" class="online-room-section-title">房间列表</h3>
-                  <button id="btn-online-room-refresh" type="button">刷新</button>
-                </div>
-                <div id="online-room-list" role="list"></div>
-              </section>
-            </div>
-          </div>
-        </div>
-
         <div id="rename-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="rename-title">
           <button class="mode-dialog-backdrop" type="button" aria-label="关闭改名" data-rename-close></button>
           <div class="mode-dialog-panel">
@@ -3589,6 +3566,84 @@
           <div id="codex-unit-list" class="codex-unit-list" aria-label="兵种列表"></div>
           <article id="codex-detail" class="codex-detail" aria-live="polite"></article>
         </section>
+      </div>
+    </main>
+
+    <main id="online-lobby" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell">
+        <header class="online-page-header">
+          <button id="btn-online-lobby-back" class="online-page-back" type="button">返回</button>
+          <h1>多人联机</h1>
+          <button id="btn-online-lobby-refresh" class="online-page-refresh" type="button">刷新</button>
+        </header>
+        <div id="online-lobby-list" role="list"></div>
+        <div id="online-lobby-status" role="status" aria-live="polite"></div>
+        <div class="online-lobby-actions">
+          <button id="btn-online-lobby-create" type="button">创建房间</button>
+          <button id="btn-online-lobby-join" type="button">加入房间</button>
+        </div>
+        <div id="online-create-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="online-create-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭创建房间" data-online-create-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="online-create-title" class="mode-dialog-title">创建房间</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-online-create-close>×</button>
+            </header>
+            <input
+              id="online-create-name-input"
+              type="text"
+              maxlength="24"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="房间名，例如 小明的房间"
+              aria-label="联机房间名"
+            />
+            <div id="online-create-error" role="alert"></div>
+            <button id="btn-online-create-confirm" type="button">创建</button>
+          </div>
+        </div>
+        <div id="online-join-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="online-join-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭加入房间" data-online-join-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="online-join-title" class="mode-dialog-title">加入房间</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-online-join-close>×</button>
+            </header>
+            <input
+              id="online-join-id-input"
+              type="text"
+              maxlength="3"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="三位房号，如 042"
+              aria-label="联机房间号"
+            />
+            <div id="online-join-error" role="alert"></div>
+            <button id="btn-online-join-confirm" type="button">加入</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <main id="online-room" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell">
+        <header class="online-page-header">
+          <button id="btn-online-room-leave" class="online-page-back" type="button">离开房间</button>
+          <h1>房间</h1>
+          <span></span>
+        </header>
+        <div class="online-room-meta">
+          <div id="online-room-id">---</div>
+          <div id="online-room-name">正在加入…</div>
+        </div>
+        <div id="online-room-members"></div>
+        <div id="online-room-status" role="status" aria-live="polite"></div>
+        <div class="online-room-actions">
+          <button id="btn-online-room-start" type="button" disabled>开始游戏</button>
+          <button id="btn-online-room-ready" class="is-hidden" type="button">取消准备</button>
+        </div>
       </div>
     </main>
 
@@ -3844,7 +3899,7 @@
               <div class="battle-hp-track"><div id="battle-result-opp-bar" class="battle-hp-bar"></div></div>
             </article>
           </div>
-          <button id="btn-battle-result-return" type="button">返回主界面</button>
+          <button id="btn-battle-result-return" type="button">返回</button>
         </div>
       </section>
       <button id="btn-back-menu" type="button">返回主界面</button>

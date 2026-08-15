@@ -103,21 +103,48 @@ export interface PingMessage {
   t?: number;
 }
 
+/** C→S：房主请求开局；仅 waiting 且双方已准备时生效。 */
+export interface StartMatchMessage {
+  type: 'startMatch';
+}
+
+/** C→S：非房主切换准备；房主始终准备，取消会被拒绝。 */
+export interface SetReadyMessage {
+  type: 'setReady';
+  ready: boolean;
+}
+
 export type ClientMessage =
   | JoinMessage
   | RejoinMessage
   | ListRoomsMessage
   | LobbyMessage
+  | StartMatchMessage
+  | SetReadyMessage
   | InputMessage
   | HashMessage
   | PingMessage;
+
+/** 房间阶段：等待开局 / 对局中。结算后立刻回到 waiting。 */
+export type RoomPhase = 'waiting' | 'playing';
+
+/** 房间成员摘要，供房间页展示准备与房主。 */
+export interface RoomMember {
+  seat: number;
+  name: string;
+  ready: boolean;
+  isHost: boolean;
+}
 
 /** 可展示给玩家的房间/重连错误码。 */
 export type RoomErrorCode =
   | 'invalid_room'
   | 'room_full'
   | 'already_started'
-  | 'rejoin_failed';
+  | 'rejoin_failed'
+  | 'not_host'
+  | 'not_ready'
+  | 'is_host';
 
 /** S→C：入座成功，带上种子、房间号与重连令牌。 */
 export interface WelcomeMessage {
@@ -137,6 +164,16 @@ export interface WelcomeMessage {
 export interface RoomListMessage {
   type: 'roomList';
   rooms: RoomListEntry[];
+}
+
+/** S→C：房间成员与阶段快照，入座/离座/回房后都会广播。 */
+export interface RoomStateMessage {
+  type: 'roomState';
+  roomId: string;
+  roomName: string;
+  hostSeat: number;
+  phase: RoomPhase;
+  members: RoomMember[];
 }
 
 /** S→C：对局开始，告知首个逻辑 tick。 */
@@ -198,6 +235,7 @@ export interface ErrorMessage {
 export type ServerMessage =
   | WelcomeMessage
   | RoomListMessage
+  | RoomStateMessage
   | StartMessage
   | FrameMessage
   | DesyncMessage

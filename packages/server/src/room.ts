@@ -6,6 +6,7 @@ import {
   encodeMessage,
   type ClientMessage,
   type RoomListEntry,
+  type RoomStateMessage,
   type ServerMessage,
 } from '@pb/net';
 import { MatchState, TICK_RATE, type Command, type Faction } from '@pb/sim';
@@ -29,6 +30,8 @@ interface Seat {
   seat: number;
   /** 不可预测令牌，仅本席重连可用。 */
   reconnectToken: string;
+  /** 入座默认准备；结算回房后再次置为 true。 */
+  ready: boolean;
   connected: boolean;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   /** 避免同一连接 close 被重复处理。 */
@@ -52,8 +55,8 @@ export interface MatchRoomOptions {
 }
 
 /**
- * 单房间权威循环：两人到齐开局，20Hz 匀速推进。
- * 对局中断线保留席位并继续 tick，凭令牌在窗口内补帧恢复。
+ * 单房间权威循环：入座默认准备，房主手动开局，20Hz 匀速推进。
+ * 结算后回到 waiting 以便再开；对局中断线保留席位并补帧恢复。
  */
 export class MatchRoom {
   readonly roomId: string;
@@ -66,6 +69,8 @@ export class MatchRoom {
     names: { winner: string; loser: string },
   ) => void;
   private readonly seats: Array<Seat | null> = [null, null];
+  /** 房主席位；创建者 / 先入座者为房主，离开后交给剩余席。 */
+  private hostSeat = 0;
   private match: MatchState | null = null;
   private seed = 0;
   private serverTick = 0;
@@ -172,21 +177,21 @@ export class MatchRoom {
       faction,
       seat: seatIndex,
       reconnectToken: createReconnectToken(),
+      ready: true,
       connected: true,
       disconnectTimer: null,
       closeHandler: null,
       messageHandler: null,
     };
     this.seats[seatIndex] = seat;
+    // 空房第一人成为房主，避免沿用上一任已离开的 hostSeat
+    if (this.playerCount === 1) this.hostSeat = seatIndex;
     this.touchActive();
     this.bindSocket(seat);
     if (playerId) this.onPlayerJoin?.(playerId, name);
 
-    if (this.seats[0] && this.seats[1] && !this.started) {
-      this.beginMatch();
-    } else if (!this.started) {
-      this.sendWelcome(seat, 0);
-    }
+    this.sendWelcome(seat, 0);
+    this.broadcastRoomState();
     return true;
   }
 
@@ -283,9 +288,7 @@ export class MatchRoom {
         reason: this.match.result.reason,
       });
       this.recordDecisiveMatchIfNeeded();
-      if (this.timer) clearInterval(this.timer);
-      this.timer = null;
-      this.scheduled.clear();
+      this.resetToWaiting();
       return;
     }
 
@@ -296,7 +299,7 @@ export class MatchRoom {
 
   private handleClientMessage(seatIndex: number, raw: string): void {
     const seat = this.seats[seatIndex];
-    if (!seat || !seat.connected || !this.match) return;
+    if (!seat || !seat.connected) return;
 
     let message: ClientMessage;
     try {
@@ -309,7 +312,9 @@ export class MatchRoom {
     if (
       message.type === 'ping' ||
       message.type === 'input' ||
-      message.type === 'hash'
+      message.type === 'hash' ||
+      message.type === 'startMatch' ||
+      message.type === 'setReady'
     ) {
       this.touchActive();
     }
@@ -317,6 +322,12 @@ export class MatchRoom {
     switch (message.type) {
       case 'ping':
         this.send(seat.ws, { type: 'pong', t: message.t });
+        break;
+      case 'startMatch':
+        this.handleStartMatch(seat);
+        break;
+      case 'setReady':
+        this.handleSetReady(seat, message.ready === true);
         break;
       case 'input':
         this.acceptInput(seat, message.tick, message.commands ?? []);
@@ -327,6 +338,60 @@ export class MatchRoom {
       default:
         break;
     }
+  }
+
+  /** 房主在 waiting 且双方已准备时开局；否则回可展示错误。 */
+  private handleStartMatch(seat: Seat): void {
+    if (this.started) {
+      this.send(seat.ws, { type: 'error', code: 'already_started', message: '对局已经开始' });
+      return;
+    }
+    if (seat.seat !== this.hostSeat) {
+      this.send(seat.ws, { type: 'error', code: 'not_host', message: '只有房主可以开始游戏' });
+      return;
+    }
+    if (!this.seats[0] || !this.seats[1]) {
+      this.send(seat.ws, { type: 'error', code: 'not_ready', message: '人数未齐，无法开始' });
+      return;
+    }
+    if (!this.seats[0].ready || !this.seats[1].ready) {
+      this.send(seat.ws, { type: 'error', code: 'not_ready', message: '双方尚未准备' });
+      return;
+    }
+    this.beginMatch();
+  }
+
+  /** 非房主在 waiting 切换准备；房主始终准备，取消会被拒绝。 */
+  private handleSetReady(seat: Seat, ready: boolean): void {
+    if (this.started) {
+      this.send(seat.ws, { type: 'error', code: 'already_started', message: '对局已经开始' });
+      return;
+    }
+    if (seat.seat === this.hostSeat) {
+      this.send(seat.ws, { type: 'error', code: 'is_host', message: '房主默认准备，无需取消' });
+      return;
+    }
+    if (seat.ready === ready) return;
+    seat.ready = ready;
+    this.broadcastRoomState();
+  }
+
+  /** 结算后清对局状态、保留席位，并广播回房快照。 */
+  private resetToWaiting(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.started = false;
+    this.ended = false;
+    this.match = null;
+    this.serverTick = 0;
+    this.seed = 0;
+    this.scheduled.clear();
+    this.serverHashes.clear();
+    this.frameHistory.clear();
+    for (const seat of this.seats) {
+      if (seat) seat.ready = true;
+    }
+    this.broadcastRoomState();
   }
 
   /** 输入排到 max(serverTick+1, T)；非法指令静默丢弃。 */
@@ -375,7 +440,12 @@ export class MatchRoom {
     if (!this.started || this.ended) {
       this.clearDisconnectTimer(seat);
       this.seats[seatIndex] = null;
-      if (this.isEmpty) this.dispose();
+      this.promoteHostAfterLeave(seatIndex);
+      if (this.isEmpty) {
+        this.dispose();
+        return;
+      }
+      this.broadcastRoomState();
       return;
     }
 
@@ -497,6 +567,39 @@ export class MatchRoom {
     if (!seat.disconnectTimer) return;
     clearTimeout(seat.disconnectTimer);
     seat.disconnectTimer = null;
+  }
+
+  /** 房主离座后把主持权交给剩余席，保证房间始终有人能开局。 */
+  private promoteHostAfterLeave(leftSeat: number): void {
+    if (this.hostSeat !== leftSeat) return;
+    const next = this.seats.findIndex((entry) => entry !== null);
+    if (next < 0) return;
+    this.hostSeat = next;
+    const host = this.seats[next];
+    if (host) host.ready = true;
+  }
+
+  /** 广播成员、准备与房主，供房间页刷新。 */
+  private broadcastRoomState(): void {
+    this.broadcast(this.toRoomState());
+  }
+
+  private toRoomState(): RoomStateMessage {
+    return {
+      type: 'roomState',
+      roomId: this.roomId,
+      roomName: this.roomName,
+      hostSeat: this.hostSeat,
+      phase: this.started ? 'playing' : 'waiting',
+      members: this.seats
+        .filter((entry): entry is Seat => entry !== null)
+        .map((entry) => ({
+          seat: entry.seat,
+          name: entry.name,
+          ready: entry.ready,
+          isHost: entry.seat === this.hostSeat,
+        })),
+    };
   }
 
   private sendWelcome(seat: Seat, seed: number): void {

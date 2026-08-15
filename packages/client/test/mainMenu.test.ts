@@ -42,15 +42,11 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onStartSandbox: vi.fn(),
     onStartSolo: vi.fn(),
     onStartSoloDebug: vi.fn(),
-    onStartVersus: vi.fn(),
-    onCancelVersus: vi.fn(),
+    onOpenOnline: vi.fn(),
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
     getProfile: () => buildProfile(),
     onRename: vi.fn(),
-    listRooms: vi.fn(async () => [
-      { roomId: '042', roomName: '可加入房', playerCount: 1, maxPlayers: 2 },
-    ]),
     ...overrides,
   };
 }
@@ -78,29 +74,12 @@ function mountMainMenuDom(): void {
       <button id="btn-codex"></button>
       <button id="btn-solo-ai"></button>
       <button id="btn-solo-debug"></button>
-      <button id="btn-online-quick"></button>
-      <button id="btn-online-room"></button>
-      <div id="online-room-panel" class="is-hidden">
-        <input id="online-room-name-input" />
-        <input id="online-room-input" />
-        <div id="online-room-error"></div>
-        <button id="btn-online-room-create"></button>
-        <button id="btn-online-room-join"></button>
-        <button id="btn-online-room-refresh"></button>
-        <div id="online-room-list"></div>
-      </div>
       <div class="lobby-status-row">
         <div id="lobby-status"></div>
-        <button id="btn-lobby-room-cancel" class="is-hidden" type="button">取消</button>
       </div>
       <div id="lobby-version"></div>
       <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
         <button data-mode-close></button>
-      </div>
-      <div id="mode-online-dialog" class="is-hidden" aria-hidden="true">
-        <button data-mode-close></button>
-        <h2 id="mode-online-title">多人联机</h2>
-        <div class="mode-dialog-options"></div>
       </div>
       <div id="rename-dialog" class="is-hidden" aria-hidden="true">
         <button data-rename-close></button>
@@ -231,91 +210,12 @@ describe('大厅玩家档案展示', () => {
     expect(status.textContent).toContain('正式服不可进入模拟沙盒');
   });
 
-  it('快速匹配、创建与加入分别传递入房参数', async () => {
-    const onStartVersus = vi.fn();
-    createMainMenu(menuOptions({ onStartVersus }));
-
-    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
-    expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
-    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(true);
+  it('点击多人联机进入独立大厅页', () => {
+    const onOpenOnline = vi.fn();
+    createMainMenu(menuOptions({ onOpenOnline }));
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
-    const onlineDialog = document.querySelector('#mode-online-dialog')!;
-    expect(onlineDialog.classList.contains('is-room')).toBe(true);
-    expect(document.querySelector('#mode-online-title')?.textContent).toBe('房间');
-    const nameInput = document.querySelector<HTMLInputElement>('#online-room-name-input')!;
-    expect(nameInput.value).toBe('测试玩家的房间');
-
-    const input = document.querySelector<HTMLInputElement>('#online-room-input')!;
-    input.value = 'bad';
-    document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
-    expect(document.querySelector('#online-room-error')?.classList.contains('is-visible')).toBe(true);
-    expect(onStartVersus).toHaveBeenCalledTimes(1);
-
-    nameInput.value = '自定义房';
-    document.querySelector<HTMLButtonElement>('#btn-online-room-create')!.click();
-    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'create', roomName: '自定义房' });
-
-    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
-    input.value = '042';
-    document.querySelector<HTMLButtonElement>('#btn-online-room-join')!.click();
-    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
-
-    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
-    await vi.waitFor(() => {
-      expect(document.querySelector('.online-room-list-item')).not.toBeNull();
-    });
-    document.querySelector<HTMLButtonElement>('.online-room-list-item')!.click();
-    expect(onStartVersus).toHaveBeenLastCalledWith({ mode: 'room', roomId: '042' });
-  });
-
-  it('房间视图关闭时先退回联机选项', () => {
-    createMainMenu(menuOptions());
-
-    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-online-room')!.click();
-    const dialog = document.querySelector('#mode-online-dialog')!;
-    expect(dialog.classList.contains('is-room')).toBe(true);
-    expect(document.querySelector('#online-room-panel')?.classList.contains('is-hidden')).toBe(false);
-
-    document.querySelector<HTMLButtonElement>('#mode-online-dialog [data-mode-close]')!.click();
-    expect(dialog.classList.contains('is-hidden')).toBe(false);
-    expect(dialog.classList.contains('is-room')).toBe(false);
-    expect(document.querySelector('#online-room-panel')?.classList.contains('is-hidden')).toBe(true);
-    expect(document.querySelector('#mode-online-title')?.textContent).toBe('多人联机');
-  });
-
-  it('快速匹配关弹层后发起，流程与主动创建一致', () => {
-    const onStartVersus = vi.fn();
-    createMainMenu(menuOptions({ onStartVersus }));
-
-    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
-    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
-
-    const dialog = document.querySelector('#mode-online-dialog')!;
-    expect(dialog.classList.contains('is-hidden')).toBe(true);
-    expect(onStartVersus).toHaveBeenCalledWith({ mode: 'quick' });
-  });
-
-  it('大厅房间等待取消会离房并回调 onCancelVersus', () => {
-    const onCancelVersus = vi.fn();
-    const menu = createMainMenu(menuOptions({ onCancelVersus }));
-    const cancelButton = document.querySelector<HTMLButtonElement>('#btn-lobby-room-cancel')!;
-    const status = document.querySelector('#lobby-status')!;
-
-    menu.setRoomWaitingCancelVisible(true);
-    status.textContent = '已入座房间 042 · 测试房，等待对手…';
-    status.classList.add('is-visible');
-    expect(cancelButton.classList.contains('is-hidden')).toBe(false);
-
-    cancelButton.click();
-
-    expect(onCancelVersus).toHaveBeenCalledTimes(1);
-    expect(cancelButton.classList.contains('is-hidden')).toBe(true);
-    expect(status.classList.contains('is-visible')).toBe(false);
+    expect(onOpenOnline).toHaveBeenCalledTimes(1);
   });
 
   it('默认名首次点单机只出改名弹窗，不出模式弹窗', () => {
@@ -330,11 +230,12 @@ describe('大厅玩家档案展示', () => {
     expect(document.querySelector('#rename-title')?.textContent).toBe('请先设置玩家名称');
   });
 
-  it('默认名取消改名后再点开局不再主动弹，直接进模式', () => {
+  it('默认名取消改名后再点开局不再主动弹，直接进联机页', () => {
     const profile = buildProfile({
       displayName: defaultDisplayName('device-ui'),
     });
-    createMainMenu(menuOptions({ getProfile: () => profile }));
+    const onOpenOnline = vi.fn();
+    createMainMenu(menuOptions({ getProfile: () => profile, onOpenOnline }));
 
     document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
     document.querySelector<HTMLButtonElement>('#btn-rename-cancel')!.click();
@@ -342,7 +243,7 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
-    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(false);
+    expect(onOpenOnline).toHaveBeenCalledTimes(1);
   });
 
   it('本会话已主动提示过则默认名点单机直接打开模式弹窗', () => {

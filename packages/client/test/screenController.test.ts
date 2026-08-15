@@ -12,6 +12,8 @@ describe('页面状态管理', () => {
     const leaveUnitStats = vi.fn();
     const leaveSceneConfig = vi.fn();
     const leaveVersus = vi.fn();
+    const leaveOnline = vi.fn();
+    const leaveRoom = vi.fn();
     const enterMenu = vi.fn(() => leaveMenu);
     const enterSolo = vi.fn(() => leaveSolo);
     const enterSandbox = vi.fn(() => leaveSandbox);
@@ -21,8 +23,12 @@ describe('页面状态管理', () => {
     const enterUnitStats = vi.fn(() => leaveUnitStats);
     const enterSceneConfig = vi.fn(() => leaveSceneConfig);
     const enterVersus = vi.fn(() => leaveVersus);
+    const enterOnline = vi.fn(() => leaveOnline);
+    const enterRoom = vi.fn(() => leaveRoom);
     const screens = createScreenController({
       menu: enterMenu,
+      online: enterOnline,
+      room: enterRoom,
       solo: enterSolo,
       sandbox: enterSandbox,
       'deck-config': enterDeckConfig,
@@ -67,6 +73,8 @@ describe('页面状态管理', () => {
     const enterMenu = vi.fn(() => leaveMenu);
     const screens = createScreenController({
       menu: enterMenu,
+      online: () => vi.fn(),
+      room: () => vi.fn(),
       solo: () => vi.fn(),
       sandbox: () => vi.fn(),
       'deck-config': () => vi.fn(),

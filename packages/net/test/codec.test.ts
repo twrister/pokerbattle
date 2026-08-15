@@ -113,6 +113,37 @@ describe('协议编解码', () => {
     });
   });
 
+  it('可编解码 startMatch / roomState', () => {
+    const startMatch = encodeMessage({ type: 'startMatch' });
+    expect(decodeClientMessage(startMatch)).toEqual({ type: 'startMatch' });
+
+    const setReady = encodeMessage({ type: 'setReady', ready: false });
+    expect(decodeClientMessage(setReady)).toEqual({ type: 'setReady', ready: false });
+
+    const roomState = encodeMessage({
+      type: 'roomState',
+      roomId: '042',
+      roomName: 'Alice的房间',
+      hostSeat: 0,
+      phase: 'waiting',
+      members: [
+        { seat: 0, name: 'Alice', ready: true, isHost: true },
+        { seat: 1, name: 'Bob', ready: true, isHost: false },
+      ],
+    });
+    expect(decodeServerMessage(roomState)).toEqual({
+      type: 'roomState',
+      roomId: '042',
+      roomName: 'Alice的房间',
+      hostSeat: 0,
+      phase: 'waiting',
+      members: [
+        { seat: 0, name: 'Alice', ready: true, isHost: true },
+        { seat: 1, name: 'Bob', ready: true, isHost: false },
+      ],
+    });
+  });
+
   it('规范化三位房号并拒绝非法值', () => {
     expect(normalizeRoomId('  042  ')).toBe('042');
     expect(normalizeRoomId('999')).toBe('999');

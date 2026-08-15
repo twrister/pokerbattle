@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Faction } from '@pb/sim';
 import { encodeMessage } from '@pb/net';
-import { connectVersusSession, createLobbyPresence } from '../src/net/session.js';
+import { connectRoomSession, createLobbyPresence } from '../src/net/session.js';
 
 type Listener = (event?: { data?: string }) => void;
 
@@ -52,7 +52,7 @@ class MockWebSocket {
   }
 }
 
-describe('connectVersusSession', () => {
+describe('connectRoomSession', () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket);
@@ -67,11 +67,43 @@ describe('connectVersusSession', () => {
     vi.useRealTimers();
   });
 
-  it('快速匹配入房并在 start 后 resolve', async () => {
-    const { done, close } = connectVersusSession({ mode: 'quick', name: 'Tester' });
+  it('入房在 welcome 后 resolve，start 再回调开局', async () => {
+    const onMatchStart = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Tester',
+      onMatchStart,
+    });
     await Promise.resolve();
     const ws = MockWebSocket.instances[0]!;
-    expect(JSON.parse(ws.sent[0]!)).toMatchObject({ type: 'join', mode: 'quick' });
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({ type: 'join', mode: 'create' });
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '101',
+      roomName: 'Tester的房间',
+      reconnectToken: 'tok-a',
+      opponentName: '',
+    });
+    ws.pushServer({
+      type: 'roomState',
+      roomId: '101',
+      roomName: 'Tester的房间',
+      hostSeat: 0,
+      phase: 'waiting',
+      members: [{ seat: 0, name: 'Tester', ready: true, isHost: true }],
+    });
+
+    const session = await done;
+    expect(session.roomId).toBe('101');
+    expect(session.roomName).toBe('Tester的房间');
+    expect(session.faction).toBe(Faction.Blue);
+    expect(session.isHost).toBe(true);
+    expect(onMatchStart).not.toHaveBeenCalled();
 
     ws.pushServer({
       type: 'welcome',
@@ -85,18 +117,14 @@ describe('connectVersusSession', () => {
       opponentName: 'Rival',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
-
-    const session = await done;
-    expect(session.roomId).toBe('101');
-    expect(session.roomName).toBe('Tester的房间');
-    expect(session.faction).toBe(Faction.Blue);
-    expect(session.opponentName).toBe('Rival');
+    expect(onMatchStart).toHaveBeenCalledTimes(1);
+    expect(onMatchStart.mock.calls[0]?.[1]).toBe(Faction.Blue);
     close();
   });
 
   it('join 会带上 playerId', async () => {
-    const { done, close } = connectVersusSession({
-      mode: 'quick',
+    const { done, close } = connectRoomSession({
+      mode: 'create',
       name: 'Tester',
       playerId: 'device-abc-001',
     });
@@ -104,16 +132,16 @@ describe('connectVersusSession', () => {
     const ws = MockWebSocket.instances[0]!;
     expect(JSON.parse(ws.sent[0]!)).toMatchObject({
       type: 'join',
-      mode: 'quick',
+      mode: 'create',
       name: 'Tester',
       playerId: 'device-abc-001',
     });
     close();
-    await expect(done).rejects.toThrow('已取消匹配');
+    await expect(done).rejects.toThrow('已取消入房');
   });
 
   it('创建房间会带上 roomName', async () => {
-    const { done, close } = connectVersusSession({
+    const { done, close } = connectRoomSession({
       mode: 'create',
       roomName: '自定义房',
       name: 'Tester',
@@ -130,23 +158,25 @@ describe('connectVersusSession', () => {
       type: 'welcome',
       seat: 0,
       faction: Faction.Blue,
-      seed: 1,
+      seed: 0,
       inputDelay: 4,
       roomId: '088',
       roomName: '自定义房',
       reconnectToken: 'tok-create',
-      opponentName: 'Peer',
+      opponentName: '',
     });
-    ws.pushServer({ type: 'start', startTick: 1 });
     const session = await done;
     expect(session.roomId).toBe('088');
-    expect(session.opponentName).toBe('Peer');
+    session.sendStartMatch();
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ type: 'startMatch' });
+    session.sendSetReady(false);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ type: 'setReady', ready: false });
     close();
   });
 
   it('主动 close 后断线不会触发重连', async () => {
     const onReconnecting = vi.fn();
-    const { done } = connectVersusSession({
+    const { done } = connectRoomSession({
       mode: 'room',
       roomId: '042',
       name: 'Tester',
@@ -173,8 +203,8 @@ describe('connectVersusSession', () => {
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
-  it('匹配等待期 close 会立刻断连并拒绝 done', async () => {
-    const { done, close } = connectVersusSession({ mode: 'quick', name: 'Tester' });
+  it('入座后 close 会立刻断连且不重连', async () => {
+    const { done, close } = connectRoomSession({ mode: 'create', name: 'Tester' });
     await Promise.resolve();
     const ws = MockWebSocket.instances[0]!;
     ws.pushServer({
@@ -191,18 +221,20 @@ describe('connectVersusSession', () => {
 
     close();
     expect(ws.readyState).toBe(MockWebSocket.CLOSED);
-    await expect(done).rejects.toThrow('已取消匹配');
+    await expect(done).resolves.toMatchObject({ roomId: '055' });
   });
 
   it('意外断线会自动 rejoin 并恢复输入', async () => {
     vi.useFakeTimers();
     const onReconnecting = vi.fn();
     const onReconnected = vi.fn();
-    const { done, close } = connectVersusSession({
-      mode: 'quick',
+    const onMatchStart = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
       name: 'Tester',
       onReconnecting,
       onReconnected,
+      onMatchStart,
     });
     await Promise.resolve();
     const ws = MockWebSocket.instances[0]!;
@@ -218,9 +250,11 @@ describe('connectVersusSession', () => {
       opponentName: 'Rival',
     });
     ws.pushServer({ type: 'start', startTick: 1 });
-    const session = await done;
-    session.loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
-    expect(session.loop.lastConfirmedTick).toBe(1);
+    await done;
+    const loop = onMatchStart.mock.calls[0]?.[0];
+    expect(loop).toBeDefined();
+    loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
+    expect(loop.lastConfirmedTick).toBe(1);
 
     // 模拟非主动断开
     ws.readyState = MockWebSocket.CLOSED;
@@ -251,7 +285,7 @@ describe('connectVersusSession', () => {
     });
     rejoinWs.pushServer({ type: 'frame', tick: 2, commands: [] });
     expect(onReconnected).toHaveBeenCalled();
-    expect(session.loop.lastConfirmedTick).toBe(2);
+    expect(loop.lastConfirmedTick).toBe(2);
     close();
   });
 });

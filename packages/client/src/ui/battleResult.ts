@@ -14,6 +14,8 @@ export interface BattleResultContext {
 export interface BattleResultHandle {
   /** 写入双方显示名，结算时与残血一起展示。 */
   setContext(context: BattleResultContext): void;
+  /** 联机结算回房间，单机结算回主界面。 */
+  setReturnLabel(label: string): void;
   show(result: MatchResult, playerFaction: Faction, match?: MatchState): void;
   hide(): void;
 }
@@ -34,12 +36,18 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
   const button = requiredElement<HTMLButtonElement>('#btn-battle-result-return');
   button.addEventListener('click', onReturnToMenu);
 
+  /** 联机结算回房间，单机结算回主界面。 */
+  const setReturnLabel = (label: string): void => {
+    button.textContent = label;
+  };
+
   let context: BattleResultContext = {
     localName: '玩家',
     opponentName: '对手',
   };
 
   return {
+    setReturnLabel,
     setContext(next) {
       context = {
         localName: next.localName || '玩家',
