@@ -32,6 +32,8 @@ describe('对局 HUD 与结算弹窗', () => {
         </div>
         <span id="battle-phase-label"></span>
         <span id="battle-timer-label"></span><strong id="battle-timer"></strong>
+        <span id="battle-spectators" class="is-hidden">观战 0</span>
+        <span id="battle-catchup" class="is-hidden">正在追帧…</span>
       </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true">
         <h2 id="battle-result-title"></h2><p id="battle-result-detail"></p>

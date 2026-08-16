@@ -15,6 +15,7 @@ export interface OpsRoomSnapshot {
   serverTick: number;
   playerCount: number;
   connectedCount: number;
+  spectatorCount?: number;
   maxPlayers: number;
   seats: OpsSeatSnapshot[];
   createdAt: number;

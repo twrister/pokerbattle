@@ -9,7 +9,8 @@ export type AppScreen =
   | 'scene-config'
   | 'sandbox'
   | 'solo'
-  | 'versus';
+  | 'versus'
+  | 'spectate';
 export type EnterScreen = () => () => void;
 
 export interface ScreenController {

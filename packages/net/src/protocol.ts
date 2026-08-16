@@ -30,12 +30,17 @@ export function normalizeRoomName(raw: string): string | null {
 /** 加入方式：快速匹配 / 加入已有房 / 创建新房。 */
 export type JoinMode = 'quick' | 'room' | 'create';
 
-/** 可加入房间的列表摘要。 */
+/** 房间阶段：等待开局 / 对局中。结算后立刻回到 waiting。 */
+export type RoomPhase = 'waiting' | 'playing';
+
+/** 大厅房间列表摘要；含对局中房间，供加入或观战。 */
 export interface RoomListEntry {
   roomId: string;
   roomName: string;
   playerCount: number;
   maxPlayers: number;
+  phase: RoomPhase;
+  spectatorCount: number;
 }
 
 /** C→S：加入房间。 */
@@ -59,9 +64,17 @@ export interface RejoinMessage {
   lastTick: number;
 }
 
-/** C→S：查询当前可加入房间列表（不占用 join 握手）。 */
+/** C→S：查询当前全部房间列表（不占用 join 握手）。 */
 export interface ListRoomsMessage {
   type: 'listRooms';
+}
+
+/** C→S：观战已开局房间，不占席位。 */
+export interface SpectateMessage {
+  type: 'spectate';
+  roomId: string;
+  name?: string;
+  playerId?: string;
 }
 
 /** 未入联机房时的页面活动，供运维站区分大厅与单机。 */
@@ -117,6 +130,7 @@ export interface SetReadyMessage {
 export type ClientMessage =
   | JoinMessage
   | RejoinMessage
+  | SpectateMessage
   | ListRoomsMessage
   | LobbyMessage
   | StartMatchMessage
@@ -124,9 +138,6 @@ export type ClientMessage =
   | InputMessage
   | HashMessage
   | PingMessage;
-
-/** 房间阶段：等待开局 / 对局中。结算后立刻回到 waiting。 */
-export type RoomPhase = 'waiting' | 'playing';
 
 /** 房间成员摘要，供房间页展示准备与房主。 */
 export interface RoomMember {
@@ -144,7 +155,8 @@ export type RoomErrorCode =
   | 'rejoin_failed'
   | 'not_host'
   | 'not_ready'
-  | 'is_host';
+  | 'is_host'
+  | 'not_playing';
 
 /** S→C：入座成功，带上种子、房间号与重连令牌。 */
 export interface WelcomeMessage {
@@ -160,10 +172,35 @@ export interface WelcomeMessage {
   opponentName: string;
 }
 
-/** S→C：可加入房间列表。 */
+/** S→C：全部存活房间列表（含对局中）。 */
 export interface RoomListMessage {
   type: 'roomList';
   rooms: RoomListEntry[];
+}
+
+/** S→C：观战入房成功，带种子与当前 tick，随后会跟 frameBatch。 */
+export interface SpectateWelcomeMessage {
+  type: 'spectateWelcome';
+  roomId: string;
+  roomName: string;
+  seed: number;
+  currentTick: number;
+  blueName: string;
+  redName: string;
+  spectatorCount: number;
+}
+
+/** S→C：一段连续权威帧，供观战者中途追平。 */
+export interface FrameBatchMessage {
+  type: 'frameBatch';
+  fromTick: number;
+  frames: Command[][];
+}
+
+/** S→C：当前观战人数，房内玩家与观战者都收。 */
+export interface SpectatorCountMessage {
+  type: 'spectatorCount';
+  count: number;
 }
 
 /** S→C：房间成员与阶段快照，入座/离座/回房后都会广播。 */
@@ -236,6 +273,9 @@ export type ServerMessage =
   | WelcomeMessage
   | RoomListMessage
   | RoomStateMessage
+  | SpectateWelcomeMessage
+  | FrameBatchMessage
+  | SpectatorCountMessage
   | StartMessage
   | FrameMessage
   | DesyncMessage

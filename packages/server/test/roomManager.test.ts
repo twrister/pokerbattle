@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { decodeServerMessage, encodeMessage, type ServerMessage } from '@pb/net';
+import { MatchState } from '@pb/sim';
 import { PlayerStatsStore } from '../src/playerStatsStore.js';
 import { RoomManager } from '../src/roomManager.js';
 import { MatchRoom } from '../src/room.js';
@@ -132,7 +133,7 @@ describe('RoomManager 多房间', () => {
     manager.dispose();
   });
 
-  it('列表只包含可加入的等待中房间', () => {
+  it('列表包含全部房间并带上 phase 与 spectatorCount', () => {
     const manager = new RoomManager();
     const a = new FakeWebSocket();
     const b = new FakeWebSocket();
@@ -156,13 +157,22 @@ describe('RoomManager 多房间', () => {
     const fullId = welcomeRoom(b);
     manager.join(c as never, { type: 'join', mode: 'room', roomId: fullId, name: 'C' });
 
-    const list = manager.listJoinable();
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({
+    const list = manager.listRooms();
+    expect(list).toHaveLength(2);
+    expect(list.find((room) => room.roomId === waitingId)).toMatchObject({
       roomId: waitingId,
       roomName: '等待房',
       playerCount: 1,
       maxPlayers: 2,
+      phase: 'waiting',
+      spectatorCount: 0,
+    });
+    expect(list.find((room) => room.roomId === fullId)).toMatchObject({
+      roomId: fullId,
+      roomName: '满员房',
+      playerCount: 2,
+      phase: 'waiting',
+      spectatorCount: 0,
     });
     manager.dispose();
   });
@@ -469,6 +479,126 @@ describe('MatchRoom 断线重连', () => {
     b.receive({ type: 'setReady', ready: true });
     hostStart(a);
     expect(a.messages().some((m) => m.type === 'start')).toBe(true);
+    room.dispose();
+  });
+});
+
+describe('MatchRoom 观战', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('未开局房间拒绝观战', () => {
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: '等待房',
+    });
+    const roomId = welcomeRoom(a);
+    const viewer = new FakeWebSocket();
+    const result = manager.spectate(viewer as never, { type: 'spectate', roomId, name: '观众' });
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('not_playing');
+    manager.dispose();
+  });
+
+  it('对局中可观战，收到 welcome 与完整 frameBatch，进出时广播人数', () => {
+    vi.useFakeTimers();
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: '观战房',
+    });
+    const roomId = welcomeRoom(a);
+    manager.join(b as never, { type: 'join', mode: 'room', roomId, name: 'B' });
+    hostStart(a);
+    vi.advanceTimersByTime(250);
+
+    const viewer = new FakeWebSocket();
+    const result = manager.spectate(viewer as never, {
+      type: 'spectate',
+      roomId,
+      name: '观众',
+    });
+    expect(result.ok).toBe(true);
+
+    const welcome = viewer.messages().find((m) => m.type === 'spectateWelcome');
+    expect(welcome).toMatchObject({
+      type: 'spectateWelcome',
+      roomId,
+      roomName: '观战房',
+      blueName: 'A',
+      redName: 'B',
+      spectatorCount: 1,
+    });
+    const batch = viewer.messages().find((m) => m.type === 'frameBatch');
+    expect(batch && batch.type === 'frameBatch' && batch.fromTick).toBe(1);
+    expect(batch && batch.type === 'frameBatch' && batch.frames.length).toBeGreaterThan(0);
+
+    expect(a.messages().some((m) => m.type === 'spectatorCount' && m.count === 1)).toBe(true);
+
+    const list = manager.listRooms();
+    expect(list.find((room) => room.roomId === roomId)).toMatchObject({
+      phase: 'playing',
+      spectatorCount: 1,
+    });
+
+    viewer.close();
+    expect(a.messages().some((m) => m.type === 'spectatorCount' && m.count === 0)).toBe(true);
+    manager.dispose();
+  });
+
+  it('观战者发 input 不影响权威帧，重放后 hash 与服务端一致', () => {
+    vi.useFakeTimers();
+    const room = new MatchRoom({ roomId: '077', roomName: '对账房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+    vi.advanceTimersByTime(500);
+
+    const framesBefore = countFrames(a);
+    const viewer = new FakeWebSocket();
+    expect(room.handleSpectate(viewer as never, '观众')).toBe(true);
+    viewer.receive({
+      type: 'input',
+      tick: 999,
+      commands: [],
+    });
+    vi.advanceTimersByTime(200);
+    expect(countFrames(a)).toBe(framesBefore + 4);
+
+    const welcome = viewer.messages().find((m) => m.type === 'spectateWelcome');
+    const batch = viewer.messages().find((m) => m.type === 'frameBatch');
+    expect(welcome && welcome.type === 'spectateWelcome').toBe(true);
+    expect(batch && batch.type === 'frameBatch').toBe(true);
+    if (!welcome || welcome.type !== 'spectateWelcome' || !batch || batch.type !== 'frameBatch') {
+      throw new Error('missing spectate payload');
+    }
+
+    const replay = new MatchState(welcome.seed);
+    replay.seedStartingCastles();
+    for (const commands of batch.frames) {
+      replay.step(commands);
+    }
+    const liveFrames = viewer
+      .messages()
+      .filter((m): m is Extract<ServerMessage, { type: 'frame' }> => m.type === 'frame');
+    for (const frame of liveFrames) {
+      replay.step(frame.commands);
+    }
+    expect(replay.world.tick).toBe(room.toOpsSnapshot().serverTick);
+    expect(replay.hash()).toBe(room.currentMatchHash());
     room.dispose();
   });
 });

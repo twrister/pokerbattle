@@ -94,11 +94,57 @@ describe('协议编解码', () => {
 
     const roomList = encodeMessage({
       type: 'roomList',
-      rooms: [{ roomId: '042', roomName: 'Alice的房间', playerCount: 1, maxPlayers: 2 }],
+      rooms: [
+        {
+          roomId: '042',
+          roomName: 'Alice的房间',
+          playerCount: 1,
+          maxPlayers: 2,
+          phase: 'waiting',
+          spectatorCount: 0,
+        },
+      ],
     });
     expect(decodeServerMessage(roomList)).toEqual({
       type: 'roomList',
-      rooms: [{ roomId: '042', roomName: 'Alice的房间', playerCount: 1, maxPlayers: 2 }],
+      rooms: [
+        {
+          roomId: '042',
+          roomName: 'Alice的房间',
+          playerCount: 1,
+          maxPlayers: 2,
+          phase: 'waiting',
+          spectatorCount: 0,
+        },
+      ],
+    });
+
+    const spectate = encodeMessage({ type: 'spectate', roomId: '042', name: '观众' });
+    expect(decodeClientMessage(spectate)).toEqual({
+      type: 'spectate',
+      roomId: '042',
+      name: '观众',
+    });
+
+    const spectateWelcome = encodeMessage({
+      type: 'spectateWelcome',
+      roomId: '042',
+      roomName: 'Alice的房间',
+      seed: 99,
+      currentTick: 12,
+      blueName: 'Alice',
+      redName: 'Bob',
+      spectatorCount: 1,
+    });
+    expect(decodeServerMessage(spectateWelcome)).toEqual({
+      type: 'spectateWelcome',
+      roomId: '042',
+      roomName: 'Alice的房间',
+      seed: 99,
+      currentTick: 12,
+      blueName: 'Alice',
+      redName: 'Bob',
+      spectatorCount: 1,
     });
 
     const error = encodeMessage({

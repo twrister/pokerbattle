@@ -11,6 +11,10 @@ export interface BattleHudHandle {
   show(): void;
   hide(): void;
   setContext(context: BattleHudContext): void;
+  /** 观战人数；0 人时隐藏。 */
+  setSpectatorCount(count: number): void;
+  /** 观战追帧提示。 */
+  setCatchingUp(catchingUp: boolean): void;
   update(match: MatchState): void;
 }
 
@@ -39,6 +43,8 @@ export function createBattleHud(): BattleHudHandle {
   const timerLabel = requiredElement<HTMLElement>('#battle-timer-label');
   const timer = requiredElement<HTMLElement>('#battle-timer');
   const oppHand = requiredElement<HTMLElement>('#battle-opp-hand');
+  const spectators = requiredElement<HTMLElement>('#battle-spectators');
+  const catchup = requiredElement<HTMLElement>('#battle-catchup');
 
   let context: BattleHudContext = {
     localFaction: Faction.Blue,
@@ -59,6 +65,16 @@ export function createBattleHud(): BattleHudHandle {
     hide() {
       root.classList.add('is-hidden');
       lastTick = -1;
+      spectators.classList.add('is-hidden');
+      catchup.classList.add('is-hidden');
+    },
+    setSpectatorCount(count) {
+      const n = Math.max(0, count | 0);
+      spectators.textContent = `观战 ${n}`;
+      spectators.classList.toggle('is-hidden', n === 0);
+    },
+    setCatchingUp(catchingUp) {
+      catchup.classList.toggle('is-hidden', !catchingUp);
     },
     setContext(next) {
       context = next;

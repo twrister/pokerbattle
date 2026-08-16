@@ -6,6 +6,7 @@ const LIST_REFRESH_MS = 4000;
 export interface OnlineLobbyPageOptions {
   onBack: () => void;
   onJoinRoom: (request: RoomJoinRequest) => void;
+  onSpectateRoom: (roomId: string) => void;
   getDefaultRoomName: () => string;
   listRooms: () => Promise<RoomListEntry[]>;
 }
@@ -69,17 +70,21 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
     if (rooms.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'online-lobby-empty';
-      empty.textContent = '暂无可加入房间';
+      empty.textContent = '暂无房间';
       roomList.append(empty);
       return;
     }
 
     for (const room of rooms) {
-      const card = document.createElement('button');
-      card.type = 'button';
+      const phase = room.phase === 'playing' ? 'playing' : 'waiting';
+      const card = document.createElement('div');
       card.className = 'online-room-card';
+      if (phase === 'playing') card.classList.add('is-playing');
       card.setAttribute('role', 'listitem');
       card.dataset.roomId = room.roomId;
+
+      const meta = document.createElement('div');
+      meta.className = 'online-room-card-meta';
 
       const id = document.createElement('span');
       id.className = 'online-room-card-id';
@@ -93,11 +98,34 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       count.className = 'online-room-card-count';
       count.textContent = `${room.playerCount}/${room.maxPlayers}`;
 
-      card.append(id, name, count);
-      card.addEventListener('click', () => {
-        hideDialogs();
-        options.onJoinRoom({ mode: 'room', roomId: room.roomId });
-      });
+      meta.append(id, name, count);
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'online-room-card-action';
+
+      if (phase === 'playing') {
+        const state = document.createElement('span');
+        state.className = 'online-room-card-state';
+        state.textContent = `对局中 · 观战 ${room.spectatorCount ?? 0}`;
+        meta.append(state);
+        action.textContent = '观战';
+        action.addEventListener('click', () => {
+          hideDialogs();
+          options.onSpectateRoom(room.roomId);
+        });
+      } else if (room.playerCount >= room.maxPlayers) {
+        action.textContent = '已满';
+        action.disabled = true;
+      } else {
+        action.textContent = '加入';
+        action.addEventListener('click', () => {
+          hideDialogs();
+          options.onJoinRoom({ mode: 'room', roomId: room.roomId });
+        });
+      }
+
+      card.append(meta, action);
       roomList.append(card);
     }
   };

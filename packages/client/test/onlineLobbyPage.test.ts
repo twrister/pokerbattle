@@ -37,17 +37,53 @@ describe('联机大厅页', () => {
     const page = createOnlineLobbyPage({
       onBack: vi.fn(),
       onJoinRoom,
+      onSpectateRoom: vi.fn(),
       getDefaultRoomName: () => '测试的房间',
       listRooms: vi.fn(async () => [
-        { roomId: '042', roomName: '可加入房', playerCount: 1, maxPlayers: 2 },
+        {
+          roomId: '042',
+          roomName: '可加入房',
+          playerCount: 1,
+          maxPlayers: 2,
+          phase: 'waiting' as const,
+          spectatorCount: 0,
+        },
       ]),
     });
     page.show();
     await vi.waitFor(() => {
       expect(document.querySelector('.online-room-card')).not.toBeNull();
     });
-    document.querySelector<HTMLButtonElement>('.online-room-card')!.click();
+    document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
     expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'room', roomId: '042' });
+    page.dispose();
+  });
+
+  it('对局中房间显示观战按钮', async () => {
+    const onSpectateRoom = vi.fn();
+    const page = createOnlineLobbyPage({
+      onBack: vi.fn(),
+      onJoinRoom: vi.fn(),
+      onSpectateRoom,
+      getDefaultRoomName: () => '测试的房间',
+      listRooms: vi.fn(async () => [
+        {
+          roomId: '088',
+          roomName: '对局房',
+          playerCount: 2,
+          maxPlayers: 2,
+          phase: 'playing' as const,
+          spectatorCount: 3,
+        },
+      ]),
+    });
+    page.show();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.online-room-card-action')?.textContent).toBe('观战');
+    });
+    expect(document.querySelector('.online-room-card-state')?.textContent).toBe('对局中 · 观战 3');
+    document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
+    expect(onSpectateRoom).toHaveBeenCalledWith('088');
     page.dispose();
   });
 
@@ -56,6 +92,7 @@ describe('联机大厅页', () => {
     const page = createOnlineLobbyPage({
       onBack: vi.fn(),
       onJoinRoom,
+      onSpectateRoom: vi.fn(),
       getDefaultRoomName: () => '测试的房间',
       listRooms: vi.fn(async () => []),
     });

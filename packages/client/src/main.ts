@@ -58,11 +58,14 @@ import { enableCastlePackClick } from './input/castlePackClick.js';
 import { enableUnitSelection } from './input/unitSelection.js';
 import {
   connectRoomSession,
+  connectSpectateSession,
   createLobbyPresence,
   type LobbyPresenceHandle,
   type RoomConnecting,
   type RoomJoinRequest,
   type RoomSession,
+  type SpectateConnecting,
+  type SpectateSession,
 } from './net/session.js';
 import type { RoomStateMessage } from '@pb/net';
 import type { NetSimLoop } from './net/netLoop.js';
@@ -71,6 +74,7 @@ import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
 import { createBattleAnnounce } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
+import { createSpectatorHands } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
@@ -108,6 +112,10 @@ let activeRoomSession: RoomSession | null = null;
 let joiningRoom: RoomConnecting | null = null;
 let latestRoomState: RoomStateMessage | null = null;
 let pendingMatch: { loop: NetSimLoop; faction: Faction; opponentName: string } | null = null;
+let pendingSpectate: { loop: NetSimLoop; blueName: string; redName: string } | null = null;
+let activeSpectateSession: SpectateSession | null = null;
+let joiningSpectate: SpectateConnecting | null = null;
+let spectateMatchEnded = false;
 let keepRoomSession = false;
 /** 对局中对手离开时置位，避免中途退出被记成 abandoned。 */
 let versusPeerLeft = false;
@@ -145,7 +153,7 @@ function stopAppLobbyPresence(): void {
 
 /** 按当前页面同步大厅 presence：入房页断开，单机刷新 activity。 */
 function syncLobbyPresenceForScreen(screen: AppScreen): void {
-  if (screen === 'versus' || screen === 'room') {
+  if (screen === 'versus' || screen === 'room' || screen === 'spectate') {
     stopAppLobbyPresence();
     return;
   }
@@ -201,7 +209,12 @@ const codexPage = createCodexPage({
 });
 const battleHud = createBattleHud();
 const battleAnnounce = createBattleAnnounce();
+const spectatorHands = createSpectatorHands();
 const battleResult = createBattleResult(() => {
+  if (activeSpectateSession || pendingSpectate || spectateMatchEnded) {
+    screens.show('online');
+    return;
+  }
   if (activeRoomSession) {
     keepRoomSession = true;
     screens.show('room');
@@ -212,6 +225,7 @@ const battleResult = createBattleResult(() => {
 const onlineLobbyPage = createOnlineLobbyPage({
   onBack: () => screens.show('menu'),
   onJoinRoom: (request) => beginJoinRoom(request),
+  onSpectateRoom: (roomId) => beginSpectate(roomId),
   getDefaultRoomName: () => {
     const displayName = playerProfile.getProfile().displayName.trim() || '玩家';
     return `${displayName}的房间`;
@@ -246,6 +260,16 @@ function disposeRoomSession(): void {
   pendingMatch = null;
 }
 
+/** 关闭观战连接，避免离开后仍占服务端观战席。 */
+function disposeSpectateSession(): void {
+  joiningSpectate?.close();
+  joiningSpectate = null;
+  activeSpectateSession?.close();
+  activeSpectateSession = null;
+  pendingSpectate = null;
+  spectateMatchEnded = false;
+}
+
 /** 创建或加入房间，成功后进入房间页。 */
 function beginJoinRoom(request: RoomJoinRequest): void {
   cancelJoiningRoom();
@@ -273,6 +297,9 @@ function beginJoinRoom(request: RoomJoinRequest): void {
       pendingMatch = { loop, faction, opponentName };
       keepRoomSession = true;
       screens.show('versus');
+    },
+    onSpectatorCount: (count) => {
+      battleHud.setSpectatorCount(count);
     },
     onMatchEnd: () => {
       // 结算展示与记账由对局循环处理，避免重复写入档案
@@ -330,6 +357,60 @@ function beginJoinRoom(request: RoomJoinRequest): void {
       }
     });
 }
+
+/** 观战已开局房间：独立 WS，成功后切到 spectate 屏。 */
+function beginSpectate(roomId: string): void {
+  joiningSpectate?.close();
+  joiningSpectate = null;
+  stopAppLobbyPresence();
+  spectateMatchEnded = false;
+  onlineLobbyPage.showError(`正在观战房间 ${roomId}…`);
+  const connecting = connectSpectateSession({
+    roomId,
+    name: playerProfile.getProfile().displayName,
+    playerId: playerProfile.getProfile().deviceAccountId,
+    onStatus: (text) => {
+      if (screens.current === 'online') onlineLobbyPage.showError(text);
+    },
+    onReady: (loop, names) => {
+      pendingSpectate = { loop, blueName: names.blueName, redName: names.redName };
+      if (screens.current !== 'spectate') screens.show('spectate');
+    },
+    onSpectatorCount: (count) => {
+      battleHud.setSpectatorCount(count);
+    },
+    onMatchEnd: () => {
+      spectateMatchEnded = true;
+    },
+    onClosed: (reason) => {
+      joiningSpectate = null;
+      activeSpectateSession = null;
+      if (spectateMatchEnded) return;
+      pendingSpectate = null;
+      onlineLobbyPage.showError(reason);
+      if (screens.current === 'spectate') screens.show('online');
+    },
+  });
+  joiningSpectate = connecting;
+  void connecting.done
+    .then((session) => {
+      if (joiningSpectate !== connecting) {
+        session.close();
+        return;
+      }
+      joiningSpectate = null;
+      activeSpectateSession = session;
+    })
+    .catch((error: unknown) => {
+      if (joiningSpectate !== connecting) return;
+      joiningSpectate = null;
+      pendingSpectate = null;
+      const message = error instanceof Error ? error.message : String(error);
+      ensureAppLobbyPresence('lobby');
+      onlineLobbyPage.showError(message);
+    });
+}
+
 const openUnitStatsButton = document.querySelector<HTMLButtonElement>('#btn-open-unit-stats');
 const openSceneConfigButton = document.querySelector<HTMLButtonElement>('#btn-open-scene-config');
 
@@ -1073,6 +1154,8 @@ function runVersusSession(
   hud.classList.remove('is-hidden');
   battleResult.hide();
   battleAnnounce.reset();
+  battleHud.setSpectatorCount(0);
+  battleHud.setCatchingUp(false);
   battleHud.setContext({
     localFaction: faction,
     localName: names.localName,
@@ -1382,6 +1465,108 @@ function runVersusSession(
   };
 }
 
+/** 观战只读循环：复用战场渲染，不创建手牌/出牌交互。 */
+function enterSpectate(): () => void {
+  const match = pendingSpectate;
+  pendingSpectate = null;
+  if (!match) {
+    queueMicrotask(() => screens.show('online'));
+    return () => {};
+  }
+  return runSpectateSession(match.loop, match.blueName, match.redName);
+}
+
+function runSpectateSession(
+  netLoop: import('./net/netLoop.js').NetSimLoop,
+  blueName: string,
+  redName: string,
+): () => void {
+  mainMenu.hide();
+  container.classList.add('is-solo', 'is-versus', 'is-spectate');
+  hud.classList.add('is-solo', 'is-versus', 'is-spectate');
+  container.classList.remove('is-hidden');
+  hud.classList.remove('is-hidden');
+  battleResult.hide();
+  battleAnnounce.reset();
+  battleResult.setReturnLabel('返回大厅');
+  battleHud.setContext({
+    localFaction: Faction.Blue,
+    localName: blueName || '蓝方',
+    opponentName: redName || '红方',
+  });
+  battleResult.setContext({
+    localName: blueName || '蓝方',
+    opponentName: redName || '红方',
+  });
+  spectatorHands.setNames(blueName, redName);
+  spectatorHands.show();
+  battleHud.setCatchingUp(netLoop.pendingTicks > 0);
+  battleHud.show();
+
+  const sceneContext = ensureBattleScene('solo', Faction.Blue);
+  sceneContext.resize();
+  const battleView = sharedBattleView!;
+  battleView.reset();
+  battleView.setLocalFaction(Faction.Blue);
+  const disableUnitSelection = enableUnitSelection({
+    domElement: sceneContext.renderer.domElement,
+    camera: sceneContext.camera,
+    groundPlane: sceneContext.groundPlane,
+    pickUnit: (simX, simY) => battleView.pickUnitAtSim(simX, simY),
+    onSelect: (unitId) => battleView.selectUnit(unitId),
+  });
+
+  const returnToLobby = (): void => {
+    screens.show('online');
+  };
+  backButton.addEventListener('click', returnToLobby);
+
+  let lastFrameAt = performance.now();
+  let animationFrameId = 0;
+  let lastHandSyncTick = -1;
+  let resultShown = false;
+
+  const frame = (now: number): void => {
+    const deltaMs = Math.min(now - lastFrameAt, 250);
+    lastFrameAt = now;
+    netLoop.advance(deltaMs);
+    battleHud.setCatchingUp(netLoop.pendingTicks > 0);
+    battleView.syncCastlePack(netLoop.match, sceneContext.camera);
+    if (netLoop.world.tick !== lastHandSyncTick) {
+      lastHandSyncTick = netLoop.world.tick;
+      spectatorHands.update(netLoop.match);
+    }
+    battleHud.update(netLoop.match);
+    battleAnnounce.tick(netLoop.match);
+    if (netLoop.match.result && !resultShown) {
+      resultShown = true;
+      spectateMatchEnded = true;
+      battleResult.show(netLoop.match.result, Faction.Blue, netLoop.match);
+    }
+    battleView.render(netLoop.prev, netLoop.curr, netLoop.alpha, sceneContext.camera);
+    sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
+    animationFrameId = requestAnimationFrame(frame);
+  };
+  animationFrameId = requestAnimationFrame(frame);
+
+  return () => {
+    cancelAnimationFrame(animationFrameId);
+    hud.classList.add('is-hidden');
+    battleHud.hide();
+    battleHud.setCatchingUp(false);
+    spectatorHands.hide();
+    battleAnnounce.reset();
+    battleResult.hide();
+    container.classList.add('is-hidden');
+    hud.classList.remove('is-solo', 'is-versus', 'is-spectate');
+    container.classList.remove('is-solo', 'is-versus', 'is-spectate');
+    backButton.removeEventListener('click', returnToLobby);
+    disableUnitSelection();
+    battleView.reset();
+    disposeSpectateSession();
+  };
+}
+
 function enterSandbox(): () => void {
   return enterBattleSession('sandbox');
 }
@@ -1396,6 +1581,10 @@ function enterOnline(): () => void {
   return () => {
     onlineLobbyPage.hide();
     if (!activeRoomSession) cancelJoiningRoom();
+    if (!activeSpectateSession && !pendingSpectate) {
+      joiningSpectate?.close();
+      joiningSpectate = null;
+    }
   };
 }
 
@@ -1468,6 +1657,10 @@ screens = createScreenController({
     syncLobbyPresenceForScreen('versus');
     return enterVersus();
   },
+  spectate: () => {
+    syncLobbyPresenceForScreen('spectate');
+    return enterSpectate();
+  },
 });
 screens.show('menu');
 
@@ -1480,6 +1673,8 @@ function disposeApp(): void {
   sharedScene = null;
   disposeFormationThumbnailRenderer();
   disposeRoomSession();
+  disposeSpectateSession();
+  spectatorHands.dispose();
   onlineLobbyPage.dispose();
   onlineRoomPage.dispose();
   mainMenu.dispose();

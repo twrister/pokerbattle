@@ -44,6 +44,8 @@ export interface ConnectRoomOptions {
   onRoomState?: (state: RoomStateMessage) => void;
   onMatchStart?: (loop: NetSimLoop, faction: Faction, opponentName: string) => void;
   onMatchEnd?: (result: MatchResult) => void;
+  /** 观战人数变化（对局玩家 HUD 用）。 */
+  onSpectatorCount?: (count: number) => void;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
   onPeerDisconnected?: () => void;
@@ -225,6 +227,11 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         return;
       }
 
+      if (message.type === 'spectatorCount') {
+        options.onSpectatorCount?.(message.count);
+        return;
+      }
+
       if (message.type === 'start' && loop && faction !== null) {
         inMatch = true;
         reconnectDeadline = 0;
@@ -395,6 +402,207 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
 
     status('正在连接联机服务…');
     attachSocket(new WebSocket(buildWsUrl()), 'join');
+  });
+
+  return { done, close };
+}
+
+export interface SpectateSession {
+  roomId: string;
+  roomName: string;
+  blueName: string;
+  redName: string;
+  close: () => void;
+}
+
+export interface ConnectSpectateOptions {
+  roomId: string;
+  name?: string;
+  playerId?: string;
+  onStatus?: (text: string) => void;
+  onReady?: (loop: NetSimLoop, names: { blueName: string; redName: string }) => void;
+  onSpectatorCount?: (count: number) => void;
+  onMatchEnd?: (result: MatchResult) => void;
+  onClosed?: (reason: string) => void;
+}
+
+/** 观战连接句柄：done 等 spectateWelcome，close 立刻断连。 */
+export interface SpectateConnecting {
+  done: Promise<SpectateSession>;
+  close: () => void;
+}
+
+/**
+ * 连接同源 /ws 观战已开局房间；不做断线重连，断开即回大厅。
+ */
+export function connectSpectateSession(options: ConnectSpectateOptions): SpectateConnecting {
+  const status = options.onStatus ?? (() => {});
+  const playerName = options.name ?? '观众';
+  const playerId = options.playerId?.trim() ?? '';
+  const joinRoomId = options.roomId;
+
+  let sessionClose: (() => void) | null = null;
+  let rejectPending: ((error: Error) => void) | null = null;
+  let settled = false;
+  let intentionalClose = false;
+  let activeWs: WebSocket | null = null;
+
+  const close = (): void => {
+    intentionalClose = true;
+    if (!settled) {
+      settled = true;
+      try {
+        activeWs?.close();
+      } catch {
+        /* ignore */
+      }
+      rejectPending?.(new Error('已取消观战'));
+      rejectPending = null;
+      return;
+    }
+    sessionClose?.();
+  };
+
+  const done = new Promise<SpectateSession>((resolve, reject) => {
+    rejectPending = reject;
+    let loop: NetSimLoop | null = null;
+    let roomId = joinRoomId;
+    let roomName = '';
+    let blueName = '';
+    let redName = '';
+    const pending: ServerMessage[] = [];
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      intentionalClose = true;
+      rejectPending = null;
+      try {
+        activeWs?.close();
+      } catch {
+        /* ignore */
+      }
+      reject(error);
+    };
+
+    const shutdownSocket = (): void => {
+      intentionalClose = true;
+      try {
+        activeWs?.close();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const session: SpectateSession = {
+      get roomId() {
+        return roomId;
+      },
+      get roomName() {
+        return roomName;
+      },
+      get blueName() {
+        return blueName;
+      },
+      get redName() {
+        return redName;
+      },
+      close: shutdownSocket,
+    };
+    sessionClose = shutdownSocket;
+
+    const applyServerMessage = (message: ServerMessage): void => {
+      if (message.type === 'spectatorCount') {
+        options.onSpectatorCount?.(message.count);
+        return;
+      }
+      if (message.type === 'start' && loop) {
+        options.onReady?.(loop, { blueName, redName });
+      }
+      loop?.handleServerMessage(message);
+    };
+
+    const ws = new WebSocket(buildWsUrl());
+    activeWs = ws;
+
+    ws.addEventListener('open', () => {
+      status(`已连接，正在观战房间 ${joinRoomId}…`);
+      ws.send(
+        encodeMessage({
+          type: 'spectate',
+          roomId: joinRoomId,
+          name: playerName,
+          ...(playerId ? { playerId } : {}),
+        }),
+      );
+    });
+
+    ws.addEventListener('error', () => {
+      if (!settled) {
+        fail(new Error('无法连接联机服务，请确认已运行 pnpm dev:online 或 pnpm official:online'));
+      }
+    });
+
+    ws.addEventListener('close', () => {
+      if (activeWs === ws) activeWs = null;
+      if (intentionalClose) return;
+      if (!settled) {
+        fail(new Error('连接已断开'));
+        return;
+      }
+      options.onClosed?.('观战连接已断开');
+    });
+
+    ws.addEventListener('message', (event) => {
+      const message = decodeServerMessage(String(event.data));
+      if (!message) return;
+
+      if (message.type === 'error') {
+        if (!settled) {
+          fail(new Error(message.message));
+          return;
+        }
+        status(message.message);
+        return;
+      }
+
+      if (message.type === 'spectateWelcome') {
+        roomId = message.roomId || roomId;
+        roomName = message.roomName || roomName;
+        blueName = message.blueName;
+        redName = message.redName;
+        options.onSpectatorCount?.(message.spectatorCount);
+        loop = new NetSimLoop({
+          seed: message.seed,
+          faction: 0 as Faction,
+          inputDelay: DEFAULT_INPUT_DELAY,
+          spectator: true,
+          maxStepsPerAdvance: 600,
+          send: (text) => {
+            if (activeWs && activeWs.readyState === WebSocket.OPEN) activeWs.send(text);
+          },
+          onMatchEnd: (result) => options.onMatchEnd?.(result),
+        });
+        if (!settled) {
+          settled = true;
+          rejectPending = null;
+          status(`正在观战房间 ${roomId}${roomName ? ` · ${roomName}` : ''}`);
+          resolve(session);
+        }
+        options.onReady?.(loop, { blueName, redName });
+        for (const queued of pending.splice(0)) {
+          applyServerMessage(queued);
+        }
+        return;
+      }
+
+      if (!loop && (message.type === 'frame' || message.type === 'frameBatch' || message.type === 'start' || message.type === 'matchEnd')) {
+        pending.push(message);
+        return;
+      }
+
+      applyServerMessage(message);
+    });
   });
 
   return { done, close };

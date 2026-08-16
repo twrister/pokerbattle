@@ -22,6 +22,10 @@ export interface NetSimLoopOptions {
   inputDelay: number;
   /** 发送已编码的上行文本。 */
   send: (raw: string) => void;
+  /** 观战只读：不上报 input/hash。 */
+  spectator?: boolean;
+  /** 每帧最多消化的权威 tick 数；观战追帧时限制以免卡主线程。 */
+  maxStepsPerAdvance?: number;
   onDesync?: (tick: number, serverHash: number) => void;
   onPeerLeft?: () => void;
   onPeerDisconnected?: () => void;
@@ -51,6 +55,8 @@ export class NetSimLoop {
   private readonly onPeerDisconnected?: () => void;
   private readonly onPeerReconnected?: () => void;
   private readonly onMatchEnd?: (result: MatchResult) => void;
+  private readonly spectator: boolean;
+  private readonly maxStepsPerAdvance: number;
   private started = false;
   /** 重连窗口内禁止本地出牌，避免发到已失效的 socket。 */
   private inputPaused = false;
@@ -61,6 +67,8 @@ export class NetSimLoop {
     this.faction = options.faction;
     this.inputDelay = options.inputDelay;
     this.send = options.send;
+    this.spectator = options.spectator === true;
+    this.maxStepsPerAdvance = Math.max(1, options.maxStepsPerAdvance ?? Number.POSITIVE_INFINITY);
     this.onDesync = options.onDesync;
     this.onPeerLeft = options.onPeerLeft;
     this.onPeerDisconnected = options.onPeerDisconnected;
@@ -74,6 +82,13 @@ export class NetSimLoop {
   /** 本地已应用的最后权威 tick，重连时作为补帧起点。 */
   get lastConfirmedTick(): number {
     return this.match.world.tick;
+  }
+
+  /** 已收到但尚未 step 的权威帧数量，供「追帧中」提示。 */
+  get pendingTicks(): number {
+    let count = 0;
+    for (let tick = this.nextTick; this.frames.has(tick); tick += 1) count += 1;
+    return count;
   }
 
   /** 重连成功后切换到新的 WebSocket 发送函数。 */
@@ -112,6 +127,16 @@ export class NetSimLoop {
         this.started = true;
         this.nextTick = message.startTick;
         break;
+      case 'frameBatch': {
+        this.started = true;
+        let tick = message.fromTick;
+        for (const commands of message.frames) {
+          if (tick >= this.nextTick) this.frames.set(tick, commands);
+          tick += 1;
+        }
+        this.drainFrames();
+        break;
+      }
       case 'frame':
         // 补帧可能重复到达：已应用过的 tick 直接忽略，避免二次 step
         if (message.tick < this.nextTick) break;
@@ -147,7 +172,7 @@ export class NetSimLoop {
    * 目标 tick = 当前已应用 tick + inputDelay（至少为 nextTick）。
    */
   sendInput(commands: readonly Command[]): void {
-    if (!this.started || this.inputPaused || this.match.result || commands.length === 0) return;
+    if (this.spectator || !this.started || this.inputPaused || this.match.result || commands.length === 0) return;
     const tick = Math.max(this.nextTick, this.match.world.tick + this.inputDelay);
     this.send(
       encodeMessage({
@@ -164,7 +189,8 @@ export class NetSimLoop {
   }
 
   private drainFrames(): void {
-    while (this.frames.has(this.nextTick)) {
+    let stepped = 0;
+    while (this.frames.has(this.nextTick) && stepped < this.maxStepsPerAdvance) {
       const commands = this.frames.get(this.nextTick)!;
       this.frames.delete(this.nextTick);
       this.match.step(commands);
@@ -173,7 +199,7 @@ export class NetSimLoop {
       this.curr = takeSnapshot(this.match.world, reuse);
       this.lastStepAt = performance.now();
 
-      if (this.nextTick % HASH_INTERVAL_TICKS === 0) {
+      if (!this.spectator && this.nextTick % HASH_INTERVAL_TICKS === 0) {
         this.send(
           encodeMessage({
             type: 'hash',
@@ -183,6 +209,7 @@ export class NetSimLoop {
         );
       }
       this.nextTick += 1;
+      stepped += 1;
     }
   }
 }

@@ -17,8 +17,8 @@ import { resolveDecisiveMatch, type OnlinePresence } from './playerStatsStore.js
 import { factionForSeat, validateSeatCommand } from './validate.js';
 
 const STEP_MS = 1000 / TICK_RATE;
-/** 断线补帧至少覆盖重连窗口，略留余量避免边界丢帧。 */
-const MAX_FRAME_HISTORY = Math.ceil((RECONNECT_TIMEOUT_MS / 1000) * TICK_RATE) + TICK_RATE;
+/** 观战中途加入需要整局帧；15 分钟兜底防泄漏。 */
+const MAX_FRAME_HISTORY = TICK_RATE * 60 * 15;
 const MAX_PLAYERS = 2;
 
 interface Seat {
@@ -35,6 +35,15 @@ interface Seat {
   connected: boolean;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   /** 避免同一连接 close 被重复处理。 */
+  closeHandler: (() => void) | null;
+  messageHandler: ((data: RawData) => void) | null;
+}
+
+/** 观战连接：不占席、不发指令，只收帧与结算。 */
+interface Spectator {
+  ws: WebSocket;
+  name: string;
+  playerId: string | null;
   closeHandler: (() => void) | null;
   messageHandler: ((data: RawData) => void) | null;
 }
@@ -69,6 +78,7 @@ export class MatchRoom {
     names: { winner: string; loser: string },
   ) => void;
   private readonly seats: Array<Seat | null> = [null, null];
+  private readonly spectators: Spectator[] = [];
   /** 房主席位；创建者 / 先入座者为房主，离开后交给剩余席。 */
   private hostSeat = 0;
   private match: MatchState | null = null;
@@ -103,6 +113,21 @@ export class MatchRoom {
     return !this.disposed && !this.started && this.seats.some((seat) => seat === null);
   }
 
+  /** 对局进行中才允许观战。 */
+  get canSpectate(): boolean {
+    return !this.disposed && this.started && this.match !== null;
+  }
+
+  /** 当前观战连接数。 */
+  get spectatorCount(): number {
+    return this.spectators.length;
+  }
+
+  /** 当前权威仿真 hash；无对局时为 null。 */
+  currentMatchHash(): number | null {
+    return this.match ? this.match.hash() : null;
+  }
+
   /** 无人在座（含离线席）时视为空房。 */
   get isEmpty(): boolean {
     return this.seats.every((seat) => seat === null);
@@ -120,6 +145,8 @@ export class MatchRoom {
       roomName: this.roomName,
       playerCount: this.playerCount,
       maxPlayers: MAX_PLAYERS,
+      phase: this.started ? 'playing' : 'waiting',
+      spectatorCount: this.spectatorCount,
     };
   }
 
@@ -156,6 +183,7 @@ export class MatchRoom {
       serverTick: this.serverTick,
       playerCount: this.playerCount,
       connectedCount: seats.filter((seat) => seat.connected).length,
+      spectatorCount: this.spectatorCount,
       maxPlayers: MAX_PLAYERS,
       seats,
       createdAt: this.createdAt,
@@ -224,6 +252,27 @@ export class MatchRoom {
     return true;
   }
 
+  /**
+   * 观战入房：不占席，补发种子与整局帧后跟随实时广播。
+   * 未开局或已清场时返回 false。
+   */
+  handleSpectate(ws: WebSocket, name: string, playerId: string | null = null): boolean {
+    if (!this.canSpectate) return false;
+    const spectator: Spectator = {
+      ws,
+      name,
+      playerId,
+      closeHandler: null,
+      messageHandler: null,
+    };
+    this.spectators.push(spectator);
+    this.bindSpectatorSocket(spectator);
+    this.sendSpectateWelcome(spectator);
+    this.sendFrameBatch(spectator);
+    this.broadcastSpectatorCount();
+    return true;
+  }
+
   /** 停止定时器与断线计时，释放本房资源。 */
   dispose(): void {
     if (this.disposed) return;
@@ -231,6 +280,7 @@ export class MatchRoom {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.clearBothOfflineTimer();
+    this.dropSpectators();
     for (const seat of this.seats) {
       if (!seat) continue;
       this.clearDisconnectTimer(seat);
@@ -391,6 +441,7 @@ export class MatchRoom {
     for (const seat of this.seats) {
       if (seat) seat.ready = true;
     }
+    this.dropSpectators();
     this.broadcastRoomState();
   }
 
@@ -498,6 +549,7 @@ export class MatchRoom {
     this.started = false;
     this.ended = true;
     this.match = null;
+    this.dropSpectators();
 
     for (let i = 0; i < this.seats.length; i += 1) {
       const other = this.seats[i];
@@ -617,9 +669,93 @@ export class MatchRoom {
     });
   }
 
+  /** 观战欢迎包：带种子与双方名字，不含席位令牌。 */
+  private sendSpectateWelcome(spectator: Spectator): void {
+    this.send(spectator.ws, {
+      type: 'spectateWelcome',
+      roomId: this.roomId,
+      roomName: this.roomName,
+      seed: this.seed,
+      currentTick: this.serverTick,
+      blueName: this.seats[0]?.name ?? '',
+      redName: this.seats[1]?.name ?? '',
+      spectatorCount: this.spectatorCount,
+    });
+  }
+
+  /** 把 tick 1 到当前的权威帧打成一条补帧包。 */
+  private sendFrameBatch(spectator: Spectator): void {
+    if (this.serverTick < 1) return;
+    const frames: Command[][] = [];
+    for (let tick = 1; tick <= this.serverTick; tick += 1) {
+      frames.push(this.frameHistory.get(tick) ?? []);
+    }
+    this.send(spectator.ws, { type: 'frameBatch', fromTick: 1, frames });
+  }
+
+  private broadcastSpectatorCount(): void {
+    this.broadcast({ type: 'spectatorCount', count: this.spectatorCount });
+  }
+
+  /** 结算或关房时踢掉全部观战连接。 */
+  private dropSpectators(): void {
+    const list = this.spectators.splice(0);
+    for (const spectator of list) {
+      this.unbindSpectatorSocket(spectator);
+      try {
+        spectator.ws.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private bindSpectatorSocket(spectator: Spectator): void {
+    this.unbindSpectatorSocket(spectator);
+    const closeHandler = (): void => this.handleSpectatorDisconnect(spectator);
+    const messageHandler = (data: RawData): void => {
+      const text = typeof data === 'string' ? data : data.toString();
+      this.handleSpectatorMessage(spectator, text);
+    };
+    spectator.closeHandler = closeHandler;
+    spectator.messageHandler = messageHandler;
+    spectator.ws.on('close', closeHandler);
+    spectator.ws.on('message', messageHandler);
+  }
+
+  private unbindSpectatorSocket(spectator: Spectator): void {
+    if (spectator.closeHandler) spectator.ws.off('close', spectator.closeHandler);
+    if (spectator.messageHandler) spectator.ws.off('message', spectator.messageHandler);
+    spectator.closeHandler = null;
+    spectator.messageHandler = null;
+  }
+
+  private handleSpectatorDisconnect(spectator: Spectator): void {
+    this.unbindSpectatorSocket(spectator);
+    const index = this.spectators.indexOf(spectator);
+    if (index >= 0) this.spectators.splice(index, 1);
+    this.broadcastSpectatorCount();
+  }
+
+  /** 观战连接只回心跳，忽略出牌/开局等指令。 */
+  private handleSpectatorMessage(spectator: Spectator, raw: string): void {
+    let message: ClientMessage;
+    try {
+      message = JSON.parse(raw) as ClientMessage;
+    } catch {
+      return;
+    }
+    if (message.type === 'ping') {
+      this.send(spectator.ws, { type: 'pong', t: message.t });
+    }
+  }
+
   private broadcast(message: ServerMessage): void {
     for (const seat of this.seats) {
       if (seat?.connected) this.send(seat.ws, message);
+    }
+    for (const spectator of this.spectators) {
+      this.send(spectator.ws, message);
     }
   }
 

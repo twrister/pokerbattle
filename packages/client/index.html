@@ -644,7 +644,9 @@
 
       .online-room-card {
         display: grid;
-        gap: calc(6 * var(--hu));
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: calc(10 * var(--hu));
         min-height: calc(92 * var(--hu));
         padding: calc(14 * var(--hu));
         border: 1px solid rgba(153, 207, 237, 0.22);
@@ -653,13 +655,44 @@
         color: #eef5fa;
         font: inherit;
         text-align: left;
+      }
+
+      .online-room-card.is-playing {
+        border-color: rgba(244, 180, 90, 0.35);
+      }
+
+      .online-room-card-meta {
+        display: grid;
+        gap: calc(6 * var(--hu));
+        min-width: 0;
+      }
+
+      .online-room-card-state {
+        color: #f4b45a;
+        font-size: calc(12 * var(--hu));
+      }
+
+      .online-room-card-action {
+        min-width: calc(72 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.4);
+        border-radius: calc(10 * var(--hu));
+        background: rgba(28, 52, 74, 0.88);
+        color: #eef5fa;
+        font: inherit;
+        font-size: calc(13 * var(--hu));
         cursor: pointer;
       }
 
-      .online-room-card:hover,
-      .online-room-card:active {
-        border-color: rgba(153, 207, 237, 0.55);
-        background: rgba(28, 52, 74, 0.88);
+      .online-room-card-action:hover:not(:disabled),
+      .online-room-card-action:active:not(:disabled) {
+        border-color: rgba(153, 207, 237, 0.75);
+        background: rgba(40, 72, 98, 0.95);
+      }
+
+      .online-room-card-action:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
 
       .online-room-card-id {
@@ -1276,6 +1309,75 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         white-space: nowrap;
+      }
+
+      #battle-spectators,
+      #battle-catchup {
+        color: #f4b45a;
+        font-size: calc(10 * var(--hu));
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      #battle-spectators.is-hidden,
+      #battle-catchup.is-hidden {
+        display: none;
+      }
+
+      #hud.is-spectate #battle-opp-hand {
+        display: none;
+      }
+
+      #spectator-hands {
+        position: absolute;
+        right: 0;
+        bottom: max(10px, var(--stage-safe-bottom));
+        left: 0;
+        z-index: 12;
+        display: none;
+        flex-direction: column;
+        gap: calc(8 * var(--hu));
+        padding: 0 calc(12 * var(--hu)) calc(8 * var(--hu));
+        pointer-events: none;
+      }
+
+      #hud.is-spectate #spectator-hands.is-active {
+        display: flex;
+      }
+
+      .spectator-hand-row {
+        display: flex;
+        align-items: center;
+        gap: calc(8 * var(--hu));
+        min-height: calc(44 * var(--hu));
+      }
+
+      .spectator-hand-label {
+        flex: 0 0 auto;
+        width: calc(36 * var(--hu));
+        color: #9cbcff;
+        font-size: calc(11 * var(--hu));
+        font-weight: 700;
+      }
+
+      .spectator-hand-row.is-red .spectator-hand-label {
+        color: #f5a498;
+      }
+
+      .spectator-hand-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(4 * var(--hu));
+        min-height: calc(40 * var(--hu));
+      }
+
+      .spectator-hand-card {
+        display: block;
+        width: calc(32 * var(--hu));
+        aspect-ratio: 312 / 413;
+        border-radius: calc(3 * var(--hu));
+        background: #172535 center / cover no-repeat;
+        box-shadow: 0 calc(2 * var(--hu)) calc(6 * var(--hu)) rgba(0, 0, 0, 0.4);
       }
 
       #battle-timer {
@@ -4410,6 +4512,8 @@
             <span id="battle-phase-label">常规阶段</span>
             <span id="battle-timer-label">剩余时间：</span>
             <strong id="battle-timer">2:00</strong>
+            <span id="battle-spectators" class="is-hidden">观战 0</span>
+            <span id="battle-catchup" class="is-hidden">正在追帧…</span>
           </div>
           <div class="battle-opp-side">
             <div class="battle-castle battle-castle-opp">
@@ -4669,6 +4773,17 @@
         <div data-sandbox-help><kbd>1</kbd><kbd>2</kbd> 切兵种 · <kbd>Q</kbd><kbd>E</kbd> 切阵营</div>
         <div data-sandbox-help>建造面板：吸附格子放置，不可重叠</div>
         <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 重新开局</div>
+      </section>
+
+      <section id="spectator-hands" class="is-hidden" aria-label="观战手牌">
+        <div class="spectator-hand-row">
+          <span class="spectator-hand-label" id="spectator-hand-blue-label">蓝方</span>
+          <div id="spectator-hand-blue" class="spectator-hand-cards"></div>
+        </div>
+        <div class="spectator-hand-row is-red">
+          <span class="spectator-hand-label" id="spectator-hand-red-label">红方</span>
+          <div id="spectator-hand-red" class="spectator-hand-cards"></div>
+        </div>
       </section>
 
       <section id="solo-hand" aria-label="手牌">

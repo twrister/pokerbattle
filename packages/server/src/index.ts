@@ -86,7 +86,7 @@ wss.on('connection', (ws) => {
     // 列表查询不占用握手，便于同一连接先拉列表再 join
     if (message.type === 'listRooms') {
       if (ws.readyState === ws.OPEN) {
-        ws.send(encodeMessage({ type: 'roomList', rooms: rooms.listJoinable() }));
+        ws.send(encodeMessage({ type: 'roomList', rooms: rooms.listRooms() }));
       }
       return;
     }
@@ -113,6 +113,19 @@ wss.on('connection', (ws) => {
       if (!result.ok && result.error) {
         sendRoomError(ws, result.error);
         ws.close(4000, result.error.code);
+        return;
+      }
+      bindConnectedPlayer(ws, result.playerId, result.name ?? message.name);
+      return;
+    }
+
+    if (message.type === 'spectate') {
+      handshaked = true;
+      lobby.remove(ws);
+      const result = rooms.spectate(ws, message);
+      if (!result.ok && result.error) {
+        sendRoomError(ws, result.error);
+        ws.close(4002, result.error.code);
         return;
       }
       bindConnectedPlayer(ws, result.playerId, result.name ?? message.name);

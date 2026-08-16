@@ -12,6 +12,7 @@ describe('页面状态管理', () => {
     const leaveUnitStats = vi.fn();
     const leaveSceneConfig = vi.fn();
     const leaveVersus = vi.fn();
+    const leaveSpectate = vi.fn();
     const leaveOnline = vi.fn();
     const leaveRoom = vi.fn();
     const enterMenu = vi.fn(() => leaveMenu);
@@ -23,6 +24,7 @@ describe('页面状态管理', () => {
     const enterUnitStats = vi.fn(() => leaveUnitStats);
     const enterSceneConfig = vi.fn(() => leaveSceneConfig);
     const enterVersus = vi.fn(() => leaveVersus);
+    const enterSpectate = vi.fn(() => leaveSpectate);
     const enterOnline = vi.fn(() => leaveOnline);
     const enterRoom = vi.fn(() => leaveRoom);
     const screens = createScreenController({
@@ -37,6 +39,7 @@ describe('页面状态管理', () => {
       'unit-stats': enterUnitStats,
       'scene-config': enterSceneConfig,
       versus: enterVersus,
+      spectate: enterSpectate,
     });
 
     expect(screens.current).toBeNull();
@@ -83,6 +86,7 @@ describe('页面状态管理', () => {
       'unit-stats': () => vi.fn(),
       'scene-config': () => vi.fn(),
       versus: () => vi.fn(),
+      spectate: () => vi.fn(),
     });
 
     screens.show('menu');

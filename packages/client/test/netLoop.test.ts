@@ -32,4 +32,30 @@ describe('NetSimLoop', () => {
     ]);
     expect(send).not.toHaveBeenCalled();
   });
+
+  it('观战模式消化 frameBatch 且不上报 hash/input', () => {
+    const send = vi.fn();
+    const loop = new NetSimLoop({
+      seed: 1,
+      faction: Faction.Blue,
+      inputDelay: 4,
+      spectator: true,
+      maxStepsPerAdvance: 2,
+      send,
+    });
+    loop.handleServerMessage({
+      type: 'frameBatch',
+      fromTick: 1,
+      frames: [[], [], []],
+    });
+    expect(loop.lastConfirmedTick).toBe(2);
+    expect(loop.pendingTicks).toBe(1);
+    loop.advance(0);
+    expect(loop.lastConfirmedTick).toBe(3);
+    expect(loop.pendingTicks).toBe(0);
+    loop.sendInput([
+      playFormationCommand(Faction.Blue, 'single_grunt', ['A-spades'], fromFloat(9), fromFloat(8)),
+    ]);
+    expect(send).not.toHaveBeenCalled();
+  });
 });

@@ -5,6 +5,7 @@ import {
   type ErrorMessage,
   type JoinMessage,
   type RejoinMessage,
+  type SpectateMessage,
   type RoomErrorCode,
   type RoomListEntry,
 } from '@pb/net';
@@ -80,14 +81,34 @@ export class RoomManager {
     return { ok: true, room, playerId: identity?.playerId ?? null, name: identity?.name };
   }
 
-  /** 列出当前可加入的等待中房间。 */
-  listJoinable(): RoomListEntry[] {
+  /** 列出全部存活房间（含对局中），供大厅加入或观战。 */
+  listRooms(): RoomListEntry[] {
     const result: RoomListEntry[] = [];
     for (const room of this.rooms.values()) {
-      if (!room.canJoin) continue;
       result.push(room.toListEntry());
     }
     return result;
+  }
+
+  /** 处理首条 spectate：仅对局中房间可入。 */
+  spectate(ws: WebSocket, message: SpectateMessage): RoomActionResult {
+    const roomId = normalizeRoomId(message.roomId ?? '');
+    if (!roomId) {
+      return fail('invalid_room', '房间号须为 3 位数字');
+    }
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return fail('invalid_room', '房间不存在');
+    }
+    if (!room.canSpectate) {
+      return fail('not_playing', '该房间尚未开局，无法观战');
+    }
+    const name = (message.name || '观众').trim() || '观众';
+    const playerId = normalizePlayerId(message.playerId);
+    if (!room.handleSpectate(ws, name, playerId)) {
+      return fail('not_playing', '该房间尚未开局，无法观战');
+    }
+    return { ok: true, room, playerId, name };
   }
 
   /** 各房间当前在线席位，供运维站在线名单。 */
