@@ -9,3 +9,14 @@ export function shouldRecordVersusAbandon(flags: {
 }): boolean {
   return flags.matchStarted && !flags.battleRecorded && !flags.peerLeft;
 }
+
+/**
+ * 真人对战进行中点返回才二次确认；观战、单机、已结算直接离开。
+ */
+export function shouldConfirmVersusLeave(flags: {
+  versus: boolean;
+  spectating: boolean;
+  matchEnded: boolean;
+}): boolean {
+  return flags.versus && !flags.spectating && !flags.matchEnded;
+}

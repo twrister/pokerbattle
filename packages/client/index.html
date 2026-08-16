@@ -1591,6 +1591,46 @@
         line-height: 1.6;
       }
 
+      /* HUD 默认不吃点击，确认层需自行打开事件并压过返回按钮 */
+      #versus-exit-dialog {
+        z-index: 36;
+        pointer-events: auto;
+      }
+
+      #versus-exit-detail {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: calc(15 * var(--hu));
+        line-height: 1.6;
+      }
+
+      .versus-exit-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      #btn-versus-exit-cancel,
+      #btn-versus-exit-confirm {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
+      }
+
+      #btn-versus-exit-cancel {
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+        color: #c5d4e0;
+      }
+
+      #btn-versus-exit-confirm {
+        border: 1px solid rgba(153, 207, 237, 0.5);
+        background: linear-gradient(135deg, #3d718f, #294c68);
+        color: #f7fbfd;
+      }
+
       /* 底部居中：建造在上、出兵在下；贴视口底边，不跟舞台 letterbox */
       #panel-bottom-dock {
         position: fixed;
@@ -4593,6 +4633,20 @@
           <button id="btn-battle-result-return" type="button">返回</button>
         </div>
       </section>
+      <div id="versus-exit-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="versus-exit-title">
+        <button class="mode-dialog-backdrop" type="button" aria-label="取消退出" data-versus-exit-cancel></button>
+        <div class="mode-dialog-panel">
+          <header class="mode-dialog-header">
+            <h2 id="versus-exit-title" class="mode-dialog-title">退出对局</h2>
+            <button class="mode-dialog-close" type="button" aria-label="取消" data-versus-exit-cancel>×</button>
+          </header>
+          <p id="versus-exit-detail">中途退出将记为失败，确定要离开吗？</p>
+          <div class="versus-exit-actions">
+            <button id="btn-versus-exit-cancel" type="button" data-versus-exit-cancel>取消</button>
+            <button id="btn-versus-exit-confirm" type="button">确定退出</button>
+          </div>
+        </div>
+      </div>
       <button id="btn-back-menu" type="button">返回主界面</button>
       <section class="panel" id="panel-stats">
         <div class="title">模拟状态</div>

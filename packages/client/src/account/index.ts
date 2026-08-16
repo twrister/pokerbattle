@@ -21,7 +21,7 @@ export {
   PLAYER_PROFILE_CORRUPT_BACKUP_KEY,
   PLAYER_PROFILE_STORAGE_KEY,
 } from './storage.js';
-export { shouldRecordVersusAbandon } from './versusExit.js';
+export { shouldConfirmVersusLeave, shouldRecordVersusAbandon } from './versusExit.js';
 export {
   MAX_DISPLAY_NAME_LENGTH,
   MAX_RECENT_BATTLES,

@@ -33,6 +33,7 @@ import {
 import {
   battleInputFromMatchResult,
   createPlayerProfileService,
+  shouldConfirmVersusLeave,
   shouldRecordVersusAbandon,
 } from './account/index.js';
 import { SimLoop } from './loop.js';
@@ -74,6 +75,7 @@ import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
 import { createBattleAnnounce } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
+import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
 import { createSpectatorHands } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
@@ -210,6 +212,7 @@ const codexPage = createCodexPage({
 const battleHud = createBattleHud();
 const battleAnnounce = createBattleAnnounce();
 const spectatorHands = createSpectatorHands();
+const versusExitConfirm = createVersusExitConfirm();
 const battleResult = createBattleResult(() => {
   if (activeSpectateSession || pendingSpectate || spectateMatchEnded) {
     screens.show('online');
@@ -1153,6 +1156,7 @@ function runVersusSession(
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
   battleResult.hide();
+  versusExitConfirm.hide();
   battleAnnounce.reset();
   battleHud.setSpectatorCount(0);
   battleHud.setCatchingUp(false);
@@ -1393,12 +1397,27 @@ function runVersusSession(
 
   const unbindSceneConfig = bindSceneConfigOverlay();
 
-  const returnToMenu = (): void => {
+  const leaveBattle = (): void => {
     sceneConfigPage.hide();
+    versusExitConfirm.hide();
     keepRoomSession = false;
     screens.show('online');
   };
-  backButton.addEventListener('click', returnToMenu);
+  /** 对局未结束时先确认，避免误点返回直接记失败。 */
+  const requestLeave = (): void => {
+    if (
+      !shouldConfirmVersusLeave({
+        versus: true,
+        spectating: false,
+        matchEnded: Boolean(netLoop.match.result),
+      })
+    ) {
+      leaveBattle();
+      return;
+    }
+    versusExitConfirm.show(leaveBattle);
+  };
+  backButton.addEventListener('click', requestLeave);
 
   let lastFrameAt = performance.now();
   let smoothedFps = 60;
@@ -1429,6 +1448,7 @@ function runVersusSession(
       resultShown = true;
       // 与 onMatchEnd 共用会话防重；谁先到都只记一次
       accountHooks.onOfficialResult(netLoop.match.result);
+      versusExitConfirm.hide();
       battleResult.show(netLoop.match.result, faction, netLoop.match);
     }
     battleView.render(netLoop.prev, netLoop.curr, netLoop.alpha, sceneContext.camera);
@@ -1449,10 +1469,11 @@ function runVersusSession(
     battleHud.hide();
     battleAnnounce.reset();
     battleResult.hide();
+    versusExitConfirm.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-versus');
     container.classList.remove('is-solo', 'is-versus');
-    backButton.removeEventListener('click', returnToMenu);
+    backButton.removeEventListener('click', requestLeave);
     stopBuildingPreview();
     stopPlaceableHighlight();
     stopAoePreview();
@@ -1487,6 +1508,7 @@ function runSpectateSession(
   container.classList.remove('is-hidden');
   hud.classList.remove('is-hidden');
   battleResult.hide();
+  versusExitConfirm.hide();
   battleAnnounce.reset();
   battleResult.setReturnLabel('返回大厅');
   battleHud.setContext({

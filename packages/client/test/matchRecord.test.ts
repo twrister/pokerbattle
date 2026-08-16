@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Faction } from '@pb/sim';
 import { battleInputFromMatchResult } from '../src/account/matchRecord.js';
-import { shouldRecordVersusAbandon } from '../src/account/versusExit.js';
+import { shouldConfirmVersusLeave, shouldRecordVersusAbandon } from '../src/account/versusExit.js';
 
 describe('对战结果转档案写入', () => {
   it('按本地阵营映射胜负平', () => {
@@ -65,6 +65,42 @@ describe('联机提前退出规则', () => {
         matchStarted: true,
         battleRecorded: false,
         peerLeft: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('联机返回确认规则', () => {
+  it('仅真人对战进行中需要二次确认，观战与已结算直接离开', () => {
+    expect(
+      shouldConfirmVersusLeave({
+        versus: true,
+        spectating: false,
+        matchEnded: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldConfirmVersusLeave({
+        versus: true,
+        spectating: true,
+        matchEnded: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldConfirmVersusLeave({
+        versus: true,
+        spectating: false,
+        matchEnded: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldConfirmVersusLeave({
+        versus: false,
+        spectating: false,
+        matchEnded: false,
       }),
     ).toBe(false);
   });
