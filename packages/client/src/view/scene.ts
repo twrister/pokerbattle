@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
+  arenaFullSize,
   dumpArenaConfigDraft,
   Faction,
   type ArenaCameraMode,
@@ -123,16 +124,16 @@ export function hexColorToNumber(hex: string): number {
   return Number.parseInt(hex.replace('#', ''), 16);
 }
 
-/** 从当前运行时草稿取出场地视觉布局。 */
+/** 从当前运行时草稿取出场地视觉布局；草稿宽高是单边，这里展开成全场。 */
 export function arenaVisualFromDraft(
   draft: ArenaConfigDraft = dumpArenaConfigDraft(),
 ): ArenaVisualLayout {
-  const riverMinY = Math.floor((draft.height - draft.riverWidth) / 2);
+  const full = arenaFullSize(draft);
   return {
-    width: draft.width,
-    height: draft.height,
-    riverMinY,
-    riverMaxY: riverMinY + draft.riverWidth,
+    width: full.width,
+    height: full.height,
+    riverMinY: draft.height,
+    riverMaxY: draft.height + draft.riverWidth,
     bridges: draft.bridges,
     colors: draft.colors,
   };

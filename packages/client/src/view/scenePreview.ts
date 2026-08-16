@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Faction, type ArenaConfigDraft } from '@pb/sim';
+import { arenaFullSize, Faction, type ArenaConfigDraft } from '@pb/sim';
 import {
   applySoloCameraPose,
   arenaVisualFromDraft,
@@ -98,7 +98,7 @@ export function createScenePreview(container: HTMLElement): ScenePreviewHandle {
       draft.camera.angleDeg,
       Faction.Blue,
       draft.camera.bottomExtra,
-      { width: draft.width, height: draft.height },
+      arenaFullSize(draft),
     );
     ortho.left = bounds.left;
     ortho.right = bounds.right;

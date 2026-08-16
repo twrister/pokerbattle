@@ -75,7 +75,8 @@ describe('场景配置页', () => {
     const page = createSceneConfigPage({ onBack: vi.fn() });
     page.show();
     expect(document.querySelector<HTMLInputElement>('#scene-width')?.value).toBe('18');
-    expect(document.querySelector<HTMLInputElement>('#scene-fov')?.value).toBe('45');
+    expect(document.querySelector<HTMLInputElement>('#scene-height')?.value).toBe('15');
+    expect(document.querySelector<HTMLInputElement>('#scene-fov')?.value).toBe('30');
     expect(latestPreview().applyDraft).toHaveBeenCalled();
     page.dispose();
   });

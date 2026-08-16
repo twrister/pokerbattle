@@ -1,8 +1,8 @@
 import { type Fx, HALF, clamp, fromInt } from '../math/fixed.js';
 
-/** 场地宽（横向格数）；可由场景配置草稿在运行时改写。 */
+/** 全场宽（横向格数，与单边宽相同）；可由场景配置草稿在运行时改写。 */
 export let ARENA_WIDTH: Fx = fromInt(18);
-/** 场地高：双方半场 + 中间河道；可由场景配置草稿在运行时改写。 */
+/** 全场高：两边半场 + 中间河道；未加载配置时按单边 15 + 河宽 1。 */
 export let ARENA_HEIGHT: Fx = fromInt(31);
 
 /** 导航网格分辨率：半格一个 cell，够细也不至于让 A* 节点数爆炸 */

@@ -16,6 +16,7 @@ export {
 } from './config/arenaTerrain.js';
 export {
   applyArenaConfigDraft,
+  arenaFullSize,
   captureArenaConfigAsDefault,
   dumpArenaConfigDraft,
   dumpDefaultArenaConfigDraft,

@@ -4,7 +4,6 @@ import {
   ARENA_BRIDGES,
   ARENA_RIVER_MAX_Y,
   ARENA_RIVER_MIN_Y,
-  centeredRiverRange,
   setArenaTerrain,
   type ArenaBridge,
 } from './arenaTerrain.js';
@@ -35,9 +34,11 @@ export interface ArenaColorsDraft {
   border: string;
 }
 
-/** 场景配置页与 JSON 共用的完整草稿。 */
+/** 场景配置页与 JSON 共用的完整草稿。宽高都是单边半场，对岸对称展开。 */
 export interface ArenaConfigDraft {
+  /** 单边宽（横向格数），两边共用，即全场宽。 */
   width: number;
+  /** 单边高（己方半场纵向格数），对岸同高。 */
   height: number;
   riverWidth: number;
   bridges: ArenaBridge[];
@@ -45,8 +46,17 @@ export interface ArenaConfigDraft {
   colors: ArenaColorsDraft;
 }
 
+/** 由单边宽高展开全场：宽共用，高 = 两边半场 + 河道。 */
+export function arenaFullSize(
+  draft: Pick<ArenaConfigDraft, 'width' | 'height' | 'riverWidth'>,
+): { width: number; height: number } {
+  return {
+    width: draft.width,
+    height: draft.height * 2 + draft.riverWidth,
+  };
+}
+
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MIN_SIDE_CELLS = 1;
 const MIN_RIVER_WIDTH = 1;
 const MAX_BRIDGES = 8;
 const FOV_MIN = 20;
@@ -73,11 +83,12 @@ let defaultDraft: ArenaConfigDraft = cloneArenaConfigDraft(initialDraft);
 /** 导出当前运行时场景草稿：布局读可变常量，镜头/颜色读最近一次 apply。 */
 export function dumpArenaConfigDraft(): ArenaConfigDraft {
   const width = Math.round(toFloat(ARENA_WIDTH));
-  const height = Math.round(toFloat(ARENA_HEIGHT));
+  const fullHeight = Math.round(toFloat(ARENA_HEIGHT));
+  const riverWidth = ARENA_RIVER_MAX_Y - ARENA_RIVER_MIN_Y;
   return {
     width,
-    height,
-    riverWidth: ARENA_RIVER_MAX_Y - ARENA_RIVER_MIN_Y,
+    height: Math.round((fullHeight - riverWidth) / 2),
+    riverWidth,
     bridges: ARENA_BRIDGES.map((bridge) => ({ ...bridge })),
     camera: { ...runtimeVisual.camera },
     colors: { ...runtimeVisual.colors },
@@ -93,14 +104,10 @@ export function dumpDefaultArenaConfigDraft(): ArenaConfigDraft {
 export function validateArenaConfigDraft(draft: unknown): string | undefined {
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return '配置必须是对象';
   const value = draft as Partial<ArenaConfigDraft>;
-  if (!isPositiveInt(value.width)) return '场地宽必须是正整数';
-  if (!isPositiveInt(value.height)) return '场地高必须是正整数';
+  if (!isPositiveInt(value.width)) return '单边宽必须是正整数';
+  if (!isPositiveInt(value.height)) return '单边高必须是正整数';
   if (!isPositiveInt(value.riverWidth) || value.riverWidth < MIN_RIVER_WIDTH) {
     return '河道宽度必须是正整数';
-  }
-  if (value.riverWidth! >= value.height!) return '河道宽度必须小于场地高';
-  if (value.height! - value.riverWidth! < MIN_SIDE_CELLS * 2) {
-    return '河道两侧半场至少各保留 1 格';
   }
   if (!Array.isArray(value.bridges) || value.bridges.length === 0) return '至少需要一座桥';
   if (value.bridges.length > MAX_BRIDGES) return `桥数量不能超过 ${MAX_BRIDGES}`;
@@ -139,9 +146,9 @@ export function captureArenaConfigAsDefault(): void {
 }
 
 function applyArenaLayout(draft: ArenaConfigDraft): void {
-  const river = centeredRiverRange(draft.height, draft.riverWidth);
-  setArenaSize(draft.width, draft.height);
-  setArenaTerrain(river.minY, river.maxY, draft.bridges);
+  const full = arenaFullSize(draft);
+  setArenaSize(full.width, full.height);
+  setArenaTerrain(draft.height, draft.height + draft.riverWidth, draft.bridges);
 }
 
 function parseArenaConfigDraft(raw: unknown): ArenaConfigDraft | null {
@@ -152,7 +159,7 @@ function parseArenaConfigDraft(raw: unknown): ArenaConfigDraft | null {
 function fallbackArenaConfigDraft(): ArenaConfigDraft {
   return {
     width: 18,
-    height: 31,
+    height: 15,
     riverWidth: 1,
     bridges: [
       { minX: 3, maxX: 5 },

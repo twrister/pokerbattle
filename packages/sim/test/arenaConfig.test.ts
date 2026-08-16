@@ -29,8 +29,10 @@ describe('场景配置草稿', () => {
   it('默认值与 arena.json 的场地、镜头一致', () => {
     const draft = dumpArenaConfigDraft();
     expect(draft.width).toBe(18);
-    expect(draft.height).toBe(32);
+    expect(draft.height).toBe(15);
     expect(draft.riverWidth).toBe(2);
+    expect(toFloat(ARENA_WIDTH)).toBe(18);
+    expect(toFloat(ARENA_HEIGHT)).toBe(32);
     expect(ARENA_RIVER_MIN_Y).toBe(15);
     expect(ARENA_RIVER_MAX_Y).toBe(17);
     expect(draft.bridges).toEqual([
@@ -38,13 +40,13 @@ describe('场景配置草稿', () => {
       { minX: 13, maxX: 15 },
     ]);
     expect(draft.camera.mode).toBe('perspective');
-    expect(draft.camera.fov).toBe(45);
-    expect(draft.camera.distance).toBe(70);
-    expect(draft.camera.offsetY).toBe(0);
+    expect(draft.camera.fov).toBe(30);
+    expect(draft.camera.distance).toBe(71);
+    expect(draft.camera.offsetY).toBe(5);
   });
 
   it('河道过宽或桥越界时拒绝', () => {
-    const tooWide = { ...validDraft(), riverWidth: 31 };
+    const tooWide = { ...validDraft(), riverWidth: 0 };
     expect(validateArenaConfigDraft(tooWide)).toContain('河道');
     const badBridge = {
       ...validDraft(),
@@ -75,7 +77,7 @@ describe('场景配置草稿', () => {
     const next = {
       ...validDraft(),
       width: 20,
-      height: 35,
+      height: 16,
       riverWidth: 3,
       bridges: [
         { minX: 2, maxX: 5 },
@@ -86,6 +88,7 @@ describe('场景配置草稿', () => {
 
     expect(toFloat(ARENA_WIDTH)).toBe(20);
     expect(toFloat(ARENA_HEIGHT)).toBe(35);
+    expect(dumpArenaConfigDraft().height).toBe(16);
     expect(ARENA_RIVER_MIN_Y).toBe(16);
     expect(ARENA_RIVER_MAX_Y).toBe(19);
     expect(halfCourtYRange(Faction.Blue)).toEqual({ minY: 0, maxY: 16 });
