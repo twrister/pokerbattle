@@ -1,6 +1,9 @@
 import { Faction, type MatchState, type PlayingCard } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
 
+/** 观战手牌按 9 张满幅定宽；超过则由 CSS 按 --spec-count 自适应重叠。 */
+const SPECTATOR_FULL_COUNT = 9;
+
 export interface SpectatorHandsHandle {
   show(): void;
   hide(): void;
@@ -61,6 +64,8 @@ function syncRow(
   const key = hand.map((card) => card.id).join(',');
   if (key === current) return;
   container.replaceChildren();
+  container.style.setProperty('--spec-count', String(hand.length));
+  container.style.setProperty('--spec-full', String(SPECTATOR_FULL_COUNT));
   for (const card of hand) {
     const el = document.createElement('span');
     el.className = 'spectator-hand-card';

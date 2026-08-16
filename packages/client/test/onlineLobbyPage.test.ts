@@ -54,6 +54,10 @@ describe('联机大厅页', () => {
     await vi.waitFor(() => {
       expect(document.querySelector('.online-room-card')).not.toBeNull();
     });
+    const title = document.querySelector('.online-room-card-title');
+    expect(title?.querySelector('.online-room-card-id')?.textContent).toBe('042');
+    expect(title?.querySelector('.online-room-card-name')?.textContent).toBe('可加入房');
+    expect(document.querySelector('.online-room-card-state')?.textContent).toBe('等待中');
     document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
     expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'room', roomId: '042' });
     page.dispose();

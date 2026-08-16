@@ -86,6 +86,10 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       const meta = document.createElement('div');
       meta.className = 'online-room-card-meta';
 
+      // 房号与房间名同一行，保证卡片高度固定、长名省略。
+      const title = document.createElement('div');
+      title.className = 'online-room-card-title';
+
       const id = document.createElement('span');
       id.className = 'online-room-card-id';
       id.textContent = room.roomId;
@@ -93,22 +97,32 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       const name = document.createElement('span');
       name.className = 'online-room-card-name';
       name.textContent = room.roomName;
+      title.append(id, name);
+
+      const info = document.createElement('div');
+      info.className = 'online-room-card-info';
 
       const count = document.createElement('span');
       count.className = 'online-room-card-count';
       count.textContent = `${room.playerCount}/${room.maxPlayers}`;
 
-      meta.append(id, name, count);
+      const state = document.createElement('span');
+      state.className = 'online-room-card-state';
+      if (phase === 'playing') {
+        state.textContent = `对局中 · 观战 ${room.spectatorCount ?? 0}`;
+      } else if (room.playerCount >= room.maxPlayers) {
+        state.textContent = '已满';
+      } else {
+        state.textContent = '等待中';
+      }
+      info.append(count, state);
+      meta.append(title, info);
 
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'online-room-card-action';
 
       if (phase === 'playing') {
-        const state = document.createElement('span');
-        state.className = 'online-room-card-state';
-        state.textContent = `对局中 · 观战 ${room.spectatorCount ?? 0}`;
-        meta.append(state);
         action.textContent = '观战';
         action.addEventListener('click', () => {
           hideDialogs();
