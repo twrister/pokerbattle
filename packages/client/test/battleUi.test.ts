@@ -72,8 +72,8 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
     expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
     expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
-    expect(document.querySelector('#battle-opp-hand')?.childElementCount).toBe(
-      match.decks[Faction.Red].hand.length,
+    expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
+      `${match.decks[Faction.Red].hand.length} / ${match.getMaxHandSize()}`,
     );
     expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('style')).toContain('50%');
     expect(document.querySelector('#battle-self-track')?.classList.contains('is-protect')).toBe(false);
@@ -117,8 +117,8 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-opp-name')?.textContent).toBe('对阵蓝');
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-opp-hp')?.textContent).toBe('5000 / 5000');
-    expect(document.querySelector('#battle-opp-hand')?.childElementCount).toBe(
-      match.decks[opposingFaction(Faction.Red)].hand.length,
+    expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
+      `${match.decks[opposingFaction(Faction.Red)].hand.length} / ${match.getMaxHandSize()}`,
     );
   });
 

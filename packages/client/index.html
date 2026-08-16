@@ -1266,7 +1266,7 @@
         gap: calc(8 * var(--hu));
       }
 
-      /* 敌方血条信息 + 右侧缩小牌背手数 */
+      /* 敌方血条信息 + 右侧手牌张数 */
       .battle-opp-side {
         display: flex;
         align-items: center;
@@ -1275,25 +1275,18 @@
         min-width: 0;
       }
 
+      /* 对手手牌只报当前/上限，不画牌背。 */
       #battle-opp-hand {
-        display: flex;
         flex: 0 0 auto;
-        align-items: center;
-        min-height: calc(36 * var(--hu));
-      }
-
-      /* 对手手牌仅用缩小牌背示意数量 */
-      .battle-opp-card {
-        display: block;
-        width: calc(36 * var(--hu));
-        aspect-ratio: 312 / 413;
-        border-radius: calc(4 * var(--hu));
-        background: #172535 url('%BASE_URL%cards/Back.png') center / cover no-repeat;
-        box-shadow: 0 calc(3 * var(--hu)) calc(8 * var(--hu)) rgba(0, 0, 0, 0.4);
-      }
-
-      .battle-opp-card + .battle-opp-card {
-        margin-left: calc(-16 * var(--hu));
+        color: #f5a498;
+        font-size: calc(14 * var(--hu));
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        text-shadow: 0 calc(1 * var(--hu)) calc(3 * var(--hu)) rgba(0, 0, 0, 0.55);
+        white-space: nowrap;
+        pointer-events: none;
       }
 
       .battle-castle {
@@ -4685,7 +4678,7 @@
                 <div id="battle-opp-bar" class="battle-hp-bar"></div>
               </div>
             </div>
-            <div id="battle-opp-hand" aria-label="对手手牌 0 张"></div>
+            <div id="battle-opp-hand" aria-label="对手手牌 0 / 9">0 / 9</div>
           </div>
         </div>
       </section>

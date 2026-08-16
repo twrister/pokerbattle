@@ -57,6 +57,7 @@ export function createBattleHud(): BattleHudHandle {
   let lastPhaseText = '';
   let lastTimerLabel = '';
   let lastTimerText = '';
+  let lastOppHandText = '';
   const selfCastle: CastleHudCache = emptyCastleCache();
   const oppCastle: CastleHudCache = emptyCastleCache();
 
@@ -115,7 +116,11 @@ export function createBattleHud(): BattleHudHandle {
         lastTimerText = value;
       }, lastTimerText);
 
-      syncOpponentHand(oppHand, match.decks[opp].hand.length);
+      const nextOppHand = formatHandCount(match.decks[opp].hand.length, match.getMaxHandSize());
+      writeText(oppHand, nextOppHand, (value) => {
+        lastOppHandText = value;
+        oppHand.setAttribute('aria-label', `对手手牌 ${value}`);
+      }, lastOppHandText);
     },
   };
 }
@@ -174,24 +179,9 @@ function updateCastle(
   }
 }
 
-/** 用缩小牌背数量表示对手手牌数，不展示正面；可超过阶段上限。 */
-function syncOpponentHand(container: HTMLElement, count: number): void {
-  const clamped = Math.max(0, count | 0);
-  const current = container.childElementCount;
-  if (current === clamped) return;
-  if (current > clamped) {
-    while (container.childElementCount > clamped) {
-      container.lastElementChild?.remove();
-    }
-    return;
-  }
-  for (let i = current; i < clamped; i += 1) {
-    const card = document.createElement('span');
-    card.className = 'battle-opp-card';
-    card.setAttribute('aria-hidden', 'true');
-    container.appendChild(card);
-  }
-  container.setAttribute('aria-label', `对手手牌 ${clamped} 张`);
+/** 对手手牌用「当前 / 上限」文字，不展示牌面；张数可超过阶段上限。 */
+function formatHandCount(count: number, maxHandSize: number): string {
+  return `${Math.max(0, count | 0)} / ${Math.max(1, maxHandSize | 0)}`;
 }
 
 function formatTicks(ticks: number): string {
