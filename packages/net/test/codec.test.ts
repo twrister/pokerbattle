@@ -47,6 +47,63 @@ describe('协议编解码', () => {
     const listRooms = encodeMessage({ type: 'listRooms' });
     expect(decodeClientMessage(listRooms)).toEqual({ type: 'listRooms' });
 
+    const listLeaderboard = encodeMessage({ type: 'listLeaderboard', playerId: 'device-1' });
+    expect(decodeClientMessage(listLeaderboard)).toEqual({
+      type: 'listLeaderboard',
+      playerId: 'device-1',
+    });
+
+    const leaderboard = encodeMessage({
+      type: 'leaderboard',
+      entries: [
+        {
+          rank: 1,
+          playerId: 'device-1',
+          displayName: 'Alice',
+          score: 12,
+          matches: 4,
+          wins: 3,
+          losses: 1,
+          winRate: 0.75,
+        },
+      ],
+      self: {
+        rank: 1,
+        playerId: 'device-1',
+        displayName: 'Alice',
+        score: 12,
+        matches: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+      },
+    });
+    expect(decodeServerMessage(leaderboard)).toEqual({
+      type: 'leaderboard',
+      entries: [
+        {
+          rank: 1,
+          playerId: 'device-1',
+          displayName: 'Alice',
+          score: 12,
+          matches: 4,
+          wins: 3,
+          losses: 1,
+          winRate: 0.75,
+        },
+      ],
+      self: {
+        rank: 1,
+        playerId: 'device-1',
+        displayName: 'Alice',
+        score: 12,
+        matches: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+      },
+    });
+
     const lobby = encodeMessage({
       type: 'lobby',
       name: 'Alice',

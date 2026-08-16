@@ -29,7 +29,7 @@ describe('玩家档案服务', () => {
     expect(profile.schemaVersion).toBe(PLAYER_PROFILE_SCHEMA_VERSION);
     expect(profile.deviceAccountId.length).toBeGreaterThan(0);
     expect(profile.displayName.startsWith('玩家-')).toBe(true);
-    expect(profile.level).toBe(1);
+    expect(profile.battleScore).toBe(0);
     expect(profile.exp).toBe(0);
     expect(profile.stats).toEqual({
       wins: 0,
@@ -58,7 +58,7 @@ describe('玩家档案服务', () => {
       deviceAccountId: 'device-1',
       displayName: '  测试玩家  ',
       createdAt: 10,
-      level: 0,
+      level: 9,
       exp: -5,
       recentBattles: [
         {
@@ -73,8 +73,9 @@ describe('玩家档案服务', () => {
     });
     expect(migrated).not.toBeNull();
     expect(migrated!.displayName).toBe('测试玩家');
-    expect(migrated!.level).toBe(1);
+    expect(migrated!.battleScore).toBe(0);
     expect(migrated!.exp).toBe(0);
+    expect('level' in migrated!).toBe(false);
     expect(migrated!.stats.wins).toBe(0);
     expect(migrated!.recentBattles).toHaveLength(1);
     expect(migrated!.recentBattles[0]?.id).toBe('b1');
@@ -115,13 +116,13 @@ describe('玩家档案服务', () => {
 
   it('成长与关卡字段只接受显式写入', () => {
     const service = createPlayerProfileService({ now: () => 6000, createId: () => 'stage-1' });
-    service.setProgression({ level: 3, exp: 120 });
+    service.setProgression({ battleScore: 3, exp: 120 });
     service.setCurrentStage('stage_forest_01');
     service.recordStageChallenge({ stageId: 'stage_forest_01', outcome: 'cleared' });
     service.recordStageChallenge({ stageId: 'stage_forest_01', outcome: 'failed' });
 
     const profile = service.getProfile();
-    expect(profile.level).toBe(3);
+    expect(profile.battleScore).toBe(3);
     expect(profile.exp).toBe(120);
     expect(profile.currentStageId).toBe('stage_forest_01');
     expect(profile.stats.stageAttempts).toBe(2);

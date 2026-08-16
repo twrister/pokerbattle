@@ -19,7 +19,7 @@ export interface PlayerProfileService {
   getProfile(): PlayerProfile;
   /** 改名；校验失败抛出 Error。 */
   setDisplayName(displayName: string): PlayerProfile;
-  /** 显式写入等级/经验，不自动升级。 */
+  /** 显式写入胜点/经验，不自动推算。 */
   setProgression(patch: ProgressionPatch): PlayerProfile;
   /** 设置当前关卡；传 null 表示清空。 */
   setCurrentStage(stageId: string | null): PlayerProfile;
@@ -72,15 +72,15 @@ export function createPlayerProfileService(
     },
 
     setProgression(patch) {
-      const level =
-        typeof patch.level === 'number' && Number.isFinite(patch.level)
-          ? Math.max(1, Math.floor(patch.level))
-          : profile.level;
+      const battleScore =
+        typeof patch.battleScore === 'number' && Number.isFinite(patch.battleScore)
+          ? Math.max(0, Math.floor(patch.battleScore))
+          : profile.battleScore;
       const exp =
         typeof patch.exp === 'number' && Number.isFinite(patch.exp)
           ? Math.max(0, Math.floor(patch.exp))
           : profile.exp;
-      profile = { ...profile, level, exp };
+      profile = { ...profile, battleScore, exp };
       return persist();
     },
 

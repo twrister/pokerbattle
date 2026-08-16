@@ -15,6 +15,7 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
     type === 'rejoin' ||
     type === 'spectate' ||
     type === 'listRooms' ||
+    type === 'listLeaderboard' ||
     type === 'lobby' ||
     type === 'startMatch' ||
     type === 'setReady' ||
@@ -35,6 +36,7 @@ export function decodeServerMessage(raw: string): ServerMessage | null {
   if (
     type === 'welcome' ||
     type === 'roomList' ||
+    type === 'leaderboard' ||
     type === 'roomState' ||
     type === 'spectateWelcome' ||
     type === 'frameBatch' ||

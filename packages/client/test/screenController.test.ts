@@ -9,6 +9,7 @@ describe('页面状态管理', () => {
     const leaveDeckConfig = vi.fn();
     const leaveHandOdds = vi.fn();
     const leaveCodex = vi.fn();
+    const leaveLeaderboard = vi.fn();
     const leaveUnitStats = vi.fn();
     const leaveSceneConfig = vi.fn();
     const leaveVersus = vi.fn();
@@ -21,6 +22,7 @@ describe('页面状态管理', () => {
     const enterDeckConfig = vi.fn(() => leaveDeckConfig);
     const enterHandOdds = vi.fn(() => leaveHandOdds);
     const enterCodex = vi.fn(() => leaveCodex);
+    const enterLeaderboard = vi.fn(() => leaveLeaderboard);
     const enterUnitStats = vi.fn(() => leaveUnitStats);
     const enterSceneConfig = vi.fn(() => leaveSceneConfig);
     const enterVersus = vi.fn(() => leaveVersus);
@@ -36,6 +38,7 @@ describe('页面状态管理', () => {
       'deck-config': enterDeckConfig,
       'hand-odds': enterHandOdds,
       codex: enterCodex,
+      leaderboard: enterLeaderboard,
       'unit-stats': enterUnitStats,
       'scene-config': enterSceneConfig,
       versus: enterVersus,
@@ -83,6 +86,7 @@ describe('页面状态管理', () => {
       'deck-config': () => vi.fn(),
       'hand-odds': () => vi.fn(),
       codex: () => vi.fn(),
+      leaderboard: () => vi.fn(),
       'unit-stats': () => vi.fn(),
       'scene-config': () => vi.fn(),
       versus: () => vi.fn(),

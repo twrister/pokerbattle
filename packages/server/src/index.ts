@@ -1,4 +1,4 @@
-import { decodeClientMessage, encodeMessage } from '@pb/net';
+import { decodeClientMessage, encodeMessage, type LeaderboardMessage } from '@pb/net';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -87,6 +87,14 @@ wss.on('connection', (ws) => {
     if (message.type === 'listRooms') {
       if (ws.readyState === ws.OPEN) {
         ws.send(encodeMessage({ type: 'roomList', rooms: rooms.listRooms() }));
+      }
+      return;
+    }
+
+    // 排行榜同样不占握手，可与大厅 presence 共用连接。
+    if (message.type === 'listLeaderboard') {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(encodeMessage(buildLeaderboard(message.playerId)));
       }
       return;
     }
@@ -183,6 +191,15 @@ function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined,
   const displayName = name ?? 'player';
   connectedPlayers.bind(ws, id, displayName);
   playerStats.upsertPlayer(id, displayName);
+}
+
+/** 组装排行榜回包：前 50 名 + 查询者本人（未入榜也带真实名次）。 */
+function buildLeaderboard(playerId: string | undefined): LeaderboardMessage {
+  return {
+    type: 'leaderboard',
+    entries: playerStats.listLeaderboard(),
+    self: playerId ? playerStats.lookupLeaderboardEntry(playerId) : null,
+  };
 }
 
 /** 返回全部历史玩家；在线位置用房间席位或大厅活动补充，离线标 offline。 */

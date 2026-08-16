@@ -80,6 +80,7 @@ import { createSpectatorHands } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
+import { createLeaderboardPage } from './ui/leaderboardPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createOnlineLobbyPage } from './ui/onlineLobbyPage.js';
 import { createOnlineRoomPage } from './ui/onlineRoomPage.js';
@@ -183,6 +184,17 @@ const mainMenu = createMainMenu({
   onOpenOnline: () => screens.show('online'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
+  onOpenLeaderboard: () => screens.show('leaderboard'),
+  onSyncBattleScore: async () => {
+    try {
+      const board = await ensureAppLobbyPresence().listLeaderboard();
+      if (board.self) {
+        playerProfile.setProgression({ battleScore: board.self.score });
+      }
+    } catch {
+      /* 离线保留上次积分 */
+    }
+  },
   getProfile: () => playerProfile.getProfile(),
   onRename: (displayName) => {
     playerProfile.setDisplayName(displayName);
@@ -224,6 +236,10 @@ const battleResult = createBattleResult(() => {
     return;
   }
   screens.show('menu');
+});
+const leaderboardPage = createLeaderboardPage({
+  onBack: () => screens.show('menu'),
+  loadLeaderboard: () => ensureAppLobbyPresence().listLeaderboard(),
 });
 const onlineLobbyPage = createOnlineLobbyPage({
   onBack: () => screens.show('menu'),
@@ -1651,6 +1667,11 @@ screens = createScreenController({
     codexPage.show();
     return () => codexPage.hide();
   },
+  leaderboard: () => {
+    syncLobbyPresenceForScreen('leaderboard');
+    leaderboardPage.show();
+    return () => leaderboardPage.hide();
+  },
   'unit-stats': () => {
     syncLobbyPresenceForScreen('unit-stats');
     unitStatsPage.setOnApplied(() => {});
@@ -1698,6 +1719,7 @@ function disposeApp(): void {
   disposeSpectateSession();
   spectatorHands.dispose();
   onlineLobbyPage.dispose();
+  leaderboardPage.dispose();
   onlineRoomPage.dispose();
   mainMenu.dispose();
   deckConfigPage.dispose();

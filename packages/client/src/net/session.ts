@@ -3,6 +3,7 @@ import {
   RECONNECT_TIMEOUT_MS,
   decodeServerMessage,
   encodeMessage,
+  type LeaderboardMessage,
   type LobbyActivity,
   type RoomListEntry,
   type RoomStateMessage,
@@ -614,6 +615,8 @@ export function connectSpectateSession(options: ConnectSpectateOptions): Spectat
 export interface LobbyPresenceHandle {
   /** 复用大厅连接查询可加入房间。 */
   listRooms(): Promise<RoomListEntry[]>;
+  /** 复用大厅连接查询积分排行榜。 */
+  listLeaderboard(): Promise<LeaderboardMessage>;
   /** 切到单机/回大厅时刷新 activity，不断开连接。 */
   setActivity(activity: LobbyActivity): void;
   /** 离开主菜单时关闭连接，服务端注销大厅计数。 */
@@ -644,6 +647,11 @@ export function createLobbyPresence(
     resolve: (rooms: RoomListEntry[]) => void;
     reject: (error: Error) => void;
   }> = [];
+  let boardInflight: Promise<LeaderboardMessage> | null = null;
+  let boardWaiters: Array<{
+    resolve: (board: LeaderboardMessage) => void;
+    reject: (error: Error) => void;
+  }> = [];
 
   const rejectOpenWaiters = (error: Error): void => {
     const waiters = openWaiters;
@@ -655,6 +663,13 @@ export function createLobbyPresence(
     const waiters = listWaiters;
     listWaiters = [];
     listInflight = null;
+    for (const waiter of waiters) waiter.reject(error);
+  };
+
+  const rejectBoardWaiters = (error: Error): void => {
+    const waiters = boardWaiters;
+    boardWaiters = [];
+    boardInflight = null;
     for (const waiter of waiters) waiter.reject(error);
   };
 
@@ -736,23 +751,34 @@ export function createLobbyPresence(
       const error = new Error('无法连接联机服务');
       rejectOpenWaiters(error);
       rejectListWaiters(error);
+      rejectBoardWaiters(error);
     });
     socket.addEventListener('close', () => {
       if (disposed || ws !== socket) return;
       const error = new Error('连接已断开');
       rejectOpenWaiters(error);
       rejectListWaiters(error);
+      rejectBoardWaiters(error);
       scheduleReconnect();
     });
     socket.addEventListener('message', (event) => {
       if (disposed || ws !== socket) return;
       const message = decodeServerMessage(String(event.data));
-      if (!message || message.type !== 'roomList') return;
-      const rooms = message.rooms ?? [];
-      const waiters = listWaiters;
-      listWaiters = [];
-      listInflight = null;
-      for (const waiter of waiters) waiter.resolve(rooms);
+      if (!message) return;
+      if (message.type === 'roomList') {
+        const rooms = message.rooms ?? [];
+        const waiters = listWaiters;
+        listWaiters = [];
+        listInflight = null;
+        for (const waiter of waiters) waiter.resolve(rooms);
+        return;
+      }
+      if (message.type === 'leaderboard') {
+        const waiters = boardWaiters;
+        boardWaiters = [];
+        boardInflight = null;
+        for (const waiter of waiters) waiter.resolve(message);
+      }
     });
   };
 
@@ -773,6 +799,27 @@ export function createLobbyPresence(
           });
       });
       return listInflight;
+    },
+    listLeaderboard() {
+      if (boardInflight) return boardInflight;
+      boardInflight = new Promise<LeaderboardMessage>((resolve, reject) => {
+        boardWaiters.push({ resolve, reject });
+        void ensureOpen()
+          .then((active) => {
+            if (disposed || boardWaiters.length === 0) return;
+            const playerId = options.playerId?.trim() ?? '';
+            active.send(
+              encodeMessage({
+                type: 'listLeaderboard',
+                ...(playerId ? { playerId } : {}),
+              }),
+            );
+          })
+          .catch((error: unknown) => {
+            rejectBoardWaiters(error instanceof Error ? error : new Error(String(error)));
+          });
+      });
+      return boardInflight;
     },
     setActivity(next) {
       const normalized: LobbyActivity = next === 'solo' ? 'solo' : 'lobby';
@@ -798,6 +845,7 @@ export function createLobbyPresence(
       clearHeartbeat();
       rejectOpenWaiters(new Error('大厅连接已关闭'));
       rejectListWaiters(new Error('大厅连接已关闭'));
+      rejectBoardWaiters(new Error('大厅连接已关闭'));
       const active = ws;
       ws = null;
       try {

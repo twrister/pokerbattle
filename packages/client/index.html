@@ -782,8 +782,71 @@
       }
 
       #online-lobby-status.is-visible,
-      #online-room-status.is-visible {
+      #online-room-status.is-visible,
+      #leaderboard-status.is-visible {
         color: #8192a4;
+      }
+
+      #leaderboard-list {
+        display: grid;
+        gap: calc(8 * var(--hu));
+        flex: 1;
+        align-content: start;
+        min-height: calc(280 * var(--hu));
+        overflow: auto;
+      }
+
+      .leaderboard-empty {
+        padding: calc(28 * var(--hu)) 0;
+        color: #7f92a6;
+        font-size: calc(14 * var(--hu));
+        text-align: center;
+      }
+
+      .leaderboard-row {
+        display: grid;
+        grid-template-columns: calc(36 * var(--hu)) minmax(0, 1fr) auto;
+        align-items: center;
+        gap: calc(10 * var(--hu));
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.22);
+        border-radius: calc(14 * var(--hu));
+        background: rgba(12, 24, 36, 0.72);
+        color: #eef5fa;
+      }
+
+      .leaderboard-row.is-self {
+        border-color: rgba(153, 207, 237, 0.7);
+        background: rgba(40, 72, 98, 0.55);
+      }
+
+      .leaderboard-rank {
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #9fd0ef;
+        font-size: calc(16 * var(--hu));
+      }
+
+      .leaderboard-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: calc(15 * var(--hu));
+      }
+
+      .leaderboard-stats {
+        color: #8aa0b4;
+        font-size: calc(13 * var(--hu));
+        white-space: nowrap;
+      }
+
+      #leaderboard-status {
+        min-height: 1.4em;
+        margin-top: calc(10 * var(--hu));
+        color: transparent;
+        font-size: calc(13 * var(--hu));
+        text-align: center;
       }
 
       #online-create-name-input,
@@ -929,7 +992,7 @@
 
       .lobby-nav {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(calc(72 * var(--hu)), 1fr));
         gap: calc(8 * var(--hu));
         margin-top: calc(14 * var(--hu));
         padding-top: calc(20 * var(--hu));
@@ -3983,7 +4046,7 @@
             <div id="player-avatar" class="player-avatar" aria-hidden="true">PB</div>
             <div class="player-copy">
               <div id="player-name" class="player-name">玩家</div>
-              <div id="player-level" class="player-level">等级 01</div>
+              <div id="player-level" class="player-level">胜点 0</div>
             </div>
           </button>
         </header>
@@ -4027,6 +4090,11 @@
             <span class="nav-icon" aria-hidden="true">◎</span>
             <span class="nav-label">模拟沙盒</span>
             <span class="nav-tag">MVP</span>
+          </button>
+          <button id="btn-leaderboard" class="nav-entry" type="button">
+            <span class="nav-icon" aria-hidden="true">▲</span>
+            <span class="nav-label">排行榜</span>
+            <span class="nav-tag">胜点榜</span>
           </button>
         </nav>
         <div id="lobby-version" aria-label="游戏版本">v0.1.0</div>
@@ -4159,6 +4227,18 @@
             <button id="btn-online-join-confirm" type="button">加入</button>
           </div>
         </div>
+      </div>
+    </main>
+
+    <main id="leaderboard" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell">
+        <header class="online-page-header">
+          <button id="btn-leaderboard-back" class="online-page-back" type="button">返回</button>
+          <h1>排行榜</h1>
+          <button id="btn-leaderboard-refresh" class="online-page-refresh" type="button">刷新</button>
+        </header>
+        <div id="leaderboard-list" role="list"></div>
+        <div id="leaderboard-status" role="status" aria-live="polite"></div>
       </div>
     </main>
 

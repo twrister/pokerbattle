@@ -21,12 +21,12 @@ vi.mock('../src/net/session.js', () => ({
 
 function buildProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     deviceAccountId: 'device-ui',
     displayName: '测试玩家',
     createdAt: 1,
     updatedAt: 1,
-    level: 4,
+    battleScore: 12,
     exp: 88,
     currentStageId: null,
     stats: { wins: 0, losses: 0, draws: 0, stageAttempts: 0, stageClears: 0 },
@@ -45,6 +45,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onOpenOnline: vi.fn(),
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
+    onOpenLeaderboard: vi.fn(),
     getProfile: () => buildProfile(),
     onRename: vi.fn(),
     ...overrides,
@@ -72,6 +73,7 @@ function mountMainMenuDom(): void {
       <button id="btn-sandbox"></button>
       <button id="btn-deck"></button>
       <button id="btn-codex"></button>
+      <button id="btn-leaderboard"></button>
       <button id="btn-solo-ai"></button>
       <button id="btn-solo-debug"></button>
       <div class="lobby-status-row">
@@ -105,7 +107,7 @@ describe('大厅玩家档案展示', () => {
     mountMainMenuDom();
   });
 
-  it('初始化时展示档案名字与等级', () => {
+  it('初始化时展示档案名字与胜点', () => {
     let profile = buildProfile();
     createMainMenu(
       menuOptions({
@@ -114,7 +116,7 @@ describe('大厅玩家档案展示', () => {
     );
 
     expect(document.querySelector('#player-name')?.textContent).toBe('测试玩家');
-    expect(document.querySelector('#player-level')?.textContent).toBe('等级 04');
+    expect(document.querySelector('#player-level')?.textContent).toBe('胜点 12');
     expect(document.querySelector('#player-avatar')?.textContent).toBe('测试');
     expect(document.querySelector('#lobby-version')?.textContent).toBe('v0.1.0');
   });
@@ -123,7 +125,7 @@ describe('大厅玩家档案展示', () => {
     let profile = buildProfile();
     const onRename = vi.fn((name: string) => {
       if (name.trim() === '') throw new Error('名字不能为空');
-      profile = buildProfile({ displayName: name.trim(), level: 5, exp: 1 });
+      profile = buildProfile({ displayName: name.trim(), battleScore: 5, exp: 1 });
     });
     const menu = createMainMenu(
       menuOptions({
@@ -152,10 +154,10 @@ describe('大厅玩家档案展示', () => {
     finishRenameCloseAnim();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
 
-    profile = buildProfile({ displayName: '外部刷新', level: 9, exp: 3 });
+    profile = buildProfile({ displayName: '外部刷新', battleScore: 9, exp: 3 });
     menu.refreshProfile();
     expect(document.querySelector('#player-name')?.textContent).toBe('外部刷新');
-    expect(document.querySelector('#player-level')?.textContent).toBe('等级 09');
+    expect(document.querySelector('#player-level')?.textContent).toBe('胜点 9');
   });
 
   it('人机对战以 hard 难度启动单机', () => {
@@ -216,6 +218,30 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     expect(onOpenOnline).toHaveBeenCalledTimes(1);
+  });
+
+  it('点击排行榜进入胜点榜页', () => {
+    const onOpenLeaderboard = vi.fn();
+    createMainMenu(menuOptions({ onOpenLeaderboard }));
+
+    document.querySelector<HTMLButtonElement>('#btn-leaderboard')!.click();
+    expect(onOpenLeaderboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('回大厅时同步服务端积分并刷新卡片', async () => {
+    let profile = buildProfile({ battleScore: 0 });
+    const onSyncBattleScore = vi.fn(async () => {
+      profile = buildProfile({ battleScore: 15 });
+    });
+    const menu = createMainMenu(menuOptions({
+      getProfile: () => profile,
+      onSyncBattleScore,
+    }));
+    menu.show();
+    await vi.waitFor(() => {
+      expect(onSyncBattleScore).toHaveBeenCalledTimes(1);
+      expect(document.querySelector('#player-level')?.textContent).toBe('胜点 15');
+    });
   });
 
   it('默认名首次点单机只出改名弹窗，不出模式弹窗', () => {

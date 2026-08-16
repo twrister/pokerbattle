@@ -233,6 +233,93 @@ describe('PlayerStatsStore', () => {
     expect(reloaded.listPlayers()).toEqual([]);
   });
 
+  it('胜利积分 +1，未超过 10 分战败不扣，超过后才 -1', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 2,
+        players: [
+          {
+            playerId: 'low-score',
+            displayName: '低分',
+            matches: 3,
+            wins: 3,
+            losses: 0,
+            score: 3,
+            firstSeenAt: 10,
+            lastPlayedAt: 20,
+            lastOnlineAt: 20,
+          },
+          {
+            playerId: 'high-score',
+            displayName: '高分',
+            matches: 12,
+            wins: 11,
+            losses: 1,
+            score: 11,
+            firstSeenAt: 10,
+            lastPlayedAt: 20,
+            lastOnlineAt: 20,
+          },
+        ],
+      }),
+    );
+    const store = new PlayerStatsStore({ filePath, now: () => 99 });
+    store.recordDecisiveMatch('low-score', 'high-score', { winner: '低分', loser: '高分' });
+    expect(store.lookup('low-score')).toMatchObject({ score: 4, wins: 4, losses: 0 });
+    expect(store.lookup('high-score')).toMatchObject({ score: 10, wins: 11, losses: 2 });
+
+    store.recordDecisiveMatch('low-score', 'high-score', { winner: '低分', loser: '高分' });
+    expect(store.lookup('high-score')?.score).toBe(10);
+  });
+
+  it('排行榜按积分、胜率排序，未入前 N 也能查到自己的名次', () => {
+    const store = tempStore();
+    store.recordDecisiveMatch('ace', 'bronze', { winner: '王牌', loser: '铜牌' });
+    store.recordDecisiveMatch('ace', 'silver', { winner: '王牌', loser: '银牌' });
+    store.recordDecisiveMatch('silver', 'bronze', { winner: '银牌', loser: '铜牌' });
+
+    const board = store.listLeaderboard();
+    expect(board.map((row) => row.playerId)).toEqual(['ace', 'silver', 'bronze']);
+    expect(board[0]).toMatchObject({ rank: 1, score: 2, winRate: 1 });
+    expect(board[1]).toMatchObject({ rank: 2, score: 1, wins: 1, losses: 1 });
+    expect(board[2]).toMatchObject({ rank: 3, score: 0, wins: 0, losses: 2 });
+
+    expect(store.listLeaderboard(1).map((row) => row.playerId)).toEqual(['ace']);
+    expect(store.lookupLeaderboardEntry('bronze')).toMatchObject({ rank: 3, playerId: 'bronze' });
+    expect(store.lookupLeaderboardEntry('missing')).toBeNull();
+  });
+
+  it('旧档缺 score 时回退为 0', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        players: [
+          {
+            playerId: 'legacy-score',
+            displayName: '旧档',
+            matches: 2,
+            wins: 1,
+            losses: 1,
+            firstSeenAt: 10,
+            lastPlayedAt: 20,
+            lastOnlineAt: 20,
+          },
+        ],
+      }),
+    );
+    const store = new PlayerStatsStore({ filePath, now: () => 99 });
+    expect(store.lookup('legacy-score')).toMatchObject({ score: 0, matches: 2 });
+    expect(store.listLeaderboard()[0]).toMatchObject({ playerId: 'legacy-score', score: 0, rank: 1 });
+  });
+
   it('落盘后新实例能恢复战绩', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
     dirs.push(dir);

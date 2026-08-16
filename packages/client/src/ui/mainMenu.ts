@@ -21,6 +21,10 @@ export interface MainMenuOptions {
   onOpenOnline: () => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
+  /** 进入积分排行榜页。 */
+  onOpenLeaderboard: () => void;
+  /** 从服务端同步本人胜点；失败时应静默，保留上次本地值。 */
+  onSyncBattleScore?: () => Promise<void>;
   /** 读取当前设备档案，供大厅展示。 */
   getProfile: () => PlayerProfile;
   /** 改名成功后由编排层持久化；失败应抛错。 */
@@ -30,7 +34,7 @@ export interface MainMenuOptions {
 export interface MainMenuHandle {
   show(): void;
   hide(): void;
-  /** 档案变更后刷新名字/等级展示。 */
+  /** 档案变更后刷新名字/胜点展示。 */
   refreshProfile(): void;
   dispose(): void;
 }
@@ -43,6 +47,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const sandboxButton = required<HTMLButtonElement>('#btn-sandbox', root);
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
+  const leaderboardButton = required<HTMLButtonElement>('#btn-leaderboard', root);
   const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
   const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
@@ -160,8 +165,21 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const refreshProfile = (): void => {
     const profile = options.getProfile();
     playerName.textContent = profile.displayName;
-    playerLevel.textContent = formatLevelLine(profile.level);
+    playerLevel.textContent = formatScoreLine(profile.battleScore);
     playerAvatar.textContent = avatarInitials(profile.displayName);
+  };
+
+  /** 回大厅时拉一次权威积分；离线失败则继续展示本地缓存。 */
+  const refreshBattleScore = (): void => {
+    if (!options.onSyncBattleScore) return;
+    void options
+      .onSyncBattleScore()
+      .catch(() => {
+        /* 离线保留上次积分 */
+      })
+      .then(() => {
+        refreshProfile();
+      });
   };
 
   const showPlaceholder = (event: Event): void => {
@@ -251,6 +269,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
   const openDeckConfig = (): void => options.onOpenDeckConfig();
   const openCodex = (): void => options.onOpenCodex();
+  const openLeaderboard = (): void => options.onOpenLeaderboard();
 
   const submitRename = (event: Event): void => {
     event.preventDefault();
@@ -275,6 +294,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
+  leaderboardButton.addEventListener('click', openLeaderboard);
   soloAiButton.addEventListener('click', startSoloAi);
   soloDebugButton.addEventListener('click', startSoloDebug);
   profileButton.addEventListener('click', openRenameFromProfile);
@@ -300,6 +320,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       closeModeDialogs();
       hideRenameDialogInstant();
       refreshProfile();
+      refreshBattleScore();
     },
     hide() {
       root.classList.add('is-hidden');
@@ -314,6 +335,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
+      leaderboardButton.removeEventListener('click', openLeaderboard);
       soloAiButton.removeEventListener('click', startSoloAi);
       soloDebugButton.removeEventListener('click', startSoloDebug);
       profileButton.removeEventListener('click', openRenameFromProfile);
@@ -331,10 +353,10 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 }
 
-/** 等级行展示：补齐两位等级。 */
-function formatLevelLine(level: number): string {
-  const levelText = String(Math.max(1, Math.floor(level))).padStart(2, '0');
-  return `等级 ${levelText}`;
+/** 玩家卡片积分行：展示服务端同步后的胜点。 */
+function formatScoreLine(score: number): string {
+  const value = Math.max(0, Math.floor(score));
+  return `胜点 ${value}`;
 }
 
 /** 头像缩写：取展示名前两个可见字符。 */

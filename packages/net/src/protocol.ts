@@ -69,6 +69,33 @@ export interface ListRoomsMessage {
   type: 'listRooms';
 }
 
+/** C→S：查询战斗积分排行榜（不占用 join 握手）。 */
+export interface ListLeaderboardMessage {
+  type: 'listLeaderboard';
+  /** 设备档案 ID；有则回包带上自己的名次，即使未进前 N。 */
+  playerId?: string;
+}
+
+/** 排行榜一行：积分权威来自服务端战绩。 */
+export interface LeaderboardEntry {
+  rank: number;
+  playerId: string;
+  displayName: string;
+  score: number;
+  matches: number;
+  wins: number;
+  losses: number;
+  /** 无场次时为 null，避免除零。 */
+  winRate: number | null;
+}
+
+/** S→C：积分降序排行；self 为查询者本人，未登记则为 null。 */
+export interface LeaderboardMessage {
+  type: 'leaderboard';
+  entries: LeaderboardEntry[];
+  self: LeaderboardEntry | null;
+}
+
 /** C→S：观战已开局房间，不占席位。 */
 export interface SpectateMessage {
   type: 'spectate';
@@ -132,6 +159,7 @@ export type ClientMessage =
   | RejoinMessage
   | SpectateMessage
   | ListRoomsMessage
+  | ListLeaderboardMessage
   | LobbyMessage
   | StartMatchMessage
   | SetReadyMessage
@@ -272,6 +300,7 @@ export interface ErrorMessage {
 export type ServerMessage =
   | WelcomeMessage
   | RoomListMessage
+  | LeaderboardMessage
   | RoomStateMessage
   | SpectateWelcomeMessage
   | FrameBatchMessage

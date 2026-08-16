@@ -38,6 +38,7 @@ export interface OpsPlayerRecord {
   matches: number;
   wins: number;
   losses: number;
+  score?: number;
   winRate: number | null;
   firstSeenAt: number;
   lastPlayedAt: number;

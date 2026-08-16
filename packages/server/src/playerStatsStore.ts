@@ -7,7 +7,11 @@ const DISPLAY_NAME_MAX_LENGTH = 16;
 /** 覆盖 UUID 与 `pb-时间戳-随机串` 兜底格式。 */
 const PLAYER_ID_MAX_LENGTH = 80;
 const PLAYER_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
-const STORE_SCHEMA_VERSION = 1;
+const STORE_SCHEMA_VERSION = 2;
+/** 战败扣分门槛：只有积分已超过该值才 -1，避免新手一直掉到 0。 */
+export const LOSS_PENALTY_THRESHOLD = 10;
+/** 排行榜默认条数。 */
+export const LEADERBOARD_DEFAULT_LIMIT = 50;
 
 /** 磁盘/内存中的玩家战绩行；胜率由 list 时派生。 */
 export interface PlayerStatsRecord {
@@ -16,10 +20,24 @@ export interface PlayerStatsRecord {
   matches: number;
   wins: number;
   losses: number;
+  /** 联机战斗积分：胜 +1，超过 LOSS_PENALTY_THRESHOLD 后败 -1。 */
+  score: number;
   firstSeenAt: number;
   lastPlayedAt: number;
   /** 最近一次入厅/入房或最后一条 WS 断开的时间。 */
   lastOnlineAt: number;
+}
+
+/** 排行榜行：名次在全量排序后写入，胜率由场次派生。 */
+export interface LeaderboardRecord {
+  rank: number;
+  playerId: string;
+  displayName: string;
+  score: number;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
 }
 
 /** 运维接口行：在落盘字段上附加胜率。 */
@@ -121,6 +139,7 @@ export class PlayerStatsStore {
         matches: 0,
         wins: 0,
         losses: 0,
+        score: 0,
         firstSeenAt: now,
         lastPlayedAt: now,
         lastOnlineAt: now,
@@ -195,6 +214,18 @@ export class PlayerStatsStore {
       });
   }
 
+  /** 按积分排出前 N 名，供大厅排行榜。 */
+  listLeaderboard(limit = LEADERBOARD_DEFAULT_LIMIT): LeaderboardRecord[] {
+    return this.rankAllPlayers().slice(0, Math.max(0, Math.floor(limit)));
+  }
+
+  /** 查某人在全量榜中的名次；未登记返回 null。 */
+  lookupLeaderboardEntry(playerId: string): LeaderboardRecord | null {
+    const id = normalizePlayerId(playerId);
+    if (!id) return null;
+    return this.rankAllPlayers().find((entry) => entry.playerId === id) ?? null;
+  }
+
   private ensurePlayer(playerId: string, name: string): void {
     if (this.players.has(playerId)) {
       const displayName = normalizeDisplayName(name);
@@ -211,6 +242,7 @@ export class PlayerStatsStore {
       matches: 0,
       wins: 0,
       losses: 0,
+      score: 0,
       firstSeenAt: now,
       lastPlayedAt: now,
       lastOnlineAt: now,
@@ -225,8 +257,39 @@ export class PlayerStatsStore {
       matches: existing.matches + 1,
       wins: existing.wins + (outcome === 'win' ? 1 : 0),
       losses: existing.losses + (outcome === 'loss' ? 1 : 0),
+      score: nextScore(existing.score, outcome),
       lastPlayedAt: now,
     });
+  }
+
+  /** 全量按积分/胜率排序后写入 1-based 名次。 */
+  private rankAllPlayers(): LeaderboardRecord[] {
+    return [...this.players.values()]
+      .map((record) => ({
+        record,
+        winRate: record.matches > 0 ? record.wins / record.matches : null,
+      }))
+      .sort((a, b) => {
+        if (b.record.score !== a.record.score) return b.record.score - a.record.score;
+        const aRate = a.winRate ?? -1;
+        const bRate = b.winRate ?? -1;
+        if (bRate !== aRate) return bRate - aRate;
+        if (b.record.wins !== a.record.wins) return b.record.wins - a.record.wins;
+        if (b.record.lastPlayedAt !== a.record.lastPlayedAt) {
+          return b.record.lastPlayedAt - a.record.lastPlayedAt;
+        }
+        return a.record.displayName.localeCompare(b.record.displayName, 'zh');
+      })
+      .map(({ record, winRate }, index) => ({
+        rank: index + 1,
+        playerId: record.playerId,
+        displayName: record.displayName,
+        score: record.score,
+        matches: record.matches,
+        wins: record.wins,
+        losses: record.losses,
+        winRate,
+      }));
   }
 
   private load(): void {
@@ -284,6 +347,7 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
   const matches = readNonNegativeInt(row.matches);
   const wins = readNonNegativeInt(row.wins);
   const losses = readNonNegativeInt(row.losses);
+  const score = readNonNegativeInt(row.score);
   if (wins + losses > matches) return null;
   const firstSeenAt = readPositiveInt(row.firstSeenAt);
   const lastPlayedAt = Math.max(readPositiveInt(row.lastPlayedAt), firstSeenAt);
@@ -295,6 +359,7 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
     matches,
     wins,
     losses,
+    score,
     firstSeenAt,
     lastPlayedAt,
     lastOnlineAt,
@@ -347,6 +412,7 @@ export function listAllOpsPlayers(
       matches: 0,
       wins: 0,
       losses: 0,
+      score: 0,
       winRate: null,
       firstSeenAt: 0,
       lastPlayedAt: 0,
@@ -376,4 +442,10 @@ function presenceRank(location: OnlinePresence['location']): number {
 function readPositiveInt(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0;
   return Math.floor(value);
+}
+
+/** 胜 +1；仅当积分已超过门槛才扣分，避免新手一直负分。 */
+function nextScore(current: number, outcome: 'win' | 'loss'): number {
+  if (outcome === 'win') return current + 1;
+  return current > LOSS_PENALTY_THRESHOLD ? current - 1 : current;
 }

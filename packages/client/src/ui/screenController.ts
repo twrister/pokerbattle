@@ -5,6 +5,7 @@ export type AppScreen =
   | 'deck-config'
   | 'hand-odds'
   | 'codex'
+  | 'leaderboard'
   | 'unit-stats'
   | 'scene-config'
   | 'sandbox'

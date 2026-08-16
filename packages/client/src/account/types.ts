@@ -1,5 +1,5 @@
 /** 玩家档案 schema 版本；读写时用于迁移。 */
-export const PLAYER_PROFILE_SCHEMA_VERSION = 1;
+export const PLAYER_PROFILE_SCHEMA_VERSION = 2;
 
 /** 最近对战 / 关卡挑战摘要条数上限。 */
 export const MAX_RECENT_BATTLES = 50;
@@ -52,7 +52,8 @@ export interface PlayerProfile {
   displayName: string;
   createdAt: number;
   updatedAt: number;
-  level: number;
+  /** 联机胜点缓存；权威值在服务端，回大厅时同步。 */
+  battleScore: number;
   exp: number;
   currentStageId: string | null;
   stats: PlayerProfileStats;
@@ -75,7 +76,7 @@ export interface RecordStageChallengeInput {
 
 /** 显式写入成长字段，不自动推算升级。 */
 export interface ProgressionPatch {
-  level?: number;
+  battleScore?: number;
   exp?: number;
 }
 

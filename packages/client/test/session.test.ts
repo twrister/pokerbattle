@@ -349,4 +349,49 @@ describe('createLobbyPresence', () => {
     presence.dispose();
     vi.useRealTimers();
   });
+
+  it('复用大厅连接查询排行榜并带回自己的名次', async () => {
+    const presence = createLobbyPresence({
+      name: 'Tester',
+      playerId: 'device-1',
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    const pending = presence.listLeaderboard();
+    await Promise.resolve();
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({
+      type: 'listLeaderboard',
+      playerId: 'device-1',
+    });
+    ws.pushServer({
+      type: 'leaderboard',
+      entries: [
+        {
+          rank: 1,
+          playerId: 'device-1',
+          displayName: 'Tester',
+          score: 4,
+          matches: 4,
+          wins: 4,
+          losses: 0,
+          winRate: 1,
+        },
+      ],
+      self: {
+        rank: 1,
+        playerId: 'device-1',
+        displayName: 'Tester',
+        score: 4,
+        matches: 4,
+        wins: 4,
+        losses: 0,
+        winRate: 1,
+      },
+    });
+    await expect(pending).resolves.toMatchObject({
+      type: 'leaderboard',
+      self: { playerId: 'device-1', score: 4, rank: 1 },
+    });
+    presence.dispose();
+  });
 });
