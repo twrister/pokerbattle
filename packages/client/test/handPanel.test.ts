@@ -57,7 +57,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('新牌从牌堆顶牌出发，手牌满后持续晃动直到恢复补牌', () => {
+  it('新牌从牌堆顶牌出发，满手后继续涨进度，发牌失败才晃动且无遮罩', () => {
     const panel = createHandPanel();
     const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
     const dealtCards = [...document.querySelectorAll<HTMLElement>('.playing-card.is-dealing')];
@@ -71,6 +71,47 @@ describe('单机手牌交互', () => {
 
     panel.dispose();
 
+    // 留余牌，避免空堆把遮罩清零，掩盖满手后仍走下一张进度。
+    const fullDeck = new PokerDeck(createPokerCards(), new Rng(1));
+    fullDeck.drawMany(11);
+    const fullPanel = createHandPanel({ deck: fullDeck, drawIntervalSeconds: 0.25 });
+    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+    expect(handCount.textContent).toBe('手牌已满 11 / 11');
+    expect(handCount.classList.contains('is-full')).toBe(true);
+
+    fullPanel.update(125);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('50%');
+
+    fullPanel.update(125);
+    expect(pile.classList.contains('is-full')).toBe(true);
+    expect(fullDeck.hand).toHaveLength(11);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    fullPanel.update(125);
+    expect(pile.classList.contains('is-full')).toBe(true);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    fullDeck.play([fullDeck.hand[0]!.id]);
+    fullPanel.syncFromDeck();
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(fullDeck.hand).toHaveLength(11);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+    expect(handCount.textContent).toBe('手牌已满 11 / 11');
+    expect(handCount.classList.contains('is-full')).toBe(true);
+
+    fullPanel.update(125);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('50%');
+
+    fullPanel.dispose();
+  });
+
+  it('新开一局时清除上一局牌堆满手晃动', () => {
+    const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
+    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
     const fullDeck = deckWithCards([
       '3-spades',
       '4-hearts',
@@ -84,21 +125,22 @@ describe('单机手牌交互', () => {
       'Q-hearts',
       'K-clubs',
     ]);
-    const fullPanel = createHandPanel({ deck: fullDeck });
-    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
+    const fullPanel = createHandPanel({ deck: fullDeck, drawIntervalSeconds: 0.25 });
+    fullPanel.update(250);
     expect(pile.classList.contains('is-full')).toBe(true);
-    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
-    expect(handCount.textContent).toBe('手牌已满 11 / 11');
     expect(handCount.classList.contains('is-full')).toBe(true);
-
-    fullDeck.play([fullDeck.hand[0]!.id]);
-    fullPanel.syncFromDeck();
+    fullPanel.dispose();
     expect(pile.classList.contains('is-full')).toBe(false);
-    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
-    expect(handCount.textContent).toBe('10 / 11');
     expect(handCount.classList.contains('is-full')).toBe(false);
 
-    fullPanel.dispose();
+    // 牌堆节点跨局复用：即使上一局面板未卸下 class，新开局未满手也必须清掉晃动。
+    pile.classList.add('is-full');
+    handCount.classList.add('is-full');
+    const nextPanel = createHandPanel();
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(handCount.classList.contains('is-full')).toBe(false);
+    expect(handCount.textContent).toBe('4 / 11');
+    nextPanel.dispose();
   });
 
   it('按下为临时选中，松开后切到正式选中并可点搭配出牌', () => {
@@ -293,6 +335,59 @@ describe('单机手牌交互', () => {
     remainingMs = 0;
     panel.update(0);
     expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    panel.dispose();
+  });
+
+  it('外部发牌满手时继续走进度，pending 到点后才晃动且无遮罩', () => {
+    let remainingMs = 6000;
+    let pending = false;
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    deck.drawMany(11);
+    const panel = createHandPanel({
+      deck,
+      drawIntervalSeconds: 3,
+      externalDraw: true,
+      getDrawRemainingMs: () => remainingMs,
+      getDrawIntervalMs: () => 6000,
+      getHasPendingDraw: () => pending,
+    });
+    const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
+    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
+
+    panel.update(0);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
+    expect(handCount.textContent).toBe('手牌已满 11 / 11');
+
+    remainingMs = 3000;
+    panel.update(0);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('50%');
+
+    remainingMs = 0;
+    panel.update(0);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    pending = true;
+    remainingMs = 0;
+    panel.update(0);
+    expect(pile.classList.contains('is-full')).toBe(true);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    remainingMs = 6000;
+    panel.update(0);
+    expect(pile.classList.contains('is-full')).toBe(true);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+
+    deck.play([deck.hand[0]!.id]);
+    pending = false;
+    remainingMs = 6000;
+    panel.syncFromDeck();
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(handCount.textContent).toBe('10 / 11');
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('100%');
 
     panel.dispose();
   });

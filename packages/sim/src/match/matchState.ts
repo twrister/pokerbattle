@@ -132,7 +132,16 @@ export class MatchState {
   private normalHandLimit = HAND_LIMIT_NORMAL;
   private doubleSpeedHandLimit = HAND_LIMIT_DOUBLE_SPEED;
   private finalHandLimit = HAND_LIMIT_FINAL;
-  private nextDrawTick = NORMAL_DRAW_INTERVAL_TICKS;
+  /** 双方各自的下一张补牌 tick；满手待发时该方冻结，不拖累对方。 */
+  private nextDrawTicks: Record<Faction, number> = {
+    [Faction.Blue]: NORMAL_DRAW_INTERVAL_TICKS,
+    [Faction.Red]: NORMAL_DRAW_INTERVAL_TICKS,
+  };
+  /** 周期到点却满手时记一张待发，空位出现后同帧补上。 */
+  private pendingDraw: Record<Faction, boolean> = {
+    [Faction.Blue]: false,
+    [Faction.Red]: false,
+  };
   private bluePackState: CastlePackState = 'none';
   private redPackState: CastlePackState = 'none';
 
@@ -173,11 +182,8 @@ export class MatchState {
     this.updateMatchState();
     if (this.result) return;
 
-    if (this.world.tick >= this.nextDrawTick) {
-      this.decks[Faction.Blue].draw();
-      this.decks[Faction.Red].draw();
-      this.nextDrawTick = this.world.tick + this.drawIntervalTicks();
-    }
+    this.tryDrawForFaction(Faction.Blue);
+    this.tryDrawForFaction(Faction.Red);
   }
 
   /**
@@ -204,7 +210,10 @@ export class MatchState {
     h = mix(h, this.result?.endTick ?? 0);
     h = mix(h, this.blueCastleId ?? 0);
     h = mix(h, this.redCastleId ?? 0);
-    h = mix(h, this.nextDrawTick);
+    h = mix(h, this.nextDrawTicks[Faction.Blue]);
+    h = mix(h, this.nextDrawTicks[Faction.Red]);
+    h = mix(h, this.pendingDraw[Faction.Blue] ? 1 : 0);
+    h = mix(h, this.pendingDraw[Faction.Red] ? 1 : 0);
     h = mix(h, this.initialHandSize);
     h = mix(h, this.normalPhaseTicks);
     h = mix(h, this.doubleSpeedPhaseTicks);
@@ -234,8 +243,8 @@ export class MatchState {
     this.bluePackState = 'none';
     this.redPackState = 'none';
     this.dealStartingHands();
-    // 保留调试覆盖的节奏参数，只重置本局倒计时
-    this.nextDrawTick = this.normalDrawIntervalTicks;
+    // 保留调试覆盖的节奏参数，只重置本局倒计时与待发
+    this.resetDrawClocks(this.normalDrawIntervalTicks);
   }
 
   /**
@@ -303,9 +312,18 @@ export class MatchState {
     return { x: toFloat(unit.pos.x), y: toFloat(unit.pos.y) };
   }
 
-  /** 当前阶段距离下一张牌的逻辑帧数，结算后为零。 */
-  getTicksUntilDraw(): number {
-    return this.result ? 0 : Math.max(0, this.nextDrawTick - this.world.tick);
+  /**
+   * 指定阵营距离下一张牌的逻辑帧数。
+   * 有待发牌时视为 0（读条收起）；未传阵营时默认蓝方，兼容旧调用。
+   */
+  getTicksUntilDraw(faction: Faction = Faction.Blue): number {
+    if (this.result || this.pendingDraw[faction]) return 0;
+    return Math.max(0, this.nextDrawTicks[faction] - this.world.tick);
+  }
+
+  /** 该方是否有一张周期已到、因满手尚未发出的待发牌。 */
+  hasPendingDraw(faction: Faction): boolean {
+    return !this.result && this.pendingDraw[faction];
   }
 
   /** 当前阶段一次补牌周期的逻辑帧数，供 UI 遮罩进度与倒计时对齐。 */
@@ -361,7 +379,7 @@ export class MatchState {
       this.decks[Faction.Blue].reset();
       this.decks[Faction.Red].reset();
       this.dealStartingHands();
-      this.nextDrawTick = this.normalDrawIntervalTicks;
+      this.resetDrawClocks(this.normalDrawIntervalTicks);
     }
   }
 
@@ -397,11 +415,14 @@ export class MatchState {
     }
   }
 
-  /** 切阶段：同步手牌上限，并从当前 tick 重新计下一次补牌。 */
+  /** 切阶段：同步手牌上限，未待发的一方从当前 tick 重开读条。 */
   private enterPhase(phase: 'double_speed' | 'final'): void {
     this.phase = phase;
     this.syncHandLimits();
-    this.nextDrawTick = this.world.tick + this.drawIntervalTicks();
+    const nextTick = this.world.tick + this.drawIntervalTicks();
+    // 待发保留：上限变大时本帧 tryDrawForFaction 会立刻补上，不能在这里清掉。
+    if (!this.pendingDraw[Faction.Blue]) this.nextDrawTicks[Faction.Blue] = nextTick;
+    if (!this.pendingDraw[Faction.Red]) this.nextDrawTicks[Faction.Red] = nextTick;
   }
 
   /** 记录不可逆结算结果并冻结后续逻辑帧。 */
@@ -435,12 +456,49 @@ export class MatchState {
     this.decks[Faction.Red].drawMany(this.initialHandSize);
   }
 
+  /**
+   * 先冲待发，再到点抽牌。
+   * 满手拒抽只冻结该方计时；牌堆抽空仍推进周期，避免空堆把读条卡死。
+   */
+  private tryDrawForFaction(faction: Faction): void {
+    const deck = this.decks[faction];
+    if (this.pendingDraw[faction]) {
+      if (deck.hand.length >= deck.maxHandSize) return;
+      deck.draw();
+      this.pendingDraw[faction] = false;
+      this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+      return;
+    }
+    if (this.world.tick < this.nextDrawTicks[faction]) return;
+    const drawn = deck.draw();
+    if (drawn) {
+      this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+      return;
+    }
+    if (deck.hand.length >= deck.maxHandSize) {
+      this.pendingDraw[faction] = true;
+      return;
+    }
+    this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+  }
+
+  /** 双方读条与待发一起重置，避免清局/切阶段后仍握着上一阶段的冻结状态。 */
+  private resetDrawClocks(nextTick: number): void {
+    this.nextDrawTicks[Faction.Blue] = nextTick;
+    this.nextDrawTicks[Faction.Red] = nextTick;
+    this.pendingDraw[Faction.Blue] = false;
+    this.pendingDraw[Faction.Red] = false;
+  }
+
   private clampDrawCountdown(): void {
     if (this.result) return;
-    const remaining = this.nextDrawTick - this.world.tick;
     const interval = this.drawIntervalTicks();
-    if (remaining > interval) {
-      this.nextDrawTick = this.world.tick + interval;
+    for (const faction of [Faction.Blue, Faction.Red] as const) {
+      if (this.pendingDraw[faction]) continue;
+      const remaining = this.nextDrawTicks[faction] - this.world.tick;
+      if (remaining > interval) {
+        this.nextDrawTicks[faction] = this.world.tick + interval;
+      }
     }
   }
 

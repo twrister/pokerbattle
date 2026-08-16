@@ -21,6 +21,8 @@ const PLAY_ANIMATION_MS = 360;
 /** 手牌增删后，留存牌从旧坐标滑到新坐标的时长。 */
 const LAYOUT_MOVE_MS = 280;
 const MIN_DRAW_INTERVAL_MS = 250;
+/** 倒计时已接近周期末尾的比例；配合剩余时间回升，判定刚走过一次发牌点。 */
+const DRAW_WRAP_NEAR_ZERO_RATIO = 0.2;
 /** 选了牌但拼不出牌型时的提示。 */
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
 /** 选中超过牌型上限（5 张）时的提示。 */
@@ -67,6 +69,11 @@ export interface HandPanelOptions {
   getDrawIntervalMs?: () => number;
   /** 当前阶段手牌上限；未提供时回退到 MAX_HAND_SIZE。 */
   getMaxHandSize?: () => number;
+  /**
+   * 外部权威待发标记。提供后不再用倒计时回绕猜测晃动，
+   * 避免冲掉 pending 重开读条时被误判成又一次发牌失败。
+   */
+  getHasPendingDraw?: () => boolean;
   /**
    * 新牌飞入起点（屏幕客户区坐标）。
    * 返回 null 时仍从牌堆顶飞出；城堡保护领牌时改为卡包屏幕位置。
@@ -177,10 +184,15 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
    */
   let actionStatus: string | null = null;
   let lastHandCountText = '';
-  let lastHandFull = false;
-  let lastPileFull = false;
-  let lastPileEmpty = false;
+  /** undefined 表示尚未写入 DOM，避免复用节点时跳过清理上一局残留 class。 */
+  let lastHandFull: boolean | undefined;
+  let lastPileFull: boolean | undefined;
+  let lastPileEmpty: boolean | undefined;
   let lastPileLabel = '';
+  /** 发牌周期到达仍满手时才晃；刚凑满手牌时只继续走下一张进度。 */
+  let blockedDrawShake = false;
+  let lastRemainingMs: number | undefined;
+  let lastHandWasFull = false;
 
   root.classList.add('is-active');
   // MatchState 已发过初始手牌时不要再抽，否则两端牌面会分叉
@@ -333,6 +345,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       formations = [];
       playing = false;
       options.onPlay?.(playedCards, formation);
+      // 出牌动画结束后再冲待发，避免和飞出动画抢同一帧手牌 DOM。
+      tryFlushPendingDraw();
       render();
     }, PLAY_ANIMATION_MS);
     pendingTimers.add(timer);
@@ -773,7 +787,37 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     applyFormationNameFallback(button, formation.name);
   }
 
-  /** 同步牌堆补牌进度；满手时以持续晃动替代倒计时，避免误导玩家仍会抽牌。 */
+  /** 牌堆节点跨对局复用，离开时必须卸下满手晃动，否则新局面板会当成「本来就未满」而跳过清理。 */
+  function resetDrawPilePresentation(): void {
+    drawPile.classList.remove('is-full', 'is-empty');
+    drawPile.style.removeProperty('--draw-progress');
+    drawPile.setAttribute('aria-label', '牌堆正在准备补牌');
+    handCountLabel.classList.remove('is-full');
+    lastHandCountText = '';
+    lastHandFull = undefined;
+    lastPileFull = undefined;
+    lastPileEmpty = undefined;
+    lastPileLabel = '';
+    blockedDrawShake = false;
+    lastRemainingMs = undefined;
+    lastHandWasFull = false;
+  }
+
+  /**
+   * 本地墙钟路径：满手待发且出现空位时立刻抽一张，并从满格重开读条。
+   * 外部抽牌由 MatchState 同帧冲 pending，这里不能再抽，否则两端牌面会分叉。
+   */
+  function tryFlushPendingDraw(): boolean {
+    if (options.externalDraw || !blockedDrawShake) return false;
+    const maxHandSize = Math.max(1, options.getMaxHandSize?.() ?? MAX_HAND_SIZE);
+    if (deck.hand.length >= maxHandSize) return false;
+    const drawn = deck.draw();
+    blockedDrawShake = false;
+    remainingMs = drawIntervalMs;
+    return Boolean(drawn);
+  }
+
+  /** 同步牌堆补牌进度；待发晃动时收起黑罩，空堆同样无遮罩。 */
   function syncStatus(): void {
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
     // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认夹断倒计时。
@@ -782,22 +826,34 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const handCount = deck.hand.length;
     const isFull = handCount >= maxHandSize;
     const isEmpty = deck.availableCount === 0;
-    // 剩余时间从 1 递减到 0，供牌堆由顶向下收缩黑色遮罩；满手保持满遮罩，空堆则无遮罩。
-    const progress = isFull
-      ? 1
-      : isEmpty
-        ? 0
-        : Math.min(Math.max(ms, 0), intervalMs) / intervalMs;
+    if (options.getHasPendingDraw) {
+      blockedDrawShake = options.getHasPendingDraw();
+    } else if (!isFull) {
+      blockedDrawShake = false;
+    } else if (lastHandWasFull && didDrawCycleWrap(lastRemainingMs, ms, intervalMs)) {
+      // 上一帧已满且倒计时刚回绕：本周期发牌被满手拦截。
+      blockedDrawShake = true;
+    }
+    lastHandWasFull = isFull;
+    lastRemainingMs = ms;
+    // 晃动代表待发卡住，黑罩应收起；空堆同样不盖遮罩。
+    const progress = blockedDrawShake || isEmpty
+      ? 0
+      : Math.min(Math.max(ms, 0), intervalMs) / intervalMs;
     drawPile.style.setProperty('--draw-progress', `${progress * 100}%`);
-    if (lastPileFull !== isFull) {
-      drawPile.classList.toggle('is-full', isFull);
-      lastPileFull = isFull;
+    if (lastPileFull !== blockedDrawShake) {
+      drawPile.classList.toggle('is-full', blockedDrawShake);
+      lastPileFull = blockedDrawShake;
     }
     if (lastPileEmpty !== isEmpty) {
       drawPile.classList.toggle('is-empty', isEmpty);
       lastPileEmpty = isEmpty;
     }
-    const pileLabel = isFull ? '手牌已满，牌堆等待出牌' : isEmpty ? '牌堆已空' : '牌堆正在准备补牌';
+    const pileLabel = blockedDrawShake
+      ? '手牌已满，牌堆等待出牌'
+      : isEmpty
+        ? '牌堆已空'
+        : '牌堆正在准备补牌';
     if (lastPileLabel !== pileLabel) {
       drawPile.setAttribute('aria-label', pileLabel);
       lastPileLabel = pileLabel;
@@ -819,24 +875,38 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   return {
     deck,
     update(deltaMs: number) {
-      if (disposed) {
-        syncStatus();
-        return;
-      }
+      if (disposed) return;
       // MatchState 负责抽牌时只刷新倒计时文案
       if (options.externalDraw) {
         syncStatus();
         return;
       }
-      if (playing || deck.hand.length >= (options.getMaxHandSize?.() ?? MAX_HAND_SIZE)) {
+      if (playing) {
+        syncStatus();
+        return;
+      }
+      if (tryFlushPendingDraw()) {
+        render();
+        return;
+      }
+      // 待发未冲掉：停表并保持晃动，不再倒数以免黑罩重新刷一遍。
+      if (blockedDrawShake) {
         syncStatus();
         return;
       }
       remainingMs -= Math.max(deltaMs, 0);
       if (remainingMs <= 0) {
-        deck.draw();
+        const drawn = deck.draw();
         remainingMs += drawIntervalMs;
-        render();
+        if (drawn) {
+          render();
+          return;
+        }
+        // 满手拒抽才晃；牌堆抽空返回 undefined 时只刷新进度。
+        if (deck.hand.length >= (options.getMaxHandSize?.() ?? MAX_HAND_SIZE)) {
+          blockedDrawShake = true;
+        }
+        syncStatus();
       } else {
         syncStatus();
       }
@@ -848,8 +918,13 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       syncStatus();
     },
     syncFromDeck() {
-      if (disposed || playing) {
+      if (disposed) return;
+      if (playing) {
         syncStatus();
+        return;
+      }
+      if (tryFlushPendingDraw()) {
+        render();
         return;
       }
       // 仅倒计时/牌数变化时不要整页重建，否则搭配按钮会每 tick 闪一次。
@@ -900,6 +975,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       formationsElement.replaceChildren();
       formationsElement.classList.remove('is-visible');
       root.classList.remove('is-active');
+      resetDrawPilePresentation();
     },
   };
 }
@@ -952,6 +1028,12 @@ function formatRowUnits(formation: CardFormation, rowIndex: number): string {
 function toIntervalMs(seconds: number): number {
   const milliseconds = Number.isFinite(seconds) ? seconds * 1000 : 3000;
   return Math.max(milliseconds, MIN_DRAW_INTERVAL_MS);
+}
+
+/** 剩余时间从接近 0 回升，视为刚走过一次发牌点（切阶段中途重设倒计时不会命中）。 */
+function didDrawCycleWrap(prevMs: number | undefined, nextMs: number, intervalMs: number): boolean {
+  if (prevMs === undefined) return false;
+  return prevMs <= intervalMs * DRAW_WRAP_NEAR_ZERO_RATIO && nextMs > prevMs;
 }
 
 function required<T extends Element>(selector: string): T {

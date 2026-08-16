@@ -17,6 +17,7 @@ import {
   TICK_RATE,
   claimCastlePackCommand,
   fromFloat,
+  playFormationCommand,
   toFloat,
 } from '../src/index.js';
 
@@ -81,6 +82,37 @@ describe('MatchState 对局规则', () => {
     stepTo(match, FINAL_START_TICKS);
     expect(match.getDrawIntervalTicks()).toBe(8);
     expect(match.getTicksUntilDraw()).toBe(8);
+  });
+
+  it('满手待发只冻结该方，出牌同帧补发并只重启该方读条', () => {
+    const match = createMatch();
+    while (match.decks[Faction.Blue].hand.length < match.getMaxHandSize()) {
+      if (!match.decks[Faction.Blue].draw()) break;
+    }
+    const blueFull = match.decks[Faction.Blue].hand.length;
+    const redBefore = match.decks[Faction.Red].hand.length;
+    expect(blueFull).toBe(HAND_LIMIT_NORMAL);
+
+    stepTo(match, NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.hasPendingDraw(Faction.Blue)).toBe(true);
+    expect(match.hasPendingDraw(Faction.Red)).toBe(false);
+    expect(match.decks[Faction.Blue].hand).toHaveLength(blueFull);
+    expect(match.decks[Faction.Red].hand).toHaveLength(redBefore + 1);
+    expect(match.getTicksUntilDraw(Faction.Blue)).toBe(0);
+    expect(match.getTicksUntilDraw(Faction.Red)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
+
+    const numberCard = match.decks[Faction.Blue].hand.find(
+      (card) => card.rank !== 'JOKER' && card.rank !== 'A' && card.rank !== 'J' && card.rank !== 'Q' && card.rank !== 'K',
+    );
+    expect(numberCard).toBeDefined();
+    match.step([
+      playFormationCommand(Faction.Blue, 'single_grunt', [numberCard!.id], fromFloat(9), fromFloat(4)),
+    ]);
+
+    expect(match.hasPendingDraw(Faction.Blue)).toBe(false);
+    expect(match.decks[Faction.Blue].hand).toHaveLength(blueFull);
+    expect(match.getTicksUntilDraw(Faction.Blue)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.getTicksUntilDraw(Faction.Red)).toBe(NORMAL_DRAW_INTERVAL_TICKS - 1);
   });
 
   it('一方基地被摧毁时立即结束', () => {

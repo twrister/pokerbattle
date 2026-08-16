@@ -814,9 +814,10 @@ function enterBattleSession(mode: BattleMode): () => void {
         deck: loop.match!.decks[Faction.Blue],
         externalDraw: true,
         externalCardConsume: true,
-        getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw() * 1000) / TICK_RATE,
+        getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw(Faction.Blue) * 1000) / TICK_RATE,
         getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
         getMaxHandSize: () => loop.match!.getMaxHandSize(),
+        getHasPendingDraw: () => loop.match!.hasPendingDraw(Faction.Blue),
         getDealOrigin: () => {
           if (!dealFromCastle) return null;
           return battleView.getCastlePackClientPoint(
@@ -1340,9 +1341,10 @@ function runVersusSession(
     deck: netLoop.match.decks[faction],
     externalDraw: true,
     externalCardConsume: true,
-    getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw() * 1000) / TICK_RATE,
+    getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw(faction) * 1000) / TICK_RATE,
     getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicks() * 1000) / TICK_RATE,
     getMaxHandSize: () => netLoop.match.getMaxHandSize(),
+    getHasPendingDraw: () => netLoop.match.hasPendingDraw(faction),
     getDealOrigin: () => {
       if (!dealFromCastle) return null;
       return battleView.getCastlePackClientPoint(
