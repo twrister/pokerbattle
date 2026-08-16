@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Faction, type MatchState, type PlayingCard } from '@pb/sim';
+import { type MatchState, type PlayingCard } from '@pb/sim';
 import { createSpectatorHands } from '../src/ui/spectatorHands.js';
 
 function mountHandsDom(): void {
@@ -15,16 +15,17 @@ function mountHandsDom(): void {
 }
 
 function fakeCard(id: string): PlayingCard {
-  return { id, rank: 1, suit: 'spades', label: id };
+  return { id, rank: 'A', suit: 'spades', label: id };
 }
 
 function fakeMatch(blueCount: number, redCount: number): MatchState {
   return {
-    decks: {
-      [Faction.Blue]: { hand: Array.from({ length: blueCount }, (_, i) => fakeCard(`b${i}`)) },
-      [Faction.Red]: { hand: Array.from({ length: redCount }, (_, i) => fakeCard(`r${i}`)) },
-    },
-  } as MatchState;
+    mode: '1v1',
+    decks: [
+      { hand: Array.from({ length: blueCount }, (_, i) => fakeCard(`b${i}`)) },
+      { hand: Array.from({ length: redCount }, (_, i) => fakeCard(`r${i}`)) },
+    ],
+  } as unknown as MatchState;
 }
 
 describe('观战手牌', () => {

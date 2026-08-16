@@ -27,6 +27,8 @@ function mountDom(): void {
   document.body.innerHTML = `
     <main id="scene-config" class="is-hidden" aria-hidden="true">
       <button id="btn-scene-config-back" type="button">返回图鉴</button>
+      <button id="btn-scene-mode-1v1" type="button">1v1</button>
+      <button id="btn-scene-mode-2v2" type="button">2v2</button>
       <div id="scene-config-preview"></div>
       <form id="scene-config-form">
         <select id="scene-camera-mode">
@@ -41,6 +43,8 @@ function mountDom(): void {
         <input id="scene-width" type="number" />
         <input id="scene-height" type="number" />
         <input id="scene-river-width" type="number" />
+        <div id="scene-base-list"></div>
+        <input id="scene-bridge3-enabled" type="checkbox" />
         <div id="scene-bridge-list"></div>
         <input id="scene-color-background" type="color" />
         <input id="scene-color-ground" type="color" />
@@ -137,6 +141,48 @@ describe('场景配置页', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(dumpArenaConfigDraft().width).toBe(20);
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body));
+    expect(body.mode).toBe('1v1');
+    expect(body.draft.width).toBe(20);
+    page.dispose();
+  });
+
+  it('切换 2v2 预设后表单读宽场地草稿', () => {
+    const page = createSceneConfigPage({ onBack: vi.fn() });
+    page.show();
+    document.querySelector<HTMLButtonElement>('#btn-scene-mode-2v2')!.click();
+    expect(document.querySelector<HTMLInputElement>('#scene-width')?.value).toBe('30');
+    expect(document.querySelector('#btn-scene-mode-2v2')?.classList.contains('is-active')).toBe(true);
+    expect(document.querySelectorAll('[data-base-row]')).toHaveLength(2);
+    expect(document.querySelector<HTMLInputElement>('#scene-bridge3-enabled')?.checked).toBe(true);
+    page.dispose();
+  });
+
+  it('改单边基地坐标和桥三开关会写入草稿', () => {
+    const page = createSceneConfigPage({ onBack: vi.fn() });
+    page.show();
+    expect(document.querySelectorAll('[data-base-row]')).toHaveLength(1);
+    expect(document.querySelector<HTMLInputElement>('#scene-bridge3-enabled')?.checked).toBe(false);
+    expect(document.querySelector<HTMLInputElement>('[data-bridge-row="2"] [data-bridge-min]')?.disabled).toBe(true);
+
+    const baseX = document.querySelector<HTMLInputElement>('[data-base-x]')!;
+    baseX.value = '6';
+    baseX.dispatchEvent(new Event('input', { bubbles: true }));
+    const baseY = document.querySelector<HTMLInputElement>('[data-base-y]')!;
+    baseY.value = '4';
+    baseY.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const bridge3 = document.querySelector<HTMLInputElement>('#scene-bridge3-enabled')!;
+    bridge3.checked = true;
+    bridge3.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const last = latestPreview().applyDraft.mock.calls.at(-1)?.[0] as {
+      bases: Array<{ x: number; y: number }>;
+      bridge3Enabled: boolean;
+    };
+    expect(last.bases).toEqual([{ x: 6, y: 4 }]);
+    expect(last.bridge3Enabled).toBe(true);
+    expect(document.querySelector<HTMLInputElement>('[data-bridge-row="2"] [data-bridge-min]')?.disabled).toBe(false);
     page.dispose();
   });
 

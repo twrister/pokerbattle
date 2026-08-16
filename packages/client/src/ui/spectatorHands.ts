@@ -1,4 +1,4 @@
-import { Faction, type MatchState, type PlayingCard } from '@pb/sim';
+import { Faction, teamSlots, type MatchState, type PlayingCard } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
 
 /** 观战手牌按 9 张满幅定宽；超过则由 CSS 按 --spec-count 自适应重叠。 */
@@ -41,10 +41,10 @@ export function createSpectatorHands(): SpectatorHandsHandle {
       redLabel.textContent = redName || '红方';
     },
     update(match) {
-      syncRow(blueCards, match.decks[Faction.Blue].hand, (key) => {
+      syncRow(blueCards, teamHand(match, Faction.Blue), (key) => {
         lastBlueKey = key;
       }, lastBlueKey);
-      syncRow(redCards, match.decks[Faction.Red].hand, (key) => {
+      syncRow(redCards, teamHand(match, Faction.Red), (key) => {
         lastRedKey = key;
       }, lastRedKey);
     },
@@ -52,6 +52,15 @@ export function createSpectatorHands(): SpectatorHandsHandle {
       this.hide();
     },
   };
+}
+
+/** 同队各席手牌拼成一排，2v2 观战也能看到全队牌。 */
+function teamHand(match: MatchState, faction: Faction): PlayingCard[] {
+  const cards: PlayingCard[] = [];
+  for (const slot of teamSlots(faction, match.mode)) {
+    cards.push(...match.decks[slot]!.hand);
+  }
+  return cards;
 }
 
 /** 手牌 id 序列变化时才重渲，避免每帧刷 DOM。 */

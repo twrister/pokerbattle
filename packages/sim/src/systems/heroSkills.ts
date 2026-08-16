@@ -198,7 +198,7 @@ function resolveMageSummon(world: World, mage: Unit): void {
   const distance = mage.config.radius + summonedConfig.radius + SUMMON_SPAWN_GAP;
   const x = mage.pos.x + mul(mage.facing.x, distance);
   const y = mage.pos.y + mul(mage.facing.y, distance);
-  world.spawnUnit(mage.faction, summon.unitTypeId, x, y);
+  world.spawnUnit(mage.faction, summon.unitTypeId, x, y, mage.ownerSlot);
 }
 
 /** 按生命比例、再按实体 id 选出单体治疗目标，保证所有端作出相同决定；排除女王自身与建筑。 */

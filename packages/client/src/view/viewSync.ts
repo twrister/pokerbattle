@@ -9,7 +9,7 @@ import {
   type UnitSnapshot,
 } from '@pb/sim';
 import { projectWorldToClient, toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
-import { UnitView, viewKey, visualFaction } from './unitView.js';
+import { UnitView, viewKey, visualFaction, visualSide } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
@@ -168,6 +168,7 @@ export class BattleView {
   private pickUnits: { id: number; x: number; y: number; radius: number; footprint: number }[] = [];
   /** 本机阵营；画面上己方固定按蓝方着色，对阵方按红方。 */
   private localFaction: Faction = Faction.Blue;
+  private localSlot = 0;
   /** 仅本机可见的保护卡包；对手 pending 包不创建。 */
   private castlePack: CastlePackView | null = null;
   private readonly packRaycaster = new THREE.Raycaster();
@@ -194,6 +195,13 @@ export class BattleView {
   /** 进局时设置本机阵营，决定建筑贴图与血条走蓝皮还是红皮。 */
   setLocalFaction(faction: Faction): void {
     this.localFaction = faction;
+    // 1v1 下 slot === faction；2v2 再由 setLocalSlot 覆盖。
+    this.localSlot = faction;
+  }
+
+  /** 本机席位，供 2v2 队友血条与卡包定位。 */
+  setLocalSlot(slot: number): void {
+    this.localSlot = slot;
   }
 
   /**
@@ -222,8 +230,8 @@ export class BattleView {
    * 只渲染 localFaction 的 pending 包，对手的包保持不可见。
    */
   syncCastlePack(match: MatchState | null, camera: THREE.Camera): void {
-    const pending = match?.getCastlePackState(this.localFaction) === 'pending';
-    const castle = pending ? match!.getCastlePosition(this.localFaction) : null;
+    const pending = match?.getSlotCastlePackState(this.localSlot) === 'pending';
+    const castle = pending ? match!.getSlotCastlePosition(this.localSlot) : null;
     if (!pending || !castle) {
       this.hideCastlePack();
       return;
@@ -575,6 +583,7 @@ export class BattleView {
     }
     // 出场对齐当前血量，避免首帧被当成「掉血」误闪红
     view.lastHpRatio = unit.hpRatio;
+    view.setHpSide(visualSide(unit.faction, unit.ownerSlot, this.localFaction, this.localSlot));
     return view;
   }
 

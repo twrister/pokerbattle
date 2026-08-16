@@ -14,6 +14,8 @@ function mountLobbyDom(): void {
       <div id="online-create-dialog" class="is-hidden">
         <button data-online-create-close></button>
         <input id="online-create-name-input" />
+        <input type="radio" name="online-create-mode" value="1v1" checked />
+        <input type="radio" name="online-create-mode" value="2v2" />
         <div id="online-create-error"></div>
         <button id="btn-online-create-confirm"></button>
       </div>
@@ -57,6 +59,7 @@ describe('联机大厅页', () => {
     const title = document.querySelector('.online-room-card-title');
     expect(title?.querySelector('.online-room-card-id')?.textContent).toBe('042');
     expect(title?.querySelector('.online-room-card-name')?.textContent).toBe('可加入房');
+    expect(document.querySelector('.online-room-card-count')?.textContent).toBe('1v1 · 1/2');
     expect(document.querySelector('.online-room-card-state')?.textContent).toBe('等待中');
     document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
     expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'room', roomId: '042' });
@@ -107,7 +110,10 @@ describe('联机大厅页', () => {
     expect(nameInput.value).toBe('测试的房间');
     nameInput.value = '自定义房';
     document.querySelector<HTMLButtonElement>('#btn-online-create-confirm')!.click();
-    expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'create', roomName: '自定义房' });
+    expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'create', roomName: '自定义房', matchMode: '1v1' });
+    document.querySelector<HTMLInputElement>('input[name="online-create-mode"][value="2v2"]')!.checked = true;
+    document.querySelector<HTMLButtonElement>('#btn-online-create-confirm')!.click();
+    expect(onJoinRoom).toHaveBeenLastCalledWith({ mode: 'create', roomName: '自定义房', matchMode: '2v2' });
 
     document.querySelector<HTMLButtonElement>('#btn-online-lobby-join')!.click();
     const idInput = document.querySelector<HTMLInputElement>('#online-join-id-input')!;

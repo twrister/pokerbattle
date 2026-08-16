@@ -9,7 +9,7 @@ import {
   type RoomStateMessage,
   type ServerMessage,
 } from '@pb/net';
-import type { Faction, MatchResult } from '@pb/sim';
+import type { Faction, MatchMode, MatchResult } from '@pb/sim';
 import { NetSimLoop } from './netLoop.js';
 
 /** 创建或加入已有房间；不再提供快速匹配。 */
@@ -17,6 +17,7 @@ export interface RoomJoinRequest {
   mode: 'create' | 'room';
   roomId?: string;
   roomName?: string;
+  matchMode?: MatchMode;
 }
 
 /** 已入座的长连接房间会话；对局开始后仍复用同一条 WS。 */
@@ -27,10 +28,15 @@ export interface RoomSession {
   faction: Faction;
   isHost: boolean;
   opponentName: string;
+  matchMode: MatchMode;
   /** 房主请求开局；服务端校验未通过时走 onStatus。 */
   sendStartMatch(): void;
   /** 非房主切换准备状态。 */
   sendSetReady(ready: boolean): void;
+  /** 房主切换 1v1 / 2v2。 */
+  sendSetRoomOptions(matchMode: MatchMode): void;
+  /** 点空席换座。 */
+  sendPickSeat(seat: number): void;
   close: () => void;
 }
 
@@ -41,6 +47,7 @@ export interface ConnectRoomOptions {
   mode?: 'create' | 'room';
   roomId?: string;
   roomName?: string;
+  matchMode?: MatchMode;
   onStatus?: (text: string) => void;
   onRoomState?: (state: RoomStateMessage) => void;
   onMatchStart?: (loop: NetSimLoop, faction: Faction, opponentName: string) => void;
@@ -120,6 +127,7 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
     let roomId = '';
     let roomName = '';
     let opponentName = '';
+    let matchMode: MatchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
     let reconnectToken = '';
     let reconnectDeadline = 0;
     let reconnectAttempt = 0;
@@ -178,6 +186,17 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
         activeWs.send(encodeMessage({ type: 'setReady', ready }));
       },
+      get matchMode() {
+        return matchMode;
+      },
+      sendSetRoomOptions(nextMode) {
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+        activeWs.send(encodeMessage({ type: 'setRoomOptions', matchMode: nextMode }));
+      },
+      sendPickSeat(nextSeat) {
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+        activeWs.send(encodeMessage({ type: 'pickSeat', seat: nextSeat }));
+      },
       close: shutdownSocket,
     };
 
@@ -198,6 +217,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
       loop = new NetSimLoop({
         seed,
         faction: side,
+        seat,
+        matchMode,
         inputDelay: delay || DEFAULT_INPUT_DELAY,
         send: (text) => {
           if (activeWs && activeWs.readyState === WebSocket.OPEN) activeWs.send(text);
@@ -222,6 +243,9 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         hostSeat = message.hostSeat;
         roomId = message.roomId || roomId;
         roomName = message.roomName || roomName;
+        if (message.matchMode === '2v2' || message.matchMode === '1v1') {
+          matchMode = message.matchMode;
+        }
         const peer = message.members.find((member) => member.seat !== seat);
         opponentName = peer?.name ?? '';
         options.onRoomState?.(message);
@@ -262,6 +286,7 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
               name: playerName,
               ...(playerId ? { playerId } : {}),
               ...(mode === 'create' && joinRoomName ? { roomName: joinRoomName } : {}),
+              ...(mode === 'create' ? { matchMode: options.matchMode === '2v2' ? '2v2' : '1v1' } : {}),
             }),
           );
           return;
@@ -331,6 +356,9 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
           reconnectToken = message.reconnectToken || reconnectToken;
           seat = message.seat;
           faction = message.faction;
+          if (message.matchMode === '2v2' || message.matchMode === '1v1') {
+            matchMode = message.matchMode;
+          }
           if (typeof message.opponentName === 'string') {
             opponentName = message.opponentName;
           }
@@ -576,6 +604,8 @@ export function connectSpectateSession(options: ConnectSpectateOptions): Spectat
         loop = new NetSimLoop({
           seed: message.seed,
           faction: 0 as Faction,
+          seat: 0,
+          matchMode: message.matchMode === '2v2' ? '2v2' : '1v1',
           inputDelay: DEFAULT_INPUT_DELAY,
           spectator: true,
           maxStepsPerAdvance: 600,

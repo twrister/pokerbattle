@@ -19,6 +19,8 @@ export type CommandKind = (typeof CommandKind)[keyof typeof CommandKind];
 export interface SpawnCommand {
   kind: typeof CommandKind.Spawn;
   faction: Faction;
+  /** 出兵席位；缺省按 faction，兼容 1v1 旧包。 */
+  slot?: number;
   typeId: UnitTypeId;
   x: Fx;
   y: Fx;
@@ -28,6 +30,8 @@ export interface SpawnCommand {
 export interface PlaceBuildingCommand {
   kind: typeof CommandKind.PlaceBuilding;
   faction: Faction;
+  /** 出兵席位；缺省按 faction，兼容 1v1 旧包。 */
+  slot?: number;
   typeId: UnitTypeId;
   x: Fx;
   y: Fx;
@@ -40,6 +44,8 @@ export interface PlaceBuildingCommand {
 export interface PlayFormationCommand {
   kind: typeof CommandKind.PlayFormation;
   faction: Faction;
+  /** 出牌席位；缺省按 faction，兼容 1v1 旧包。 */
+  slot?: number;
   formationId: string;
   cardIds: string[];
   x: Fx;
@@ -50,12 +56,20 @@ export interface PlayFormationCommand {
 export interface ClaimCastlePackCommand {
   kind: typeof CommandKind.ClaimCastlePack;
   faction: Faction;
+  /** 领包席位；缺省按 faction，兼容 1v1 旧包。 */
+  slot?: number;
 }
 
 export type Command = SpawnCommand | PlaceBuildingCommand | PlayFormationCommand | ClaimCastlePackCommand;
 
-export function spawnCommand(faction: Faction, typeId: UnitTypeId, x: Fx, y: Fx): SpawnCommand {
-  return { kind: CommandKind.Spawn, faction, typeId, x, y };
+export function spawnCommand(
+  faction: Faction,
+  typeId: UnitTypeId,
+  x: Fx,
+  y: Fx,
+  slot?: number,
+): SpawnCommand {
+  return { kind: CommandKind.Spawn, faction, slot, typeId, x, y };
 }
 
 export function placeBuildingCommand(
@@ -63,8 +77,9 @@ export function placeBuildingCommand(
   typeId: UnitTypeId,
   x: Fx,
   y: Fx,
+  slot?: number,
 ): PlaceBuildingCommand {
-  return { kind: CommandKind.PlaceBuilding, faction, typeId, x, y };
+  return { kind: CommandKind.PlaceBuilding, faction, slot, typeId, x, y };
 }
 
 export function playFormationCommand(
@@ -73,10 +88,12 @@ export function playFormationCommand(
   cardIds: readonly string[],
   x: Fx,
   y: Fx,
+  slot?: number,
 ): PlayFormationCommand {
   return {
     kind: CommandKind.PlayFormation,
     faction,
+    slot,
     formationId,
     cardIds: [...cardIds],
     x,
@@ -84,6 +101,6 @@ export function playFormationCommand(
   };
 }
 
-export function claimCastlePackCommand(faction: Faction): ClaimCastlePackCommand {
-  return { kind: CommandKind.ClaimCastlePack, faction };
+export function claimCastlePackCommand(faction: Faction, slot?: number): ClaimCastlePackCommand {
+  return { kind: CommandKind.ClaimCastlePack, faction, slot };
 }

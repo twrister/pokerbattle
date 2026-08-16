@@ -113,6 +113,8 @@ export interface HandPanelHandle {
   readonly deck: PokerDeck;
   update: (deltaMs: number) => void;
   setDrawInterval: (seconds: number) => void;
+  /** 基地陷落后灰罩并禁止出牌。 */
+  setPlayLocked: (locked: boolean) => void;
   /** MatchState 步进后同步手牌 DOM（外部抽牌/扣牌时用）。 */
   syncFromDeck: () => void;
   /** 取景参数变更后重渲当前阵型按钮缩略图。 */
@@ -151,6 +153,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /** 本轮滑选按下时的牌下标；与当前划到的牌组成闭区间，往回滑会收缩临时选中区间。 */
   let dragAnchorIndex: number | null = null;
   let playing = false;
+  /** 基地陷落后锁定出牌。 */
+  let playLocked = false;
   let disposed = false;
   /** 用于作废上一轮尚未结束的布局位移动画回调。 */
   let layoutGeneration = 0;
@@ -312,7 +316,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
-    if (playing || selected.size === 0 || formations.length === 0) return false;
+    if (playLocked || playing || selected.size === 0 || formations.length === 0) return false;
     const cards = deck.hand.filter((card) => selected.has(card.id));
     if (cards.length === 0) return false;
     if (options.onRequestSpawn?.({ formation, cards, point }) === false) {
@@ -910,6 +914,15 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       } else {
         syncStatus();
       }
+    },
+    setPlayLocked(locked: boolean) {
+      playLocked = locked;
+      root.classList.toggle('is-play-locked', locked);
+      if (locked) {
+        selected.clear();
+        setActionStatus('基地陷落 · 无法出牌');
+      }
+      syncStatus();
     },
     setDrawInterval(seconds: number) {
       const nextInterval = toIntervalMs(seconds);

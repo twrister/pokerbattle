@@ -19,6 +19,8 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
     type === 'lobby' ||
     type === 'startMatch' ||
     type === 'setReady' ||
+    type === 'setRoomOptions' ||
+    type === 'pickSeat' ||
     type === 'input' ||
     type === 'hash' ||
     type === 'ping'

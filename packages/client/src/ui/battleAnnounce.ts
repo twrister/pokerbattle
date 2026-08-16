@@ -16,6 +16,8 @@ const PHASE_HOLD_MS = 2800;
 /** 倒计时数字约 1 秒一换，略长于间隔以免提前淡出。 */
 const COUNTDOWN_HOLD_MS = 1400;
 const OPENING_ANNOUNCE = '摧毁对方城堡';
+export const TEAMMATE_DOWN_ANNOUNCE = '队友阵亡 · 发牌加速';
+export const BASE_DOWN_ANNOUNCE = '基地陷落 · 无法出牌';
 
 /** 局内居中文字提示：阶段切换与最后 10 秒倒计时共用。 */
 export function createBattleAnnounce(): BattleAnnounceHandle {

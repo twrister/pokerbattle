@@ -1,33 +1,37 @@
 {
-  "width": 18,
+  "width": 24,
   "height": 15,
   "riverWidth": 2,
   "bridges": [
     {
-      "minX": 3,
-      "maxX": 5
+      "minX": 4,
+      "maxX": 8
     },
     {
-      "minX": 13,
-      "maxX": 15
+      "minX": 16,
+      "maxX": 20
     },
     {
-      "minX": 8,
-      "maxX": 10
+      "minX": 20,
+      "maxX": 23
     }
   ],
   "bridge3Enabled": false,
   "bases": [
     {
-      "x": 9,
+      "x": 6,
+      "y": 2
+    },
+    {
+      "x": 18,
       "y": 2
     }
   ],
   "camera": {
     "mode": "perspective",
-    "fov": 30,
-    "distance": 71,
-    "angleDeg": 45,
+    "fov": 28,
+    "distance": 96,
+    "angleDeg": 50,
     "bottomExtra": 8,
     "offsetY": 5
   },

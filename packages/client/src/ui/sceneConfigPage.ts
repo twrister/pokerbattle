@@ -4,7 +4,9 @@ import {
   dumpArenaConfigDraft,
   dumpDefaultArenaConfigDraft,
   resetArenaConfigToDefault,
+  resolveSideBasePositions,
   validateArenaConfigDraft,
+  type MatchMode,
   type ArenaCameraMode,
   type ArenaColorsDraft,
   type ArenaConfigDraft,
@@ -46,8 +48,11 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
   const previewRoot = required<HTMLElement>('#scene-config-preview', root);
   const formRoot = required<HTMLElement>('#scene-config-form', root);
 
-  let drafts = dumpArenaConfigDraft();
+  let editMode: MatchMode = '1v1';
+  let drafts = dumpArenaConfigDraft(editMode);
   let saveSeq = 0;
+  const mode1v1 = required<HTMLButtonElement>('#btn-scene-mode-1v1', root);
+  const mode2v2 = required<HTMLButtonElement>('#btn-scene-mode-2v2', root);
   let overlayMode = false;
   let onApplied = options.onApplied ?? (() => {});
   let preview: ReturnType<typeof createScenePreview> | null = null;
@@ -62,6 +67,8 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
   backButton.addEventListener('click', back);
   saveButton.addEventListener('click', () => void save());
   resetButton.addEventListener('click', reset);
+  mode1v1.addEventListener('click', () => switchEditMode('1v1'));
+  mode2v2.addEventListener('click', () => switchEditMode('2v2'));
   formRoot.addEventListener('input', onFormChange);
   formRoot.addEventListener('change', onFormChange);
 
@@ -97,8 +104,9 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
 
   function showInternal(asOverlay: boolean): void {
     overlayMode = asOverlay;
-    drafts = dumpArenaConfigDraft();
+    drafts = dumpArenaConfigDraft(editMode);
     writeFormFromDraft();
+    syncModeButtons();
     root.classList.toggle('is-overlay', asOverlay);
     root.classList.remove('is-hidden');
     root.setAttribute('aria-hidden', 'false');
@@ -124,7 +132,7 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
   /** 局内改表单时立刻 apply 并重建战场镜头/颜色，不写盘。 */
   function applyLiveToBattle(): void {
     try {
-      applyArenaConfigDraft(drafts);
+      applyArenaConfigDraft(drafts, editMode);
       syncArenaCoords();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
@@ -143,19 +151,20 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
       return;
     }
     try {
-      applyArenaConfigDraft(drafts);
+      applyArenaConfigDraft(drafts, editMode);
       syncArenaCoords();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
       return;
     }
     const seq = ++saveSeq;
-    const result = await persistArenaConfig(drafts);
+    const result = await persistArenaConfig(drafts, editMode);
     if (seq !== saveSeq) return;
     if (result.ok) {
-      captureArenaConfigAsDefault();
-      drafts = dumpArenaConfigDraft();
-      setStatus(overlayMode ? '已保存并写回 arena.json，当前对局已更新' : '已保存并写回 arena.json', false);
+      captureArenaConfigAsDefault(editMode);
+      drafts = dumpArenaConfigDraft(editMode);
+      const fileName = editMode === '2v2' ? 'arena2v2.json' : 'arena.json';
+      setStatus(overlayMode ? `已保存并写回 ${fileName}，当前对局已更新` : `已保存并写回 ${fileName}`, false);
     } else {
       setStatus(`已应用到运行时（未能写回文件：${result.error}）`, true);
     }
@@ -164,9 +173,9 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
   }
 
   function reset(): void {
-    resetArenaConfigToDefault();
+    resetArenaConfigToDefault(editMode);
     syncArenaCoords();
-    drafts = dumpDefaultArenaConfigDraft();
+    drafts = dumpDefaultArenaConfigDraft(editMode);
     writeFormFromDraft();
     if (overlayMode) {
       onApplied();
@@ -175,6 +184,25 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
     }
     ensurePreview().applyDraft(drafts);
     setStatus('已恢复为最近一次配置文件快照', false);
+  }
+
+  function switchEditMode(mode: MatchMode): void {
+    if (mode === editMode) return;
+    editMode = mode;
+    drafts = dumpArenaConfigDraft(mode);
+    writeFormFromDraft();
+    syncModeButtons();
+    if (overlayMode) {
+      applyLiveToBattle();
+      return;
+    }
+    ensurePreview().applyDraft(drafts);
+    setStatus(mode === '2v2' ? '正在编辑 2v2 场景' : '正在编辑 1v1 场景', false);
+  }
+
+  function syncModeButtons(): void {
+    mode1v1.classList.toggle('is-active', editMode === '1v1');
+    mode2v2.classList.toggle('is-active', editMode === '2v2');
   }
 
   function setStatus(text: string, isError: boolean): void {
@@ -192,7 +220,10 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
     drafts.camera.offsetY = readNumber('#scene-offset-y', drafts.camera.offsetY);
     drafts.camera.angleDeg = readNumber('#scene-angle', drafts.camera.angleDeg);
     drafts.camera.bottomExtra = readNumber('#scene-bottom-extra', drafts.camera.bottomExtra);
+    drafts.bases = readBases();
+    drafts.bridge3Enabled = required<HTMLInputElement>('#scene-bridge3-enabled', formRoot).checked;
     drafts.bridges = readBridges();
+    toggleBridge3Row();
     for (const field of COLOR_FIELDS) {
       const input = required<HTMLInputElement>(`#scene-color-${field.key}`, formRoot);
       drafts.colors[field.key] = input.value;
@@ -211,7 +242,10 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
     writeNumber('#scene-offset-y', drafts.camera.offsetY);
     writeNumber('#scene-angle', drafts.camera.angleDeg);
     writeNumber('#scene-bottom-extra', drafts.camera.bottomExtra);
+    writeBases(drafts);
+    required<HTMLInputElement>('#scene-bridge3-enabled', formRoot).checked = drafts.bridge3Enabled;
     writeBridges(drafts);
+    toggleBridge3Row();
     for (const field of COLOR_FIELDS) {
       const input = required<HTMLInputElement>(`#scene-color-${field.key}`, formRoot);
       input.value = drafts.colors[field.key];
@@ -260,6 +294,51 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
     });
   }
 
+  /** 桥三关闭时仍保留坐标，只锁第三行避免误改。 */
+  function toggleBridge3Row(): void {
+    const enabled = required<HTMLInputElement>('#scene-bridge3-enabled', formRoot).checked;
+    const row = formRoot.querySelector<HTMLElement>('[data-bridge-row="2"]');
+    row?.querySelectorAll('input').forEach((input) => {
+      input.disabled = !enabled;
+    });
+  }
+
+  function expectedBaseCount(): number {
+    return editMode === '2v2' ? 2 : 1;
+  }
+
+  function readBases(): ArenaConfigDraft['bases'] {
+    const rows = Array.from(formRoot.querySelectorAll<HTMLElement>('[data-base-row]'));
+    return rows.map((row) => {
+      const x = Number.parseFloat(row.querySelector<HTMLInputElement>('[data-base-x]')?.value ?? '0');
+      const y = Number.parseFloat(row.querySelector<HTMLInputElement>('[data-base-y]')?.value ?? '0');
+      return { x, y };
+    });
+  }
+
+  /** 按当前编辑模式生成单边基地行；2v2 两座，对岸开局时镜像。 */
+  function writeBases(draft: ArenaConfigDraft): void {
+    const list = required<HTMLElement>('#scene-base-list', formRoot);
+    list.replaceChildren();
+    const count = expectedBaseCount();
+    const bases = resolveSideBasePositions(draft, count);
+    bases.forEach((base, index) => {
+      const row = document.createElement('div');
+      row.className = 'scene-config-row';
+      row.dataset.baseRow = String(index);
+      const title = count === 1 ? '基地' : `基地 ${index + 1}`;
+      row.innerHTML = `
+        <label>${title} X
+          <input data-base-x type="number" min="0" step="0.5" value="${base.x}" />
+        </label>
+        <label>Y（单边）
+          <input data-base-y type="number" min="0" step="0.5" value="${base.y}" />
+        </label>
+      `;
+      list.append(row);
+    });
+  }
+
   function readInt(selector: string, fallback: number): number {
     const value = Number.parseInt(required<HTMLInputElement>(selector, formRoot).value, 10);
     return Number.isFinite(value) ? value : fallback;
@@ -291,12 +370,13 @@ export function createSceneConfigPage(options: SceneConfigPageOptions): SceneCon
 /** 开发服务器负责源码写盘，静态构建中该请求会失败并由调用方明确提示。 */
 async function persistArenaConfig(
   draft: ArenaConfigDraft,
+  mode: MatchMode = '1v1',
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const response = await fetch('/__pb/arena-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft),
+      body: JSON.stringify({ mode, draft }),
     });
     if (!response.ok) {
       if (response.status === 404) return { ok: false, error: '需在 pnpm dev 下保存' };

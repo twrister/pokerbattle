@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CASTLE_PROTECT_HP,
   DOUBLE_SPEED_START_TICKS,
   Faction,
   FINAL_START_TICKS,
   MatchState,
+  applyArenaPreset,
   fromFloat,
   opposingFaction,
 } from '@pb/sim';
@@ -34,6 +35,30 @@ describe('对局 HUD 与结算弹窗', () => {
         <span id="battle-timer-label"></span><strong id="battle-timer"></strong>
         <span id="battle-spectators" class="is-hidden">观战 0</span>
         <span id="battle-catchup" class="is-hidden">正在追帧…</span>
+        <div id="battle-castle-ally" class="is-hidden">
+          <span id="battle-ally-name"></span>
+          <strong id="battle-ally-hp"></strong>
+          <div id="battle-ally-track">
+            <div id="battle-ally-protect-mark"></div>
+            <div id="battle-ally-bar"></div>
+          </div>
+        </div>
+        <div id="battle-castle-opp-b" class="is-hidden">
+          <span id="battle-opp-b-name"></span>
+          <strong id="battle-opp-b-hp"></strong>
+          <div id="battle-opp-b-track">
+            <div id="battle-opp-b-protect-mark"></div>
+            <div id="battle-opp-b-bar"></div>
+          </div>
+        </div>
+        <div id="battle-team-self-total" class="is-hidden">
+          <strong id="battle-team-self-hp"></strong>
+          <div id="battle-team-self-bar"></div>
+        </div>
+        <div id="battle-team-opp-total" class="is-hidden">
+          <strong id="battle-team-opp-hp"></strong>
+          <div id="battle-team-opp-bar"></div>
+        </div>
       </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true">
         <h2 id="battle-result-title"></h2><p id="battle-result-detail"></p>
@@ -41,15 +66,26 @@ describe('对局 HUD 与结算弹窗', () => {
           <strong id="battle-result-self-name"></strong>
           <span id="battle-result-self-hp"></span>
           <div id="battle-result-self-bar"></div>
+          <ul id="battle-result-self-members" class="battle-result-members is-hidden"></ul>
         </article>
         <article id="battle-result-opp" class="battle-result-side is-opp">
           <strong id="battle-result-opp-name"></strong>
           <span id="battle-result-opp-hp"></span>
           <div id="battle-result-opp-bar"></div>
+          <ul id="battle-result-opp-members" class="battle-result-members is-hidden"></ul>
         </article>
+        <div id="battle-result-compare" class="battle-result-compare is-hidden">
+          <span id="battle-result-compare-self"></span>
+          <div id="battle-result-compare-bar"></div>
+          <span id="battle-result-compare-opp"></span>
+        </div>
         <button id="btn-battle-result-return"></button>
       </section>
     `;
+  });
+
+  afterEach(() => {
+    applyArenaPreset('1v1');
   });
 
   it('从 MatchState 渲染基地血量、阶段与常规倒计时', () => {
@@ -66,6 +102,8 @@ describe('对局 HUD 与结算弹窗', () => {
     hud.update(match);
 
     expect(document.querySelector('#battle-hud')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-hud')?.classList.contains('is-2v2')).toBe(false);
+    expect(document.querySelector('#battle-team-self-total')?.classList.contains('is-hidden')).toBe(true);
     expect(document.querySelector('#battle-self-name')?.textContent).toBe('Alice');
     expect(document.querySelector('#battle-opp-name')?.textContent).toBe('电脑');
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
@@ -178,5 +216,81 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-opp-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-result-self')?.classList.contains('is-winner')).toBe(true);
     expect(document.querySelector('#battle-result-opp')?.classList.contains('is-loser')).toBe(true);
+    expect(document.querySelector('#battle-result-self-members')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#battle-result-compare')?.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('2v2 结算展示四人残血与队伍总血量对比', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    const units = match.world.units.filter((unit) => unit.typeId === 'building_base');
+    const bySlot = (slot: number) => {
+      const unit = units.find((candidate) => candidate.ownerSlot === slot);
+      if (!unit) throw new Error(`席位 ${slot} 主堡未生成`);
+      return unit;
+    };
+    bySlot(0).hp = fromFloat(1000);
+    bySlot(1).hp = fromFloat(2000);
+    bySlot(2).hp = fromFloat(3000);
+    bySlot(3).hp = fromFloat(0);
+    const result = createBattleResult(() => {});
+    result.setContext({
+      localName: '我',
+      opponentName: '敌1',
+      localSlot: 0,
+      teammateName: '队友',
+      teammateSlot: 1,
+      opponentSlot: 2,
+      extraOpponentName: '敌2',
+      extraOpponentSlot: 3,
+    });
+    result.show({ winner: Faction.Red, reason: 'time_limit', endTick: 10 }, Faction.Blue, match);
+
+    expect(document.querySelector('#battle-result-dialog')?.classList.contains('is-2v2')).toBe(true);
+    expect(document.querySelector('#battle-result-self-name')?.textContent).toBe('合计');
+    expect(document.querySelector('#battle-result-self-hp')?.textContent).toBe('3000 / 10000');
+    expect(document.querySelector('#battle-result-opp-hp')?.textContent).toBe('3000 / 10000');
+    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('我');
+    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('1000 / 5000');
+    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('队友');
+    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('2000 / 5000');
+    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('敌1');
+    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('3000 / 5000');
+    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('敌2');
+    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('0 / 5000');
+    expect(document.querySelector('#battle-result-compare')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-result-compare-self')?.textContent).toBe('己方 3000');
+    expect(document.querySelector('#battle-result-compare-opp')?.textContent).toBe('对方 3000');
+    expect(document.querySelector('#battle-result-compare-bar')?.getAttribute('style')).toContain('50%');
+  });
+
+  it('2v2 渲染我/队友与两名敌人的主堡血条', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    const hud = createBattleHud();
+    hud.setContext({
+      localFaction: Faction.Blue,
+      localName: '我',
+      opponentName: '敌1',
+      localSlot: 0,
+      teammateName: '队友',
+      teammateSlot: 1,
+      opponentSlot: 2,
+      extraOpponentName: '敌2',
+      extraOpponentSlot: 3,
+    });
+    hud.update(match);
+
+    expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
+    expect(document.querySelector('#battle-ally-name')?.textContent).toBe('队友');
+    expect(document.querySelector('#battle-ally-hp')?.textContent).toBe('5000 / 5000');
+    expect(document.querySelector('#battle-castle-ally')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-opp-b-name')?.textContent).toBe('敌2');
+    expect(document.querySelector('#battle-castle-opp-b')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-hud')?.classList.contains('is-2v2')).toBe(true);
+    expect(document.querySelector('#battle-team-self-total')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-team-self-hp')?.textContent).toBe('10000 / 10000');
+    expect(document.querySelector('#battle-team-opp-hp')?.textContent).toBe('10000 / 10000');
+    expect(document.querySelector('#battle-team-self-bar')?.getAttribute('style')).toContain('100%');
   });
 });

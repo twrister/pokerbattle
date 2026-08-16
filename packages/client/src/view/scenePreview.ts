@@ -60,7 +60,7 @@ export function createScenePreview(container: HTMLElement): ScenePreviewHandle {
       scene.remove(arenaGroup);
       disposeObject3D(arenaGroup);
     }
-    arenaGroup = createArenaVisualGroup(arenaVisualFromDraft(draft), true);
+    arenaGroup = createArenaVisualGroup(arenaVisualFromDraft(draft, { showBases: true }), true);
     scene.add(arenaGroup);
     const width = container.clientWidth || 1;
     const height = container.clientHeight || 1;

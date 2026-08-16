@@ -14,6 +14,8 @@ export interface UnitSnapshot {
   id: number;
   typeId: UnitTypeId;
   faction: Faction;
+  /** 出兵席位，供 2v2 队友血条着色。 */
+  ownerSlot: number;
   state: UnitState;
   x: number;
   y: number;
@@ -122,6 +124,7 @@ function writeUnitSnapshots(world: World, units: UnitSnapshot[]): void {
     slot.id = unit.id;
     slot.typeId = unit.typeId;
     slot.faction = unit.faction;
+    slot.ownerSlot = unit.ownerSlot;
     slot.state = unit.state;
     slot.x = toFloat(unit.pos.x);
     slot.y = toFloat(unit.pos.y);

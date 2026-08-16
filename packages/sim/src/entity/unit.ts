@@ -35,6 +35,8 @@ export interface Unit {
   readonly typeId: UnitTypeId;
   readonly config: UnitConfig;
   readonly faction: Faction;
+  /** 出兵席位；1v1 下等于 faction，2v2 用来区分同队两人。 */
+  readonly ownerSlot: number;
 
   pos: Vec2;
   /** 归一化朝向，sim 内不存角度，避免用到三角函数 */
@@ -132,6 +134,7 @@ export function createUnit(
   faction: Faction,
   x: Fx,
   y: Fx,
+  ownerSlot: number = faction,
 ): Unit {
   const config = getUnitConfig(typeId);
   const base = attributesFromConfig(config);
@@ -140,6 +143,7 @@ export function createUnit(
     typeId,
     config,
     faction,
+    ownerSlot,
     pos: vec(x, y),
     // 默认朝向对方半场，蓝方在下红方在上
     facing: vec(0, faction === Faction.Blue ? ONE : -ONE),

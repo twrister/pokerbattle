@@ -4,6 +4,9 @@ import {
   arenaFullSize,
   dumpArenaConfigDraft,
   Faction,
+  resolveActiveBridges,
+  UNIT_CONFIGS,
+  type ArenaBasePos,
   type ArenaCameraMode,
   type ArenaColorsDraft,
   type ArenaConfigDraft,
@@ -117,6 +120,8 @@ export interface ArenaVisualLayout {
   riverMaxY: number;
   bridges: ReadonlyArray<{ minX: number; maxX: number }>;
   colors: ArenaColorsDraft;
+  /** 配置页预览用的单边基地；对局场景不传，避免和真实单位叠两层。 */
+  bases?: readonly ArenaBasePos[];
 }
 
 /** 把 CSS #rrggbb 转成 Three 整数色。 */
@@ -127,6 +132,7 @@ export function hexColorToNumber(hex: string): number {
 /** 从当前运行时草稿取出场地视觉布局；草稿宽高是单边，这里展开成全场。 */
 export function arenaVisualFromDraft(
   draft: ArenaConfigDraft = dumpArenaConfigDraft(),
+  options: { showBases?: boolean } = {},
 ): ArenaVisualLayout {
   const full = arenaFullSize(draft);
   return {
@@ -134,8 +140,9 @@ export function arenaVisualFromDraft(
     height: full.height,
     riverMinY: draft.height,
     riverMaxY: draft.height + draft.riverWidth,
-    bridges: draft.bridges,
+    bridges: resolveActiveBridges(draft),
     colors: draft.colors,
+    bases: options.showBases ? draft.bases : undefined,
   };
 }
 
@@ -602,6 +609,8 @@ export function createArenaVisualGroup(layout: ArenaVisualLayout, showRiver = tr
   const { sandboxMarkers, arenaTerrain } = mountArenaVisuals(root, layout);
   sandboxMarkers.visible = !showRiver;
   arenaTerrain.visible = showRiver;
+  const bases = createBaseMarkers(layout);
+  if (bases) root.add(bases);
   return root;
 }
 
@@ -746,7 +755,35 @@ function createHalfCourtLine(layout: ArenaVisualLayout): THREE.Line {
   );
 }
 
-/** 单机/联机对局的中线河道与双桥；沙盒保留原有空场地中线。 */
+/** 配置页预览：蓝方半场基地 + 对岸镜像，方便对照坐标。 */
+function createBaseMarkers(layout: ArenaVisualLayout): THREE.Group | null {
+  if (!layout.bases?.length) return null;
+  const group = new THREE.Group();
+  const size = UNIT_CONFIGS.building_base.footprint;
+  for (const base of layout.bases) {
+    group.add(createBaseMarkerBox(layout, base.x, base.y, 0x4a90d9, size));
+    group.add(createBaseMarkerBox(layout, base.x, layout.height - base.y, 0xc45c5c, size));
+  }
+  return group;
+}
+
+function createBaseMarkerBox(
+  layout: ArenaVisualLayout,
+  simX: number,
+  simY: number,
+  color: number,
+  size: number,
+): THREE.Mesh {
+  const height = 1.2;
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(size, height, size),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05 }),
+  );
+  mesh.position.set(simX - layout.width / 2, height / 2, layoutToSceneZ(layout, simY));
+  return mesh;
+}
+
+/** 单机/联机对局的中线河道与桥面；沙盒保留原有空场地中线。 */
 function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
   const terrain = new THREE.Group();
   const river = riverSceneZBand(layout);

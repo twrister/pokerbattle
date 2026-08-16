@@ -20,14 +20,22 @@ import {
   isBuildingOnlyFormation,
   resolveCardFormation,
 } from '../config/cardFormations.js';
+import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePositions } from '../config/arenaConfig.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import { isBuildingInsideHalfCourt, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { UNIT_CONFIGS } from '../config/units.js';
-import { Faction } from '../entity/unit.js';
+import { Faction, type Unit } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
+import {
+  allSlots,
+  slotCount,
+  teamSlots,
+  teammateSlot,
+  type MatchMode,
+} from './matchMode.js';
 
 /** 对局的三个可发牌阶段。 */
 export type MatchPhase = 'normal' | 'double_speed' | 'final' | 'ended';
@@ -51,6 +59,8 @@ export const MATCH_END_TICKS = DEFAULT_PHASE_DURATION_TICKS * 3;
 export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
 export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
+/** 队友主堡陷落后的发牌加速倍率。 */
+export const TEAMMATE_LOST_DRAW_SPEEDUP = 1.5;
 /** 主堡生命低于最大生命的该比例时触发保护卡包。 */
 export const CASTLE_PROTECT_HP_RATIO = 0.5;
 /** 默认主堡配置下的保护线（显示血量），供测试与静态刻度对齐。 */
@@ -112,16 +122,18 @@ export function defaultMatchRules(): MatchRules {
 }
 
 /**
- * 联机/单机对局的唯一步进入口：World + 双方牌堆。
- * 刻意不改 World 本身，抽牌与出牌校验都在这一层完成。
+ * 联机/单机对局的唯一步进入口：World + 各席牌堆。
+ * 1v1 下 slot === faction，现有按阵营取值的调用语义不变。
  */
 export class MatchState {
+  readonly mode: MatchMode;
   readonly world: World;
-  readonly decks: Record<Faction, PokerDeck>;
+  /** 按席位索引；1v1 下 decks[Faction.Blue/Red] 仍可用。 */
+  readonly decks: PokerDeck[];
   phase: MatchPhase = 'normal';
   result: MatchResult | null = null;
-  private blueCastleId: number | null = null;
-  private redCastleId: number | null = null;
+  private readonly castleIds: Array<number | null>;
+  private readonly packStates: CastlePackState[];
   private initialHandSize = INITIAL_HAND_SIZE;
   private normalPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
   private doubleSpeedPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
@@ -132,32 +144,35 @@ export class MatchState {
   private normalHandLimit = HAND_LIMIT_NORMAL;
   private doubleSpeedHandLimit = HAND_LIMIT_DOUBLE_SPEED;
   private finalHandLimit = HAND_LIMIT_FINAL;
-  /** 双方各自的下一张补牌 tick；满手待发时该方冻结，不拖累对方。 */
-  private nextDrawTicks: Record<Faction, number> = {
-    [Faction.Blue]: NORMAL_DRAW_INTERVAL_TICKS,
-    [Faction.Red]: NORMAL_DRAW_INTERVAL_TICKS,
-  };
+  /** 各席下一张补牌 tick；满手待发时该席冻结。 */
+  private readonly nextDrawTicks: number[];
   /** 周期到点却满手时记一张待发，空位出现后同帧补上。 */
-  private pendingDraw: Record<Faction, boolean> = {
-    [Faction.Blue]: false,
-    [Faction.Red]: false,
-  };
-  private bluePackState: CastlePackState = 'none';
-  private redPackState: CastlePackState = 'none';
+  private readonly pendingDraw: boolean[];
 
-  constructor(seed = 1) {
+  constructor(seed = 1, mode: MatchMode = '1v1') {
+    this.mode = mode;
+    applyArenaPreset(mode);
     this.world = new World(seed);
     applyArenaTerrain(this.world.nav);
-    // 双方牌堆共用 world.rng，抽牌顺序固定为蓝→红，保证确定性
-    this.decks = {
-      [Faction.Blue]: new PokerDeck(createPokerCards(), this.world.rng),
-      [Faction.Red]: new PokerDeck(createPokerCards(), this.world.rng),
-    };
+    const slots = slotCount(mode);
+    this.decks = [];
+    this.castleIds = [];
+    this.packStates = [];
+    this.nextDrawTicks = [];
+    this.pendingDraw = [];
+    // 各席牌堆共用 world.rng，抽牌顺序固定为 slot 升序，保证确定性
+    for (let slot = 0; slot < slots; slot += 1) {
+      this.decks.push(new PokerDeck(createPokerCards(), this.world.rng));
+      this.castleIds.push(null);
+      this.packStates.push('none');
+      this.nextDrawTicks.push(NORMAL_DRAW_INTERVAL_TICKS);
+      this.pendingDraw.push(false);
+    }
     this.dealStartingHands();
   }
 
   /**
-   * 推进一帧：先过滤并扣牌，再 world.step，最后按 tick 给未满手方补牌。
+   * 推进一帧：先过滤并扣牌，再 world.step，最后按 tick 给未满手席补牌。
    */
   step(commands: readonly Command[] = []): void {
     if (this.result) return;
@@ -166,13 +181,13 @@ export class MatchState {
     for (const command of commands) {
       if (command.kind === CommandKind.PlayFormation) {
         if (!this.validate(command)) continue;
-        this.decks[command.faction].play(command.cardIds);
+        this.decks[commandSlot(command)].play(command.cardIds);
         accepted.push(command);
         continue;
       }
       if (command.kind === CommandKind.ClaimCastlePack) {
         if (!this.validate(command)) continue;
-        this.claimCastlePack(command.faction);
+        this.claimCastlePack(commandSlot(command));
         continue;
       }
       accepted.push(command);
@@ -182,38 +197,41 @@ export class MatchState {
     this.updateMatchState();
     if (this.result) return;
 
-    this.tryDrawForFaction(Faction.Blue);
-    this.tryDrawForFaction(Faction.Red);
+    for (const slot of allSlots(this.mode)) {
+      this.tryDrawForSlot(slot);
+    }
   }
 
   /**
-   * 校验出牌：阵营手牌齐全、牌型匹配阵型、落点在己方半场。
-   * Spawn/PlaceBuilding 在对局路径上一般不走这里（沙盒仍可直接喂 World）。
+   * 校验出牌：席位手牌齐全、牌型匹配阵型、落点在己方半场。
+   * 基地已陷落的席位不能再出牌或领包。
    */
   validate(cmd: Command): boolean {
     if (this.result) return false;
     if (cmd.kind === CommandKind.ClaimCastlePack) {
-      return this.getCastlePackState(cmd.faction) === 'pending';
+      const slot = commandSlot(cmd);
+      if (this.isSlotEliminated(slot)) return false;
+      return this.getSlotCastlePackState(slot) === 'pending';
     }
     if (cmd.kind !== CommandKind.PlayFormation) return true;
     return this.validatePlayFormation(cmd);
   }
 
-  /** 世界 + 双方牌堆指纹，供联机 hash 对账。 */
+  /** 世界 + 各席牌堆指纹，供联机 hash 对账。 */
   hash(): number {
     let h = this.world.hash();
-    h = mix(h, this.decks[Faction.Blue].hash());
-    h = mix(h, this.decks[Faction.Red].hash());
+    h = mix(h, this.mode === '2v2' ? 2 : 1);
+    for (const slot of allSlots(this.mode)) {
+      h = mix(h, this.decks[slot]!.hash());
+      h = mix(h, this.castleIds[slot] ?? 0);
+      h = mix(h, this.nextDrawTicks[slot]!);
+      h = mix(h, this.pendingDraw[slot] ? 1 : 0);
+      h = mix(h, packStateCode(this.packStates[slot]!));
+    }
     h = mix(h, this.phaseCode());
     h = mix(h, this.result?.winner ?? -1);
     h = mix(h, this.result ? resultReasonCode(this.result.reason) : 0);
     h = mix(h, this.result?.endTick ?? 0);
-    h = mix(h, this.blueCastleId ?? 0);
-    h = mix(h, this.redCastleId ?? 0);
-    h = mix(h, this.nextDrawTicks[Faction.Blue]);
-    h = mix(h, this.nextDrawTicks[Faction.Red]);
-    h = mix(h, this.pendingDraw[Faction.Blue] ? 1 : 0);
-    h = mix(h, this.pendingDraw[Faction.Red] ? 1 : 0);
     h = mix(h, this.initialHandSize);
     h = mix(h, this.normalPhaseTicks);
     h = mix(h, this.doubleSpeedPhaseTicks);
@@ -224,111 +242,151 @@ export class MatchState {
     h = mix(h, this.normalHandLimit);
     h = mix(h, this.doubleSpeedHandLimit);
     h = mix(h, this.finalHandLimit);
-    h = mix(h, packStateCode(this.bluePackState));
-    h = mix(h, packStateCode(this.redPackState));
     return h >>> 0;
   }
 
   /** 清空战场与牌堆，回到开局发牌状态。 */
   clear(): void {
+    applyArenaPreset(this.mode);
     this.world.clear();
     applyArenaTerrain(this.world.nav);
     // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象
-    this.decks[Faction.Blue].reset();
-    this.decks[Faction.Red].reset();
+    for (const slot of allSlots(this.mode)) {
+      this.decks[slot]!.reset();
+      this.castleIds[slot] = null;
+      this.packStates[slot] = 'none';
+    }
     this.phase = 'normal';
     this.result = null;
-    this.blueCastleId = null;
-    this.redCastleId = null;
-    this.bluePackState = 'none';
-    this.redPackState = 'none';
     this.dealStartingHands();
     // 保留调试覆盖的节奏参数，只重置本局倒计时与待发
     this.resetDrawClocks(this.normalDrawIntervalTicks);
   }
 
   /**
-   * 双方半场底端各落一座主堡，不推进 tick（避免联机首帧错位）。
-   * 必须在 new MatchState(seed) 之后、第一次 step 之前调用，两端顺序一致。
+   * 按场景草稿的单边基地坐标播种主堡，对岸只镜像 Y。
+   * 必须在 new MatchState 之后、第一次 step 之前调用，两端顺序一致。
    */
   seedStartingCastles(): void {
-    const footprint = UNIT_CONFIGS.building_base.footprint;
-    const centerX = toFloat(ARENA_WIDTH) / 2;
-    const edgeInset = footprint / 2;
-    const blueCastle = this.world.spawnBuilding(
-      Faction.Blue,
-      'building_base',
-      fromFloat(centerX),
-      fromFloat(edgeInset),
-    );
-    const redCastle = this.world.spawnBuilding(
-      Faction.Red,
-      'building_base',
-      fromFloat(centerX),
-      fromFloat(toFloat(ARENA_HEIGHT) - edgeInset),
-    );
-    this.blueCastleId = blueCastle?.id ?? null;
-    this.redCastleId = redCastle?.id ?? null;
+    const draft = dumpArenaConfigDraft();
+    const sideBases = resolveSideBasePositions(draft, teamSlots(Faction.Blue, this.mode).length);
+    const arenaH = toFloat(ARENA_HEIGHT);
+    for (const faction of [Faction.Blue, Faction.Red] as const) {
+      const slots = teamSlots(faction, this.mode);
+      for (let i = 0; i < slots.length; i += 1) {
+        const slot = slots[i]!;
+        const side = sideBases[i]!;
+        const y = faction === Faction.Blue ? side.y : mirrorBaseY(side.y, arenaH);
+        const castle = this.world.spawnBuilding(
+          faction,
+          'building_base',
+          fromFloat(side.x),
+          fromFloat(y),
+          slot,
+        );
+        this.castleIds[slot] = castle?.id ?? null;
+      }
+    }
   }
 
-  /** 返回指定阵营主堡当前生命；主堡已被清理时视为零。 */
-  getCastleHp(faction: Faction): number {
-    const id = faction === Faction.Blue ? this.blueCastleId : this.redCastleId;
-    return id ? (this.world.getUnit(id)?.hp ?? 0) : 0;
+  /** 指定席位主堡当前生命；未播种或已清理视为零。 */
+  getSlotCastleHp(slot: number): number {
+    return this.findSlotCastle(slot)?.hp ?? 0;
   }
 
-  /** 返回指定阵营主堡的最大生命，未初始化时返回零。 */
-  getCastleMaxHp(faction: Faction): number {
-    const id = faction === Faction.Blue ? this.blueCastleId : this.redCastleId;
-    return id ? (this.world.getUnit(id)?.config.maxHp ?? UNIT_CONFIGS.building_base.maxHp) : 0;
+  /** 指定席位主堡最大生命。 */
+  getSlotCastleMaxHp(slot: number): number {
+    const unit = this.findSlotCastle(slot);
+    if (unit) return unit.config.maxHp;
+    return this.castleIds[slot] != null ? UNIT_CONFIGS.building_base.maxHp : 0;
   }
 
-  /** 主堡保护触发线（显示血量），按该方主堡最大生命的一半计算。 */
-  getCastleProtectHp(faction: Faction = Faction.Blue): number {
-    return toFloat(this.getCastleMaxHp(faction)) * CASTLE_PROTECT_HP_RATIO;
-  }
-
-  /** 指定阵营本局保护卡包状态。 */
-  getCastlePackState(faction: Faction): CastlePackState {
-    return faction === Faction.Blue ? this.bluePackState : this.redPackState;
-  }
-
-  /**
-   * 调试用：强制掉落指定阵营保护卡包。
-   * 已领取后也可再掉，方便反复看飞出与领取，不改主堡血量。
-   */
-  debugDropCastlePack(faction: Faction): boolean {
-    if (this.result) return false;
-    if (!this.getCastlePosition(faction)) return false;
-    this.setCastlePackState(faction, 'pending');
-    return true;
-  }
-
-  /** 主堡 sim 平面坐标；未播种或已清理时返回 null。 */
-  getCastlePosition(faction: Faction): { x: number; y: number } | null {
-    const id = faction === Faction.Blue ? this.blueCastleId : this.redCastleId;
-    const unit = id ? this.world.getUnit(id) : undefined;
+  /** 指定席位主堡 sim 平面坐标。 */
+  getSlotCastlePosition(slot: number): { x: number; y: number } | null {
+    const unit = this.findSlotCastle(slot);
     if (!unit) return null;
     return { x: toFloat(unit.pos.x), y: toFloat(unit.pos.y) };
   }
 
+  /** 指定席位本局保护卡包状态。 */
+  getSlotCastlePackState(slot: number): CastlePackState {
+    return this.packStates[slot] ?? 'none';
+  }
+
+  /** 该席位主堡已陷落（播种后 hp ≤ 0）。未播种时不算淘汰，避免沙盒误禁。 */
+  isSlotEliminated(slot: number): boolean {
+    const castle = this.findSlotCastle(slot);
+    if (castle) return castle.hp <= 0 || castle.dead;
+    // 播种过但实体已被 cleanup 摘掉 → 淘汰；从未播种 → 不淘汰
+    return this.castleIds[slot] != null;
+  }
+
+  /** 队伍主堡剩余总血量；1v1 仍是单座血量。 */
+  getCastleHp(faction: Faction): number {
+    let total = 0;
+    for (const slot of teamSlots(faction, this.mode)) {
+      total += this.getSlotCastleHp(slot);
+    }
+    return total;
+  }
+
+  /** 队伍主堡最大生命总和。 */
+  getCastleMaxHp(faction: Faction): number {
+    let total = 0;
+    for (const slot of teamSlots(faction, this.mode)) {
+      total += this.getSlotCastleMaxHp(slot);
+    }
+    return total;
+  }
+
+  /** 主堡保护触发线（显示血量），按该席主堡最大生命的一半计算。 */
+  getCastleProtectHp(factionOrSlot: Faction | number = Faction.Blue): number {
+    return toFloat(this.getSlotCastleMaxHp(factionOrSlot)) * CASTLE_PROTECT_HP_RATIO;
+  }
+
+  /** 指定阵营/席位本局保护卡包状态。1v1 下 faction 即 slot。 */
+  getCastlePackState(factionOrSlot: Faction | number): CastlePackState {
+    return this.getSlotCastlePackState(factionOrSlot);
+  }
+
   /**
-   * 指定阵营距离下一张牌的逻辑帧数。
-   * 有待发牌时视为 0（读条收起）；未传阵营时默认蓝方，兼容旧调用。
+   * 调试用：强制掉落指定席位保护卡包。
+   * 已领取后也可再掉，方便反复看飞出与领取，不改主堡血量。
    */
-  getTicksUntilDraw(faction: Faction = Faction.Blue): number {
-    if (this.result || this.pendingDraw[faction]) return 0;
-    return Math.max(0, this.nextDrawTicks[faction] - this.world.tick);
+  debugDropCastlePack(factionOrSlot: Faction | number): boolean {
+    if (this.result) return false;
+    if (!this.getSlotCastlePosition(factionOrSlot)) return false;
+    this.packStates[factionOrSlot] = 'pending';
+    return true;
   }
 
-  /** 该方是否有一张周期已到、因满手尚未发出的待发牌。 */
-  hasPendingDraw(faction: Faction): boolean {
-    return !this.result && this.pendingDraw[faction];
+  /** 主堡 sim 平面坐标；1v1 下 faction 即 slot。 */
+  getCastlePosition(factionOrSlot: Faction | number): { x: number; y: number } | null {
+    return this.getSlotCastlePosition(factionOrSlot);
   }
 
-  /** 当前阶段一次补牌周期的逻辑帧数，供 UI 遮罩进度与倒计时对齐。 */
+  /**
+   * 指定席位距离下一张牌的逻辑帧数。
+   * 有待发牌时视为 0（读条收起）；未传时默认蓝方席 0，兼容旧调用。
+   */
+  getTicksUntilDraw(slot: number = Faction.Blue): number {
+    if (this.result || this.pendingDraw[slot] || this.isSlotEliminated(slot)) return 0;
+    return Math.max(0, this.nextDrawTicks[slot]! - this.world.tick);
+  }
+
+  /** 该席是否有一张周期已到、因满手尚未发出的待发牌。 */
+  hasPendingDraw(slot: number): boolean {
+    return !this.result && !this.isSlotEliminated(slot) && this.pendingDraw[slot] === true;
+  }
+
+  /** 当前阶段一次补牌周期的逻辑帧数（不含队友阵亡加速）。 */
   getDrawIntervalTicks(): number {
     return this.drawIntervalTicks();
+  }
+
+  /** 指定席位当前补牌周期，含队友阵亡 1.5 倍加速。 */
+  getDrawIntervalTicksForSlot(slot: number): number {
+    return this.drawIntervalTicksForSlot(slot);
   }
 
   /** 当前阶段手牌上限，供 HUD / 手牌面板展示。 */
@@ -362,7 +420,7 @@ export class MatchState {
     this.finalPhaseTicks = clampPositiveTicks(durations.finalTicks);
   }
 
-  /** 覆盖三阶段手牌上限，立即同步到双方牌堆。 */
+  /** 覆盖三阶段手牌上限，立即同步到各席牌堆。 */
   setHandLimits(limits: MatchHandLimits): void {
     this.normalHandLimit = clampHandSize(limits.normal);
     this.doubleSpeedHandLimit = clampHandSize(limits.doubleSpeed);
@@ -376,33 +434,36 @@ export class MatchState {
   setInitialHandSize(size: number): void {
     this.initialHandSize = clampHandSize(size);
     if (this.world.tick === 0 && !this.result) {
-      this.decks[Faction.Blue].reset();
-      this.decks[Faction.Red].reset();
+      for (const slot of allSlots(this.mode)) {
+        this.decks[slot]!.reset();
+      }
       this.dealStartingHands();
       this.resetDrawClocks(this.normalDrawIntervalTicks);
     }
   }
 
   /**
-   * 在战斗清理后按主堡存活和时间边界裁决对局。
-   * 主堡同帧归零直接平局，避免依赖系统内部伤害迭代顺序。
+   * 在战斗清理后按队伍主堡存活和时间边界裁决对局。
+   * 2v2 必须一队主堡全灭才结束；同帧双灭判平；决胜到点比队伍总血量。
    */
   private updateMatchState(): void {
     // 沙盒/确定性测试可复用 MatchState 而不播种主堡，此时不启用对局结算。
-    if (this.blueCastleId === null || this.redCastleId === null) return;
-    const blueHp = this.getCastleHp(Faction.Blue);
-    const redHp = this.getCastleHp(Faction.Red);
-    if (blueHp <= 0 || redHp <= 0) {
-      if (blueHp <= 0 && redHp <= 0) {
+    if (this.castleIds.every((id) => id === null)) return;
+    const blueAlive = this.teamHasLivingCastle(Faction.Blue);
+    const redAlive = this.teamHasLivingCastle(Faction.Red);
+    if (!blueAlive || !redAlive) {
+      if (!blueAlive && !redAlive) {
         this.finish(null, 'simultaneous_destroyed');
       } else {
-        this.finish(blueHp > 0 ? Faction.Blue : Faction.Red, 'base_destroyed');
+        this.finish(blueAlive ? Faction.Blue : Faction.Red, 'base_destroyed');
       }
       return;
     }
 
-    this.maybeTriggerCastlePack(Faction.Blue, blueHp);
-    this.maybeTriggerCastlePack(Faction.Red, redHp);
+    for (const slot of allSlots(this.mode)) {
+      this.maybeTriggerCastlePack(slot, this.getSlotCastleHp(slot));
+    }
+    this.clampDrawCountdown();
 
     if (this.phase === 'normal' && this.world.tick >= this.doubleSpeedStartTick()) {
       this.enterPhase('double_speed');
@@ -411,18 +472,18 @@ export class MatchState {
       this.enterPhase('final');
     }
     if (this.phase === 'final' && this.world.tick >= this.matchEndTick()) {
-      this.finish(compareHp(blueHp, redHp), 'time_limit');
+      this.finish(compareHp(this.getCastleHp(Faction.Blue), this.getCastleHp(Faction.Red)), 'time_limit');
     }
   }
 
-  /** 切阶段：同步手牌上限，未待发的一方从当前 tick 重开读条。 */
+  /** 切阶段：同步手牌上限，未待发且未淘汰的席位从当前 tick 重开读条。 */
   private enterPhase(phase: 'double_speed' | 'final'): void {
     this.phase = phase;
     this.syncHandLimits();
-    const nextTick = this.world.tick + this.drawIntervalTicks();
-    // 待发保留：上限变大时本帧 tryDrawForFaction 会立刻补上，不能在这里清掉。
-    if (!this.pendingDraw[Faction.Blue]) this.nextDrawTicks[Faction.Blue] = nextTick;
-    if (!this.pendingDraw[Faction.Red]) this.nextDrawTicks[Faction.Red] = nextTick;
+    for (const slot of allSlots(this.mode)) {
+      if (this.pendingDraw[slot] || this.isSlotEliminated(slot)) continue;
+      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
+    }
   }
 
   /** 记录不可逆结算结果并冻结后续逻辑帧。 */
@@ -431,11 +492,19 @@ export class MatchState {
     this.result = { winner, reason, endTick: this.world.tick };
   }
 
-  /** 当前阶段的下一次补牌间隔。 */
+  /** 当前阶段的基础补牌间隔。 */
   private drawIntervalTicks(): number {
     if (this.phase === 'normal') return this.normalDrawIntervalTicks;
     if (this.phase === 'double_speed') return this.doubleSpeedDrawIntervalTicks;
     return this.finalDrawIntervalTicks;
+  }
+
+  /** 该席位当前补牌间隔；队友主堡已陷落时加速 1.5 倍，取整保证两端一致。 */
+  private drawIntervalTicksForSlot(slot: number): number {
+    const base = this.drawIntervalTicks();
+    const mate = teammateSlot(slot, this.mode);
+    if (mate === null || !this.isSlotEliminated(mate)) return base;
+    return Math.max(1, Math.round(base / TEAMMATE_LOST_DRAW_SPEEDUP));
   }
 
   private currentHandLimit(): number {
@@ -446,58 +515,61 @@ export class MatchState {
 
   private syncHandLimits(): void {
     const max = this.currentHandLimit();
-    this.decks[Faction.Blue].setMaxHandSize(max);
-    this.decks[Faction.Red].setMaxHandSize(max);
+    for (const slot of allSlots(this.mode)) {
+      this.decks[slot]!.setMaxHandSize(max);
+    }
   }
 
   private dealStartingHands(): void {
     this.syncHandLimits();
-    this.decks[Faction.Blue].drawMany(this.initialHandSize);
-    this.decks[Faction.Red].drawMany(this.initialHandSize);
+    for (const slot of allSlots(this.mode)) {
+      this.decks[slot]!.drawMany(this.initialHandSize);
+    }
   }
 
   /**
    * 先冲待发，再到点抽牌。
-   * 满手拒抽只冻结该方计时；牌堆抽空仍推进周期，避免空堆把读条卡死。
+   * 满手拒抽只冻结该席计时；牌堆抽空仍推进周期，避免空堆把读条卡死。
    */
-  private tryDrawForFaction(faction: Faction): void {
-    const deck = this.decks[faction];
-    if (this.pendingDraw[faction]) {
+  private tryDrawForSlot(slot: number): void {
+    if (this.isSlotEliminated(slot)) return;
+    const deck = this.decks[slot]!;
+    if (this.pendingDraw[slot]) {
       if (deck.hand.length >= deck.maxHandSize) return;
       deck.draw();
-      this.pendingDraw[faction] = false;
-      this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+      this.pendingDraw[slot] = false;
+      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
       return;
     }
-    if (this.world.tick < this.nextDrawTicks[faction]) return;
+    if (this.world.tick < this.nextDrawTicks[slot]!) return;
     const drawn = deck.draw();
     if (drawn) {
-      this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
       return;
     }
     if (deck.hand.length >= deck.maxHandSize) {
-      this.pendingDraw[faction] = true;
+      this.pendingDraw[slot] = true;
       return;
     }
-    this.nextDrawTicks[faction] = this.world.tick + this.drawIntervalTicks();
+    this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
   }
 
-  /** 双方读条与待发一起重置，避免清局/切阶段后仍握着上一阶段的冻结状态。 */
+  /** 各席读条与待发一起重置。 */
   private resetDrawClocks(nextTick: number): void {
-    this.nextDrawTicks[Faction.Blue] = nextTick;
-    this.nextDrawTicks[Faction.Red] = nextTick;
-    this.pendingDraw[Faction.Blue] = false;
-    this.pendingDraw[Faction.Red] = false;
+    for (const slot of allSlots(this.mode)) {
+      this.nextDrawTicks[slot] = nextTick;
+      this.pendingDraw[slot] = false;
+    }
   }
 
   private clampDrawCountdown(): void {
     if (this.result) return;
-    const interval = this.drawIntervalTicks();
-    for (const faction of [Faction.Blue, Faction.Red] as const) {
-      if (this.pendingDraw[faction]) continue;
-      const remaining = this.nextDrawTicks[faction] - this.world.tick;
+    for (const slot of allSlots(this.mode)) {
+      if (this.pendingDraw[slot] || this.isSlotEliminated(slot)) continue;
+      const interval = this.drawIntervalTicksForSlot(slot);
+      const remaining = this.nextDrawTicks[slot]! - this.world.tick;
       if (remaining > interval) {
-        this.nextDrawTicks[faction] = this.world.tick + interval;
+        this.nextDrawTicks[slot] = this.world.tick + interval;
       }
     }
   }
@@ -521,33 +593,59 @@ export class MatchState {
     return 4;
   }
 
-  /** 主堡仍存活且血量低于半血保护线时，每方每局只升到 pending 一次。 */
-  private maybeTriggerCastlePack(faction: Faction, hp: number): void {
-    if (this.getCastlePackState(faction) !== 'none') return;
-    if (toFloat(hp) >= this.getCastleProtectHp(faction)) return;
-    this.setCastlePackState(faction, 'pending');
+  /**
+   * 该队是否还有至少一座主堡存活。
+   * 以场上实体为准，避免席位 ID 对不上时单座陷落被误判成团灭停 sim。
+   */
+  private teamHasLivingCastle(faction: Faction): boolean {
+    for (const unit of this.world.units) {
+      if (unit.typeId !== 'building_base' || unit.faction !== faction) continue;
+      if (!unit.dead && unit.hp > 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 查找该席开局主堡：先按播种 ID，再按 ownerSlot 回扫场上实体。
+   * cleanup 摘掉尸体后 ID 会失效，回扫才能认到仍存活的另一座。
+   */
+  private findSlotCastle(slot: number): Unit | undefined {
+    const id = this.castleIds[slot];
+    if (id != null) {
+      const byId = this.world.getUnit(id);
+      if (byId) return byId;
+    }
+    return this.world.units.find(
+      (unit) => unit.ownerSlot === slot && unit.typeId === 'building_base',
+    );
+  }
+
+  /** 主堡仍存活且血量低于半血保护线时，每席每局只升到 pending 一次。 */
+  private maybeTriggerCastlePack(slot: number, hp: number): void {
+    if (this.packStates[slot] !== 'none') return;
+    if (this.isSlotEliminated(slot)) return;
+    if (toFloat(hp) >= this.getCastleProtectHp(slot)) return;
+    this.packStates[slot] = 'pending';
   }
 
   /** 从剩余牌堆无视上限抽保护牌，并将卡包标为已领取。 */
-  private claimCastlePack(faction: Faction): void {
-    const deck = this.decks[faction];
+  private claimCastlePack(slot: number): void {
+    const deck = this.decks[slot]!;
     for (let index = 0; index < CASTLE_PROTECT_CARDS; index += 1) {
       if (!deck.drawIgnoringLimit()) break;
     }
-    this.setCastlePackState(faction, 'claimed');
+    this.packStates[slot] = 'claimed';
   }
 
-  private setCastlePackState(faction: Faction, state: CastlePackState): void {
-    if (faction === Faction.Blue) this.bluePackState = state;
-    else this.redPackState = state;
-  }
-
-  /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠。 */
+  /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠 / 席位未淘汰。 */
   private validatePlayFormation(cmd: PlayFormationCommand): boolean {
+    const slot = commandSlot(cmd);
+    if (this.isSlotEliminated(slot)) return false;
     const template = findFormationById(cmd.formationId);
     if (!template) return false;
 
-    const deck = this.decks[cmd.faction];
+    const deck = this.decks[slot];
+    if (!deck) return false;
     const uniqueIds = [...new Set(cmd.cardIds)];
     if (uniqueIds.length === 0 || uniqueIds.length !== cmd.cardIds.length) return false;
     for (const id of uniqueIds) {
@@ -578,6 +676,10 @@ export class MatchState {
     // 与白色部署区高亮一致：只校验锚点，阵型贴边溢出仍可放置
     return isDeployAnchorInsideHalfCourt(anchorX, anchorY, cmd.faction);
   }
+}
+
+function commandSlot(cmd: { slot?: number; faction: Faction }): number {
+  return cmd.slot ?? cmd.faction;
 }
 
 function clampPositiveTicks(ticks: number): number {

@@ -23,7 +23,7 @@ export interface ArenaRect {
 /** 与 ARENA_BRIDGES 同步的河道阻挡矩形缓存，避免每 tick 重算。 */
 const riverBlockedRectCache: ArenaRect[] = [];
 
-/** 左右两座桥，是地面单位跨河的唯一通道；apply 时原地替换内容以保持引用稳定。 */
+/** 跨河桥面；apply 时原地替换内容以保持引用稳定。桥三关闭时这里只有前两座。 */
 export const ARENA_BRIDGES: ArenaBridge[] = [
   { minX: 3, maxX: 5 },
   { minX: 13, maxX: 15 },

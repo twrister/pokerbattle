@@ -22,7 +22,7 @@ import {
   toSimY,
 } from '../src/view/coords.js';
 import { BattleView } from '../src/view/viewSync.js';
-import { UnitView, visualFaction } from '../src/view/unitView.js';
+import { HP_COLOR_ALLY, HP_COLOR_ENEMY, HP_COLOR_SELF, UnitView, visualFaction, visualSide } from '../src/view/unitView.js';
 import { SPRITE_DEFS, SPRITE_GEOMETRY } from '../src/view/unitSprites.js';
 
 /** 从单位视图里取出前景血条颜色，忽略底条与等级徽章。 */
@@ -44,6 +44,18 @@ function findHpFillHex(group: THREE.Group): number | undefined {
  * 这些用例只跑场景图，不创建 WebGL 上下文，所以能在 Node 里直接执行。
  * 目的是守住「快照 -> 场景对象」这条同步链路，不是验证画面好不好看。
  */
+describe('队友着色', () => {
+  it('同队不同席位为青蓝，1v1 不会出现 ally', () => {
+    expect(visualSide(Faction.Blue, 0, Faction.Blue, 0)).toBe('self');
+    expect(visualSide(Faction.Blue, 1, Faction.Blue, 0)).toBe('ally');
+    expect(visualSide(Faction.Red, 2, Faction.Blue, 0)).toBe('enemy');
+    expect(visualSide(Faction.Blue, 0, Faction.Blue, 0)).not.toBe('ally');
+    expect(HP_COLOR_SELF).toBe(0x63d68a);
+    expect(HP_COLOR_ALLY).toBe(0x35d6d6);
+    expect(HP_COLOR_ENEMY).toBe(0xf2604f);
+  });
+});
+
 describe('坐标换算', () => {
   it('sim 坐标与场景坐标可以来回转换', () => {
     expect(toSimX(toSceneX(3.25))).toBeCloseTo(3.25, 6);

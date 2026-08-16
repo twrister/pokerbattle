@@ -9,7 +9,15 @@ import {
   type RoomStateMessage,
   type ServerMessage,
 } from '@pb/net';
-import { MatchState, TICK_RATE, type Command, type Faction } from '@pb/sim';
+import {
+  MatchState,
+  TICK_RATE,
+  slotCount,
+  slotFaction,
+  type Command,
+  type Faction,
+  type MatchMode,
+} from '@pb/sim';
 import { randomBytes } from 'node:crypto';
 import type { RawData, WebSocket } from 'ws';
 import type { OpsRoomPhase, OpsRoomSnapshot } from './opsTypes.js';
@@ -19,7 +27,6 @@ import { factionForSeat, validateSeatCommand } from './validate.js';
 const STEP_MS = 1000 / TICK_RATE;
 /** 观战中途加入需要整局帧；15 分钟兜底防泄漏。 */
 const MAX_FRAME_HISTORY = TICK_RATE * 60 * 15;
-const MAX_PLAYERS = 2;
 
 interface Seat {
   ws: WebSocket | null;
@@ -51,6 +58,8 @@ interface Spectator {
 export interface MatchRoomOptions {
   roomId: string;
   roomName: string;
+  /** 创建时的对局模式；缺省 1v1。 */
+  matchMode?: MatchMode;
   /** 房间变空或对局因超时结束并清场后回调，供管理器回收。 */
   onDispose?: (roomId: string) => void;
   /** 入座且带有 playerId 时登记昵称。 */
@@ -77,7 +86,8 @@ export class MatchRoom {
     loserId: string,
     names: { winner: string; loser: string },
   ) => void;
-  private readonly seats: Array<Seat | null> = [null, null];
+  private seats: Array<Seat | null>;
+  private matchMode: MatchMode;
   private readonly spectators: Spectator[] = [];
   /** 房主席位；创建者 / 先入座者为房主，离开后交给剩余席。 */
   private hostSeat = 0;
@@ -106,6 +116,13 @@ export class MatchRoom {
     this.onDispose = options.onDispose;
     this.onPlayerJoin = options.onPlayerJoin;
     this.onDecisiveMatch = options.onDecisiveMatch;
+    this.matchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
+    this.seats = emptySeats(this.matchMode);
+  }
+
+  /** 当前模式席位数。 */
+  private maxPlayers(): number {
+    return slotCount(this.matchMode);
   }
 
   /** 未开局且仍有空座时可加入。 */
@@ -144,9 +161,10 @@ export class MatchRoom {
       roomId: this.roomId,
       roomName: this.roomName,
       playerCount: this.playerCount,
-      maxPlayers: MAX_PLAYERS,
+      maxPlayers: this.maxPlayers(),
       phase: this.started ? 'playing' : 'waiting',
       spectatorCount: this.spectatorCount,
+      matchMode: this.matchMode,
     };
   }
 
@@ -184,7 +202,7 @@ export class MatchRoom {
       playerCount: this.playerCount,
       connectedCount: seats.filter((seat) => seat.connected).length,
       spectatorCount: this.spectatorCount,
-      maxPlayers: MAX_PLAYERS,
+      maxPlayers: this.maxPlayers(),
       seats,
       createdAt: this.createdAt,
       lastActiveAt: this.lastActiveAt,
@@ -197,7 +215,7 @@ export class MatchRoom {
     const seatIndex = this.seats.findIndex((seat) => seat === null);
     if (seatIndex < 0) return false;
 
-    const faction = factionForSeat(seatIndex);
+    const faction = factionForSeat(seatIndex, this.matchMode);
     const seat: Seat = {
       ws,
       name,
@@ -286,8 +304,7 @@ export class MatchRoom {
       this.clearDisconnectTimer(seat);
       this.unbindSocket(seat);
     }
-    this.seats[0] = null;
-    this.seats[1] = null;
+    this.seats = emptySeats(this.matchMode);
     this.match = null;
     this.scheduled.clear();
     this.serverHashes.clear();
@@ -300,7 +317,7 @@ export class MatchRoom {
     this.ended = false;
     this.seed = (Date.now() ^ (Math.random() * 0x7fffffff)) | 0;
     if (this.seed === 0) this.seed = 0x9e3779b9;
-    this.match = new MatchState(this.seed);
+    this.match = new MatchState(this.seed, this.matchMode);
     this.match.seedStartingCastles();
     this.serverTick = 0;
     this.scheduled.clear();
@@ -364,7 +381,9 @@ export class MatchRoom {
       message.type === 'input' ||
       message.type === 'hash' ||
       message.type === 'startMatch' ||
-      message.type === 'setReady'
+      message.type === 'setReady' ||
+      message.type === 'setRoomOptions' ||
+      message.type === 'pickSeat'
     ) {
       this.touchActive();
     }
@@ -378,6 +397,12 @@ export class MatchRoom {
         break;
       case 'setReady':
         this.handleSetReady(seat, message.ready === true);
+        break;
+      case 'setRoomOptions':
+        this.handleSetRoomOptions(seat, message.matchMode);
+        break;
+      case 'pickSeat':
+        this.handlePickSeat(seat, message.seat);
         break;
       case 'input':
         this.acceptInput(seat, message.tick, message.commands ?? []);
@@ -400,15 +425,61 @@ export class MatchRoom {
       this.send(seat.ws, { type: 'error', code: 'not_host', message: '只有房主可以开始游戏' });
       return;
     }
-    if (!this.seats[0] || !this.seats[1]) {
+    if (this.seats.some((entry) => entry === null)) {
       this.send(seat.ws, { type: 'error', code: 'not_ready', message: '人数未齐，无法开始' });
       return;
     }
-    if (!this.seats[0].ready || !this.seats[1].ready) {
-      this.send(seat.ws, { type: 'error', code: 'not_ready', message: '双方尚未准备' });
+    if (this.seats.some((entry) => entry && !entry.ready)) {
+      this.send(seat.ws, { type: 'error', code: 'not_ready', message: '全员尚未准备' });
       return;
     }
     this.beginMatch();
+  }
+
+  /** 房主在 waiting 切换 1v1/2v2；超出新席数的人挤到空席，挤不下则拒绝。 */
+  private handleSetRoomOptions(seat: Seat, rawMode: unknown): void {
+    if (this.started) {
+      this.send(seat.ws, { type: 'error', code: 'already_started', message: '对局已经开始' });
+      return;
+    }
+    if (seat.seat !== this.hostSeat) {
+      this.send(seat.ws, { type: 'error', code: 'not_host', message: '只有房主可以切换模式' });
+      return;
+    }
+    const nextMode: MatchMode = rawMode === '2v2' ? '2v2' : rawMode === '1v1' ? '1v1' : this.matchMode;
+    if (nextMode === this.matchMode) return;
+    if (!this.tryResizeSeats(nextMode)) {
+      this.send(seat.ws, { type: 'error', code: 'cannot_change_mode', message: '人数超出目标模式席位，无法切换' });
+      return;
+    }
+    this.matchMode = nextMode;
+    this.broadcastRoomState();
+  }
+
+  /** 未开局时换到空席，房主身份跟人走。 */
+  private handlePickSeat(seat: Seat, rawTarget: unknown): void {
+    if (this.started) {
+      this.send(seat.ws, { type: 'error', code: 'already_started', message: '对局已经开始' });
+      return;
+    }
+    const target = Number(rawTarget) | 0;
+    if (target < 0 || target >= this.seats.length) {
+      this.send(seat.ws, { type: 'error', code: 'invalid_seat', message: '席位不存在' });
+      return;
+    }
+    if (target === seat.seat) return;
+    if (this.seats[target]) {
+      this.send(seat.ws, { type: 'error', code: 'seat_taken', message: '该席位已被占用' });
+      return;
+    }
+    const from = seat.seat;
+    this.seats[from] = null;
+    seat.seat = target;
+    seat.faction = factionForSeat(target, this.matchMode);
+    this.seats[target] = seat;
+    if (this.hostSeat === from) this.hostSeat = target;
+    this.broadcastRoomState();
+    this.sendWelcome(seat, this.seed);
   }
 
   /** 非房主在 waiting 切换准备；房主始终准备，取消会被拒绝。 */
@@ -451,19 +522,19 @@ export class MatchRoom {
     const targetTick = Math.max(this.serverTick + 1, tick | 0);
     const accepted: Command[] = [];
     for (const command of commands) {
-      if (!validateSeatCommand(this.match, seat.faction, command)) {
+      if (!validateSeatCommand(this.match, seat.seat, command)) {
         console.warn(
           `[rejected] room=${this.roomId} seat=${seat.seat} faction=${seat.faction} tick=${targetTick} kind=${command.kind}`,
         );
         continue;
       }
-      accepted.push(command);
+      accepted.push({ ...command, slot: command.slot ?? seat.seat });
     }
     if (accepted.length === 0) return;
     const bucket = this.scheduled.get(targetTick) ?? [];
-    // 蓝座指令在前，红座在后，保证同 tick 合并顺序稳定
-    if (seat.seat === 0) bucket.unshift(...accepted);
-    else bucket.push(...accepted);
+    bucket.push(...accepted);
+    // 按席位升序稳定合并，保证同 tick 多端输入顺序确定
+    bucket.sort((left, right) => (left.slot ?? 0) - (right.slot ?? 0));
     this.scheduled.set(targetTick, bucket);
   }
 
@@ -636,6 +707,57 @@ export class MatchRoom {
     this.broadcast(this.toRoomState());
   }
 
+  /** 当前在座席位摘要，welcome / roomState / 观战共用。 */
+  private listMembers() {
+    return this.seats
+      .filter((entry): entry is Seat => entry !== null)
+      .map((entry) => ({
+        seat: entry.seat,
+        name: entry.name,
+        ready: entry.ready,
+        isHost: entry.seat === this.hostSeat,
+        faction: entry.faction,
+      }));
+  }
+
+  /** 指定队伍第一人名字，供观战欢迎包兼容旧字段。 */
+  private firstNameOfFaction(faction: Faction): string | undefined {
+    return this.seats.find((entry) => entry?.faction === faction)?.name;
+  }
+
+  /**
+   * 把现有玩家迁到新模式席位：超出范围的人挤进空席。
+   * 人数多于新席数时返回 false，不改当前数组。
+   */
+  private tryResizeSeats(nextMode: MatchMode): boolean {
+    const nextSize = slotCount(nextMode);
+    const occupied = this.seats.filter((entry): entry is Seat => entry !== null);
+    if (occupied.length > nextSize) return false;
+    const hostPerson = this.seats[this.hostSeat] ?? occupied[0] ?? null;
+    const next = emptySeats(nextMode);
+    const overflow: Seat[] = [];
+    for (const entry of occupied) {
+      if (entry.seat < nextSize && next[entry.seat] === null) {
+        next[entry.seat] = entry;
+      } else {
+        overflow.push(entry);
+      }
+    }
+    for (const entry of overflow) {
+      const empty = next.findIndex((slot) => slot === null);
+      if (empty < 0) return false;
+      entry.seat = empty;
+      next[empty] = entry;
+    }
+    for (const entry of next) {
+      if (!entry) continue;
+      entry.faction = slotFaction(entry.seat, nextMode);
+    }
+    this.seats = next;
+    if (hostPerson) this.hostSeat = hostPerson.seat;
+    return true;
+  }
+
   private toRoomState(): RoomStateMessage {
     return {
       type: 'roomState',
@@ -643,19 +765,16 @@ export class MatchRoom {
       roomName: this.roomName,
       hostSeat: this.hostSeat,
       phase: this.started ? 'playing' : 'waiting',
-      members: this.seats
-        .filter((entry): entry is Seat => entry !== null)
-        .map((entry) => ({
-          seat: entry.seat,
-          name: entry.name,
-          ready: entry.ready,
-          isHost: entry.seat === this.hostSeat,
-        })),
+      members: this.listMembers(),
+      matchMode: this.matchMode,
+      maxPlayers: this.maxPlayers(),
     };
   }
 
   private sendWelcome(seat: Seat, seed: number): void {
-    const opponent = this.seats.find((entry) => entry && entry.seat !== seat.seat) ?? null;
+    const opponent = this.seats.find(
+      (entry) => entry && entry.faction !== seat.faction,
+    ) ?? null;
     this.send(seat.ws, {
       type: 'welcome',
       seat: seat.seat,
@@ -666,6 +785,8 @@ export class MatchRoom {
       roomName: this.roomName,
       reconnectToken: seat.reconnectToken,
       opponentName: opponent?.name ?? '',
+      matchMode: this.matchMode,
+      members: this.listMembers(),
     });
   }
 
@@ -677,9 +798,11 @@ export class MatchRoom {
       roomName: this.roomName,
       seed: this.seed,
       currentTick: this.serverTick,
-      blueName: this.seats[0]?.name ?? '',
-      redName: this.seats[1]?.name ?? '',
+      blueName: this.firstNameOfFaction(0) ?? '',
+      redName: this.firstNameOfFaction(1) ?? '',
       spectatorCount: this.spectatorCount,
+      matchMode: this.matchMode,
+      members: this.listMembers(),
     });
   }
 
@@ -789,6 +912,11 @@ export class MatchRoom {
   private touchActive(): void {
     this.lastActiveAt = Date.now();
   }
+}
+
+/** 按模式分配空席数组。 */
+function emptySeats(mode: MatchMode): Array<Seat | null> {
+  return Array.from({ length: slotCount(mode) }, () => null);
 }
 
 /** 生成足够熵的重连令牌，避免被猜测占用席位。 */

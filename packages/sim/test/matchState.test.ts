@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Faction } from '../src/entity/unit.js';
 import {
   CASTLE_PROTECT_CARDS,
@@ -15,7 +15,11 @@ import {
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
   TICK_RATE,
+  ARENA_HEIGHT,
+  applyArenaConfigDraft,
+  applyArenaPreset,
   claimCastlePackCommand,
+  dumpDefaultArenaConfigDraft,
   fromFloat,
   playFormationCommand,
   toFloat,
@@ -290,3 +294,103 @@ function castle(match: MatchState, faction: Faction) {
   if (!unit) throw new Error('主堡未生成');
   return unit;
 }
+
+function castleOfSlot(match: MatchState, slot: number) {
+  const unit = match.world.units.find(
+    (candidate) => candidate.ownerSlot === slot && candidate.typeId === 'building_base',
+  );
+  if (!unit) throw new Error(`席位 ${slot} 主堡未生成`);
+  return unit;
+}
+
+describe('MatchState 2v2', () => {
+  afterEach(() => {
+    applyArenaPreset('1v1');
+  });
+
+  it('四席独立牌堆，主堡按队均分 X', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    expect(match.mode).toBe('2v2');
+    expect(match.decks).toHaveLength(4);
+    expect(match.decks[0]!.hand).toHaveLength(INITIAL_HAND_SIZE);
+    expect(match.decks[3]!.hand).toHaveLength(INITIAL_HAND_SIZE);
+    // 2v2 默认单边 (6,2)/(18,2)，偶数 footprint 吸附后仍是整数
+    expect(match.getSlotCastlePosition(0)?.x).toBeCloseTo(6, 5);
+    expect(match.getSlotCastlePosition(1)?.x).toBeCloseTo(18, 5);
+    expect(match.getSlotCastlePosition(2)?.x).toBeCloseTo(6, 5);
+    expect(match.getSlotCastlePosition(3)?.x).toBeCloseTo(18, 5);
+    expect(match.world.units.filter((unit) => unit.typeId === 'building_base')).toHaveLength(4);
+  });
+
+  it('单边基地坐标写入后对岸只镜像 Y', () => {
+    const match = new MatchState(1, '2v2');
+    applyArenaConfigDraft({
+      ...dumpDefaultArenaConfigDraft('2v2'),
+      bases: [
+        { x: 6, y: 4 },
+        { x: 18, y: 3 },
+      ],
+    }, '2v2');
+    match.seedStartingCastles();
+    const fullH = toFloat(ARENA_HEIGHT);
+    expect(match.getSlotCastlePosition(0)).toEqual({ x: 6, y: 4 });
+    expect(match.getSlotCastlePosition(1)).toEqual({ x: 18, y: 3 });
+    expect(match.getSlotCastlePosition(2)).toEqual({ x: 6, y: fullH - 4 });
+    expect(match.getSlotCastlePosition(3)).toEqual({ x: 18, y: fullH - 3 });
+  });
+
+  it('单座阵亡后该席禁出牌且停抽，对局继续', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    expect(match.world.units.filter((unit) => unit.typeId === 'building_base')).toHaveLength(4);
+    const before = match.decks[0]!.hand.length;
+    castleOfSlot(match, 0).hp = 0;
+    match.step();
+    expect(match.isSlotEliminated(0)).toBe(true);
+    expect(match.isSlotEliminated(1)).toBe(false);
+    expect(match.result).toBeNull();
+    const tick = match.world.tick;
+    match.step();
+    match.step();
+    expect(match.world.tick).toBe(tick + 2);
+    expect(match.result).toBeNull();
+    expect(match.validate(playFormationCommand(Faction.Blue, 'single_grunt', ['x'], fromFloat(4), fromFloat(4), 0))).toBe(false);
+    stepTo(match, NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.decks[0]!.hand).toHaveLength(before);
+    expect(match.decks[1]!.hand.length).toBeGreaterThan(before);
+  });
+
+  it('队友阵亡后发牌间隔变为 1.5 倍', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    castleOfSlot(match, 1).hp = 0;
+    match.step();
+    expect(match.getDrawIntervalTicksForSlot(0)).toBe(Math.round(NORMAL_DRAW_INTERVAL_TICKS / 1.5));
+    expect(match.getDrawIntervalTicksForSlot(2)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
+  });
+
+  it('一队两座全灭立即判负', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    castleOfSlot(match, 0).hp = 0;
+    castleOfSlot(match, 1).hp = 0;
+    match.step();
+    expect(match.result).toMatchObject({ winner: Faction.Red, reason: 'base_destroyed' });
+  });
+
+  it('时间到比队伍主堡总血量，hash 对同一种子稳定', () => {
+    const left = new MatchState(7, '2v2');
+    const right = new MatchState(7, '2v2');
+    left.seedStartingCastles();
+    right.seedStartingCastles();
+    left.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2 });
+    right.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2 });
+    castleOfSlot(left, 2).hp -= 10;
+    castleOfSlot(right, 2).hp -= 10;
+    stepTo(left, 6);
+    stepTo(right, 6);
+    expect(left.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
+    expect(left.hash()).toBe(right.hash());
+  });
+});

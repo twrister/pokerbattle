@@ -54,7 +54,7 @@ export class RoomManager {
       mode === 'quick'
         ? this.joinQuick(ws, name, playerId)
         : mode === 'create'
-          ? this.createCustom(ws, name, playerId, message.roomName)
+          ? this.createCustom(ws, name, playerId, message.roomName, message.matchMode)
           : this.joinCustom(ws, message.roomId ?? '', name, playerId);
     if (result.ok) {
       result.playerId = playerId;
@@ -184,13 +184,14 @@ export class RoomManager {
     name: string,
     playerId: string | null,
     rawRoomName?: string,
+    matchMode?: string,
   ): RoomActionResult {
     const roomId = this.nextNumericRoomId();
     if (!roomId) {
       return fail('room_full', '房间号已满，请稍后再试');
     }
     const roomName = normalizeRoomName(rawRoomName ?? '') ?? defaultRoomName(name);
-    const room = this.createRoom(roomId, roomName);
+    const room = this.createRoom(roomId, roomName, matchMode === '2v2' ? '2v2' : '1v1');
     if (!room.handleJoin(ws, name, playerId)) {
       room.dispose();
       return fail('room_full', '暂时无法创建房间');
@@ -228,10 +229,11 @@ export class RoomManager {
   }
 
   /** 创建房间并登记；dispose 时从注册表移除，防止泄漏。 */
-  private createRoom(roomId: string, roomName: string): MatchRoom {
+  private createRoom(roomId: string, roomName: string, matchMode: '1v1' | '2v2' = '1v1'): MatchRoom {
     const room = new MatchRoom({
       roomId,
       roomName,
+      matchMode,
       onDispose: (id) => {
         const current = this.rooms.get(id);
         if (current === room) this.rooms.delete(id);

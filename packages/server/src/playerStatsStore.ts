@@ -99,6 +99,8 @@ export function resolveDecisiveMatch(
 ): DecisiveMatchSides | null {
   if (winner === null) return null;
   const occupied = seats.filter((seat): seat is NonNullable<(typeof seats)[number]> => seat !== null);
+  // 2v2 同队多人共享胜负，暂不写入个人胜点，避免污染 1v1 排行榜。
+  if (occupied.length !== 2) return null;
   const winSeat = occupied.find((seat) => seat.faction === winner);
   const loseSeat = occupied.find((seat) => seat.faction !== winner);
   if (!winSeat?.playerId || !loseSeat?.playerId) return null;

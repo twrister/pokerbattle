@@ -5,6 +5,13 @@ export interface BattleHudContext {
   localFaction: Faction;
   localName: string;
   opponentName: string;
+  /** 本机席位；缺省等于 localFaction，兼容 1v1。 */
+  localSlot?: number;
+  teammateName?: string;
+  teammateSlot?: number | null;
+  opponentSlot?: number;
+  extraOpponentName?: string;
+  extraOpponentSlot?: number | null;
 }
 
 export interface BattleHudHandle {
@@ -26,6 +33,11 @@ interface CastleHudCache {
   protect: boolean;
 }
 
+interface TeamTotalCache {
+  text: string;
+  width: string;
+}
+
 /** 将共享仿真状态投射到顶部信息条；左右始终是「己方蓝 / 对阵红」。 */
 export function createBattleHud(): BattleHudHandle {
   const root = requiredElement<HTMLElement>('#battle-hud');
@@ -39,6 +51,24 @@ export function createBattleHud(): BattleHudHandle {
   const oppTrack = requiredElement<HTMLElement>('#battle-opp-track');
   const selfMark = requiredElement<HTMLElement>('#battle-self-protect-mark');
   const oppMark = requiredElement<HTMLElement>('#battle-opp-protect-mark');
+  const allyRoot = document.querySelector<HTMLElement>('#battle-castle-ally');
+  const allyName = document.querySelector<HTMLElement>('#battle-ally-name');
+  const allyHp = document.querySelector<HTMLElement>('#battle-ally-hp');
+  const allyBar = document.querySelector<HTMLElement>('#battle-ally-bar');
+  const allyTrack = document.querySelector<HTMLElement>('#battle-ally-track');
+  const allyMark = document.querySelector<HTMLElement>('#battle-ally-protect-mark');
+  const opp2Root = document.querySelector<HTMLElement>('#battle-castle-opp-b');
+  const opp2Name = document.querySelector<HTMLElement>('#battle-opp-b-name');
+  const opp2Hp = document.querySelector<HTMLElement>('#battle-opp-b-hp');
+  const opp2Bar = document.querySelector<HTMLElement>('#battle-opp-b-bar');
+  const opp2Track = document.querySelector<HTMLElement>('#battle-opp-b-track');
+  const opp2Mark = document.querySelector<HTMLElement>('#battle-opp-b-protect-mark');
+  const selfTeamTotal = document.querySelector<HTMLElement>('#battle-team-self-total');
+  const selfTeamHp = document.querySelector<HTMLElement>('#battle-team-self-hp');
+  const selfTeamBar = document.querySelector<HTMLElement>('#battle-team-self-bar');
+  const oppTeamTotal = document.querySelector<HTMLElement>('#battle-team-opp-total');
+  const oppTeamHp = document.querySelector<HTMLElement>('#battle-team-opp-hp');
+  const oppTeamBar = document.querySelector<HTMLElement>('#battle-team-opp-bar');
   const phaseLabel = requiredElement<HTMLElement>('#battle-phase-label');
   const timerLabel = requiredElement<HTMLElement>('#battle-timer-label');
   const timer = requiredElement<HTMLElement>('#battle-timer');
@@ -50,7 +80,10 @@ export function createBattleHud(): BattleHudHandle {
     localFaction: Faction.Blue,
     localName: '玩家',
     opponentName: '电脑',
+    localSlot: Faction.Blue,
   };
+  const allyCastle: CastleHudCache = emptyCastleCache();
+  const opp2Castle: CastleHudCache = emptyCastleCache();
   let lastTick = -1;
   let lastSelfName = '';
   let lastOppName = '';
@@ -60,6 +93,8 @@ export function createBattleHud(): BattleHudHandle {
   let lastOppHandText = '';
   const selfCastle: CastleHudCache = emptyCastleCache();
   const oppCastle: CastleHudCache = emptyCastleCache();
+  const selfTeamCache: TeamTotalCache = emptyTeamCache();
+  const oppTeamCache: TeamTotalCache = emptyTeamCache();
 
   return {
     show: () => root.classList.remove('is-hidden'),
@@ -79,6 +114,7 @@ export function createBattleHud(): BattleHudHandle {
     },
     setContext(next) {
       context = next;
+      root.classList.toggle('is-2v2', next.teammateSlot != null);
       writeText(selfName, next.localName || '玩家', (value) => {
         lastSelfName = value;
       }, lastSelfName);
@@ -92,6 +128,7 @@ export function createBattleHud(): BattleHudHandle {
       lastTick = tick;
 
       const local = context.localFaction;
+      const localSlot = context.localSlot ?? local;
       const opp = opposingFaction(local);
       writeText(selfName, context.localName || '玩家', (value) => {
         lastSelfName = value;
@@ -99,8 +136,38 @@ export function createBattleHud(): BattleHudHandle {
       writeText(oppName, context.opponentName || '对手', (value) => {
         lastOppName = value;
       }, lastOppName);
-      updateCastle(local, selfHp, selfBar, selfTrack, selfMark, match, selfCastle);
-      updateCastle(opp, oppHp, oppBar, oppTrack, oppMark, match, oppCastle);
+      updateCastle(localSlot, selfHp, selfBar, selfTrack, selfMark, match, selfCastle);
+      const firstOppSlot = context.opponentSlot ?? opp;
+      updateCastle(firstOppSlot, oppHp, oppBar, oppTrack, oppMark, match, oppCastle);
+      syncOptionalCastle(
+        allyRoot,
+        allyName,
+        allyHp,
+        allyBar,
+        allyTrack,
+        allyMark,
+        context.teammateSlot,
+        context.teammateName,
+        match,
+        allyCastle,
+      );
+      syncOptionalCastle(
+        opp2Root,
+        opp2Name,
+        opp2Hp,
+        opp2Bar,
+        opp2Track,
+        opp2Mark,
+        context.extraOpponentSlot,
+        context.extraOpponentName,
+        match,
+        opp2Castle,
+      );
+      // 2v2 在并排个人条下方再画队伍合计，1v1 只有一座不重复占行
+      const showTeamTotal = context.teammateSlot != null;
+      root.classList.toggle('is-2v2', showTeamTotal);
+      syncTeamTotal(selfTeamTotal, selfTeamHp, selfTeamBar, local, showTeamTotal, match, selfTeamCache);
+      syncTeamTotal(oppTeamTotal, oppTeamHp, oppTeamBar, opp, showTeamTotal, match, oppTeamCache);
 
       const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
       writeText(phaseLabel, phaseText, (value) => {
@@ -116,7 +183,8 @@ export function createBattleHud(): BattleHudHandle {
         lastTimerText = value;
       }, lastTimerText);
 
-      const nextOppHand = formatHandCount(match.decks[opp].hand.length, match.getMaxHandSize());
+      const oppHandSlot = context.opponentSlot ?? opp;
+      const nextOppHand = formatHandCount(match.decks[oppHandSlot]?.hand.length ?? 0, match.getMaxHandSize());
       writeText(oppHand, nextOppHand, (value) => {
         lastOppHandText = value;
         oppHand.setAttribute('aria-label', `对手手牌 ${value}`);
@@ -127,6 +195,37 @@ export function createBattleHud(): BattleHudHandle {
 
 function emptyCastleCache(): CastleHudCache {
   return { text: '', width: '', markLeft: '', markTitle: '', protect: false };
+}
+
+function emptyTeamCache(): TeamTotalCache {
+  return { text: '', width: '' };
+}
+
+/** 2v2 队伍合计血条；1v1 隐藏，避免和单座条重复。 */
+function syncTeamTotal(
+  root: HTMLElement | null,
+  hpEl: HTMLElement | null,
+  bar: HTMLElement | null,
+  faction: Faction,
+  visible: boolean,
+  match: MatchState,
+  cache: TeamTotalCache,
+): void {
+  if (!root || !hpEl || !bar) return;
+  root.classList.toggle('is-hidden', !visible);
+  if (!visible) return;
+  const hp = toFloat(match.getCastleHp(faction));
+  const maxHp = toFloat(match.getCastleMaxHp(faction));
+  const text = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
+  const width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
+  if (cache.text !== text) {
+    hpEl.textContent = text;
+    cache.text = text;
+  }
+  if (cache.width !== width) {
+    bar.style.width = width;
+    cache.width = width;
+  }
 }
 
 function writeText(
@@ -140,8 +239,28 @@ function writeText(
   assign(next);
 }
 
+function syncOptionalCastle(
+  root: HTMLElement | null,
+  nameEl: HTMLElement | null,
+  hpEl: HTMLElement | null,
+  bar: HTMLElement | null,
+  track: HTMLElement | null,
+  mark: HTMLElement | null,
+  slot: number | null | undefined,
+  name: string | undefined,
+  match: MatchState,
+  cache: CastleHudCache,
+): void {
+  if (!root || !hpEl || !bar || !track || !mark) return;
+  const visible = slot != null;
+  root.classList.toggle('is-hidden', !visible);
+  if (!visible) return;
+  if (nameEl) nameEl.textContent = name || '队友';
+  updateCastle(slot, hpEl, bar, track, mark, match, cache);
+}
+
 function updateCastle(
-  faction: Faction,
+  slot: number,
   label: HTMLElement,
   bar: HTMLElement,
   track: HTMLElement,
@@ -149,9 +268,9 @@ function updateCastle(
   match: MatchState,
   cache: CastleHudCache,
 ): void {
-  const hp = toFloat(match.getCastleHp(faction));
-  const maxHp = toFloat(match.getCastleMaxHp(faction));
-  const protectHp = match.getCastleProtectHp(faction);
+  const hp = toFloat(match.getSlotCastleHp(slot));
+  const maxHp = toFloat(match.getSlotCastleMaxHp(slot));
+  const protectHp = match.getCastleProtectHp(slot);
   const text = `${Math.ceil(hp)} / ${Math.ceil(maxHp)}`;
   const width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
   const markLeft = `${maxHp > 0 ? Math.max(0, Math.min(100, (protectHp / maxHp) * 100)) : 0}%`;

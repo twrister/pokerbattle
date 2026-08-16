@@ -12,6 +12,7 @@ const unitsJsonPath = path.resolve(clientDir, '../sim/src/config/units.json');
 const cardFormationsJsonPath = path.resolve(clientDir, '../sim/src/config/cardFormations.json');
 /** monorepo 内场景配置的唯一落盘路径 */
 const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
+const arena2v2JsonPath = path.resolve(clientDir, '../sim/src/config/arena2v2.json');
 
 /** 开发服务器：GET 读盘最新 units.json，POST 覆盖写回。 */
 function unitConfigWritePlugin(): Plugin {
@@ -138,12 +139,16 @@ function arenaConfigWritePlugin(): Plugin {
               sendJson(res, 400, { error: 'invalid JSON' });
               return;
             }
-            const validationError = validateArenaConfigBody(parsed);
+            const wrapped = parsed as { mode?: unknown; draft?: unknown };
+            const mode = wrapped.mode === '2v2' ? '2v2' : wrapped.mode === '1v1' ? '1v1' : null;
+            const draft = mode && wrapped.draft ? wrapped.draft : parsed;
+            const validationError = validateArenaConfigBody(draft);
             if (validationError) {
               sendJson(res, 400, { error: validationError });
               return;
             }
-            fs.writeFileSync(arenaJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+            const target = mode === '2v2' ? arena2v2JsonPath : arenaJsonPath;
+            fs.writeFileSync(target, `${JSON.stringify(draft, null, 2)}\n`, 'utf8');
             sendJson(res, 200, { ok: true });
           })
           .catch((err: unknown) => {
@@ -169,6 +174,8 @@ function validateArenaConfigBody(value: unknown): string | undefined {
     height?: unknown;
     riverWidth?: unknown;
     bridges?: unknown;
+    bridge3Enabled?: unknown;
+    bases?: unknown;
     camera?: { mode?: unknown };
     colors?: unknown;
   };
@@ -178,6 +185,10 @@ function validateArenaConfigBody(value: unknown): string | undefined {
     return 'riverWidth must be a positive integer';
   }
   if (!Array.isArray(draft.bridges) || draft.bridges.length === 0) return 'bridges must be a non-empty array';
+  if (draft.bridge3Enabled !== undefined && typeof draft.bridge3Enabled !== 'boolean') {
+    return 'bridge3Enabled must be a boolean';
+  }
+  if (draft.bases !== undefined && !Array.isArray(draft.bases)) return 'bases must be an array';
   if (draft.camera?.mode !== 'ortho' && draft.camera?.mode !== 'perspective') {
     return 'camera.mode must be ortho or perspective';
   }

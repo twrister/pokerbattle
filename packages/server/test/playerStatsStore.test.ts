@@ -52,6 +52,20 @@ describe('resolveDecisiveMatch', () => {
     });
   });
 
+  it('2v2 四席暂不记入排行榜', () => {
+    expect(
+      resolveDecisiveMatch(
+        [
+          { playerId: 'a', name: 'A', faction: Faction.Blue },
+          { playerId: 'b', name: 'B', faction: Faction.Blue },
+          { playerId: 'c', name: 'C', faction: Faction.Red },
+          { playerId: 'd', name: 'D', faction: Faction.Red },
+        ],
+        Faction.Blue,
+      ),
+    ).toBeNull();
+  });
+
   it('平局或缺 ID 不记账', () => {
     expect(resolveDecisiveMatch(seats, null)).toBeNull();
     expect(

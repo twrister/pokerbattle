@@ -603,6 +603,56 @@ describe('MatchRoom 观战', () => {
   });
 });
 
+describe('2v2 房间', () => {
+  it('创建 2v2 后可入四席，点空席换队，满员才能开局', () => {
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    const c = new FakeWebSocket();
+    const d = new FakeWebSocket();
+    const created = manager.join(a as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'A',
+      roomName: '双人房',
+      matchMode: '2v2',
+    });
+    expect(created.ok).toBe(true);
+    const roomId = welcomeRoom(a);
+    expect(latestWelcome(a).matchMode).toBe('2v2');
+    expect(manager.join(b as never, { type: 'join', mode: 'room', roomId, name: 'B' }).ok).toBe(true);
+    expect(manager.join(c as never, { type: 'join', mode: 'room', roomId, name: 'C' }).ok).toBe(true);
+    a.receive({ type: 'startMatch' });
+    expect(a.messages().some((m) => m.type === 'error' && m.code === 'not_ready')).toBe(true);
+
+    expect(manager.join(d as never, { type: 'join', mode: 'room', roomId, name: 'D' }).ok).toBe(true);
+    d.receive({ type: 'pickSeat', seat: 3 });
+    expect(latestWelcome(d).seat).toBe(3);
+    a.receive({ type: 'startMatch' });
+    expect(a.messages().some((m) => m.type === 'start')).toBe(true);
+    manager.dispose();
+  });
+
+  it('房主切回 1v1 时人数超席拒绝，两人则可挤座', () => {
+    const room = new MatchRoom({ roomId: '201', roomName: '切模式', matchMode: '2v2' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    const c = new FakeWebSocket();
+    expect(room.handleJoin(a as never, 'A')).toBe(true);
+    expect(room.handleJoin(b as never, 'B')).toBe(true);
+    expect(room.handleJoin(c as never, 'C')).toBe(true);
+    a.receive({ type: 'setRoomOptions', matchMode: '1v1' });
+    expect(a.messages().some((m) => m.type === 'error' && m.code === 'cannot_change_mode')).toBe(true);
+    c.close();
+    a.receive({ type: 'setRoomOptions', matchMode: '1v1' });
+    const state = [...a.messages()].reverse().find((m) => m.type === 'roomState');
+    expect(state && state.type === 'roomState' ? state.matchMode : null).toBe('1v1');
+    expect(state && state.type === 'roomState' ? state.maxPlayers : null).toBe(2);
+    room.dispose();
+  });
+});
+
 function hostStart(ws: FakeWebSocket): void {
   ws.receive({ type: 'startMatch' });
 }

@@ -255,6 +255,27 @@ describe('协议编解码', () => {
     expect(normalizeRoomId('')).toBeNull();
   });
 
+  it('可编解码 setRoomOptions / pickSeat / 带 matchMode 的 join', () => {
+    const options = encodeMessage({ type: 'setRoomOptions', matchMode: '2v2' });
+    expect(decodeClientMessage(options)).toEqual({ type: 'setRoomOptions', matchMode: '2v2' });
+    const pick = encodeMessage({ type: 'pickSeat', seat: 3 });
+    expect(decodeClientMessage(pick)).toEqual({ type: 'pickSeat', seat: 3 });
+    const join = encodeMessage({
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'Alice',
+      matchMode: '2v2',
+    });
+    expect(decodeClientMessage(join)).toEqual({
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: 'Alice',
+      matchMode: '2v2',
+    });
+  });
+
   it('规范化房间名并裁剪超长', () => {
     expect(normalizeRoomName('  测试房间  ')).toBe('测试房间');
     expect(normalizeRoomName('')).toBeNull();

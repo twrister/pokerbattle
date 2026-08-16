@@ -104,7 +104,8 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
 
       const count = document.createElement('span');
       count.className = 'online-room-card-count';
-      count.textContent = `${room.playerCount}/${room.maxPlayers}`;
+      const modeLabel = room.matchMode === '2v2' ? '2v2' : '1v1';
+      count.textContent = `${modeLabel} · ${room.playerCount}/${room.maxPlayers}`;
 
       const state = document.createElement('span');
       state.className = 'online-room-card-state';
@@ -191,7 +192,8 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
   const confirmCreate = (): void => {
     const roomName = normalizeRoomName(createNameInput.value) ?? options.getDefaultRoomName();
     hideDialogs();
-    options.onJoinRoom({ mode: 'create', roomName });
+    const matchMode = createDialog.querySelector<HTMLInputElement>('input[name="online-create-mode"]:checked')?.value;
+    options.onJoinRoom({ mode: 'create', roomName, matchMode: matchMode === '2v2' ? '2v2' : '1v1' });
   };
 
   const confirmJoin = (): void => {

@@ -16,12 +16,19 @@ export {
 } from './config/arenaTerrain.js';
 export {
   applyArenaConfigDraft,
+  applyArenaPreset,
   arenaFullSize,
   captureArenaConfigAsDefault,
+  currentArenaPreset,
+  defaultSideBasePositions,
   dumpArenaConfigDraft,
   dumpDefaultArenaConfigDraft,
+  mirrorBaseY,
   resetArenaConfigToDefault,
+  resolveActiveBridges,
+  resolveSideBasePositions,
   validateArenaConfigDraft,
+  type ArenaBasePos,
   type ArenaCameraDraft,
   type ArenaCameraMode,
   type ArenaColorsDraft,
@@ -185,6 +192,7 @@ export {
   MATCH_END_TICKS,
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
+  TEAMMATE_LOST_DRAW_SPEEDUP,
   defaultMatchRules,
   type CastlePackState,
   type MatchDrawIntervals,
@@ -195,6 +203,15 @@ export {
   type MatchResult,
   type MatchRules,
 } from './match/matchState.js';
+export {
+  allSlots,
+  isValidSlot,
+  slotCount,
+  slotFaction,
+  teamSlots,
+  teammateSlot,
+  type MatchMode,
+} from './match/matchMode.js';
 export { SoloBotController, type SoloDifficulty } from './match/soloBot.js';
 
 export { type Attributes } from './stats/attributes.js';

@@ -1,6 +1,10 @@
 import {
+  applyArenaPreset,
   Faction,
+  opposingFaction,
   SoloBotController,
+  teammateSlot,
+  teamSlots,
   TICK_RATE,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
@@ -72,7 +76,11 @@ import type { RoomStateMessage } from '@pb/net';
 import type { NetSimLoop } from './net/netLoop.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
-import { createBattleAnnounce } from './ui/battleAnnounce.js';
+import {
+  BASE_DOWN_ANNOUNCE,
+  createBattleAnnounce,
+  TEAMMATE_DOWN_ANNOUNCE,
+} from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
@@ -262,6 +270,12 @@ const onlineRoomPage = createOnlineRoomPage({
   onSetReady: (ready) => {
     activeRoomSession?.sendSetReady(ready);
   },
+  onSetMatchMode: (mode) => {
+    activeRoomSession?.sendSetRoomOptions(mode);
+  },
+  onPickSeat: (seat) => {
+    activeRoomSession?.sendPickSeat(seat);
+  },
 });
 
 /** 关闭入房中的连接，避免重复占席。 */
@@ -302,6 +316,7 @@ function beginJoinRoom(request: RoomJoinRequest): void {
     mode: request.mode,
     roomId: request.roomId,
     roomName: request.roomName,
+    matchMode: request.matchMode,
     onStatus: (text) => {
       if (screens.current === 'online') onlineLobbyPage.showError(text);
       else onlineRoomPage.showStatus(text);
@@ -484,6 +499,7 @@ type BattleMode = 'sandbox' | 'solo';
 
 /** 启动一轮战斗会话；离开时释放本局监听与循环，场景与配置面板保留。 */
 function enterBattleSession(mode: BattleMode): () => void {
+  applyArenaPreset('1v1');
   const isSolo = mode === 'solo';
   const debugSpawn = isSolo && selectedSoloDebugSpawn && IS_DEV_SERVER;
 
@@ -514,6 +530,7 @@ function enterBattleSession(mode: BattleMode): () => void {
   const battleView = sharedBattleView!;
   battleView.reset();
   battleView.setLocalFaction(Faction.Blue);
+  battleView.setLocalSlot(Faction.Blue);
 
   // 单机走 MatchState，与联机共用出牌/抽牌规则，避免双路径漂移
   // 每局随机 seed（对齐服务端 room.ts），避免开局手牌永远相同
@@ -1177,15 +1194,27 @@ function runVersusSession(
   battleAnnounce.reset();
   battleHud.setSpectatorCount(0);
   battleHud.setCatchingUp(false);
-  battleHud.setContext({
+  const localSlot = netLoop.seat;
+  const matchMode = netLoop.match.mode;
+  applyArenaPreset(matchMode);
+  const mate = teammateSlot(localSlot, matchMode);
+  const oppSlots = teamSlots(opposingFaction(faction), matchMode);
+  const members = latestRoomState?.members ?? [];
+  const memberName = (slot: number | null | undefined, fallback: string): string =>
+    slot == null ? fallback : (members.find((entry) => entry.seat === slot)?.name ?? fallback);
+  const hudContext = {
     localFaction: faction,
+    localSlot,
     localName: names.localName,
-    opponentName: names.opponentName,
-  });
-  battleResult.setContext({
-    localName: names.localName,
-    opponentName: names.opponentName,
-  });
+    opponentName: memberName(oppSlots[0], names.opponentName),
+    opponentSlot: oppSlots[0],
+    teammateSlot: mate,
+    teammateName: mate == null ? undefined : memberName(mate, '队友'),
+    extraOpponentSlot: oppSlots[1] ?? null,
+    extraOpponentName: oppSlots[1] == null ? undefined : memberName(oppSlots[1], '对手'),
+  };
+  battleHud.setContext(hudContext);
+  battleResult.setContext(hudContext);
   battleHud.show();
 
   const sceneContext = ensureBattleScene('solo', faction);
@@ -1193,8 +1222,9 @@ function runVersusSession(
   const battleView = sharedBattleView!;
   battleView.reset();
   battleView.setLocalFaction(faction);
+  battleView.setLocalSlot(localSlot);
   let dealFromCastle = false;
-  let prevPackState = netLoop.match.getCastlePackState(faction);
+  let prevPackState = netLoop.match.getSlotCastlePackState(localSlot);
   const disableCastlePackClick = enableCastlePackClick({
     domElement: sceneContext.renderer.domElement,
     pickPack: (clientX, clientY) =>
@@ -1205,7 +1235,7 @@ function runVersusSession(
         sceneContext.renderer.domElement,
       ),
     onClaim: () => {
-      const command = claimCastlePackCommand(faction);
+      const command = claimCastlePackCommand(faction, localSlot);
       if (!netLoop.match.validate(command)) return;
       netLoop.sendInput([command]);
     },
@@ -1250,6 +1280,7 @@ function runVersusSession(
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
+    if (netLoop.match.isSlotEliminated(localSlot)) return false;
     if (isFuseBombFormation(formation)) {
       if (!point) return false;
       const anchor = screenToSim(
@@ -1331,6 +1362,7 @@ function runVersusSession(
       request.cards.map((card) => card.id),
       fromFloat(anchorX),
       fromFloat(anchorY),
+      localSlot,
     );
     if (!netLoop.match.validate(cmd)) return false;
     netLoop.sendInput([cmd]);
@@ -1338,13 +1370,13 @@ function runVersusSession(
   };
 
   const handPanel = createHandPanel({
-    deck: netLoop.match.decks[faction],
+    deck: netLoop.match.decks[localSlot],
     externalDraw: true,
     externalCardConsume: true,
-    getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw(faction) * 1000) / TICK_RATE,
-    getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicks() * 1000) / TICK_RATE,
+    getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw(localSlot) * 1000) / TICK_RATE,
+    getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicksForSlot(localSlot) * 1000) / TICK_RATE,
     getMaxHandSize: () => netLoop.match.getMaxHandSize(),
-    getHasPendingDraw: () => netLoop.match.hasPendingDraw(faction),
+    getHasPendingDraw: () => netLoop.match.hasPendingDraw(localSlot),
     getDealOrigin: () => {
       if (!dealFromCastle) return null;
       return battleView.getCastlePackClientPoint(
@@ -1442,6 +1474,8 @@ function runVersusSession(
   let animationFrameId = 0;
   let lastHandSyncTick = netLoop.world.tick;
   let resultShown = false;
+  let selfEliminated = netLoop.match.isSlotEliminated(localSlot);
+  let mateEliminated = mate != null && netLoop.match.isSlotEliminated(mate);
 
   const frame = (now: number): void => {
     const deltaMs = Math.min(now - lastFrameAt, 250);
@@ -1449,7 +1483,18 @@ function runVersusSession(
     smoothedFps += (1000 / Math.max(deltaMs, 1) - smoothedFps) * 0.08;
 
     netLoop.advance(deltaMs);
-    const packState = netLoop.match.getCastlePackState(faction);
+    const nowEliminated = netLoop.match.isSlotEliminated(localSlot);
+    if (nowEliminated && !selfEliminated) {
+      battleAnnounce.show(BASE_DOWN_ANNOUNCE);
+      handPanel.setPlayLocked(true);
+    }
+    selfEliminated = nowEliminated;
+    if (mate != null) {
+      const mateDown = netLoop.match.isSlotEliminated(mate);
+      if (mateDown && !mateEliminated) battleAnnounce.show(TEAMMATE_DOWN_ANNOUNCE);
+      mateEliminated = mateDown;
+    }
+    const packState = netLoop.match.getSlotCastlePackState(localSlot);
     if (netLoop.world.tick !== lastHandSyncTick) {
       dealFromCastle = prevPackState === 'pending' && packState === 'claimed';
       prevPackState = packState;
@@ -1529,25 +1574,37 @@ function runSpectateSession(
   versusExitConfirm.hide();
   battleAnnounce.reset();
   battleResult.setReturnLabel('返回大厅');
-  battleHud.setContext({
+  const matchMode = netLoop.match.mode;
+  const members = latestRoomState?.members ?? [];
+  const memberName = (slot: number | undefined, fallback: string): string =>
+    slot == null ? fallback : (members.find((entry) => entry.seat === slot)?.name ?? fallback);
+  const blueSlots = teamSlots(Faction.Blue, matchMode);
+  const redSlots = teamSlots(Faction.Red, matchMode);
+  const spectateContext = {
     localFaction: Faction.Blue,
-    localName: blueName || '蓝方',
-    opponentName: redName || '红方',
-  });
-  battleResult.setContext({
-    localName: blueName || '蓝方',
-    opponentName: redName || '红方',
-  });
+    localSlot: blueSlots[0],
+    localName: memberName(blueSlots[0], blueName || '蓝方'),
+    opponentName: memberName(redSlots[0], redName || '红方'),
+    opponentSlot: redSlots[0],
+    teammateSlot: blueSlots[1] ?? null,
+    teammateName: blueSlots[1] == null ? undefined : memberName(blueSlots[1], '蓝方2'),
+    extraOpponentSlot: redSlots[1] ?? null,
+    extraOpponentName: redSlots[1] == null ? undefined : memberName(redSlots[1], '红方2'),
+  };
+  battleHud.setContext(spectateContext);
+  battleResult.setContext(spectateContext);
   spectatorHands.setNames(blueName, redName);
   spectatorHands.show();
   battleHud.setCatchingUp(netLoop.pendingTicks > 0);
   battleHud.show();
 
+  applyArenaPreset(netLoop.match.mode);
   const sceneContext = ensureBattleScene('solo', Faction.Blue);
   sceneContext.resize();
   const battleView = sharedBattleView!;
   battleView.reset();
   battleView.setLocalFaction(Faction.Blue);
+  battleView.setLocalSlot(0);
   const disableUnitSelection = enableUnitSelection({
     domElement: sceneContext.renderer.domElement,
     camera: sceneContext.camera,

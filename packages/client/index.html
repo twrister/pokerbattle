@@ -900,6 +900,50 @@
         align-content: start;
       }
 
+      .online-room-teams {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      .online-room-team-title {
+        margin: 0 0 calc(8 * var(--hu));
+        font-size: calc(14 * var(--hu));
+        font-weight: 650;
+      }
+
+      .online-room-team.is-blue .online-room-team-title { color: #7eb6ff; }
+      .online-room-team.is-red .online-room-team-title { color: #f08a7a; }
+
+      .online-room-mode {
+        display: flex;
+        gap: calc(8 * var(--hu));
+        margin-bottom: calc(10 * var(--hu));
+      }
+
+      .online-room-mode button {
+        flex: 1;
+        padding: calc(8 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.28);
+        background: rgba(12, 24, 36, 0.72);
+        color: #c5d7e6;
+      }
+
+      .online-room-mode button.is-active {
+        border-color: rgba(153, 207, 237, 0.7);
+        background: rgba(79, 141, 253, 0.22);
+      }
+
+      .online-create-mode {
+        border: 0;
+        margin: calc(10 * var(--hu)) 0;
+        padding: 0;
+        color: #c5d7e6;
+        display: flex;
+        gap: calc(16 * var(--hu));
+      }
+
       .online-room-member {
         padding: calc(16 * var(--hu));
         border: 1px solid rgba(153, 207, 237, 0.22);
@@ -909,6 +953,11 @@
 
       .online-room-member.is-host {
         border-color: rgba(153, 207, 237, 0.55);
+      }
+
+      .online-room-member.is-empty {
+        cursor: pointer;
+        opacity: 0.72;
       }
 
       .online-room-member-name {
@@ -1259,6 +1308,11 @@
         pointer-events: none;
       }
 
+      /* 2v2 两侧各两座并排，总条再占一行，加宽避免名字被挤没 */
+      #battle-hud.is-2v2 {
+        width: min(calc(680 * var(--hu)), calc(100vw - 16px));
+      }
+
       .battle-hud-main {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -1363,8 +1417,92 @@
         box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.85);
       }
 
-      .battle-castle-self .battle-hp-bar { background: var(--blue); }
-      .battle-castle-opp .battle-hp-bar { background: var(--red); }
+      .battle-team {
+        display: grid;
+        gap: calc(5 * var(--hu));
+        min-width: 0;
+      }
+
+      .battle-team-self {
+        justify-self: end;
+      }
+
+      /* 1v1 仍是单座竖排；2v2 改成我/队友并排 */
+      .battle-castle-row {
+        display: flex;
+        align-items: stretch;
+        justify-content: flex-end;
+        gap: calc(6 * var(--hu));
+        min-width: 0;
+      }
+
+      .battle-team-opp .battle-castle-row {
+        justify-content: flex-start;
+      }
+
+      #battle-hud.is-2v2 .battle-castle {
+        width: auto;
+        flex: 1 1 0;
+        min-width: 0;
+        /* 名字和血量同一行，并排时少占高度 */
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: baseline;
+      }
+
+      #battle-hud.is-2v2 .battle-hp-track {
+        grid-column: 1 / -1;
+      }
+
+      .battle-castle-ally .battle-castle-label {
+        color: #7ee8e8;
+      }
+
+      .battle-team-total {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: calc(4 * var(--hu)) calc(8 * var(--hu));
+        min-width: 0;
+        padding: calc(4 * var(--hu)) calc(8 * var(--hu));
+        border: 1px solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(12, 19, 29, 0.72);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-team-total.is-hidden {
+        display: none;
+      }
+
+      .battle-team-total-label {
+        color: var(--text-dim);
+        font-size: calc(10 * var(--hu));
+        letter-spacing: 0.04em;
+      }
+
+      .battle-team-total .battle-hp {
+        justify-self: end;
+        font-size: calc(12 * var(--hu));
+      }
+
+      .battle-team-total .battle-hp-track {
+        grid-column: 1 / -1;
+        height: calc(5 * var(--hu));
+      }
+
+      .battle-team-self .battle-team-total {
+        border-color: rgba(79, 141, 253, 0.35);
+      }
+
+      .battle-team-opp .battle-team-total {
+        border-color: rgba(242, 96, 79, 0.35);
+      }
+
+      .battle-castle-self .battle-hp-bar,
+      .battle-team-self .battle-team-total-bar { background: var(--blue); }
+      .battle-castle-ally .battle-hp-bar { background: #35d6d6; }
+      .battle-castle-opp .battle-hp-bar,
+      .battle-team-opp .battle-team-total-bar { background: var(--red); }
 
       .battle-center {
         display: grid;
@@ -1552,6 +1690,10 @@
         background: rgba(3, 7, 12, 0.68);
       }
 
+      #battle-result-dialog.is-2v2 .battle-result-panel {
+        width: min(100%, calc(480 * var(--hu)));
+      }
+
       .battle-result-panel {
         display: grid;
         gap: calc(18 * var(--hu));
@@ -1629,6 +1771,75 @@
 
       .battle-result-side.is-self .battle-hp-bar { background: var(--blue); }
       .battle-result-side.is-opp .battle-hp-bar { background: var(--red); }
+
+      .battle-result-members {
+        display: grid;
+        gap: calc(4 * var(--hu));
+        margin: calc(4 * var(--hu)) 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .battle-result-members.is-hidden {
+        display: none;
+      }
+
+      .battle-result-members li {
+        display: flex;
+        justify-content: space-between;
+        gap: calc(8 * var(--hu));
+        min-width: 0;
+        color: #d7e1eb;
+        font-size: calc(12 * var(--hu));
+      }
+
+      .battle-result-members li.is-down {
+        opacity: 0.55;
+      }
+
+      .battle-result-member-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .battle-result-member-hp {
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-result-compare {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: calc(8 * var(--hu));
+        font-size: calc(13 * var(--hu));
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-result-compare.is-hidden {
+        display: none;
+      }
+
+      .battle-result-compare-self {
+        color: #9cbcff;
+      }
+
+      .battle-result-compare-opp {
+        color: #f5a498;
+      }
+
+      .battle-result-compare-track {
+        height: calc(8 * var(--hu));
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--red);
+      }
+
+      .battle-result-compare-bar {
+        height: 100%;
+        background: var(--blue);
+      }
 
       #battle-result-title {
         margin: 0;
@@ -1886,6 +2097,11 @@
        * 手牌独立于调试面板锚在单机画面底部，重叠排布确保九张牌仍能完整操作。
        * 尺寸使用 :root 的 --hu（舞台宽 / 720），与大厅同一套 720×1280 设计单位。
        */
+      #solo-hand.is-play-locked {
+        opacity: 0.45;
+        pointer-events: none;
+      }
+
       #solo-hand {
         position: absolute;
         right: 0;
@@ -3832,6 +4048,21 @@
         flex-shrink: 0;
       }
 
+      .scene-config-mode {
+        display: flex;
+        gap: calc(6 * var(--hu));
+      }
+      .scene-config-mode button {
+        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(8 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.28);
+        background: rgba(12, 24, 36, 0.72);
+        color: #c5d7e6;
+      }
+      .scene-config-mode button.is-active {
+        border-color: rgba(153, 207, 237, 0.7);
+        background: rgba(79, 141, 253, 0.22);
+      }
       .scene-config-header h1 {
         margin: 0;
         font-size: 22px;
@@ -3922,6 +4153,23 @@
       .scene-config-row input[type='color'] {
         padding: 2px;
         min-height: 34px;
+      }
+
+      .scene-config-row input:disabled {
+        opacity: 0.45;
+      }
+
+      .scene-config-check {
+        flex-direction: row;
+        align-items: center;
+        min-width: auto;
+      }
+
+      .scene-config-check input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        min-height: 16px;
+        padding: 0;
       }
 
       .scene-config-footer {
@@ -4194,6 +4442,11 @@
               placeholder="房间名，例如 小明的房间"
               aria-label="联机房间名"
             />
+            <fieldset class="online-create-mode">
+              <legend>对局模式</legend>
+              <label><input type="radio" name="online-create-mode" value="1v1" checked /> 1v1</label>
+              <label><input type="radio" name="online-create-mode" value="2v2" /> 2v2</label>
+            </fieldset>
             <div id="online-create-error" role="alert"></div>
             <button id="btn-online-create-confirm" type="button">创建</button>
           </div>
@@ -4245,6 +4498,10 @@
         <div class="online-room-meta">
           <div id="online-room-id">---</div>
           <div id="online-room-name">正在加入…</div>
+        </div>
+        <div id="online-room-mode" class="online-room-mode is-hidden">
+          <button id="btn-online-room-mode-1v1" type="button">1v1</button>
+          <button id="btn-online-room-mode-2v2" type="button">2v2</button>
         </div>
         <div id="online-room-members"></div>
         <div id="online-room-status" role="status" aria-live="polite"></div>
@@ -4579,7 +4836,10 @@
         <header class="scene-config-header">
           <button id="btn-scene-config-back" type="button">返回图鉴</button>
           <h1>场景配置</h1>
-          <span aria-hidden="true"></span>
+          <div id="scene-config-mode" class="scene-config-mode">
+            <button id="btn-scene-mode-1v1" type="button">1v1</button>
+            <button id="btn-scene-mode-2v2" type="button">2v2</button>
+          </div>
         </header>
         <section class="scene-config-body">
           <div id="scene-config-preview" aria-label="场景预览"></div>
@@ -4625,7 +4885,17 @@
               </div>
             </section>
             <section class="scene-config-group">
+              <h2>单边基地</h2>
+              <div id="scene-base-list"></div>
+            </section>
+            <section class="scene-config-group">
               <h2>桥</h2>
+              <div class="scene-config-row">
+                <label class="scene-config-check">
+                  <input id="scene-bridge3-enabled" type="checkbox" />
+                  开启桥三
+                </label>
+              </div>
               <div id="scene-bridge-list"></div>
             </section>
             <section class="scene-config-group">
@@ -4654,12 +4924,31 @@
     <div id="hud" class="is-hidden">
       <section id="battle-hud" class="is-hidden" aria-label="对局信息">
         <div class="battle-hud-main">
-          <div class="battle-castle battle-castle-self">
-            <span id="battle-self-name" class="battle-castle-label">玩家</span>
-            <strong id="battle-self-hp" class="battle-hp">0 / 0</strong>
-            <div class="battle-hp-track" id="battle-self-track">
-              <div id="battle-self-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
-              <div id="battle-self-bar" class="battle-hp-bar"></div>
+          <div class="battle-team battle-team-self">
+            <div class="battle-castle-row">
+              <div class="battle-castle battle-castle-self">
+                <span id="battle-self-name" class="battle-castle-label">玩家</span>
+                <strong id="battle-self-hp" class="battle-hp">0 / 0</strong>
+                <div class="battle-hp-track" id="battle-self-track">
+                  <div id="battle-self-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
+                  <div id="battle-self-bar" class="battle-hp-bar"></div>
+                </div>
+              </div>
+              <div id="battle-castle-ally" class="battle-castle battle-castle-ally is-hidden">
+                <span id="battle-ally-name" class="battle-castle-label">队友</span>
+                <strong id="battle-ally-hp" class="battle-hp">0 / 0</strong>
+                <div class="battle-hp-track" id="battle-ally-track">
+                  <div id="battle-ally-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
+                  <div id="battle-ally-bar" class="battle-hp-bar"></div>
+                </div>
+              </div>
+            </div>
+            <div id="battle-team-self-total" class="battle-team-total is-hidden">
+              <span class="battle-team-total-label">合计</span>
+              <strong id="battle-team-self-hp" class="battle-hp">0 / 0</strong>
+              <div class="battle-hp-track">
+                <div id="battle-team-self-bar" class="battle-hp-bar battle-team-total-bar"></div>
+              </div>
             </div>
           </div>
           <div class="battle-center">
@@ -4670,12 +4959,31 @@
             <span id="battle-catchup" class="is-hidden">正在追帧…</span>
           </div>
           <div class="battle-opp-side">
-            <div class="battle-castle battle-castle-opp">
-              <span id="battle-opp-name" class="battle-castle-label">电脑</span>
-              <strong id="battle-opp-hp" class="battle-hp">0 / 0</strong>
-              <div class="battle-hp-track" id="battle-opp-track">
-                <div id="battle-opp-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
-                <div id="battle-opp-bar" class="battle-hp-bar"></div>
+            <div class="battle-team battle-team-opp">
+              <div class="battle-castle-row">
+                <div class="battle-castle battle-castle-opp">
+                  <span id="battle-opp-name" class="battle-castle-label">电脑</span>
+                  <strong id="battle-opp-hp" class="battle-hp">0 / 0</strong>
+                  <div class="battle-hp-track" id="battle-opp-track">
+                    <div id="battle-opp-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
+                    <div id="battle-opp-bar" class="battle-hp-bar"></div>
+                  </div>
+                </div>
+                <div id="battle-castle-opp-b" class="battle-castle battle-castle-opp is-hidden">
+                  <span id="battle-opp-b-name" class="battle-castle-label">对手</span>
+                  <strong id="battle-opp-b-hp" class="battle-hp">0 / 0</strong>
+                  <div class="battle-hp-track" id="battle-opp-b-track">
+                    <div id="battle-opp-b-protect-mark" class="battle-hp-protect-mark" title="保护线 半血" aria-hidden="true"></div>
+                    <div id="battle-opp-b-bar" class="battle-hp-bar"></div>
+                  </div>
+                </div>
+              </div>
+              <div id="battle-team-opp-total" class="battle-team-total is-hidden">
+                <span class="battle-team-total-label">合计</span>
+                <strong id="battle-team-opp-hp" class="battle-hp">0 / 0</strong>
+                <div class="battle-hp-track">
+                  <div id="battle-team-opp-bar" class="battle-hp-bar battle-team-total-bar"></div>
+                </div>
               </div>
             </div>
             <div id="battle-opp-hand" aria-label="对手手牌 0 / 9">0 / 9</div>
@@ -4695,13 +5003,22 @@
               <strong id="battle-result-self-name" class="battle-result-name">玩家</strong>
               <span id="battle-result-self-hp" class="battle-result-hp">0 / 0</span>
               <div class="battle-hp-track"><div id="battle-result-self-bar" class="battle-hp-bar"></div></div>
+              <ul id="battle-result-self-members" class="battle-result-members is-hidden"></ul>
             </article>
             <article id="battle-result-opp" class="battle-result-side is-opp">
               <span class="battle-result-side-tag">对方</span>
               <strong id="battle-result-opp-name" class="battle-result-name">对手</strong>
               <span id="battle-result-opp-hp" class="battle-result-hp">0 / 0</span>
               <div class="battle-hp-track"><div id="battle-result-opp-bar" class="battle-hp-bar"></div></div>
+              <ul id="battle-result-opp-members" class="battle-result-members is-hidden"></ul>
             </article>
+          </div>
+          <div id="battle-result-compare" class="battle-result-compare is-hidden" aria-label="队伍总血量对比">
+            <span id="battle-result-compare-self" class="battle-result-compare-self">己方 0</span>
+            <div class="battle-result-compare-track">
+              <div id="battle-result-compare-bar" class="battle-result-compare-bar"></div>
+            </div>
+            <span id="battle-result-compare-opp" class="battle-result-compare-opp">对方 0</span>
           </div>
           <button id="btn-battle-result-return" type="button">返回</button>
         </div>

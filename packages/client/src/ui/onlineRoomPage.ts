@@ -1,12 +1,15 @@
 import type { RoomStateMessage } from '@pb/net';
-
-const MAX_PLAYERS = 2;
+import { slotCount, slotFaction, type MatchMode } from '@pb/sim';
 
 export interface OnlineRoomPageOptions {
   onLeave: () => void;
   onStartMatch: () => void;
   /** 非房主切换准备。 */
   onSetReady: (ready: boolean) => void;
+  /** 房主切换对局模式。 */
+  onSetMatchMode: (mode: MatchMode) => void;
+  /** 点空席换座。 */
+  onPickSeat: (seat: number) => void;
 }
 
 export interface OnlineRoomPageHandle {
@@ -21,7 +24,7 @@ export interface OnlineRoomPageHandle {
   dispose(): void;
 }
 
-/** 房间等待页：成员位、默认准备、房主开局。 */
+/** 房间等待页：两队席位、换座、房主切模式与开局。 */
 export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoomPageHandle {
   const root = required<HTMLElement>('#online-room');
   const leaveButton = required<HTMLButtonElement>('#btn-online-room-leave', root);
@@ -31,46 +34,76 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
   const roomNameLabel = required<HTMLElement>('#online-room-name', root);
   const members = required<HTMLElement>('#online-room-members', root);
   const status = required<HTMLElement>('#online-room-status', root);
+  const modeBar = required<HTMLElement>('#online-room-mode', root);
+  const mode1v1 = required<HTMLButtonElement>('#btn-online-room-mode-1v1', root);
+  const mode2v2 = required<HTMLButtonElement>('#btn-online-room-mode-2v2', root);
 
   let localSeat = 0;
   let canStart = false;
   let selfReady = true;
+  let latest: RoomStateMessage | null = null;
 
   const renderMembers = (state: RoomStateMessage | null): void => {
     members.replaceChildren();
-    for (let seat = 0; seat < MAX_PLAYERS; seat += 1) {
-      const member = state?.members.find((entry) => entry.seat === seat) ?? null;
-      const card = document.createElement('article');
-      card.className = 'online-room-member';
-      if (member?.isHost) card.classList.add('is-host');
-      if (seat === localSeat) card.classList.add('is-self');
+    const mode: MatchMode = state?.matchMode === '2v2' ? '2v2' : '1v1';
+    const max = state?.maxPlayers ?? slotCount(mode);
+    const teams = document.createElement('div');
+    teams.className = 'online-room-teams';
 
-      const name = document.createElement('div');
-      name.className = 'online-room-member-name';
-      name.textContent = member?.name ?? '等待加入…';
+    for (const faction of [0, 1] as const) {
+      const column = document.createElement('section');
+      column.className = `online-room-team is-${faction === 0 ? 'blue' : 'red'}`;
+      const title = document.createElement('h2');
+      title.className = 'online-room-team-title';
+      title.textContent = faction === 0 ? '蓝队' : '红队';
+      column.append(title);
 
-      const meta = document.createElement('div');
-      meta.className = 'online-room-member-meta';
-      if (!member) {
-        meta.textContent = '空位';
-      } else {
-        const tags: string[] = [];
-        if (member.isHost) tags.push('房主');
-        if (seat === localSeat) tags.push('我');
-        tags.push(member.ready ? '已准备' : '未准备');
-        meta.textContent = tags.join(' · ');
+      for (let seat = 0; seat < max; seat += 1) {
+        if (slotFaction(seat, mode) !== faction) continue;
+        const member = state?.members.find((entry) => entry.seat === seat) ?? null;
+        const card = document.createElement('article');
+        card.className = 'online-room-member';
+        if (member?.isHost) card.classList.add('is-host');
+        if (seat === localSeat) card.classList.add('is-self');
+        if (!member) card.classList.add('is-empty');
+
+        const name = document.createElement('div');
+        name.className = 'online-room-member-name';
+        name.textContent = member?.name ?? '空位 · 点击入座';
+
+        const meta = document.createElement('div');
+        meta.className = 'online-room-member-meta';
+        if (!member) {
+          meta.textContent = `席位 ${seat + 1}`;
+          card.addEventListener('click', () => options.onPickSeat(seat));
+        } else {
+          const tags: string[] = [];
+          if (member.isHost) tags.push('房主');
+          if (seat === localSeat) tags.push('我');
+          tags.push(member.ready ? '已准备' : '未准备');
+          meta.textContent = tags.join(' · ');
+        }
+
+        card.append(name, meta);
+        column.append(card);
       }
-
-      card.append(name, meta);
-      members.append(card);
+      teams.append(column);
     }
+    members.append(teams);
+  };
+
+  const syncModeBar = (state: RoomStateMessage | null): void => {
+    const self = state?.members.find((entry) => entry.seat === localSeat);
+    const mode: MatchMode = state?.matchMode === '2v2' ? '2v2' : '1v1';
+    modeBar.classList.toggle('is-hidden', !self?.isHost || state?.phase !== 'waiting');
+    mode1v1.classList.toggle('is-active', mode === '1v1');
+    mode2v2.classList.toggle('is-active', mode === '2v2');
   };
 
   const syncActionButtons = (state: RoomStateMessage | null): void => {
     const self = state?.members.find((entry) => entry.seat === localSeat);
-    const allReady =
-      (state?.members.length ?? 0) >= MAX_PLAYERS &&
-      (state?.members.every((entry) => entry.ready) ?? false);
+    const max = state?.maxPlayers ?? 2;
+    const allReady = (state?.members.length ?? 0) >= max && (state?.members.every((entry) => entry.ready) ?? false);
     canStart = Boolean(self?.isHost && state?.phase === 'waiting' && allReady);
     selfReady = self?.ready ?? true;
     startButton.disabled = !canStart;
@@ -91,9 +124,12 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
     options.onStartMatch();
   });
   readyButton.addEventListener('click', toggleReady);
+  mode1v1.addEventListener('click', () => options.onSetMatchMode('1v1'));
+  mode2v2.addEventListener('click', () => options.onSetMatchMode('2v2'));
 
   renderMembers(null);
   syncActionButtons(null);
+  syncModeBar(null);
 
   return {
     show() {
@@ -109,17 +145,21 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
       roomNameLabel.textContent = roomName;
     },
     applyRoomState(state, seat) {
+      latest = state;
       localSeat = seat;
       roomIdLabel.textContent = state.roomId;
       roomNameLabel.textContent = state.roomName;
       renderMembers(state);
       syncActionButtons(state);
-      const waiting = state.members.length < MAX_PLAYERS;
-      const allReady = state.members.length >= MAX_PLAYERS && state.members.every((entry) => entry.ready);
+      syncModeBar(state);
+      const max = state.maxPlayers ?? 2;
+      const waiting = state.members.length < max;
+      const allReady = state.members.length >= max && state.members.every((entry) => entry.ready);
+      const modeLabel = state.matchMode === '2v2' ? '2v2' : '1v1';
       status.textContent = waiting
-        ? '等待其他玩家加入…'
+        ? `当前 ${modeLabel}，等待其他玩家加入…`
         : allReady
-          ? '双方已准备，房主可以开始游戏'
+          ? `全员已准备，房主可以开始 ${modeLabel}`
           : '等待其他玩家准备…';
       status.classList.add('is-visible');
     },
@@ -129,6 +169,7 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
     },
     dispose() {
       leaveButton.removeEventListener('click', options.onLeave);
+      void latest;
     },
   };
 }

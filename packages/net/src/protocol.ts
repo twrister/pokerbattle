@@ -1,4 +1,6 @@
-import type { Command, Faction, MatchEndReason } from '@pb/sim';
+import type { Command, Faction, MatchEndReason, MatchMode } from '@pb/sim';
+
+export type { MatchMode };
 
 /** 默认输入延迟（tick），约 200ms @ 20Hz。 */
 export const DEFAULT_INPUT_DELAY = 4;
@@ -41,6 +43,7 @@ export interface RoomListEntry {
   maxPlayers: number;
   phase: RoomPhase;
   spectatorCount: number;
+  matchMode?: MatchMode;
 }
 
 /** C→S：加入房间。 */
@@ -54,6 +57,8 @@ export interface JoinMessage {
   mode?: JoinMode;
   /** create 时可带；空则由服务端按玩家名生成默认房间名。 */
   roomName?: string;
+  /** create 时可带；缺省为 1v1。 */
+  matchMode?: MatchMode;
 }
 
 /** C→S：凭令牌恢复已断开的席位，并声明本地已确认的最后 tick。 */
@@ -154,6 +159,18 @@ export interface SetReadyMessage {
   ready: boolean;
 }
 
+/** C→S：房主在 waiting 期切换对局模式。 */
+export interface SetRoomOptionsMessage {
+  type: 'setRoomOptions';
+  matchMode: MatchMode;
+}
+
+/** C→S：未开局时点空席换座。 */
+export interface PickSeatMessage {
+  type: 'pickSeat';
+  seat: number;
+}
+
 export type ClientMessage =
   | JoinMessage
   | RejoinMessage
@@ -163,6 +180,8 @@ export type ClientMessage =
   | LobbyMessage
   | StartMatchMessage
   | SetReadyMessage
+  | SetRoomOptionsMessage
+  | PickSeatMessage
   | InputMessage
   | HashMessage
   | PingMessage;
@@ -173,6 +192,7 @@ export interface RoomMember {
   name: string;
   ready: boolean;
   isHost: boolean;
+  faction?: Faction;
 }
 
 /** 可展示给玩家的房间/重连错误码。 */
@@ -184,7 +204,10 @@ export type RoomErrorCode =
   | 'not_host'
   | 'not_ready'
   | 'is_host'
-  | 'not_playing';
+  | 'not_playing'
+  | 'invalid_seat'
+  | 'seat_taken'
+  | 'cannot_change_mode';
 
 /** S→C：入座成功，带上种子、房间号与重连令牌。 */
 export interface WelcomeMessage {
@@ -196,8 +219,10 @@ export interface WelcomeMessage {
   roomId: string;
   roomName: string;
   reconnectToken: string;
-  /** 对手席位显示名；尚未入座时为空串。 */
+  /** 对手席位显示名；尚未入座时为空串。2v2 取对队第一人。 */
   opponentName: string;
+  matchMode?: MatchMode;
+  members?: RoomMember[];
 }
 
 /** S→C：全部存活房间列表（含对局中）。 */
@@ -216,6 +241,8 @@ export interface SpectateWelcomeMessage {
   blueName: string;
   redName: string;
   spectatorCount: number;
+  matchMode?: MatchMode;
+  members?: RoomMember[];
 }
 
 /** S→C：一段连续权威帧，供观战者中途追平。 */
@@ -239,6 +266,8 @@ export interface RoomStateMessage {
   hostSeat: number;
   phase: RoomPhase;
   members: RoomMember[];
+  matchMode?: MatchMode;
+  maxPlayers?: number;
 }
 
 /** S→C：对局开始，告知首个逻辑 tick。 */

@@ -943,6 +943,20 @@ describe('单机手牌交互', () => {
 
     panel.dispose();
   });
+
+  it('基地陷落时进入禁用态并挡住出牌', () => {
+    const onPlay = vi.fn();
+    const panel = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+      onPlay,
+    });
+    panel.setPlayLocked(true);
+    expect(document.querySelector('#solo-hand')?.classList.contains('is-play-locked')).toBe(true);
+    expect(document.querySelector('#hand-status')?.textContent).toContain('无法出牌');
+    document.querySelector<HTMLButtonElement>('.hand-formation')?.click();
+    expect(onPlay).not.toHaveBeenCalled();
+    panel.dispose();
+  });
 });
 
 /** 依次点选当前全部手牌，得到稳定的正式选中集合。 */

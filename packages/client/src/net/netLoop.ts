@@ -10,6 +10,7 @@ import {
   takeSnapshot,
   type Command,
   type Faction,
+  type MatchMode,
   type MatchResult,
   type Snapshot,
 } from '@pb/sim';
@@ -19,6 +20,9 @@ const STEP_MS = 1000 / TICK_RATE;
 export interface NetSimLoopOptions {
   seed: number;
   faction: Faction;
+  /** 本端席位；缺省等于 faction，兼容 1v1。 */
+  seat?: number;
+  matchMode?: MatchMode;
   inputDelay: number;
   /** 发送已编码的上行文本。 */
   send: (raw: string) => void;
@@ -41,6 +45,7 @@ export interface NetSimLoopOptions {
 export class NetSimLoop {
   readonly match: MatchState;
   readonly faction: Faction;
+  readonly seat: number;
   readonly inputDelay: number;
 
   prev: Snapshot;
@@ -62,9 +67,10 @@ export class NetSimLoop {
   private inputPaused = false;
 
   constructor(options: NetSimLoopOptions) {
-    this.match = new MatchState(options.seed);
+    this.match = new MatchState(options.seed, options.matchMode ?? '1v1');
     this.match.seedStartingCastles();
     this.faction = options.faction;
+    this.seat = options.seat ?? options.faction;
     this.inputDelay = options.inputDelay;
     this.send = options.send;
     this.spectator = options.spectator === true;
@@ -178,7 +184,7 @@ export class NetSimLoop {
       encodeMessage({
         type: 'input',
         tick,
-        commands: [...commands],
+        commands: commands.map((command) => ({ ...command, slot: command.slot ?? this.seat })),
       }),
     );
   }

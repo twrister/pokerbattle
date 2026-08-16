@@ -711,6 +711,12 @@ export class UnitView {
     sprite.scale.set(this.mirror * width, size * stretch, 1);
   }
 
+  /** 按己方/队友/敌人重设血条颜色，对象池复用时必须调用。 */
+  setHpSide(side: VisualSide): void {
+    const material = this.hpFill.material as THREE.MeshBasicMaterial;
+    material.color.setHex(hpColorForSide(side));
+  }
+
   /** 对象池取出复用时清掉攻击/受击动画边沿，避免上一任单位的残帧 */
   resetAnimState(): void {
     this.wasAttacking = false;
@@ -772,6 +778,32 @@ export function visualFaction(simFaction: Faction, localFaction: Faction): Facti
   return simFaction === localFaction ? Faction.Blue : Faction.Red;
 }
 
+/** 2v2 血条三档：己方绿、队友青蓝、敌人红。 */
+export type VisualSide = 'self' | 'ally' | 'enemy';
+
+export const HP_COLOR_SELF = 0x63d68a;
+export const HP_COLOR_ALLY = 0x35d6d6;
+export const HP_COLOR_ENEMY = 0xf2604f;
+
+/** 按席位区分同队两人；1v1 下 ownerSlot === faction，不会出现 ally。 */
+export function visualSide(
+  unitFaction: Faction,
+  unitOwnerSlot: number,
+  localFaction: Faction,
+  localSlot: number,
+): VisualSide {
+  if (unitFaction !== localFaction) return 'enemy';
+  if (unitOwnerSlot === localSlot) return 'self';
+  return 'ally';
+}
+
+/** 把血条改成己方/队友/敌人颜色；对象池复用时必须重设。 */
+export function hpColorForSide(side: VisualSide): number {
+  if (side === 'ally') return HP_COLOR_ALLY;
+  if (side === 'enemy') return HP_COLOR_ENEMY;
+  return HP_COLOR_SELF;
+}
+
 function bodyColor(faction: Faction, typeId: UnitTypeId): number {
   if (faction === Faction.Blue) {
     if (typeId === 'melee_grunt' || typeId === 'melee_guard') return 0x3f7ae0;
@@ -785,7 +817,7 @@ function bodyColor(faction: Faction, typeId: UnitTypeId): number {
 
 /** 画面己方（蓝皮）用绿色，对阵方用红色；颜色跟仿真阵营无关，只看映射后的画面阵营。 */
 function hpColor(faction: Faction): number {
-  return faction === Faction.Blue ? 0x63d68a : 0xf2604f;
+  return hpColorForSide(faction === Faction.Blue ? 'self' : 'enemy');
 }
 
 /** 前景相对底条朝相机方向的偏移，拉开深度差减轻远距 Z-fighting */

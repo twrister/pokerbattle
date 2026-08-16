@@ -32,11 +32,23 @@ export function applyCommands(world: World, commands: readonly Command[]): void 
           }
           break;
         }
-        world.spawnUnit(command.faction, command.typeId, command.x, command.y);
+        world.spawnUnit(
+          command.faction,
+          command.typeId,
+          command.x,
+          command.y,
+          command.slot ?? command.faction,
+        );
         break;
       case CommandKind.PlaceBuilding:
         // 非法落点静默丢弃，与客户端预览拦截对齐，保持确定性
-        world.spawnBuilding(command.faction, command.typeId, command.x, command.y);
+        world.spawnBuilding(
+          command.faction,
+          command.typeId,
+          command.x,
+          command.y,
+          command.slot ?? command.faction,
+        );
         break;
       case CommandKind.PlayFormation:
         applyPlayFormation(world, command);
@@ -63,7 +75,7 @@ function applyPlayFormation(
   if (isBuildingOnlyFormation(formation)) {
     const typeId = getFormationBuildingTypeId(formation);
     if (!typeId) return;
-    world.spawnBuilding(command.faction, typeId, command.x, command.y);
+    world.spawnBuilding(command.faction, typeId, command.x, command.y, command.slot ?? command.faction);
     return;
   }
   if (isFuseBombFormation(formation)) {
@@ -80,6 +92,6 @@ function applyPlayFormation(
   const points = resolveFormationSpawnsFx(formation, command.faction, command.x, command.y);
   for (const point of points) {
     if (isBuildingConfig(getUnitConfig(point.typeId))) continue;
-    world.spawnUnit(command.faction, point.typeId, point.x, point.y);
+    world.spawnUnit(command.faction, point.typeId, point.x, point.y, command.slot ?? command.faction);
   }
 }
