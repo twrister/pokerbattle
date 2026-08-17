@@ -424,6 +424,115 @@ describe('connectRoomSession', () => {
     expect(onRoomState).toHaveBeenLastCalledWith(expect.objectContaining({ hostSeat: 2 }));
     close();
   });
+
+  it('同房间再开局会换新 NetSimLoop，不会复用上一局已结束的状态', async () => {
+    const onMatchStart = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Tester',
+      onMatchStart,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '501',
+      roomName: '连开房',
+      reconnectToken: 'tok-rematch',
+      opponentName: '',
+    });
+    const session = await done;
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 11,
+      inputDelay: 4,
+      roomId: '501',
+      roomName: '连开房',
+      reconnectToken: 'tok-rematch',
+      opponentName: 'Rival',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    const firstLoop = onMatchStart.mock.calls[0]?.[0];
+    expect(firstLoop).toBeDefined();
+    firstLoop.handleServerMessage({
+      type: 'matchEnd',
+      endTick: 8,
+      winner: Faction.Red,
+      reason: 'base_destroyed',
+    });
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 22,
+      inputDelay: 4,
+      roomId: '501',
+      roomName: '连开房',
+      reconnectToken: 'tok-rematch',
+      opponentName: 'Rival',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    expect(onMatchStart).toHaveBeenCalledTimes(2);
+    const secondLoop = onMatchStart.mock.calls[1]?.[0];
+    expect(secondLoop).not.toBe(firstLoop);
+    expect(secondLoop.match.result).toBeNull();
+    expect(secondLoop.match.world.seed).toBe(22);
+    expect(session.roomId).toBe('501');
+    close();
+  });
+
+  it('welcome 种子变了即使仍标记在局内也会重建 loop，避免误走重连', async () => {
+    const onMatchStart = vi.fn();
+    const onReconnected = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Tester',
+      onMatchStart,
+      onReconnected,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 1,
+      faction: Faction.Red,
+      seed: 33,
+      inputDelay: 4,
+      roomId: '502',
+      roomName: '误重连房',
+      reconnectToken: 'tok-seed',
+      opponentName: 'Host',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    await done;
+    const firstLoop = onMatchStart.mock.calls[0]?.[0];
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 1,
+      faction: Faction.Red,
+      seed: 44,
+      inputDelay: 4,
+      roomId: '502',
+      roomName: '误重连房',
+      reconnectToken: 'tok-seed',
+      opponentName: 'Host',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    expect(onReconnected).not.toHaveBeenCalled();
+    expect(onMatchStart).toHaveBeenCalledTimes(2);
+    expect(onMatchStart.mock.calls[1]?.[0]).not.toBe(firstLoop);
+    expect(onMatchStart.mock.calls[1]?.[0].match.world.seed).toBe(44);
+    close();
+  });
 });
 
 describe('createLobbyPresence', () => {

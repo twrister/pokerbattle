@@ -957,6 +957,22 @@ describe('单机手牌交互', () => {
     expect(onPlay).not.toHaveBeenCalled();
     panel.dispose();
   });
+
+  it('销毁或重建时清掉基地陷落锁定，避免同房间下一局点不了牌', () => {
+    const first = createHandPanel({
+      deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
+    });
+    first.setPlayLocked(true);
+    first.dispose();
+    expect(document.querySelector('#solo-hand')?.classList.contains('is-play-locked')).toBe(false);
+
+    document.querySelector('#solo-hand')?.classList.add('is-play-locked');
+    const second = createHandPanel({
+      deck: deckWithCards(['6-spades', '7-hearts', '8-clubs']),
+    });
+    expect(document.querySelector('#solo-hand')?.classList.contains('is-play-locked')).toBe(false);
+    second.dispose();
+  });
 });
 
 /** 依次点选当前全部手牌，得到稳定的正式选中集合。 */

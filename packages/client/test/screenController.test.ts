@@ -109,4 +109,36 @@ describe('页面状态管理', () => {
     expect(leaveMenu).toHaveBeenCalledOnce();
     expect(screens.current).toBeNull();
   });
+
+  it('remount 会先离开再进入当前页，供同房间再开局重建 versus', () => {
+    const leaveVersus = vi.fn();
+    const enterVersus = vi.fn(() => leaveVersus);
+    const screens = createScreenController({
+      menu: () => vi.fn(),
+      online: () => vi.fn(),
+      room: () => vi.fn(),
+      solo: () => vi.fn(),
+      sandbox: () => vi.fn(),
+      'deck-config': () => vi.fn(),
+      'hand-odds': () => vi.fn(),
+      codex: () => vi.fn(),
+      leaderboard: () => vi.fn(),
+      'replay-list': () => vi.fn(),
+      replay: () => vi.fn(),
+      'unit-stats': () => vi.fn(),
+      'scene-config': () => vi.fn(),
+      versus: enterVersus,
+      spectate: () => vi.fn(),
+    });
+
+    screens.show('versus');
+    screens.show('versus');
+    expect(enterVersus).toHaveBeenCalledOnce();
+    expect(leaveVersus).not.toHaveBeenCalled();
+
+    screens.show('versus', { remount: true });
+    expect(leaveVersus).toHaveBeenCalledOnce();
+    expect(enterVersus).toHaveBeenCalledTimes(2);
+    expect(screens.current).toBe('versus');
+  });
 });

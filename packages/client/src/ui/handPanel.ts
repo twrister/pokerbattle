@@ -198,6 +198,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let lastRemainingMs: number | undefined;
   let lastHandWasFull = false;
 
+  // #solo-hand 是跨局复用的节点；上一局败方锁定会留下 is-play-locked（pointer-events:none），
+  // 不先清掉的话新手牌面板看起来能亮、实际点不了牌。
+  root.classList.remove('is-play-locked');
   root.classList.add('is-active');
   // MatchState 已发过初始手牌时不要再抽，否则两端牌面会分叉
   if (deck.hand.length === 0) {
@@ -987,7 +990,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardsElement.replaceChildren();
       formationsElement.replaceChildren();
       formationsElement.classList.remove('is-visible');
-      root.classList.remove('is-active');
+      root.classList.remove('is-active', 'is-play-locked');
       resetDrawPilePresentation();
     },
   };

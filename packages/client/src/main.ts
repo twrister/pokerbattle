@@ -357,7 +357,8 @@ function beginJoinRoom(request: RoomJoinRequest): void {
     onMatchStart: (loop, faction, opponentName) => {
       pendingMatch = { loop, faction, opponentName };
       keepRoomSession = true;
-      screens.show('versus');
+      // 败方可能还停在结算屏；重复 show('versus') 会被忽略，上一局 playLocked / 旧 loop 会留下。
+      screens.show('versus', { remount: screens.current === 'versus' });
     },
     onSpectatorCount: (count) => {
       battleHud.setSpectatorCount(count);

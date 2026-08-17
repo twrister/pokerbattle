@@ -16,9 +16,14 @@ export type AppScreen =
   | 'spectate';
 export type EnterScreen = () => () => void;
 
+export interface ShowScreenOptions {
+  /** 已在目标页时仍先 leave 再 enter；同房间再开局必须拆掉上一局 versus session。 */
+  remount?: boolean;
+}
+
 export interface ScreenController {
   readonly current: AppScreen | null;
-  show(screen: AppScreen): void;
+  show(screen: AppScreen, options?: ShowScreenOptions): void;
   dispose(): void;
 }
 
@@ -34,8 +39,8 @@ export function createScreenController(entries: Record<AppScreen, EnterScreen>):
     get current() {
       return current;
     },
-    show(screen) {
-      if (screen === current) return;
+    show(screen, options) {
+      if (screen === current && !options?.remount) return;
       leaveCurrent?.();
       current = screen;
       leaveCurrent = entries[screen]();

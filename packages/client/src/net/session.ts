@@ -381,8 +381,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
             return;
           }
 
-          // 重连：复用已有 NetSimLoop，只换发送通道并消化补帧
-          if (loop && inMatch) {
+          // 同局重连才复用 loop；新开局 seed 变了必须重建，否则上一局 result/淘汰态会挡住出牌。
+          if (loop && inMatch && loop.match.world.seed === message.seed) {
             clearReconnectTimer();
             reconnectAttempt = 0;
             loop.setSend((text) => {
