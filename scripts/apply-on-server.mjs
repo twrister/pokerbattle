@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hashSourceTree, nextReleaseVersion, readPackageVersion } from './releaseVersion.mjs';
+import { resolveAndSyncReleaseVersion } from './releaseVersion.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAME_APP = process.env.GAME_APP || '/opt/projects/poker-battle/app';
@@ -119,8 +119,7 @@ function writeReleaseMeta(filePath, previous, release) {
 ensurePnpm();
 const pnpm = resolveTool('pnpm') || 'pnpm';
 const previousMeta = readLocalGameMeta(GAME_META);
-const contentHash = hashSourceTree(root);
-const version = nextReleaseVersion(previousMeta, contentHash, readPackageVersion(root));
+const { version, contentHash } = resolveAndSyncReleaseVersion(root, previousMeta);
 console.log(`[apply-on-server] version=${version} hash=${contentHash.slice(0, 12)}`);
 run(pnpm, ['install', '--frozen-lockfile']);
 run(pnpm, ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE, VITE_APP_VERSION: version });

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'ssh2';
-import { hashSourceTree, nextReleaseVersion, readPackageVersion } from './releaseVersion.mjs';
+import { readPackageVersion, resolveAndSyncReleaseVersion } from './releaseVersion.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const project = JSON.parse(fs.readFileSync(path.join(root, '.deploy/project.json'), 'utf8'));
@@ -60,8 +60,7 @@ async function main() {
   try {
     await bootstrapServer(conn);
     const previous = await readRemoteReleaseMeta(conn);
-    const contentHash = hashSourceTree(root);
-    const version = nextReleaseVersion(previous, contentHash, readPackageVersion(root));
+    const { version, contentHash } = resolveAndSyncReleaseVersion(root, previous);
     console.log(`[deploy] version=${version} hash=${contentHash.slice(0, 12)}`);
 
     process.env.VITE_PUBLIC_BASE = ROUTE;

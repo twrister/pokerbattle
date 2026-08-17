@@ -39,10 +39,28 @@ export function hashSourceTree(rootDir) {
   for (const rel of files) {
     hash.update(rel);
     hash.update('\0');
-    hash.update(fs.readFileSync(path.join(rootDir, rel)));
+    hash.update(contentForHash(rel, fs.readFileSync(path.join(rootDir, rel))));
     hash.update('\0');
   }
   return hash.digest('hex');
+}
+
+/**
+ * 根 package.json 的 version 由发布流程回写，不参与「内容是否变化」。
+ * 否则每次同步版本号都会让下次部署再 +1。
+ */
+function contentForHash(rel, content) {
+  if (rel !== 'package.json') return content;
+  try {
+    const json = JSON.parse(content.toString('utf8'));
+    if (json && typeof json === 'object' && !Array.isArray(json)) {
+      delete json.version;
+      return JSON.stringify(json);
+    }
+  } catch {
+    /* 坏 JSON 仍按原文哈希 */
+  }
+  return content;
 }
 
 /** 读取根 package.json 的 version，缺省 0.1.0。 */
@@ -54,6 +72,33 @@ export function readPackageVersion(rootDir) {
     /* 回落到种子版本 */
   }
   return '0.1.0';
+}
+
+/**
+ * 把发布版本写回根 package.json，让开发服与线上号对齐。
+ * 已相同则不写盘，避免无意义改文件。
+ */
+export function writePackageVersion(rootDir, version) {
+  const filePath = path.join(rootDir, 'package.json');
+  const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('package.json 不是对象，无法写入 version');
+  }
+  if (raw.version === version) return false;
+  raw.version = version;
+  fs.writeFileSync(filePath, `${JSON.stringify(raw, null, 2)}\n`);
+  return true;
+}
+
+/**
+ * 按上次发布记录算出版本，写回 package.json 后返回本次 version / contentHash。
+ * 先比哈希再写版本：version 已从哈希中剔除，回写不会触发下一次误加号。
+ */
+export function resolveAndSyncReleaseVersion(rootDir, previous) {
+  const contentHash = hashSourceTree(rootDir);
+  const version = nextReleaseVersion(previous, contentHash, readPackageVersion(rootDir));
+  writePackageVersion(rootDir, version);
+  return { version, contentHash };
 }
 
 /**
