@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
+import { validatePatchNotes } from './src/data/patchNotes.js';
 
 const clientDir = path.dirname(fileURLToPath(import.meta.url));
 /** monorepo 内 sim 兵种配置的唯一落盘路径 */
@@ -13,6 +14,8 @@ const cardFormationsJsonPath = path.resolve(clientDir, '../sim/src/config/cardFo
 /** monorepo 内场景配置的唯一落盘路径 */
 const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
 const arena2v2JsonPath = path.resolve(clientDir, '../sim/src/config/arena2v2.json');
+/** 大厅更新公告的唯一落盘路径 */
+const patchNotesJsonPath = path.resolve(clientDir, 'src/data/patchNotes.json');
 
 /** 开发服务器：GET 读盘最新 units.json，POST 覆盖写回。 */
 function unitConfigWritePlugin(): Plugin {
@@ -166,6 +169,63 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/** 开发服务器：GET 读盘最新 patchNotes.json，POST 覆盖写回。 */
+function patchNotesWritePlugin(): Plugin {
+  return {
+    name: 'pb-patch-notes-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__pb/patch-notes') {
+          next();
+          return;
+        }
+        if (req.method === 'GET') {
+          try {
+            const text = fs.readFileSync(patchNotesJsonPath, 'utf8');
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              sendJson(res, 500, { error: 'patchNotes.json is not valid JSON' });
+              return;
+            }
+            sendJson(res, 200, parsed);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          }
+          return;
+        }
+        if (req.method !== 'POST') {
+          next();
+          return;
+        }
+        readRequestBody(req)
+          .then((raw) => {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              sendJson(res, 400, { error: 'invalid JSON' });
+              return;
+            }
+            const validationError = validatePatchNotes(parsed);
+            if (validationError) {
+              sendJson(res, 400, { error: validationError });
+              return;
+            }
+            fs.writeFileSync(patchNotesJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
 /** 写盘前做结构校验，避免把残缺场景配置写进 arena.json。 */
 function validateArenaConfigBody(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
@@ -228,7 +288,12 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(resolveAppVersion()),
   },
-  plugins: [unitConfigWritePlugin(), cardFormationWritePlugin(), arenaConfigWritePlugin()],
+  plugins: [
+    unitConfigWritePlugin(),
+    cardFormationWritePlugin(),
+    arenaConfigWritePlugin(),
+    patchNotesWritePlugin(),
+  ],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {
     host: true,

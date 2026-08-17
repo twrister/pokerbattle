@@ -1,5 +1,12 @@
-import { PATCH_NOTES } from '../data/patchNotes.js';
-import { formatLobbyVersion } from '../env.js';
+import {
+  applyPatchNotes,
+  clonePatchNotes,
+  parsePatchNotes,
+  persistPatchNotes,
+  PATCH_NOTES,
+  type PatchNote,
+} from '../data/patchNotes.js';
+import { APP_VERSION, formatLobbyVersion, IS_DEV_SERVER } from '../env.js';
 
 export interface PatchNotesPanelHandle {
   open(): void;
@@ -7,7 +14,7 @@ export interface PatchNotesPanelHandle {
   dispose(): void;
 }
 
-/** 大厅内嵌更新公告弹层：静态数据渲染一次，开关只切显隐。 */
+/** 大厅内嵌更新公告弹层：正式服只读渲染；开发服可编辑并写回 patchNotes.json。 */
 export function createPatchNotesPanel(): PatchNotesPanelHandle {
   const root = required<HTMLElement>('#patch-notes-dialog');
   const list = required<HTMLElement>('#patch-notes-list', root);
@@ -15,7 +22,12 @@ export function createPatchNotesPanel(): PatchNotesPanelHandle {
     root.querySelectorAll<HTMLButtonElement>('[data-patch-notes-close]'),
   );
 
-  list.replaceChildren(...PATCH_NOTES.map(renderNote));
+  const addButton = IS_DEV_SERVER ? required<HTMLButtonElement>('#btn-patch-notes-add', root) : null;
+  const saveButton = IS_DEV_SERVER ? required<HTMLButtonElement>('#btn-patch-notes-save', root) : null;
+  const statusEl = IS_DEV_SERVER ? required<HTMLElement>('#patch-notes-status', root) : null;
+
+  let drafts = clonePatchNotes(PATCH_NOTES);
+  let saveSeq = 0;
 
   const close = (): void => {
     root.classList.add('is-hidden');
@@ -27,9 +39,105 @@ export function createPatchNotesPanel(): PatchNotesPanelHandle {
     root.setAttribute('aria-hidden', 'false');
   };
 
+  const addNote = (): void => {
+    drafts.unshift(createBlankNote());
+    setStatus('已新增版本，编辑后点保存写回文件', false);
+    render();
+  };
+
+  const save = (): void => {
+    let parsed: PatchNote[];
+    try {
+      parsed = parsePatchNotes(drafts);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error), true);
+      return;
+    }
+    applyPatchNotes(parsed);
+    drafts = clonePatchNotes(parsed);
+    const seq = ++saveSeq;
+    void persistPatchNotes(parsed).then((result) => {
+      if (seq !== saveSeq) return;
+      if (result.ok) {
+        setStatus('已保存并写回 patchNotes.json', false);
+      } else {
+        setStatus(`已应用到大厅（未能写回文件：${result.error}）`, true);
+      }
+    });
+    render();
+  };
+
+  function setStatus(text: string, isError: boolean): void {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.toggle('is-error', isError);
+  }
+
+  function render(): void {
+    if (IS_DEV_SERVER) {
+      list.replaceChildren(...drafts.map((note, index) => renderEditorNote(note, index)));
+      return;
+    }
+    list.replaceChildren(...PATCH_NOTES.map(renderNote));
+  }
+
+  /** 开发服单条公告：版本/日期可改，条目按行编辑，避免每敲一字就重绘。 */
+  function renderEditorNote(note: PatchNote, index: number): HTMLElement {
+    const article = document.createElement('article');
+    article.className = 'patch-note is-editing';
+
+    const head = document.createElement('header');
+    head.className = 'patch-note-head';
+
+    const version = document.createElement('input');
+    version.className = 'patch-note-version-input';
+    version.type = 'text';
+    version.value = note.version;
+    version.setAttribute('aria-label', `版本 ${index + 1}`);
+    version.addEventListener('input', () => {
+      note.version = version.value;
+    });
+
+    const date = document.createElement('input');
+    date.className = 'patch-note-date-input';
+    date.type = 'date';
+    date.value = note.date;
+    date.setAttribute('aria-label', `日期 ${index + 1}`);
+    date.addEventListener('input', () => {
+      note.date = date.value;
+    });
+
+    const remove = document.createElement('button');
+    remove.className = 'patch-note-remove';
+    remove.type = 'button';
+    remove.textContent = '删除';
+    remove.addEventListener('click', () => {
+      drafts.splice(index, 1);
+      setStatus('已删除该版本，保存后才会写盘', false);
+      render();
+    });
+
+    head.append(version, date, remove);
+
+    const items = document.createElement('textarea');
+    items.className = 'patch-note-items-input';
+    items.rows = Math.max(3, note.items.length);
+    items.value = note.items.join('\n');
+    items.setAttribute('aria-label', `更新条目 ${index + 1}`);
+    items.addEventListener('input', () => {
+      note.items = items.value.split('\n');
+    });
+
+    article.append(head, items);
+    return article;
+  }
+
   for (const button of closeButtons) {
     button.addEventListener('click', close);
   }
+  addButton?.addEventListener('click', addNote);
+  saveButton?.addEventListener('click', save);
+  render();
 
   return {
     open,
@@ -38,12 +146,14 @@ export function createPatchNotesPanel(): PatchNotesPanelHandle {
       for (const button of closeButtons) {
         button.removeEventListener('click', close);
       }
+      addButton?.removeEventListener('click', addNote);
+      saveButton?.removeEventListener('click', save);
     },
   };
 }
 
 /** 单条版本公告：标题行 + 条目列表。 */
-function renderNote(note: (typeof PATCH_NOTES)[number]): HTMLElement {
+function renderNote(note: PatchNote): HTMLElement {
   const article = document.createElement('article');
   article.className = 'patch-note';
 
@@ -71,6 +181,18 @@ function renderNote(note: (typeof PATCH_NOTES)[number]): HTMLElement {
 
   article.append(head, items);
   return article;
+}
+
+/** 新增版本预填当前构建号与今天日期，条目留空等策划填写。 */
+function createBlankNote(): PatchNote {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return {
+    version: APP_VERSION.replace(/^v/i, ''),
+    date: `${now.getFullYear()}-${month}-${day}`,
+    items: [''],
+  };
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

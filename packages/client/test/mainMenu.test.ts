@@ -101,6 +101,9 @@ function mountMainMenuDom(): void {
       <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
         <button data-patch-notes-close></button>
         <div id="patch-notes-list"></div>
+        <p id="patch-notes-status"></p>
+        <button id="btn-patch-notes-add" type="button">新增版本</button>
+        <button id="btn-patch-notes-save" type="button">保存</button>
       </div>
     </main>
   `;
@@ -435,7 +438,9 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-patch-notes')!.click();
     expect(dialog.classList.contains('is-hidden')).toBe(false);
-    expect(document.querySelector('.patch-note-version')?.textContent).toBe('v0.1.0');
+    expect(document.querySelector<HTMLInputElement>('.patch-note-version-input')?.value).toBe(
+      '0.1.5',
+    );
 
     document.querySelector<HTMLButtonElement>('[data-patch-notes-close]')!.click();
     expect(dialog.classList.contains('is-hidden')).toBe(true);

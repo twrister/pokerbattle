@@ -591,12 +591,20 @@
         width: min(100%, calc(360 * var(--hu)));
       }
 
+      html.is-dev #patch-notes-dialog .mode-dialog-panel {
+        width: min(100%, calc(400 * var(--hu)));
+      }
+
       .patch-notes-list {
         display: grid;
         gap: calc(18 * var(--hu));
         max-height: calc(420 * var(--hu));
         overflow-y: auto;
         padding-right: calc(4 * var(--hu));
+      }
+
+      html.is-dev .patch-notes-list {
+        max-height: calc(480 * var(--hu));
       }
 
       .patch-note {
@@ -634,6 +642,84 @@
 
       .patch-note-items li + li {
         margin-top: calc(6 * var(--hu));
+      }
+
+      .patch-note.is-editing {
+        gap: calc(10 * var(--hu));
+        padding-bottom: calc(12 * var(--hu));
+        border-bottom: 1px solid rgba(139, 165, 184, 0.16);
+      }
+
+      .patch-note-version-input,
+      .patch-note-date-input,
+      .patch-note-items-input {
+        box-sizing: border-box;
+        border: 1px solid rgba(169, 198, 220, 0.28);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(8, 14, 22, 0.88);
+        color: #f2f5f7;
+        font: inherit;
+      }
+
+      .patch-note-version-input {
+        width: calc(110 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        font-size: calc(16 * var(--hu));
+        font-weight: 700;
+      }
+
+      .patch-note-date-input {
+        width: calc(140 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(8 * var(--hu));
+        color: #c5d4e0;
+        font-size: calc(13 * var(--hu));
+      }
+
+      .patch-note-remove {
+        margin-left: auto;
+        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(8 * var(--hu));
+        font-size: calc(13 * var(--hu));
+      }
+
+      .patch-note-items-input {
+        width: 100%;
+        min-height: calc(84 * var(--hu));
+        padding: calc(10 * var(--hu));
+        color: #c5d4e0;
+        font-size: calc(14 * var(--hu));
+        line-height: 1.5;
+        resize: vertical;
+      }
+
+      .patch-notes-dev-bar {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      #patch-notes-status {
+        min-height: 1.2em;
+        color: #8b98ab;
+        font-size: calc(12 * var(--hu));
+      }
+
+      #patch-notes-status.is-error {
+        color: #ef8b8b;
+      }
+
+      .patch-notes-dev-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      #btn-patch-notes-add,
+      #btn-patch-notes-save {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
       }
 
       .mode-dialog-options {
@@ -4844,6 +4930,13 @@
               <button class="mode-dialog-close" type="button" aria-label="关闭" data-patch-notes-close>×</button>
             </header>
             <div id="patch-notes-list" class="patch-notes-list"></div>
+            <div class="patch-notes-dev-bar dev-only">
+              <p id="patch-notes-status" role="status" aria-live="polite"></p>
+              <div class="patch-notes-dev-actions">
+                <button id="btn-patch-notes-add" type="button">新增版本</button>
+                <button id="btn-patch-notes-save" type="button">保存</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

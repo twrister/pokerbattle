@@ -1,20 +1,44 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from 'vitest';
-import { PATCH_NOTES } from '../src/data/patchNotes.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PATCH_NOTES, resetPatchNotesToDefault } from '../src/data/patchNotes.js';
 import { createPatchNotesPanel } from '../src/ui/patchNotesPanel.js';
+
+const envState = vi.hoisted(() => ({ isDev: false }));
+
+vi.mock('../src/env.js', () => ({
+  get IS_DEV_SERVER() {
+    return envState.isDev;
+  },
+  APP_VERSION: '0.1.5',
+  formatLobbyVersion: (version: string) => `v${version.trim().replace(/^v/i, '') || '0.0.0'}`,
+}));
+
+function mountDom(): void {
+  document.body.innerHTML = `
+    <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
+      <button data-patch-notes-close></button>
+      <div id="patch-notes-list"></div>
+      <p id="patch-notes-status"></p>
+      <button id="btn-patch-notes-add" type="button">新增版本</button>
+      <button id="btn-patch-notes-save" type="button">保存</button>
+    </div>
+  `;
+}
 
 describe('更新公告面板', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
-        <button data-patch-notes-close></button>
-        <div id="patch-notes-list"></div>
-      </div>
-    `;
+    envState.isDev = false;
+    resetPatchNotesToDefault();
+    mountDom();
   });
 
-  it('构造时按静态数据渲染版本与条目', () => {
+  afterEach(() => {
+    resetPatchNotesToDefault();
+    vi.unstubAllGlobals();
+  });
+
+  it('正式服按静态数据渲染版本与条目', () => {
     createPatchNotesPanel();
 
     const notes = document.querySelectorAll('.patch-note');
@@ -24,6 +48,7 @@ describe('更新公告面板', () => {
     expect(document.querySelector('.patch-note-date')?.textContent).toBe(newest.date);
     expect(document.querySelector('.patch-note-items')?.textContent).toContain(newest.items[0]);
     expect(document.querySelector('#patch-notes-list')?.textContent).toContain('首个可玩版本');
+    expect(document.querySelector('.patch-note-version-input')).toBeNull();
   });
 
   it('打开后去掉隐藏，点击关闭按钮再收起', () => {
@@ -37,5 +62,59 @@ describe('更新公告面板', () => {
     document.querySelector<HTMLButtonElement>('[data-patch-notes-close]')!.click();
     expect(dialog.classList.contains('is-hidden')).toBe(true);
     expect(dialog.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('开发服渲染可编辑表单，新增版本插到最前', () => {
+    envState.isDev = true;
+    createPatchNotesPanel();
+
+    expect(document.querySelectorAll('.patch-note.is-editing')).toHaveLength(PATCH_NOTES.length);
+    expect(document.querySelector<HTMLInputElement>('.patch-note-version-input')?.value).toBe(
+      PATCH_NOTES[0]!.version,
+    );
+
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes-add')!.click();
+    expect(document.querySelectorAll('.patch-note.is-editing')).toHaveLength(PATCH_NOTES.length + 1);
+    expect(document.querySelector<HTMLInputElement>('.patch-note-version-input')?.value).toBe('0.1.5');
+  });
+
+  it('开发服改条目后保存会更新运行时并 POST 写盘', async () => {
+    envState.isDev = true;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    createPatchNotesPanel();
+    const items = document.querySelector<HTMLTextAreaElement>('.patch-note-items-input')!;
+    items.value = '测试公告一行\n另一行';
+    items.dispatchEvent(new Event('input'));
+
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes-save')!.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('#patch-notes-status')?.textContent).toContain('已保存');
+    });
+
+    expect(PATCH_NOTES[0]!.items).toEqual(['测试公告一行', '另一行']);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/__pb/patch-notes');
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body[0].items).toEqual(['测试公告一行', '另一行']);
+  });
+
+  it('开发服空条目保存失败且不写盘', () => {
+    envState.isDev = true;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    createPatchNotesPanel();
+    const items = document.querySelector<HTMLTextAreaElement>('.patch-note-items-input')!;
+    items.value = '   \n';
+    items.dispatchEvent(new Event('input'));
+
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes-save')!.click();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector('#patch-notes-status')?.classList.contains('is-error')).toBe(true);
+    expect(PATCH_NOTES[0]!.items[0]).not.toBe('');
   });
 });
