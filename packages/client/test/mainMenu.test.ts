@@ -198,7 +198,7 @@ describe('大厅玩家档案展示', () => {
     expect(status.textContent).toContain('正式服不可进入调试模式');
   });
 
-  it('开发服点击模拟沙盒会进入，正式服仅提示不可进入', () => {
+  it('开发服与正式服点击模拟沙盒都会进入', () => {
     const onStartSandbox = vi.fn();
     createMainMenu(menuOptions({ onStartSandbox }));
 
@@ -208,10 +208,7 @@ describe('大厅玩家档案展示', () => {
     envState.isDev = false;
     onStartSandbox.mockClear();
     document.querySelector<HTMLButtonElement>('#btn-sandbox')!.click();
-    expect(onStartSandbox).not.toHaveBeenCalled();
-    const status = document.querySelector('#lobby-status')!;
-    expect(status.classList.contains('is-visible')).toBe(true);
-    expect(status.textContent).toContain('正式服不可进入模拟沙盒');
+    expect(onStartSandbox).toHaveBeenCalledTimes(1);
   });
 
   it('点击多人联机进入独立大厅页', () => {
@@ -220,6 +217,15 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     expect(onOpenOnline).toHaveBeenCalledTimes(1);
+  });
+
+  it('正式服点击卡组进入阵型页', () => {
+    envState.isDev = false;
+    const onOpenDeckConfig = vi.fn();
+    createMainMenu(menuOptions({ onOpenDeckConfig }));
+
+    document.querySelector<HTMLButtonElement>('#btn-deck')!.click();
+    expect(onOpenDeckConfig).toHaveBeenCalledTimes(1);
   });
 
   it('点击排行榜进入胜点榜页', () => {

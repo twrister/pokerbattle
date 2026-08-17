@@ -37,6 +37,13 @@ if (!fs.existsSync(path.join(clientDist, 'index.html'))) {
 fs.rmSync(outDist, { recursive: true, force: true });
 fs.cpSync(clientDist, outDist, { recursive: true });
 
+// 部署包需要 /poker-battle 前缀，但本机 9080 正式预览吃的是 packages/client/dist。
+// 若留下子路径产物，页面会去 /poker-battle/assets 拉 JS，Vite preview 回退成 HTML，无法游玩。
+if (base) {
+  console.log('[build-prod] restore local official dist with root base');
+  run('pnpm', ['--filter', '@pb/client', 'build'], { VITE_PUBLIC_BASE: '' });
+}
+
 run('pnpm', [
   'exec',
   'esbuild',

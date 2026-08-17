@@ -187,9 +187,7 @@ function syncLobbyPresenceForScreen(screen: AppScreen): void {
 }
 
 const mainMenu = createMainMenu({
-  // 正式服入口仍显示，点击提示由大厅处理；这里再挡一层防止误入
   onStartSandbox: () => {
-    if (!IS_DEV_SERVER) return;
     screens.show('sandbox');
   },
   onStartSolo: (difficulty) => {
@@ -1933,11 +1931,6 @@ screens = createScreenController({
     return () => sceneConfigPage.hide();
   },
   sandbox: () => {
-    // 正式服禁止进入沙盒；若被直接调起则立刻回大厅
-    if (!IS_DEV_SERVER) {
-      queueMicrotask(() => screens.show('menu'));
-      return () => {};
-    }
     syncLobbyPresenceForScreen('sandbox');
     return enterSandbox();
   },
