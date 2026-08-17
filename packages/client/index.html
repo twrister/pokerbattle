@@ -733,14 +733,29 @@
         gap: calc(10 * var(--hu));
       }
 
+      /* 与改名/建房输入一致：深底浅字，避免沿用原生白底导致浅色字看不清 */
       #feedback-input {
         width: 100%;
+        box-sizing: border-box;
         min-height: calc(96 * var(--hu));
         padding: calc(10 * var(--hu));
-        color: #c5d4e0;
+        border: 1px solid rgba(169, 198, 220, 0.28);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(8, 14, 22, 0.88);
+        color: #f2f5f7;
+        font: inherit;
         font-size: calc(14 * var(--hu));
         line-height: 1.5;
         resize: vertical;
+      }
+
+      #feedback-input::placeholder {
+        color: #8aa0b4;
+      }
+
+      #feedback-input:focus {
+        outline: 1px solid rgba(153, 207, 237, 0.55);
+        outline-offset: 1px;
       }
 
       #feedback-status {
