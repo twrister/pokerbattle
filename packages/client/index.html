@@ -13,6 +13,24 @@
         --blue: #4f8dfd;
         --red: #f2604f;
         --accent: #63d68a;
+        --highlight: #9fd0ef;
+        --warn: #f4b45a;
+        --error: #ef8b8b;
+        --surface: rgba(12, 24, 36, 0.72);
+        --surface-strong: rgba(16, 28, 42, 0.88);
+        --radius-sm: calc(8 * var(--hu));
+        --radius-md: calc(12 * var(--hu));
+        --radius-lg: calc(16 * var(--hu));
+        --space-1: calc(6 * var(--hu));
+        --space-2: calc(10 * var(--hu));
+        --space-3: calc(14 * var(--hu));
+        --space-4: calc(18 * var(--hu));
+        --btn-primary-bg: linear-gradient(135deg, #3d718f, #294c68);
+        --btn-primary-border: rgba(153, 207, 237, 0.5);
+        --btn-secondary-bg: rgba(255, 255, 255, 0.04);
+        --btn-secondary-border: rgba(139, 165, 184, 0.28);
+        --btn-danger-bg: linear-gradient(135deg, #7a3530, #4a1e1c);
+        --btn-danger-border: rgba(242, 96, 79, 0.48);
         /* 9:16 舞台；--hu 以 720 设计宽为 1，各分辨率等比对齐 720×1280 */
         --stage-w: min(100vw, calc(100svh * 9 / 16));
         --stage-h: min(100svh, calc(100vw * 16 / 9));
@@ -409,29 +427,6 @@
         color: #8192a4;
       }
 
-      /* 创建/加入房间等待对手时，文案右侧提供离房入口 */
-      #btn-lobby-room-cancel {
-        flex: 0 0 auto;
-        padding: calc(6 * var(--hu)) calc(12 * var(--hu));
-        border-radius: calc(8 * var(--hu));
-        font-size: calc(12 * var(--hu));
-        font-weight: 600;
-        border: 1px solid rgba(169, 198, 220, 0.35);
-        background: rgba(20, 36, 52, 0.95);
-        color: #eef5fa;
-        white-space: nowrap;
-      }
-
-      #btn-lobby-room-cancel.is-hidden {
-        display: none;
-      }
-
-      #btn-lobby-room-cancel:hover,
-      #btn-lobby-room-cancel:active {
-        border-color: rgba(153, 207, 237, 0.55);
-        background: rgba(28, 52, 74, 0.95);
-      }
-
       /* 大厅二级模式选择弹层 */
       .mode-dialog {
         position: absolute;
@@ -598,36 +593,52 @@
       }
 
       .online-page-header {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
-        justify-content: space-between;
-        gap: calc(10 * var(--hu));
-        margin-bottom: calc(18 * var(--hu));
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
       }
 
       .online-page-header h1 {
         margin: 0;
+        color: #f2f5f7;
         font-size: calc(22 * var(--hu));
+        font-weight: 700;
         letter-spacing: 0.08em;
+        text-align: center;
+      }
+
+      .online-page-header > span {
+        min-width: calc(72 * var(--hu));
       }
 
       .online-page-back,
       .online-page-refresh {
         width: auto;
+        min-width: calc(72 * var(--hu));
         padding: calc(8 * var(--hu)) calc(12 * var(--hu));
         border-radius: calc(10 * var(--hu));
         font-size: calc(13 * var(--hu));
         font-weight: 600;
-        border: 1px solid rgba(153, 207, 237, 0.5);
-        background: rgba(20, 36, 52, 0.9);
-        color: #f7fbfd;
+        border: 1px solid var(--btn-secondary-border);
+        background: var(--btn-secondary-bg);
+        color: #d5e2ec;
         white-space: nowrap;
+      }
+
+      .online-lobby-body,
+      .online-room-body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
       }
 
       #online-lobby-list {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: calc(10 * var(--hu));
+        gap: var(--space-2);
         flex: 1;
         align-content: start;
         min-height: calc(280 * var(--hu));
@@ -635,36 +646,57 @@
       }
 
       .online-lobby-empty {
+        display: grid;
         grid-column: 1 / -1;
-        padding: calc(28 * var(--hu)) 0;
+        place-items: center;
+        min-height: calc(168 * var(--hu));
+        padding: calc(36 * var(--hu)) var(--space-3);
+        border: 1px dashed rgba(153, 207, 237, 0.18);
+        border-radius: var(--radius-lg);
+        background: rgba(8, 14, 22, 0.28);
         color: #7f92a6;
         font-size: calc(14 * var(--hu));
         text-align: center;
+      }
+
+      .online-lobby-empty.is-error {
+        border-color: rgba(239, 139, 139, 0.28);
+        color: var(--error);
       }
 
       .online-room-card {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        gap: calc(10 * var(--hu));
-        height: calc(80 * var(--hu));
-        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        gap: var(--space-2);
+        height: calc(84 * var(--hu));
+        padding: calc(12 * var(--hu)) var(--space-3);
         overflow: hidden;
         border: 1px solid rgba(153, 207, 237, 0.22);
-        border-radius: calc(14 * var(--hu));
-        background: rgba(12, 24, 36, 0.72);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
         color: #eef5fa;
         font: inherit;
         text-align: left;
       }
 
+      .online-room-card.is-waiting {
+        border-color: rgba(153, 207, 237, 0.28);
+      }
+
+      .online-room-card.is-full {
+        border-color: rgba(139, 165, 184, 0.18);
+        opacity: 0.82;
+      }
+
       .online-room-card.is-playing {
-        border-color: rgba(244, 180, 90, 0.35);
+        border-color: rgba(244, 180, 90, 0.4);
+        background: rgba(42, 32, 16, 0.55);
       }
 
       .online-room-card-meta {
         display: grid;
-        gap: calc(6 * var(--hu));
+        gap: var(--space-1);
         min-width: 0;
       }
 
@@ -691,25 +723,43 @@
       }
 
       .online-room-card.is-playing .online-room-card-state {
-        color: #f4b45a;
+        color: var(--warn);
       }
 
       .online-room-card-action {
         min-width: calc(72 * var(--hu));
         padding: calc(8 * var(--hu)) calc(12 * var(--hu));
-        border: 1px solid rgba(153, 207, 237, 0.4);
+        border: 1px solid var(--btn-primary-border);
         border-radius: calc(10 * var(--hu));
         background: rgba(28, 52, 74, 0.88);
         color: #eef5fa;
         font: inherit;
         font-size: calc(13 * var(--hu));
+        font-weight: 650;
         cursor: pointer;
+      }
+
+      .online-room-card-action.is-spectate {
+        border-color: rgba(244, 180, 90, 0.5);
+        background: rgba(74, 52, 18, 0.88);
+        color: #ffe7b0;
+      }
+
+      .online-room-card-action.is-full {
+        border-color: rgba(139, 165, 184, 0.22);
+        background: rgba(255, 255, 255, 0.04);
+        color: #8aa0b4;
       }
 
       .online-room-card-action:hover:not(:disabled),
       .online-room-card-action:active:not(:disabled) {
         border-color: rgba(153, 207, 237, 0.75);
         background: rgba(40, 72, 98, 0.95);
+      }
+
+      .online-room-card-action.is-spectate:hover:not(:disabled) {
+        border-color: rgba(244, 180, 90, 0.75);
+        background: rgba(92, 64, 22, 0.95);
       }
 
       .online-room-card-action:disabled {
@@ -721,7 +771,7 @@
         flex: 0 0 auto;
         font-weight: 700;
         letter-spacing: 0.12em;
-        color: #9fd0ef;
+        color: var(--highlight);
         font-size: calc(18 * var(--hu));
       }
 
@@ -739,27 +789,43 @@
         font-size: calc(12 * var(--hu));
       }
 
-      .online-lobby-actions {
+      .online-lobby-actions,
+      .online-room-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: calc(10 * var(--hu));
-        margin-top: calc(16 * var(--hu));
+        gap: var(--space-2);
+        margin-top: var(--space-4);
+      }
+
+      .online-room-actions {
+        grid-template-columns: 1fr;
       }
 
       #btn-online-lobby-create,
-      #btn-online-lobby-join,
       #btn-online-create-confirm,
       #btn-online-join-confirm,
       #btn-online-room-start,
-      #btn-online-room-ready {
+      #btn-online-room-ready,
+      #btn-battle-result-return {
         width: 100%;
         padding: calc(16 * var(--hu)) calc(12 * var(--hu));
-        border-radius: calc(12 * var(--hu));
+        border-radius: var(--radius-md);
         font-size: calc(16 * var(--hu));
         font-weight: 700;
-        border: 1px solid rgba(153, 207, 237, 0.5);
-        background: linear-gradient(135deg, #3d718f, #294c68);
+        border: 1px solid var(--btn-primary-border);
+        background: var(--btn-primary-bg);
         color: #f7fbfd;
+      }
+
+      #btn-online-lobby-join {
+        width: 100%;
+        padding: calc(16 * var(--hu)) calc(12 * var(--hu));
+        border-radius: var(--radius-md);
+        font-size: calc(16 * var(--hu));
+        font-weight: 700;
+        border: 1px solid var(--btn-secondary-border);
+        background: var(--btn-secondary-bg);
+        color: #d5e2ec;
       }
 
       #btn-online-room-start:disabled {
@@ -767,15 +833,15 @@
       }
 
       #btn-online-room-ready.is-ready {
-        border-color: rgba(139, 165, 184, 0.36);
-        background: rgba(255, 255, 255, 0.06);
+        border-color: var(--btn-secondary-border);
+        background: var(--btn-secondary-bg);
         color: #d5e2ec;
       }
 
       #online-lobby-status,
       #online-room-status {
         min-height: 1.4em;
-        margin-top: calc(10 * var(--hu));
+        margin-top: var(--space-2);
         color: transparent;
         font-size: calc(13 * var(--hu));
         text-align: center;
@@ -785,6 +851,10 @@
       #online-room-status.is-visible,
       #leaderboard-status.is-visible {
         color: #8192a4;
+      }
+
+      #online-lobby-status.is-error {
+        color: var(--error);
       }
 
       #leaderboard-list {
@@ -917,6 +987,18 @@
         text-align: center;
       }
 
+      .online-dialog-form {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .online-dialog-label {
+        color: #8aa0b4;
+        font-size: calc(12 * var(--hu));
+        font-weight: 650;
+        letter-spacing: 0.08em;
+      }
+
       #online-create-name-input,
       #online-join-id-input {
         width: 100%;
@@ -930,6 +1012,12 @@
         font-size: calc(16 * var(--hu));
       }
 
+      #online-create-name-input:focus,
+      #online-join-id-input:focus {
+        outline: 1px solid rgba(153, 207, 237, 0.55);
+        outline-offset: 1px;
+      }
+
       #online-create-error,
       #online-join-error {
         min-height: 1.2em;
@@ -939,13 +1027,17 @@
 
       #online-create-error.is-visible,
       #online-join-error.is-visible {
-        color: #ef8b8b;
+        color: var(--error);
       }
 
       .online-room-meta {
         display: grid;
         gap: calc(4 * var(--hu));
-        margin-bottom: calc(18 * var(--hu));
+        margin-bottom: var(--space-3);
+        padding: var(--space-3);
+        border: 1px solid rgba(153, 207, 237, 0.2);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
         text-align: center;
       }
 
@@ -953,7 +1045,7 @@
         font-size: calc(28 * var(--hu));
         font-weight: 700;
         letter-spacing: 0.16em;
-        color: #9fd0ef;
+        color: var(--highlight);
       }
 
       #online-room-name {
@@ -963,7 +1055,7 @@
 
       #online-room-members {
         display: grid;
-        gap: calc(10 * var(--hu));
+        gap: var(--space-2);
         flex: 1;
         align-content: start;
       }
@@ -971,97 +1063,181 @@
       .online-room-teams {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: calc(10 * var(--hu));
+        gap: var(--space-2);
+      }
+
+      .online-room-team {
+        display: grid;
+        gap: var(--space-2);
+        min-width: 0;
+        padding: var(--space-2);
+        border-radius: var(--radius-lg);
+        background: rgba(8, 14, 22, 0.35);
+      }
+
+      .online-room-team.is-blue {
+        border: 1px solid rgba(79, 141, 253, 0.22);
+      }
+
+      .online-room-team.is-red {
+        border: 1px solid rgba(242, 96, 79, 0.22);
       }
 
       .online-room-team-title {
-        margin: 0 0 calc(8 * var(--hu));
+        margin: 0;
         font-size: calc(14 * var(--hu));
         font-weight: 650;
+        letter-spacing: 0.08em;
       }
 
       .online-room-team.is-blue .online-room-team-title { color: #7eb6ff; }
       .online-room-team.is-red .online-room-team-title { color: #f08a7a; }
 
+      .online-mode-switch,
       .online-room-mode {
-        display: flex;
-        gap: calc(8 * var(--hu));
-        margin-bottom: calc(10 * var(--hu));
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-1);
+        margin: 0 0 var(--space-3);
+        padding: calc(4 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.2);
+        border-radius: var(--radius-md);
+        background: rgba(8, 16, 24, 0.55);
+      }
+
+      .online-dialog-form .online-mode-switch {
+        margin: 0;
+      }
+
+      .online-mode-switch legend {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+      }
+
+      .online-mode-option {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: calc(40 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        color: #c5d7e6;
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .online-mode-option input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .online-mode-option:has(input:checked),
+      .online-room-mode button.is-active {
+        background: rgba(79, 141, 253, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(153, 207, 237, 0.55);
+        color: #f7fbfd;
       }
 
       .online-room-mode button {
-        flex: 1;
-        padding: calc(8 * var(--hu));
-        border-radius: calc(10 * var(--hu));
-        border: 1px solid rgba(153, 207, 237, 0.28);
-        background: rgba(12, 24, 36, 0.72);
-        color: #c5d7e6;
-      }
-
-      .online-room-mode button.is-active {
-        border-color: rgba(153, 207, 237, 0.7);
-        background: rgba(79, 141, 253, 0.22);
-      }
-
-      .online-create-mode {
-        border: 0;
-        margin: calc(10 * var(--hu)) 0;
+        min-height: calc(40 * var(--hu));
         padding: 0;
+        border: 0;
+        border-radius: calc(10 * var(--hu));
+        background: transparent;
         color: #c5d7e6;
-        display: flex;
-        gap: calc(16 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
       }
 
       .online-room-member {
-        padding: calc(16 * var(--hu));
-        border: 1px solid rgba(153, 207, 237, 0.22);
-        border-radius: calc(14 * var(--hu));
-        background: rgba(12, 24, 36, 0.72);
+        display: grid;
+        gap: calc(8 * var(--hu));
+        min-height: calc(88 * var(--hu));
+        padding: var(--space-3);
+        border: 1px solid rgba(153, 207, 237, 0.2);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
       }
 
       .online-room-member.is-host {
         border-color: rgba(153, 207, 237, 0.55);
       }
 
+      .online-room-member.is-self {
+        box-shadow: inset 0 0 0 1px rgba(153, 207, 237, 0.4);
+      }
+
+      .online-room-member.is-ready {
+        border-color: rgba(99, 214, 138, 0.4);
+      }
+
+      .online-room-member.is-unready:not(.is-empty) {
+        border-color: rgba(244, 180, 90, 0.35);
+      }
+
       .online-room-member.is-empty {
+        border-style: dashed;
         cursor: pointer;
-        opacity: 0.72;
+        opacity: 0.78;
       }
 
       .online-room-member-name {
+        overflow: hidden;
         font-size: calc(18 * var(--hu));
         font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .online-room-member-meta {
-        margin-top: calc(6 * var(--hu));
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
         color: #8aa0b4;
         font-size: calc(13 * var(--hu));
       }
 
-      .online-room-actions {
-        display: grid;
-        gap: calc(10 * var(--hu));
-        margin-top: calc(16 * var(--hu));
+      .online-room-tag {
+        padding: calc(2 * var(--hu)) calc(8 * var(--hu));
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #8aa0b4;
+        font-size: calc(11 * var(--hu));
+        font-weight: 650;
       }
 
-      #btn-online-room-leave {
-        width: 100%;
-        padding: calc(14 * var(--hu));
-        border-radius: calc(12 * var(--hu));
-        font-size: calc(15 * var(--hu));
-        border: 1px solid rgba(139, 165, 184, 0.28);
-        background: rgba(255, 255, 255, 0.04);
-        color: #d5e2ec;
+      .online-room-tag.is-host {
+        background: rgba(79, 141, 253, 0.16);
+        color: var(--highlight);
+      }
+
+      .online-room-tag.is-self {
+        background: rgba(99, 214, 138, 0.16);
+        color: #d8ffe8;
+      }
+
+      .online-room-tag.is-ready {
+        background: rgba(99, 214, 138, 0.16);
+        color: #d8ffe8;
+      }
+
+      .online-room-tag.is-unready {
+        background: rgba(244, 180, 90, 0.14);
+        color: #ffe7b0;
       }
 
       .reconnect-banner {
-        position: fixed;
-        top: max(calc(18 * var(--hu)), env(safe-area-inset-top));
+        position: absolute;
+        top: max(calc(118 * var(--hu)), calc(var(--stage-safe-top) + calc(110 * var(--hu))));
         left: 50%;
         z-index: 40;
         transform: translateX(-50%);
-        max-width: min(92vw, calc(320 * var(--hu)));
+        max-width: min(92%, calc(320 * var(--hu)));
         padding: calc(10 * var(--hu)) calc(14 * var(--hu));
         border-radius: calc(999 * var(--hu));
         border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1079,18 +1255,21 @@
         display: none;
       }
 
+      .reconnect-banner.is-warn,
       .reconnect-banner[data-tone='warn'] {
         border-color: rgba(240, 196, 104, 0.55);
         background: rgba(54, 40, 12, 0.9);
         color: #ffe7b0;
       }
 
+      .reconnect-banner.is-ok,
       .reconnect-banner[data-tone='ok'] {
         border-color: rgba(120, 214, 156, 0.55);
         background: rgba(16, 48, 34, 0.9);
         color: #d8ffe8;
       }
 
+      .reconnect-banner.is-error,
       .reconnect-banner[data-tone='error'] {
         border-color: rgba(239, 139, 139, 0.55);
         background: rgba(56, 22, 22, 0.92);
@@ -1171,6 +1350,23 @@
       @media (max-height: 620px) {
         .lobby-subtitle {
           display: none;
+        }
+
+        .online-room-meta {
+          padding: var(--space-2);
+          margin-bottom: var(--space-2);
+        }
+
+        .online-room-member {
+          min-height: calc(72 * var(--hu));
+          padding: var(--space-2);
+        }
+      }
+
+      @media (max-width: 420px) {
+        #online-lobby-list,
+        .online-room-teams {
+          grid-template-columns: 1fr;
         }
       }
 
@@ -1355,14 +1551,19 @@
         left: max(calc(12 * var(--hu)), var(--stage-safe-left));
         z-index: 2;
         width: auto;
+        min-width: calc(64 * var(--hu));
         max-width: calc(88 * var(--hu));
-        padding: calc(6 * var(--hu)) calc(8 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
+        border: 1px solid var(--btn-secondary-border);
+        border-radius: calc(10 * var(--hu));
+        background: var(--btn-secondary-bg);
+        color: #d5e2ec;
         pointer-events: auto;
         font-size: calc(12 * var(--hu));
         font-weight: 600;
         line-height: 1.25;
         letter-spacing: 0.02em;
-        white-space: normal;
+        white-space: nowrap;
         text-align: center;
       }
 
@@ -1576,7 +1777,11 @@
         display: grid;
         place-items: center;
         gap: calc(2 * var(--hu));
-        min-width: calc(88 * var(--hu));
+        min-width: calc(96 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
+        border: 1px solid rgba(185, 207, 225, 0.16);
+        border-radius: var(--radius-md);
+        background: rgba(12, 19, 29, 0.72);
         color: var(--text-dim);
         font-size: calc(11 * var(--hu));
         text-align: center;
@@ -1598,9 +1803,13 @@
         white-space: nowrap;
       }
 
+      .battle-status-chip,
       #battle-spectators,
       #battle-catchup {
-        color: #f4b45a;
+        padding: calc(1 * var(--hu)) calc(6 * var(--hu));
+        border-radius: 999px;
+        background: rgba(244, 180, 90, 0.14);
+        color: var(--warn);
         font-size: calc(10 * var(--hu));
         font-weight: 600;
         white-space: nowrap;
@@ -1686,7 +1895,11 @@
       }
 
       .spectator-hand-label {
+        align-self: flex-start;
         overflow: hidden;
+        padding: calc(2 * var(--hu)) calc(8 * var(--hu));
+        border-radius: 999px;
+        background: rgba(79, 141, 253, 0.16);
         color: #9cbcff;
         font-size: calc(12 * var(--hu));
         font-weight: 700;
@@ -1695,6 +1908,7 @@
       }
 
       .spectator-hand-row.is-red .spectator-hand-label {
+        background: rgba(242, 96, 79, 0.16);
         color: #f5a498;
       }
 
@@ -1810,14 +2024,14 @@
 
       .battle-result-panel {
         display: grid;
-        gap: calc(18 * var(--hu));
+        gap: var(--space-4);
         width: min(100%, calc(400 * var(--hu)));
-        padding: calc(30 * var(--hu));
-        border: 1px solid rgba(185, 207, 225, 0.28);
-        border-radius: calc(16 * var(--hu));
-        background: linear-gradient(160deg, rgba(38, 56, 74, 0.98), rgba(11, 18, 28, 0.99));
+        padding: calc(28 * var(--hu));
+        border: 1px solid rgba(169, 198, 220, 0.22);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(160deg, rgba(38, 56, 74, 0.96), rgba(14, 22, 32, 0.98));
         text-align: center;
-        box-shadow: 0 calc(24 * var(--hu)) calc(60 * var(--hu)) rgba(0, 0, 0, 0.48);
+        box-shadow: 0 calc(24 * var(--hu)) calc(60 * var(--hu)) rgba(0, 0, 0, 0.42);
       }
 
       .battle-result-sides {
@@ -2007,9 +2221,9 @@
       }
 
       #btn-versus-exit-confirm {
-        border: 1px solid rgba(153, 207, 237, 0.5);
-        background: linear-gradient(135deg, #3d718f, #294c68);
-        color: #f7fbfd;
+        border: 1px solid var(--btn-danger-border);
+        background: var(--btn-danger-bg);
+        color: #fff4f2;
       }
 
       /* 底部居中：建造在上、出兵在下；贴视口底边，不跟舞台 letterbox */
@@ -4430,7 +4644,6 @@
           </div>
           <div class="lobby-status-row">
             <div id="lobby-status" role="status" aria-live="polite">功能正在筹备中</div>
-            <button id="btn-lobby-room-cancel" class="is-hidden" type="button">取消</button>
           </div>
         </section>
 
@@ -4543,7 +4756,9 @@
           <h1>多人联机</h1>
           <button id="btn-online-lobby-refresh" class="online-page-refresh" type="button">刷新</button>
         </header>
-        <div id="online-lobby-list" role="list"></div>
+        <div class="online-lobby-body">
+          <div id="online-lobby-list" role="list"></div>
+        </div>
         <div id="online-lobby-status" role="status" aria-live="polite"></div>
         <div class="online-lobby-actions">
           <button id="btn-online-lobby-create" type="button">创建房间</button>
@@ -4556,22 +4771,32 @@
               <h2 id="online-create-title" class="mode-dialog-title">创建房间</h2>
               <button class="mode-dialog-close" type="button" aria-label="关闭" data-online-create-close>×</button>
             </header>
-            <input
-              id="online-create-name-input"
-              type="text"
-              maxlength="24"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="房间名，例如 小明的房间"
-              aria-label="联机房间名"
-            />
-            <fieldset class="online-create-mode">
-              <legend>对局模式</legend>
-              <label><input type="radio" name="online-create-mode" value="1v1" checked /> 1v1</label>
-              <label><input type="radio" name="online-create-mode" value="2v2" /> 2v2</label>
-            </fieldset>
-            <div id="online-create-error" role="alert"></div>
-            <button id="btn-online-create-confirm" type="button">创建</button>
+            <div class="online-dialog-form">
+              <span class="online-dialog-label">房间名</span>
+              <input
+                id="online-create-name-input"
+                type="text"
+                maxlength="24"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="例如 小明的房间"
+                aria-label="联机房间名"
+              />
+              <span class="online-dialog-label">对局模式</span>
+              <fieldset class="online-mode-switch" role="radiogroup" aria-label="对局模式">
+                <legend>对局模式</legend>
+                <label class="online-mode-option">
+                  <input type="radio" name="online-create-mode" value="1v1" checked />
+                  <span>1v1</span>
+                </label>
+                <label class="online-mode-option">
+                  <input type="radio" name="online-create-mode" value="2v2" />
+                  <span>2v2</span>
+                </label>
+              </fieldset>
+              <div id="online-create-error" role="alert"></div>
+              <button id="btn-online-create-confirm" type="button">创建</button>
+            </div>
           </div>
         </div>
         <div id="online-join-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="online-join-title">
@@ -4581,19 +4806,22 @@
               <h2 id="online-join-title" class="mode-dialog-title">加入房间</h2>
               <button class="mode-dialog-close" type="button" aria-label="关闭" data-online-join-close>×</button>
             </header>
-            <input
-              id="online-join-id-input"
-              type="text"
-              maxlength="3"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="三位房号，如 042"
-              aria-label="联机房间号"
-            />
-            <div id="online-join-error" role="alert"></div>
-            <button id="btn-online-join-confirm" type="button">加入</button>
+            <div class="online-dialog-form">
+              <span class="online-dialog-label">房间号</span>
+              <input
+                id="online-join-id-input"
+                type="text"
+                maxlength="3"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="三位房号，如 042"
+                aria-label="联机房间号"
+              />
+              <div id="online-join-error" role="alert"></div>
+              <button id="btn-online-join-confirm" type="button">加入</button>
+            </div>
           </div>
         </div>
       </div>
@@ -4626,19 +4854,21 @@
     <main id="online-room" class="is-hidden" aria-hidden="true">
       <div class="lobby-shell">
         <header class="online-page-header">
-          <button id="btn-online-room-leave" class="online-page-back" type="button">离开房间</button>
+          <button id="btn-online-room-leave" class="online-page-back" type="button">离开</button>
           <h1>房间</h1>
           <span></span>
         </header>
-        <div class="online-room-meta">
-          <div id="online-room-id">---</div>
-          <div id="online-room-name">正在加入…</div>
+        <div class="online-room-body">
+          <div class="online-room-meta">
+            <div id="online-room-id">---</div>
+            <div id="online-room-name">正在加入…</div>
+          </div>
+          <div id="online-room-mode" class="online-room-mode online-mode-switch is-hidden" role="group" aria-label="对局模式">
+            <button id="btn-online-room-mode-1v1" type="button" aria-pressed="false">1v1</button>
+            <button id="btn-online-room-mode-2v2" type="button" aria-pressed="false">2v2</button>
+          </div>
+          <div id="online-room-members"></div>
         </div>
-        <div id="online-room-mode" class="online-room-mode is-hidden">
-          <button id="btn-online-room-mode-1v1" type="button">1v1</button>
-          <button id="btn-online-room-mode-2v2" type="button">2v2</button>
-        </div>
-        <div id="online-room-members"></div>
         <div id="online-room-status" role="status" aria-live="polite"></div>
         <div class="online-room-actions">
           <button id="btn-online-room-start" type="button" disabled>开始游戏</button>
@@ -5090,8 +5320,8 @@
             <span id="battle-phase-label">常规阶段</span>
             <span id="battle-timer-label">剩余时间：</span>
             <strong id="battle-timer">2:00</strong>
-            <span id="battle-spectators" class="is-hidden">观战 0</span>
-            <span id="battle-catchup" class="is-hidden">正在追帧…</span>
+            <span id="battle-spectators" class="battle-status-chip is-hidden">观战 0</span>
+            <span id="battle-catchup" class="battle-status-chip is-hidden">正在追帧…</span>
           </div>
           <div class="battle-opp-side">
             <div class="battle-team battle-team-opp">
@@ -5180,7 +5410,7 @@
           </div>
         </div>
       </div>
-      <button id="btn-back-menu" type="button">返回主界面</button>
+      <button id="btn-back-menu" type="button">返回</button>
       <section class="panel" id="panel-stats">
         <div class="title">模拟状态</div>
         <dl class="stats-grid">

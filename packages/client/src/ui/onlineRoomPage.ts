@@ -63,9 +63,17 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
         const member = state?.members.find((entry) => entry.seat === seat) ?? null;
         const card = document.createElement('article');
         card.className = 'online-room-member';
+        card.dataset.seat = String(seat);
         if (member?.isHost) card.classList.add('is-host');
         if (seat === localSeat) card.classList.add('is-self');
-        if (!member) card.classList.add('is-empty');
+        if (!member) {
+          card.classList.add('is-empty');
+          card.dataset.state = 'empty';
+        } else {
+          card.classList.toggle('is-ready', member.ready);
+          card.classList.toggle('is-unready', !member.ready);
+          card.dataset.state = member.ready ? 'ready' : 'unready';
+        }
 
         const name = document.createElement('div');
         name.className = 'online-room-member-name';
@@ -74,14 +82,15 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
         const meta = document.createElement('div');
         meta.className = 'online-room-member-meta';
         if (!member) {
-          meta.textContent = `席位 ${seat + 1}`;
+          meta.append(createRoomTag(`席位 ${seat + 1}`));
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
+          card.setAttribute('aria-label', `入座席位 ${seat + 1}`);
           card.addEventListener('click', () => options.onPickSeat(seat));
         } else {
-          const tags: string[] = [];
-          if (member.isHost) tags.push('房主');
-          if (seat === localSeat) tags.push('我');
-          tags.push(member.ready ? '已准备' : '未准备');
-          meta.textContent = tags.join(' · ');
+          if (member.isHost) meta.append(createRoomTag('房主', 'is-host'));
+          if (seat === localSeat) meta.append(createRoomTag('我', 'is-self'));
+          meta.append(createRoomTag(member.ready ? '已准备' : '未准备', member.ready ? 'is-ready' : 'is-unready'));
         }
 
         card.append(name, meta);
@@ -98,6 +107,8 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
     modeBar.classList.toggle('is-hidden', !self?.isHost || state?.phase !== 'waiting');
     mode1v1.classList.toggle('is-active', mode === '1v1');
     mode2v2.classList.toggle('is-active', mode === '2v2');
+    mode1v1.setAttribute('aria-pressed', mode === '1v1' ? 'true' : 'false');
+    mode2v2.setAttribute('aria-pressed', mode === '2v2' ? 'true' : 'false');
   };
 
   const syncActionButtons = (state: RoomStateMessage | null): void => {
@@ -172,6 +183,14 @@ export function createOnlineRoomPage(options: OnlineRoomPageOptions): OnlineRoom
       void latest;
     },
   };
+}
+
+/** 席位状态小标签，统一房主 / 自己 / 准备态的视觉层级。 */
+function createRoomTag(text: string, extraClass = ''): HTMLSpanElement {
+  const tag = document.createElement('span');
+  tag.className = extraClass ? `online-room-tag ${extraClass}` : 'online-room-tag';
+  tag.textContent = text;
+  return tag;
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

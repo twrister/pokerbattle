@@ -48,12 +48,14 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
 
   const clearStatus = (): void => {
     status.textContent = '';
-    status.classList.remove('is-visible');
+    status.classList.remove('is-visible', 'is-error');
   };
 
-  const showStatus = (message: string): void => {
+  /** 底部状态行；错误用红色，避免与普通提示混在一起。 */
+  const showStatus = (message: string, tone: 'info' | 'error' = 'info'): void => {
     status.textContent = message;
     status.classList.toggle('is-visible', Boolean(message));
+    status.classList.toggle('is-error', Boolean(message) && tone === 'error');
   };
 
   const hideDialogs = (): void => {
@@ -76,12 +78,12 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
     }
 
     for (const room of rooms) {
-      const phase = room.phase === 'playing' ? 'playing' : 'waiting';
+      const cardState = roomCardState(room);
       const card = document.createElement('div');
-      card.className = 'online-room-card';
-      if (phase === 'playing') card.classList.add('is-playing');
+      card.className = `online-room-card is-${cardState}`;
       card.setAttribute('role', 'listitem');
       card.dataset.roomId = room.roomId;
+      card.dataset.state = cardState;
 
       const meta = document.createElement('div');
       meta.className = 'online-room-card-meta';
@@ -109,9 +111,9 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
 
       const state = document.createElement('span');
       state.className = 'online-room-card-state';
-      if (phase === 'playing') {
+      if (cardState === 'playing') {
         state.textContent = `对局中 · 观战 ${room.spectatorCount ?? 0}`;
-      } else if (room.playerCount >= room.maxPlayers) {
+      } else if (cardState === 'full') {
         state.textContent = '已满';
       } else {
         state.textContent = '等待中';
@@ -121,15 +123,15 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
 
       const action = document.createElement('button');
       action.type = 'button';
-      action.className = 'online-room-card-action';
+      action.className = `online-room-card-action is-${cardState === 'playing' ? 'spectate' : cardState === 'full' ? 'full' : 'join'}`;
 
-      if (phase === 'playing') {
+      if (cardState === 'playing') {
         action.textContent = '观战';
         action.addEventListener('click', () => {
           hideDialogs();
           options.onSpectateRoom(room.roomId);
         });
-      } else if (room.playerCount >= room.maxPlayers) {
+      } else if (cardState === 'full') {
         action.textContent = '已满';
         action.disabled = true;
       } else {
@@ -149,7 +151,7 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
     const requestId = ++listRequestId;
     if (roomList.childElementCount === 0) {
       const loading = document.createElement('div');
-      loading.className = 'online-lobby-empty';
+      loading.className = 'online-lobby-empty is-loading';
       loading.textContent = '加载中…';
       roomList.append(loading);
     }
@@ -164,7 +166,7 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
         if (requestId !== listRequestId) return;
         roomList.replaceChildren();
         const failed = document.createElement('div');
-        failed.className = 'online-lobby-empty';
+        failed.className = 'online-lobby-empty is-error';
         failed.textContent = error instanceof Error ? error.message : '加载房间列表失败';
         roomList.append(failed);
       });
@@ -259,7 +261,7 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       stopRefresh();
     },
     showError(message) {
-      showStatus(message);
+      showStatus(message, 'error');
     },
     dispose() {
       stopRefresh();
@@ -281,6 +283,13 @@ function showDialog(dialog: HTMLElement): void {
 function hideDialog(dialog: HTMLElement): void {
   dialog.classList.add('is-hidden');
   dialog.setAttribute('aria-hidden', 'true');
+}
+
+/** 房间卡片状态：等待、已满、对局中，决定边框色与操作按钮。 */
+function roomCardState(room: RoomListEntry): 'waiting' | 'full' | 'playing' {
+  if (room.phase === 'playing') return 'playing';
+  if (room.playerCount >= room.maxPlayers) return 'full';
+  return 'waiting';
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

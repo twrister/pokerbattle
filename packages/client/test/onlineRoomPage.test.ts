@@ -57,7 +57,11 @@ describe('联机房间页', () => {
     expect(document.querySelectorAll('.online-room-team')).toHaveLength(2);
     expect(document.querySelectorAll('.online-room-member')).toHaveLength(4);
     expect(document.querySelectorAll('.online-room-member.is-empty')).toHaveLength(2);
+    expect(document.querySelector('.online-room-member.is-host')?.classList.contains('is-ready')).toBe(true);
+    expect(document.querySelector('.online-room-member.is-self .online-room-tag.is-host')?.textContent).toBe('房主');
+    expect(document.querySelector('.online-room-member.is-empty')?.getAttribute('role')).toBe('button');
     expect(document.querySelector('#btn-online-room-mode-2v2')?.classList.contains('is-active')).toBe(true);
+    expect(document.querySelector('#btn-online-room-mode-2v2')?.getAttribute('aria-pressed')).toBe('true');
 
     document.querySelectorAll<HTMLElement>('.online-room-member.is-empty')[0]?.click();
     expect(onPickSeat).toHaveBeenCalled();
@@ -105,6 +109,44 @@ describe('联机房间页', () => {
     );
     expect(document.querySelector('#btn-online-room-start')?.classList.contains('is-hidden')).toBe(false);
     expect(document.querySelector('#btn-online-room-ready')?.classList.contains('is-hidden')).toBe(true);
+    page.dispose();
+  });
+
+  it('非房主未准备时显示准备按钮，席位带未准备标记', () => {
+    const onSetReady = vi.fn();
+    const page = createOnlineRoomPage({
+      onLeave: vi.fn(),
+      onStartMatch: vi.fn(),
+      onSetReady,
+      onSetMatchMode: vi.fn(),
+      onPickSeat: vi.fn(),
+    });
+    page.applyRoomState(
+      {
+        type: 'roomState',
+        roomId: '202',
+        roomName: '对战房',
+        hostSeat: 0,
+        phase: 'waiting',
+        matchMode: '1v1',
+        maxPlayers: 2,
+        members: [
+          { seat: 0, name: '房主', ready: true, isHost: true, faction: Faction.Blue },
+          { seat: 1, name: '客人', ready: false, isHost: false, faction: Faction.Red },
+        ],
+      },
+      1,
+    );
+
+    const self = document.querySelector('.online-room-member.is-self');
+    expect(self?.classList.contains('is-unready')).toBe(true);
+    expect(self?.querySelector('.online-room-tag.is-unready')?.textContent).toBe('未准备');
+    const readyButton = document.querySelector<HTMLButtonElement>('#btn-online-room-ready')!;
+    expect(readyButton.classList.contains('is-hidden')).toBe(false);
+    expect(readyButton.classList.contains('is-ready')).toBe(false);
+    expect(readyButton.textContent).toBe('准备');
+    readyButton.click();
+    expect(onSetReady).toHaveBeenCalledWith(true);
     page.dispose();
   });
 });

@@ -27,11 +27,12 @@ export function createReconnectBanner(root: HTMLElement = document.body): Reconn
     hideTimer = null;
   };
 
+  /** 按语气切换状态色，避免和顶部 HUD 抢层级。 */
   const show = (text: string, tone: 'info' | 'warn' | 'ok' | 'error'): void => {
     clearHideTimer();
     el.textContent = text;
     el.dataset.tone = tone;
-    el.classList.remove('is-hidden');
+    el.className = `reconnect-banner is-${tone}`;
   };
 
   return {

@@ -61,6 +61,8 @@ describe('联机大厅页', () => {
     expect(title?.querySelector('.online-room-card-name')?.textContent).toBe('可加入房');
     expect(document.querySelector('.online-room-card-count')?.textContent).toBe('1v1 · 1/2');
     expect(document.querySelector('.online-room-card-state')?.textContent).toBe('等待中');
+    expect(document.querySelector('.online-room-card')?.classList.contains('is-waiting')).toBe(true);
+    expect(document.querySelector('.online-room-card-action')?.classList.contains('is-join')).toBe(true);
     document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
     expect(onJoinRoom).toHaveBeenCalledWith({ mode: 'room', roomId: '042' });
     page.dispose();
@@ -88,6 +90,8 @@ describe('联机大厅页', () => {
     await vi.waitFor(() => {
       expect(document.querySelector('.online-room-card-action')?.textContent).toBe('观战');
     });
+    expect(document.querySelector('.online-room-card')?.classList.contains('is-playing')).toBe(true);
+    expect(document.querySelector('.online-room-card-action')?.classList.contains('is-spectate')).toBe(true);
     expect(document.querySelector('.online-room-card-state')?.textContent).toBe('对局中 · 观战 3');
     document.querySelector<HTMLButtonElement>('.online-room-card-action')!.click();
     expect(onSpectateRoom).toHaveBeenCalledWith('088');
@@ -124,6 +128,40 @@ describe('联机大厅页', () => {
     idInput.value = '088';
     document.querySelector<HTMLButtonElement>('#btn-online-join-confirm')!.click();
     expect(onJoinRoom).toHaveBeenLastCalledWith({ mode: 'room', roomId: '088' });
+    page.dispose();
+  });
+
+  it('已满房间显示禁用操作，入房失败用错误状态行', async () => {
+    const page = createOnlineLobbyPage({
+      onBack: vi.fn(),
+      onJoinRoom: vi.fn(),
+      onSpectateRoom: vi.fn(),
+      getDefaultRoomName: () => '测试的房间',
+      listRooms: vi.fn(async () => [
+        {
+          roomId: '066',
+          roomName: '满员房',
+          playerCount: 2,
+          maxPlayers: 2,
+          phase: 'waiting' as const,
+          spectatorCount: 0,
+        },
+      ]),
+    });
+    page.show();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.online-room-card')?.classList.contains('is-full')).toBe(true);
+    });
+    const action = document.querySelector<HTMLButtonElement>('.online-room-card-action')!;
+    expect(action.textContent).toBe('已满');
+    expect(action.disabled).toBe(true);
+    expect(action.classList.contains('is-full')).toBe(true);
+
+    page.showError('房间已满');
+    const status = document.querySelector('#online-lobby-status')!;
+    expect(status.classList.contains('is-visible')).toBe(true);
+    expect(status.classList.contains('is-error')).toBe(true);
+    expect(status.textContent).toBe('房间已满');
     page.dispose();
   });
 });
