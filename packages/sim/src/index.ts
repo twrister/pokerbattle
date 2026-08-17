@@ -133,14 +133,13 @@ export {
 } from './config/halfCourt.js';
 
 export {
-  FRESH_CARD_WEIGHT,
   HAND_LIMIT_DOUBLE_SPEED,
   HAND_LIMIT_FINAL,
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
   PokerDeck,
-  RETURNED_CARD_WEIGHT,
+  RETURN_MIN_DEPTH,
   clampHandSize,
   compareCardsByStrength,
   createPokerCards,

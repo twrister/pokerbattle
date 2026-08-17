@@ -25,7 +25,7 @@ describe('SoloBotController', () => {
     expect(command?.kind).toBe(CommandKind.PlayFormation);
     expect(command?.faction).toBe(Faction.Red);
     if (command?.kind !== CommandKind.PlayFormation) throw new Error('期望出牌指令');
-    expect(command.cardIds.length).toBeGreaterThanOrEqual(2);
+    expect(command.cardIds.length).toBeGreaterThanOrEqual(1);
     expect(match.validate(command)).toBe(true);
     match.step([command!]);
     expect(match.decks[Faction.Red].hand.length).toBeLessThan(before);

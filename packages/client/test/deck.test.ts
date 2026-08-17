@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '@pb/sim';
 import {
-  FRESH_CARD_WEIGHT,
   MAX_HAND_SIZE,
   PokerDeck,
-  RETURNED_CARD_WEIGHT,
+  RETURN_MIN_DEPTH,
   createPokerCards,
 } from '../src/cards/deck.js';
 import { cardImageUrl } from '../src/cards/cardImageUrl.js';
@@ -59,18 +58,49 @@ describe('单机扑克牌堆', () => {
     expect(deck.draw()).toBeUndefined();
   });
 
-  it('出牌后回到牌堆并永久使用更低抽取权重', () => {
+  it('出牌后插回牌顶 5 张之后，且随后 5 张都不是它', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const [card] = deck.drawMany(1);
+    const pileBeforePlay = deck.availableCount;
 
     expect(card).toBeDefined();
-    expect(deck.getAvailableWeight(card!.id)).toBeUndefined();
-    expect(deck.getAvailableWeight('2-spades')).toBe(FRESH_CARD_WEIGHT);
+    expect(deck.getAvailableDepth(card!.id)).toBeUndefined();
 
     expect(deck.play([card!.id, card!.id])).toEqual([card]);
     expect(deck.hand).toHaveLength(0);
     expect(deck.availableCount).toBe(54);
-    expect(deck.getAvailableWeight(card!.id)).toBe(RETURNED_CARD_WEIGHT);
+    expect(deck.getAvailableDepth(card!.id)).toBeGreaterThanOrEqual(
+      Math.min(RETURN_MIN_DEPTH, pileBeforePlay),
+    );
+
+    const nextFive = deck.drawMany(RETURN_MIN_DEPTH);
+    expect(nextFive).toHaveLength(RETURN_MIN_DEPTH);
+    expect(nextFive.map((drawn) => drawn.id)).not.toContain(card!.id);
+  });
+
+  it('堆里只剩 3 张时打出只能插到牌底，第 4 张才是它', () => {
+    const allCards = createPokerCards().slice(0, 4);
+    const deck = new PokerDeck(allCards, new Rng(1));
+    const [card] = deck.drawMany(1);
+
+    expect(deck.availableCount).toBe(3);
+    deck.play([card!.id]);
+    expect(deck.getAvailableDepth(card!.id)).toBe(3);
+
+    const nextThree = deck.drawMany(3);
+    expect(nextThree.map((drawn) => drawn.id)).not.toContain(card!.id);
+    expect(deck.draw()?.id).toBe(card!.id);
+  });
+
+  it('空堆回牌后下一张就是它', () => {
+    const allCards = createPokerCards().slice(0, 1);
+    const deck = new PokerDeck(allCards, new Rng(1));
+    const [card] = deck.drawMany(1);
+
+    expect(deck.availableCount).toBe(0);
+    deck.play([card!.id]);
+    expect(deck.getAvailableDepth(card!.id)).toBe(0);
+    expect(deck.draw()?.id).toBe(card!.id);
   });
 
   it('每次查看手牌都按牌力自动从大到小排列（2 最小）', () => {
@@ -91,16 +121,16 @@ describe('单机扑克牌堆', () => {
     ]);
   });
 
-  it('reset 清空手牌与回收权重，恢复为全新一副牌', () => {
+  it('reset 清空手牌并重新洗牌，回收深度不再保留', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const [card] = deck.drawMany(1);
     deck.play([card!.id]);
-    expect(deck.getAvailableWeight(card!.id)).toBe(RETURNED_CARD_WEIGHT);
+    expect(deck.getAvailableDepth(card!.id)).toBeGreaterThanOrEqual(RETURN_MIN_DEPTH);
 
     deck.reset();
 
     expect(deck.hand).toHaveLength(0);
     expect(deck.availableCount).toBe(54);
-    expect(deck.getAvailableWeight(card!.id)).toBe(FRESH_CARD_WEIGHT);
+    expect(deck.getAvailableDepth(card!.id)).toBeDefined();
   });
 });

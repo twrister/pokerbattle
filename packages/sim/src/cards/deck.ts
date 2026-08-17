@@ -15,10 +15,8 @@ export function clampHandSize(size: number): number {
   if (!Number.isFinite(size)) return INITIAL_HAND_SIZE;
   return Math.max(1, Math.min(MAX_HAND_SIZE, Math.floor(size)));
 }
-/** 新牌权重（整数）；与 RETURNED 比约为 4:1，对应旧版 1 : 0.25。 */
-export const FRESH_CARD_WEIGHT = 4;
-/** 打出回收后的权重，降低立刻重抽概率。 */
-export const RETURNED_CARD_WEIGHT = 1;
+/** 打出后至少隔开的牌顶张数，保证随后 5 次抽牌不会抽到刚打出的牌。 */
+export const RETURN_MIN_DEPTH = 5;
 
 export type CardSuit = 'spades' | 'hearts' | 'clubs' | 'diamonds';
 export type CardRank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
@@ -30,11 +28,6 @@ export interface PlayingCard {
   suit?: CardSuit;
   label: string;
   joker?: 'black' | 'red';
-}
-
-interface AvailableCard {
-  card: PlayingCard;
-  weight: number;
 }
 
 const SUITS: ReadonlyArray<{ id: CardSuit; symbol: string }> = [
@@ -120,10 +113,11 @@ export function getCardStrength(card: PlayingCard): number {
 
 /**
  * 管理有限牌堆与手牌。
- * 随机源必须注入 Rng，用整数权重抽取，保证联机/回放确定性。
+ * 随机源必须注入 Rng：开局洗牌、回牌插入都走同一实例，保证联机/回放确定性。
  */
 export class PokerDeck {
-  private readonly available = new Map<string, AvailableCard>();
+  /** 下标 0 为牌顶（下一张）；打出后插入牌顶 RETURN_MIN_DEPTH 张之后。 */
+  private readonly pile: PlayingCard[] = [];
   private readonly cardsInHand = new Map<string, PlayingCard>();
   /** 当前可持有张数；阶段切换时由 MatchState 改写，下调不丢已有手牌。 */
   private currentMaxHandSize = MAX_HAND_SIZE;
@@ -132,9 +126,7 @@ export class PokerDeck {
     cards: readonly PlayingCard[] = createPokerCards(),
     private readonly rng: Rng = new Rng(1),
   ) {
-    for (const card of cards) {
-      this.available.set(card.id, { card, weight: FRESH_CARD_WEIGHT });
-    }
+    this.refill(cards);
   }
 
   /** 当前抽牌上限；满手后 draw 直接返回。 */
@@ -152,7 +144,7 @@ export class PokerDeck {
   }
 
   get availableCount(): number {
-    return this.available.size;
+    return this.pile.length;
   }
 
   /** 手牌中是否持有指定 id。 */
@@ -160,14 +152,14 @@ export class PokerDeck {
     return this.cardsInHand.has(cardId);
   }
 
-  /** 按当前整数权重抽一张；抽出的牌离开牌堆直到被打出后回收。 */
+  /** 从牌顶抽一张；抽出的牌离开牌堆直到被打出后插回。 */
   draw(): PlayingCard | undefined {
     if (this.cardsInHand.size >= this.currentMaxHandSize) return undefined;
     return this.drawFromAvailable();
   }
 
   /**
-   * 按原权重抽一张，但无视手牌上限。
+   * 从牌顶抽一张，但无视手牌上限。
    * 城堡保护等奖励补牌用；牌堆空时仍返回 undefined。
    */
   drawIgnoringLimit(): PlayingCard | undefined {
@@ -185,71 +177,73 @@ export class PokerDeck {
     return drawn;
   }
 
-  /** 从剩余牌堆按权重抽一张并入手；不做手牌上限检查。 */
+  /** 从牌顶取一张并入手；不做手牌上限检查。 */
   private drawFromAvailable(): PlayingCard | undefined {
-    if (this.available.size === 0) return undefined;
-
-    // 按 id 排序再抽，避免 Map 迭代顺序造成跨端分叉
-    const entries = [...this.available.values()].sort((a, b) => (a.card.id < b.card.id ? -1 : 1));
-    const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
-    let cursor = this.rng.nextInt(totalWeight);
-    let selected = entries.at(-1)!;
-
-    for (const entry of entries) {
-      cursor -= entry.weight;
-      if (cursor < 0) {
-        selected = entry;
-        break;
-      }
-    }
-
-    this.available.delete(selected.card.id);
-    this.cardsInHand.set(selected.card.id, selected.card);
-    return selected.card;
+    const card = this.pile.shift();
+    if (!card) return undefined;
+    this.cardsInHand.set(card.id, card);
+    return card;
   }
 
-  /** 将有效手牌放回牌堆并降低权重。 */
+  /** 将有效手牌插回牌顶 RETURN_MIN_DEPTH 张之后的随机位置。 */
   play(cardIds: Iterable<string>): PlayingCard[] {
     const played: PlayingCard[] = [];
     for (const cardId of new Set(cardIds)) {
       const card = this.cardsInHand.get(cardId);
       if (!card) continue;
       this.cardsInHand.delete(cardId);
-      this.available.set(cardId, { card, weight: RETURNED_CARD_WEIGHT });
+      this.insertBelowMinDepth(card);
       played.push(card);
     }
     return played;
   }
 
-  /** 暴露只读权重用于状态展示与单元测试。 */
-  getAvailableWeight(cardId: string): number | undefined {
-    return this.available.get(cardId)?.weight;
+  /**
+   * 跳过牌顶 RETURN_MIN_DEPTH 张，把回收牌随机插入剩余区间（含牌底）。
+   * 堆里不足 5 张时只能插到牌底，先抽完原剩牌才会再摸到它。
+   */
+  private insertBelowMinDepth(card: PlayingCard): void {
+    const n = this.pile.length;
+    const lo = Math.min(RETURN_MIN_DEPTH, n);
+    const index = lo + this.rng.nextInt(n - lo + 1);
+    this.pile.splice(index, 0, card);
+  }
+
+  /** 牌顶为 0；不在堆中则 undefined。供单测断言回牌深度。 */
+  getAvailableDepth(cardId: string): number | undefined {
+    const index = this.pile.findIndex((card) => card.id === cardId);
+    return index < 0 ? undefined : index;
   }
 
   /**
-   * 原地清空手牌与牌堆权重，恢复为全新一副牌。
+   * 原地清空手牌并重新洗一副牌。
    * 保持实例引用不变，避免 UI 仍握着旧 deck 导致清空后无法出牌。
    */
   reset(cards: readonly PlayingCard[] = createPokerCards()): void {
-    this.available.clear();
     this.cardsInHand.clear();
-    for (const card of cards) {
-      this.available.set(card.id, { card, weight: FRESH_CARD_WEIGHT });
+    this.refill(cards);
+  }
+
+  /** 用当前牌面填满牌堆并洗牌，开局与 reset 共用。 */
+  private refill(cards: readonly PlayingCard[]): void {
+    this.pile.length = 0;
+    this.pile.push(...cards);
+    for (let i = this.pile.length - 1; i > 0; i -= 1) {
+      const j = this.rng.nextInt(i + 1);
+      const tmp = this.pile[i]!;
+      this.pile[i] = this.pile[j]!;
+      this.pile[j] = tmp;
     }
   }
 
-  /** 牌堆+手牌指纹，供 MatchState 对账。 */
+  /** 牌堆+手牌指纹，供 MatchState 对账；堆序参与 mix，插入位置不同则分叉。 */
   hash(): number {
     let h = 0x811c9dc5;
     h = mix(h, this.currentMaxHandSize);
     h = mix(h, this.cardsInHand.size);
     const handIds = [...this.cardsInHand.keys()].sort();
     for (const id of handIds) h = mixString(h, id);
-    const availableIds = [...this.available.keys()].sort();
-    for (const id of availableIds) {
-      h = mixString(h, id);
-      h = mix(h, this.available.get(id)!.weight);
-    }
+    for (const card of this.pile) h = mixString(h, card.id);
     return h >>> 0;
   }
 }
