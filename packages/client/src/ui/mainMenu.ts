@@ -6,6 +6,7 @@ import { isDefaultDisplayName } from '../account/id.js';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
 import { APP_VERSION, formatLobbyVersion, IS_DEV_SERVER } from '../env.js';
+import { createPatchNotesPanel } from './patchNotesPanel.js';
 
 const RENAME_TITLE_DEFAULT = '玩家名称';
 const RENAME_TITLE_FIRST_PLAY = '请先设置玩家名称';
@@ -61,6 +62,8 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const renameInput = required<HTMLInputElement>('#rename-input', root);
   const renameError = required<HTMLElement>('#rename-error', root);
   const profileButton = required<HTMLButtonElement>('#btn-player-profile', root);
+  const patchNotesButton = required<HTMLButtonElement>('#btn-patch-notes', root);
+  const patchNotes = createPatchNotesPanel();
   const playerAvatar = required<HTMLElement>('#player-avatar', root);
   const playerName = required<HTMLElement>('#player-name', root);
   const playerLevel = required<HTMLElement>('#player-level', root);
@@ -86,6 +89,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
+    patchNotes.close();
   };
 
   /** 仍是建档默认名则拦截开局，引导先改名。 */
@@ -269,6 +273,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const openCodex = (): void => options.onOpenCodex();
   const openLeaderboard = (): void => options.onOpenLeaderboard();
   const openReplays = (): void => options.onOpenReplays();
+  /** 先收起其他弹层，避免改名/单机选择与公告叠在一起。 */
+  const openPatchNotes = (): void => {
+    closeModeDialogs();
+    hideRenameDialogInstant();
+    patchNotes.open();
+  };
 
   const submitRename = (event: Event): void => {
     event.preventDefault();
@@ -298,6 +308,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   soloAiButton.addEventListener('click', startSoloAi);
   soloDebugButton.addEventListener('click', startSoloDebug);
   profileButton.addEventListener('click', openRenameFromProfile);
+  patchNotesButton.addEventListener('click', openPatchNotes);
   renameForm.addEventListener('submit', submitRename);
   for (const button of placeholderButtons) {
     button.addEventListener('click', showPlaceholder);
@@ -340,6 +351,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       soloAiButton.removeEventListener('click', startSoloAi);
       soloDebugButton.removeEventListener('click', startSoloDebug);
       profileButton.removeEventListener('click', openRenameFromProfile);
+      patchNotesButton.removeEventListener('click', openPatchNotes);
       renameForm.removeEventListener('submit', submitRename);
       for (const button of placeholderButtons) {
         button.removeEventListener('click', showPlaceholder);
@@ -350,6 +362,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       for (const button of renameCloseButtons) {
         button.removeEventListener('click', dismissRenameDialog);
       }
+      patchNotes.dispose();
     },
   };
 }

@@ -215,6 +215,35 @@
         transform: none;
       }
 
+      /* 大厅右上角次要入口，与玩家卡片对坐、不抢主操作视觉权重 */
+      .topbar-action {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(6 * var(--hu));
+        min-height: calc(40 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        border-radius: calc(999 * var(--hu));
+        background: rgba(255, 255, 255, 0.04);
+        color: #c5d4e0;
+        font-size: calc(14 * var(--hu));
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+      }
+
+      .topbar-action-icon {
+        font-size: calc(15 * var(--hu));
+        line-height: 1;
+      }
+
+      .topbar-action:hover,
+      .topbar-action:active {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(169, 198, 220, 0.42);
+        transform: none;
+      }
+
       /* 改名收起时点亮左上角卡片，暗示关闭后仍可从这里打开 */
       #btn-player-profile.is-rename-anchor {
         background: rgba(153, 207, 237, 0.12);
@@ -556,6 +585,55 @@
         color: #c5d4e0;
         font-size: calc(18 * var(--hu));
         line-height: 1;
+      }
+
+      #patch-notes-dialog .mode-dialog-panel {
+        width: min(100%, calc(360 * var(--hu)));
+      }
+
+      .patch-notes-list {
+        display: grid;
+        gap: calc(18 * var(--hu));
+        max-height: calc(420 * var(--hu));
+        overflow-y: auto;
+        padding-right: calc(4 * var(--hu));
+      }
+
+      .patch-note {
+        display: grid;
+        gap: calc(8 * var(--hu));
+      }
+
+      .patch-note-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: calc(12 * var(--hu));
+      }
+
+      .patch-note-version {
+        color: #f2f5f7;
+        font-size: calc(18 * var(--hu));
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .patch-note-date {
+        color: #79899b;
+        font-size: calc(13 * var(--hu));
+        letter-spacing: 0.06em;
+      }
+
+      .patch-note-items {
+        margin: 0;
+        padding-left: calc(18 * var(--hu));
+        color: #c5d4e0;
+        font-size: calc(15 * var(--hu));
+        line-height: 1.55;
+      }
+
+      .patch-note-items li + li {
+        margin-top: calc(6 * var(--hu));
       }
 
       .mode-dialog-options {
@@ -4650,6 +4728,10 @@
               <div id="player-level" class="player-level">胜点 0</div>
             </div>
           </button>
+          <button id="btn-patch-notes" class="topbar-action" type="button" aria-label="查看更新公告">
+            <span class="topbar-action-icon" aria-hidden="true">✦</span>
+            <span class="topbar-action-label">更新公告</span>
+          </button>
         </header>
 
         <section class="lobby-hero">
@@ -4751,6 +4833,17 @@
                 <button id="btn-rename-confirm" type="submit">保存</button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <div id="patch-notes-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="patch-notes-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭更新公告" data-patch-notes-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="patch-notes-title" class="mode-dialog-title">更新公告</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-patch-notes-close>×</button>
+            </header>
+            <div id="patch-notes-list" class="patch-notes-list"></div>
           </div>
         </div>
       </div>

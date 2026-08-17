@@ -69,6 +69,7 @@ function mountMainMenuDom(): void {
         <div id="player-name"></div>
         <div id="player-level"></div>
       </button>
+      <button id="btn-patch-notes" type="button">更新公告</button>
       <button id="btn-solo"></button>
       <button id="btn-match"></button>
       <button id="btn-sandbox"></button>
@@ -96,6 +97,10 @@ function mountMainMenuDom(): void {
             <button id="btn-rename-confirm" type="submit">保存</button>
           </form>
         </div>
+      </div>
+      <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
+        <button data-patch-notes-close></button>
+        <div id="patch-notes-list"></div>
       </div>
     </main>
   `;
@@ -422,5 +427,17 @@ describe('大厅玩家档案展示', () => {
     expect(dialog.classList.contains('is-hidden')).toBe(true);
     expect(dialog.classList.contains('is-closing')).toBe(false);
     expect(profileButton.classList.contains('is-rename-anchor')).toBe(false);
+  });
+
+  it('点击更新公告入口打开面板，关闭后回到大厅', () => {
+    createMainMenu(menuOptions());
+    const dialog = document.querySelector('#patch-notes-dialog')!;
+
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes')!.click();
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('.patch-note-version')?.textContent).toBe('v0.1.0');
+
+    document.querySelector<HTMLButtonElement>('[data-patch-notes-close]')!.click();
+    expect(dialog.classList.contains('is-hidden')).toBe(true);
   });
 });
