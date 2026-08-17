@@ -6,6 +6,8 @@ export type AppScreen =
   | 'hand-odds'
   | 'codex'
   | 'leaderboard'
+  | 'replay-list'
+  | 'replay'
   | 'unit-stats'
   | 'scene-config'
   | 'sandbox'

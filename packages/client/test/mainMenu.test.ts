@@ -46,6 +46,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
     onOpenLeaderboard: vi.fn(),
+    onOpenReplays: vi.fn(),
     getProfile: () => buildProfile(),
     onRename: vi.fn(),
     ...overrides,
@@ -74,6 +75,7 @@ function mountMainMenuDom(): void {
       <button id="btn-deck"></button>
       <button id="btn-codex"></button>
       <button id="btn-leaderboard"></button>
+      <button id="btn-replays"></button>
       <button id="btn-solo-ai"></button>
       <button id="btn-solo-debug"></button>
       <div class="lobby-status-row">
@@ -226,6 +228,14 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-leaderboard')!.click();
     expect(onOpenLeaderboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('点击战绩回放进入列表页', () => {
+    const onOpenReplays = vi.fn();
+    createMainMenu(menuOptions({ onOpenReplays }));
+
+    document.querySelector<HTMLButtonElement>('#btn-replays')!.click();
+    expect(onOpenReplays).toHaveBeenCalledTimes(1);
   });
 
   it('回大厅时同步服务端积分并刷新卡片', async () => {

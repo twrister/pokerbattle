@@ -23,6 +23,8 @@ export interface MainMenuOptions {
   onOpenCodex: () => void;
   /** 进入积分排行榜页。 */
   onOpenLeaderboard: () => void;
+  /** 进入本地战绩回放列表。 */
+  onOpenReplays: () => void;
   /** 从服务端同步本人胜点；失败时应静默，保留上次本地值。 */
   onSyncBattleScore?: () => Promise<void>;
   /** 读取当前设备档案，供大厅展示。 */
@@ -48,6 +50,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const deckButton = required<HTMLButtonElement>('#btn-deck', root);
   const codexButton = required<HTMLButtonElement>('#btn-codex', root);
   const leaderboardButton = required<HTMLButtonElement>('#btn-leaderboard', root);
+  const replaysButton = required<HTMLButtonElement>('#btn-replays', root);
   const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
   const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
@@ -270,6 +273,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const openDeckConfig = (): void => options.onOpenDeckConfig();
   const openCodex = (): void => options.onOpenCodex();
   const openLeaderboard = (): void => options.onOpenLeaderboard();
+  const openReplays = (): void => options.onOpenReplays();
 
   const submitRename = (event: Event): void => {
     event.preventDefault();
@@ -295,6 +299,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
   leaderboardButton.addEventListener('click', openLeaderboard);
+  replaysButton.addEventListener('click', openReplays);
   soloAiButton.addEventListener('click', startSoloAi);
   soloDebugButton.addEventListener('click', startSoloDebug);
   profileButton.addEventListener('click', openRenameFromProfile);
@@ -336,6 +341,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);
       leaderboardButton.removeEventListener('click', openLeaderboard);
+      replaysButton.removeEventListener('click', openReplays);
       soloAiButton.removeEventListener('click', startSoloAi);
       soloDebugButton.removeEventListener('click', startSoloDebug);
       profileButton.removeEventListener('click', openRenameFromProfile);

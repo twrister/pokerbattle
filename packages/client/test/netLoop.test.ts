@@ -33,6 +33,29 @@ describe('NetSimLoop', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('权威帧只回调一次，供录像收集', () => {
+    const onFrameApplied = vi.fn();
+    const loop = new NetSimLoop({
+      seed: 1,
+      faction: Faction.Blue,
+      inputDelay: 4,
+      send: vi.fn(),
+      onFrameApplied,
+    });
+    loop.handleServerMessage({ type: 'start', startTick: 1 });
+    loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
+    loop.handleServerMessage({ type: 'frame', tick: 1, commands: [] });
+    loop.handleServerMessage({
+      type: 'frame',
+      tick: 2,
+      commands: [playFormationCommand(Faction.Blue, 'single_grunt', ['A-spades'], fromFloat(9), fromFloat(8))],
+    });
+    expect(onFrameApplied).toHaveBeenCalledTimes(2);
+    expect(onFrameApplied.mock.calls[0]?.[0]).toBe(1);
+    expect(loop.getAppliedFrames()).toHaveLength(1);
+    expect(loop.getAppliedFrames()[0]?.tick).toBe(2);
+  });
+
   it('观战模式消化 frameBatch 且不上报 hash/input', () => {
     const send = vi.fn();
     const loop = new NetSimLoop({

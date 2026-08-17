@@ -849,6 +849,74 @@
         text-align: center;
       }
 
+      #replay-list-items {
+        display: grid;
+        gap: calc(8 * var(--hu));
+        flex: 1;
+        align-content: start;
+        min-height: calc(280 * var(--hu));
+        overflow: auto;
+      }
+
+      .replay-list-empty {
+        padding: calc(28 * var(--hu)) 0;
+        color: #7f92a6;
+        font-size: calc(14 * var(--hu));
+        text-align: center;
+      }
+
+      .replay-list-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: calc(10 * var(--hu));
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.22);
+        border-radius: calc(14 * var(--hu));
+        background: rgba(12, 24, 36, 0.72);
+        color: #eef5fa;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .replay-list-row:hover {
+        border-color: rgba(153, 207, 237, 0.7);
+        background: rgba(40, 72, 98, 0.55);
+      }
+
+      .replay-list-row.is-stale {
+        border-color: rgba(212, 168, 80, 0.45);
+      }
+
+      .replay-list-time {
+        color: #8aa0b4;
+        font-size: calc(12 * var(--hu));
+        white-space: nowrap;
+      }
+
+      .replay-list-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: calc(15 * var(--hu));
+      }
+
+      .replay-list-meta {
+        color: #8aa0b4;
+        font-size: calc(13 * var(--hu));
+        white-space: nowrap;
+      }
+
+      #replay-list-status {
+        min-height: 1.4em;
+        margin-top: calc(10 * var(--hu));
+        color: #8192a4;
+        font-size: calc(13 * var(--hu));
+        text-align: center;
+      }
+
       #online-create-name-input,
       #online-join-id-input {
         width: 100%;
@@ -1543,7 +1611,8 @@
         display: none;
       }
 
-      #hud.is-spectate #battle-opp-hand {
+      #hud.is-spectate #battle-opp-hand,
+      #hud.is-replay #battle-opp-hand {
         display: none;
       }
 
@@ -1560,8 +1629,53 @@
         pointer-events: none;
       }
 
-      #hud.is-spectate #spectator-hands.is-active {
+      #hud.is-spectate #spectator-hands.is-active,
+      #hud.is-replay #spectator-hands.is-active {
         display: flex;
+      }
+
+      #replay-controls {
+        position: absolute;
+        left: 50%;
+        bottom: calc(132 * var(--hu));
+        z-index: 13;
+        display: none;
+        align-items: center;
+        gap: calc(8 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.28);
+        border-radius: calc(14 * var(--hu));
+        background: rgba(8, 16, 26, 0.82);
+        transform: translateX(-50%);
+        pointer-events: auto;
+      }
+
+      #hud.is-replay #replay-controls:not(.is-hidden) {
+        display: flex;
+      }
+
+      #replay-controls button {
+        min-width: calc(52 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.28);
+        border-radius: calc(8 * var(--hu));
+        background: rgba(20, 36, 52, 0.9);
+        color: #eef5fa;
+        font-size: calc(13 * var(--hu));
+      }
+
+      #replay-controls button.is-active,
+      #replay-controls button:hover {
+        border-color: rgba(153, 207, 237, 0.7);
+        background: rgba(40, 72, 98, 0.9);
+      }
+
+      #replay-progress {
+        min-width: calc(88 * var(--hu));
+        color: #9cbcff;
+        font-size: calc(13 * var(--hu));
+        font-variant-numeric: tabular-nums;
+        text-align: center;
       }
 
       .spectator-hand-row {
@@ -1979,7 +2093,10 @@
       /* 联机：禁运行控制/改表/操作提示，避免调试面板盖住战场或误操作 */
       #hud.is-versus #panel-controls,
       #hud.is-versus #btn-open-unit-stats,
-      #hud.is-versus #panel-help {
+      #hud.is-versus #panel-help,
+      #hud.is-replay #panel-controls,
+      #hud.is-replay #btn-open-unit-stats,
+      #hud.is-replay #panel-help {
         display: none !important;
       }
 
@@ -2005,7 +2122,8 @@
       }
 
       /* 联机藏单位参数后，场景配置占回视口右下角 */
-      #hud.is-versus #btn-open-scene-config {
+      #hud.is-versus #btn-open-scene-config,
+      #hud.is-replay #btn-open-scene-config {
         right: max(16px, env(safe-area-inset-right));
       }
 
@@ -4337,6 +4455,11 @@
             <span class="nav-label">排行榜</span>
             <span class="nav-tag">胜点榜</span>
           </button>
+          <button id="btn-replays" class="nav-entry" type="button">
+            <span class="nav-icon" aria-hidden="true">▷</span>
+            <span class="nav-label">战绩回放</span>
+            <span class="nav-tag">最近 10 场</span>
+          </button>
         </nav>
         <div id="lobby-version" aria-label="游戏版本">v0.1.0</div>
 
@@ -4485,6 +4608,18 @@
         </header>
         <div id="leaderboard-list" role="list"></div>
         <div id="leaderboard-status" role="status" aria-live="polite"></div>
+      </div>
+    </main>
+
+    <main id="replay-list" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell">
+        <header class="online-page-header">
+          <button id="btn-replay-list-back" class="online-page-back" type="button">返回</button>
+          <h1>战绩回放</h1>
+          <span></span>
+        </header>
+        <div id="replay-list-items" role="list"></div>
+        <div id="replay-list-status" role="status" aria-live="polite"></div>
       </div>
     </main>
 
@@ -4993,6 +5128,14 @@
       <div id="battle-announce" class="is-hidden" role="status" aria-live="polite">
         <span id="battle-announce-text"></span>
       </div>
+      <section id="replay-controls" class="is-hidden" aria-label="回放控制">
+        <button id="btn-replay-pause" type="button">暂停</button>
+        <button type="button" data-replay-speed="1" class="is-active">1x</button>
+        <button type="button" data-replay-speed="2">2x</button>
+        <button type="button" data-replay-speed="4">4x</button>
+        <button id="btn-replay-restart" type="button">重播</button>
+        <span id="replay-progress">0:00 / 0:00</span>
+      </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true" role="dialog" aria-labelledby="battle-result-title">
         <div class="battle-result-panel">
           <h2 id="battle-result-title">胜利</h2>

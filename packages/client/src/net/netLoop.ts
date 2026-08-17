@@ -36,6 +36,8 @@ export interface NetSimLoopOptions {
   onPeerReconnected?: () => void;
   onMatchEnd?: (result: MatchResult) => void;
   onReady?: () => void;
+  /** 每消化一个权威帧回调一次，供录像收集；只读，不得改指令。 */
+  onFrameApplied?: (tick: number, commands: readonly Command[]) => void;
 }
 
 /**
@@ -60,6 +62,9 @@ export class NetSimLoop {
   private readonly onPeerDisconnected?: () => void;
   private readonly onPeerReconnected?: () => void;
   private readonly onMatchEnd?: (result: MatchResult) => void;
+  private onFrameApplied?: (tick: number, commands: readonly Command[]) => void;
+  /** 已应用的非空权威帧，重连补帧也走 drain 所以不会重复。 */
+  private readonly appliedFrames: { tick: number; commands: Command[] }[] = [];
   private readonly spectator: boolean;
   private readonly maxStepsPerAdvance: number;
   private started = false;
@@ -80,6 +85,7 @@ export class NetSimLoop {
     this.onPeerDisconnected = options.onPeerDisconnected;
     this.onPeerReconnected = options.onPeerReconnected;
     this.onMatchEnd = options.onMatchEnd;
+    this.onFrameApplied = options.onFrameApplied;
     this.curr = takeSnapshot(this.match.world);
     this.prev = takeSnapshot(this.match.world);
     options.onReady?.();
@@ -105,6 +111,21 @@ export class NetSimLoop {
   /** 暂停或恢复本地输入上报。 */
   setInputPaused(paused: boolean): void {
     this.inputPaused = paused;
+  }
+
+  /** 对局开始后再挂录像收集，不覆盖已应用过的帧。 */
+  setOnFrameApplied(callback: ((tick: number, commands: readonly Command[]) => void) | undefined): void {
+    this.onFrameApplied = callback;
+  }
+
+  /** 已消化的非空权威帧拷贝，供结算落盘。 */
+  getAppliedFrames(): { tick: number; commands: Command[] }[] {
+    return this.appliedFrames.map((frame) => ({
+      tick: frame.tick,
+      commands: frame.commands.map((command) =>
+        'cardIds' in command ? { ...command, cardIds: [...command.cardIds] } : { ...command },
+      ),
+    }));
   }
 
   get world() {
@@ -200,6 +221,16 @@ export class NetSimLoop {
       const commands = this.frames.get(this.nextTick)!;
       this.frames.delete(this.nextTick);
       this.match.step(commands);
+      const appliedTick = this.nextTick;
+      if (commands.length > 0) {
+        this.appliedFrames.push({
+          tick: appliedTick,
+          commands: commands.map((command) =>
+            'cardIds' in command ? { ...command, cardIds: [...command.cardIds] } : { ...command },
+          ),
+        });
+      }
+      this.onFrameApplied?.(appliedTick, commands);
       const reuse = this.prev;
       this.prev = this.curr;
       this.curr = takeSnapshot(this.match.world, reuse);

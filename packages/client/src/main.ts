@@ -90,6 +90,8 @@ import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
 import { createLeaderboardPage } from './ui/leaderboardPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
+import { createReplayControls } from './ui/replayControls.js';
+import { createReplayListPage } from './ui/replayListPage.js';
 import { createOnlineLobbyPage } from './ui/onlineLobbyPage.js';
 import { createOnlineRoomPage } from './ui/onlineRoomPage.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
@@ -102,6 +104,14 @@ import { loadRuntimeDefaults } from './debug/runtimeDefaults.js';
 import { disposeFormationThumbnailRenderer } from './view/formationThumbnail.js';
 import { createScene, type SceneContext } from './view/scene.js';
 import { BattleView } from './view/viewSync.js';
+import {
+  createArenaSignature,
+  createReplayStore,
+  ReplayLoop,
+  ReplayRecorder,
+  type ReplayRecord,
+  type ReplaySideContext,
+} from './replay/index.js';
 
 const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
@@ -112,6 +122,8 @@ document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
 
 /** 设备档案：启动时静默建档，后续结算/改名都走同一实例。 */
 const playerProfile = createPlayerProfileService();
+/** 联机录像独立落盘，避免改档案时重写整段指令序列。 */
+const replayStore = createReplayStore();
 
 let screens: ScreenController;
 /** 大厅选择只影响下一场单机，避免在 UI 路由中扩散难度状态。 */
@@ -127,6 +139,8 @@ let pendingSpectate: { loop: NetSimLoop; blueName: string; redName: string } | n
 let activeSpectateSession: SpectateSession | null = null;
 let joiningSpectate: SpectateConnecting | null = null;
 let spectateMatchEnded = false;
+let pendingReplay: ReplayRecord | null = null;
+let replaySessionActive = false;
 let keepRoomSession = false;
 /** 对局中对手离开时置位，避免中途退出被记成 abandoned。 */
 let versusPeerLeft = false;
@@ -193,6 +207,7 @@ const mainMenu = createMainMenu({
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
   onOpenLeaderboard: () => screens.show('leaderboard'),
+  onOpenReplays: () => screens.show('replay-list'),
   onSyncBattleScore: async () => {
     try {
       const board = await ensureAppLobbyPresence().listLeaderboard();
@@ -234,6 +249,10 @@ const battleAnnounce = createBattleAnnounce();
 const spectatorHands = createSpectatorHands();
 const versusExitConfirm = createVersusExitConfirm();
 const battleResult = createBattleResult(() => {
+  if (replaySessionActive || pendingReplay) {
+    screens.show('replay-list');
+    return;
+  }
   if (activeSpectateSession || pendingSpectate || spectateMatchEnded) {
     screens.show('online');
     return;
@@ -248,6 +267,14 @@ const battleResult = createBattleResult(() => {
 const leaderboardPage = createLeaderboardPage({
   onBack: () => screens.show('menu'),
   loadLeaderboard: () => ensureAppLobbyPresence().listLeaderboard(),
+});
+const replayListPage = createReplayListPage({
+  onBack: () => screens.show('menu'),
+  listReplays: () => replayStore.list(),
+  onPlay: (record) => {
+    pendingReplay = record;
+    screens.show('replay');
+  },
 });
 const onlineLobbyPage = createOnlineLobbyPage({
   onBack: () => screens.show('menu'),
@@ -1116,15 +1143,19 @@ function enterVersus(): () => void {
   let localFaction: Faction = match.faction;
   let matchStarted = true;
   let battleRecorded = false;
+  let replaySaved = false;
   const peerLeft = versusPeerLeft;
   versusPeerLeft = false;
   reconnectBanner = createReconnectBanner(hud);
   battleResult.setReturnLabel('返回房间');
 
-  const recordVersusResult = (result: MatchResult, faction: Faction): void => {
+  const recordVersusResult = (result: MatchResult, faction: Faction, context?: ReplaySideContext): void => {
     if (battleRecorded) return;
     battleRecorded = true;
     recordLocalBattle(result, faction, 'versus');
+    if (replaySaved || !context) return;
+    replaySaved = true;
+    persistVersusReplay(match.loop, result, context);
   };
 
   const recordVersusAbandonedIfNeeded = (): void => {
@@ -1147,7 +1178,7 @@ function enterVersus(): () => void {
     match.faction,
     () => {},
     {
-      onOfficialResult: (result) => recordVersusResult(result, localFaction),
+      onOfficialResult: (result, context) => recordVersusResult(result, localFaction, context),
       onLeaveWithoutResult: recordVersusAbandonedIfNeeded,
     },
     {
@@ -1176,7 +1207,7 @@ function runVersusSession(
   faction: Faction,
   _closeSocket: () => void,
   accountHooks: {
-    onOfficialResult: (result: MatchResult) => void;
+    onOfficialResult: (result: MatchResult, context: ReplaySideContext) => void;
     onLeaveWithoutResult: () => void;
   },
   names: {
@@ -1216,6 +1247,9 @@ function runVersusSession(
   battleHud.setContext(hudContext);
   battleResult.setContext(hudContext);
   battleHud.show();
+
+  const recorder = new ReplayRecorder();
+  netLoop.setOnFrameApplied((tick, commands) => recorder.record(tick, commands));
 
   const sceneContext = ensureBattleScene('solo', faction);
   sceneContext.resize();
@@ -1510,7 +1544,7 @@ function runVersusSession(
     if (netLoop.match.result && !resultShown) {
       resultShown = true;
       // 与 onMatchEnd 共用会话防重；谁先到都只记一次
-      accountHooks.onOfficialResult(netLoop.match.result);
+      accountHooks.onOfficialResult(netLoop.match.result, hudContext);
       versusExitConfirm.hide();
       battleResult.show(netLoop.match.result, faction, netLoop.match);
     }
@@ -1526,8 +1560,9 @@ function runVersusSession(
   return () => {
     cancelAnimationFrame(animationFrameId);
     // 离开时兜底：已有权威结果则补记，否则按本机中途退出处理
-    if (netLoop.match.result) accountHooks.onOfficialResult(netLoop.match.result);
+    if (netLoop.match.result) accountHooks.onOfficialResult(netLoop.match.result, hudContext);
     else accountHooks.onLeaveWithoutResult();
+    netLoop.setOnFrameApplied(undefined);
     hud.classList.add('is-hidden');
     battleHud.hide();
     battleAnnounce.reset();
@@ -1550,6 +1585,145 @@ function runVersusSession(
 }
 
 /** 观战只读循环：复用战场渲染，不创建手牌/出牌交互。 */
+function enterReplay(): () => void {
+  const record = pendingReplay;
+  pendingReplay = null;
+  if (!record) {
+    queueMicrotask(() => screens.show('replay-list'));
+    return () => {};
+  }
+  return runReplaySession(record);
+}
+
+/** 回放只读循环：复用观战渲染，数据源换成本地 ReplayLoop。 */
+function runReplaySession(record: ReplayRecord): () => void {
+  replaySessionActive = true;
+  mainMenu.hide();
+  container.classList.add('is-solo', 'is-versus', 'is-replay');
+  hud.classList.add('is-solo', 'is-versus', 'is-replay');
+  container.classList.remove('is-hidden');
+  hud.classList.remove('is-hidden');
+  battleResult.hide();
+  versusExitConfirm.hide();
+  battleAnnounce.reset();
+  battleResult.setReturnLabel('返回列表');
+  battleHud.setSpectatorCount(0);
+  battleHud.setCatchingUp(false);
+  battleHud.setContext(record.context);
+  battleResult.setContext(record.context);
+  spectatorHands.setNames(
+    joinReplayTeamName(record.context, true),
+    joinReplayTeamName(record.context, false),
+  );
+  spectatorHands.show();
+  battleHud.show();
+
+  applyArenaPreset(record.matchMode);
+  const replayLoop = new ReplayLoop(record, {
+    onMismatch: (actual, expected) => {
+      console.warn('[replay] 回放结算与录像不一致', { actual, expected });
+    },
+  });
+  const sceneContext = ensureBattleScene('solo', record.context.localFaction);
+  sceneContext.resize();
+  const battleView = sharedBattleView!;
+  battleView.reset();
+  battleView.setLocalFaction(record.context.localFaction);
+  battleView.setLocalSlot(record.context.localSlot ?? record.context.localFaction);
+  const disableUnitSelection = enableUnitSelection({
+    domElement: sceneContext.renderer.domElement,
+    camera: sceneContext.camera,
+    groundPlane: sceneContext.groundPlane,
+    pickUnit: (simX, simY) => battleView.pickUnitAtSim(simX, simY),
+    onSelect: (unitId) => battleView.selectUnit(unitId),
+  });
+
+  const replayControls = createReplayControls({
+    onTogglePause: () => {
+      replayLoop.setPaused(!replayLoop.isPaused);
+      replayControls.setPaused(replayLoop.isPaused);
+    },
+    onSetSpeed: (speed) => {
+      replayLoop.setSpeed(speed);
+      replayControls.setSpeed(speed);
+    },
+    onRestart: () => {
+      replayLoop.restart();
+      resultShown = false;
+      battleResult.hide();
+      battleAnnounce.reset();
+      replayControls.setPaused(replayLoop.isPaused);
+      replayControls.setProgress(replayLoop.tick, record.endTick);
+    },
+  });
+  replayControls.setPaused(false);
+  replayControls.setSpeed(1);
+  replayControls.setProgress(0, record.endTick);
+  replayControls.show();
+
+  const returnToList = (): void => {
+    screens.show('replay-list');
+  };
+  backButton.addEventListener('click', returnToList);
+
+  let lastFrameAt = performance.now();
+  let animationFrameId = 0;
+  let lastHandSyncTick = -1;
+  let resultShown = false;
+
+  const frame = (now: number): void => {
+    const deltaMs = Math.min(now - lastFrameAt, 250);
+    lastFrameAt = now;
+    replayLoop.advance(deltaMs);
+    battleView.syncCastlePack(replayLoop.match, sceneContext.camera);
+    if (replayLoop.world.tick !== lastHandSyncTick) {
+      lastHandSyncTick = replayLoop.world.tick;
+      spectatorHands.update(replayLoop.match);
+      replayControls.setProgress(replayLoop.tick, record.endTick);
+    }
+    battleHud.update(replayLoop.match);
+    battleAnnounce.tick(replayLoop.match);
+    if (replayLoop.match.result && !resultShown) {
+      resultShown = true;
+      battleResult.show(replayLoop.match.result, record.context.localFaction, replayLoop.match);
+    }
+    battleView.render(replayLoop.prev, replayLoop.curr, replayLoop.alpha, sceneContext.camera);
+    sceneContext.renderer.render(sceneContext.scene, sceneContext.camera);
+    animationFrameId = requestAnimationFrame(frame);
+  };
+  animationFrameId = requestAnimationFrame(frame);
+
+  return () => {
+    cancelAnimationFrame(animationFrameId);
+    replaySessionActive = false;
+    hud.classList.add('is-hidden');
+    battleHud.hide();
+    battleHud.setCatchingUp(false);
+    spectatorHands.hide();
+    battleAnnounce.reset();
+    battleResult.hide();
+    replayControls.hide();
+    replayControls.dispose();
+    container.classList.add('is-hidden');
+    hud.classList.remove('is-solo', 'is-versus', 'is-replay');
+    container.classList.remove('is-solo', 'is-versus', 'is-replay');
+    backButton.removeEventListener('click', returnToList);
+    disableUnitSelection();
+    battleView.reset();
+  };
+}
+
+/** 回放手牌条按阵营拼显示名，2v2 用斜线连接同队两人。 */
+function joinReplayTeamName(context: ReplaySideContext, blue: boolean): string {
+  const localIsBlue = context.localFaction === Faction.Blue;
+  if (blue === localIsBlue) {
+    return context.teammateName ? `${context.localName} / ${context.teammateName}` : context.localName;
+  }
+  return context.extraOpponentName
+    ? `${context.opponentName} / ${context.extraOpponentName}`
+    : context.opponentName;
+}
+
 function enterSpectate(): () => void {
   const match = pendingSpectate;
   pendingSpectate = null;
@@ -1731,6 +1905,15 @@ screens = createScreenController({
     leaderboardPage.show();
     return () => leaderboardPage.hide();
   },
+  'replay-list': () => {
+    syncLobbyPresenceForScreen('replay-list');
+    replayListPage.show();
+    return () => replayListPage.hide();
+  },
+  replay: () => {
+    syncLobbyPresenceForScreen('replay');
+    return enterReplay();
+  },
   'unit-stats': () => {
     syncLobbyPresenceForScreen('unit-stats');
     unitStatsPage.setOnApplied(() => {});
@@ -1779,6 +1962,7 @@ function disposeApp(): void {
   spectatorHands.dispose();
   onlineLobbyPage.dispose();
   leaderboardPage.dispose();
+  replayListPage.dispose();
   onlineRoomPage.dispose();
   mainMenu.dispose();
   deckConfigPage.dispose();
@@ -1789,6 +1973,28 @@ function disposeApp(): void {
 }
 
 window.addEventListener('pagehide', disposeApp, { once: true });
+
+/** 联机正式结算后落一条可回放录像；失败不影响对局流程。 */
+function persistVersusReplay(
+  loop: NetSimLoop,
+  result: MatchResult,
+  context: ReplaySideContext,
+): void {
+  try {
+    const frames = loop.getAppliedFrames();
+    replayStore.save({
+      seed: loop.match.world.seed,
+      matchMode: loop.match.mode,
+      endTick: result.endTick,
+      result: { winner: result.winner, reason: result.reason },
+      context: { ...context },
+      frames,
+      arenaSignature: createArenaSignature(loop.match.mode),
+    });
+  } catch (error) {
+    console.warn('[replay] 录像保存失败', error);
+  }
+}
 
 /** 把权威结算写入设备档案，并刷新大厅展示。 */
 function recordLocalBattle(
