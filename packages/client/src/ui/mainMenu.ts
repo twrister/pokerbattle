@@ -6,6 +6,7 @@ import { isDefaultDisplayName } from '../account/id.js';
 import type { PlayerProfile } from '../account/types.js';
 import type { SoloDifficulty } from '@pb/sim';
 import { APP_VERSION, formatLobbyVersion, IS_DEV_SERVER } from '../env.js';
+import { createFeedbackForm } from './feedbackForm.js';
 import { createPatchNotesPanel } from './patchNotesPanel.js';
 
 const RENAME_TITLE_DEFAULT = '玩家名称';
@@ -64,6 +65,13 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const profileButton = required<HTMLButtonElement>('#btn-player-profile', root);
   const patchNotesButton = required<HTMLButtonElement>('#btn-patch-notes', root);
   const patchNotes = createPatchNotesPanel();
+  const feedback = createFeedbackForm({
+    getProfile: options.getProfile,
+    onBeforeOpen: () => {
+      closeModeDialogs();
+      hideRenameDialogInstant();
+    },
+  });
   const playerAvatar = required<HTMLElement>('#player-avatar', root);
   const playerName = required<HTMLElement>('#player-name', root);
   const playerLevel = required<HTMLElement>('#player-level', root);
@@ -90,6 +98,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
     patchNotes.close();
+    feedback.collapse();
   };
 
   /** 仍是建档默认名则拦截开局，引导先改名。 */
@@ -363,6 +372,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
         button.removeEventListener('click', dismissRenameDialog);
       }
       patchNotes.dispose();
+      feedback.dispose();
     },
   };
 }

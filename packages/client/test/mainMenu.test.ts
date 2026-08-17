@@ -69,7 +69,10 @@ function mountMainMenuDom(): void {
         <div id="player-name"></div>
         <div id="player-level"></div>
       </button>
-      <button id="btn-patch-notes" type="button">更新公告</button>
+      <div class="lobby-topbar-actions">
+        <button id="btn-patch-notes" type="button">更新公告</button>
+        <button id="btn-feedback-open" type="button" aria-expanded="false">提意见</button>
+      </div>
       <button id="btn-solo"></button>
       <button id="btn-match"></button>
       <button id="btn-sandbox"></button>
@@ -104,6 +107,15 @@ function mountMainMenuDom(): void {
         <p id="patch-notes-status"></p>
         <button id="btn-patch-notes-add" type="button">新增版本</button>
         <button id="btn-patch-notes-save" type="button">保存</button>
+      </div>
+      <div id="feedback-dialog" class="is-hidden" aria-hidden="true">
+        <button data-feedback-close type="button">关闭</button>
+        <form id="feedback-form">
+          <textarea id="feedback-input"></textarea>
+          <p id="feedback-status"></p>
+          <button id="btn-feedback-cancel" type="button" data-feedback-close>取消</button>
+          <button id="btn-feedback-submit" type="submit">提交</button>
+        </form>
       </div>
     </main>
   `;
@@ -444,5 +456,19 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('[data-patch-notes-close]')!.click();
     expect(dialog.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('提意见入口在更新公告下方，点击打开独立弹层', () => {
+    createMainMenu(menuOptions());
+    const actions = document.querySelector('.lobby-topbar-actions')!;
+    const buttons = Array.from(actions.querySelectorAll('button')).map((button) => button.id);
+    expect(buttons).toEqual(['btn-patch-notes', 'btn-feedback-open']);
+
+    document.querySelector<HTMLButtonElement>('#btn-feedback-open')!.click();
+    expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#patch-notes-dialog')?.classList.contains('is-hidden')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('#btn-feedback-cancel')!.click();
+    expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(true);
   });
 });

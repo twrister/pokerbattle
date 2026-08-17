@@ -157,6 +157,12 @@
         gap: calc(12 * var(--hu));
       }
 
+      .lobby-topbar-actions {
+        display: grid;
+        justify-items: end;
+        gap: calc(8 * var(--hu));
+      }
+
       .player-card {
         display: flex;
         align-items: center;
@@ -715,6 +721,46 @@
 
       #btn-patch-notes-add,
       #btn-patch-notes-save {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        font-size: calc(15 * var(--hu));
+        font-weight: 650;
+      }
+
+      .feedback-form {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      #feedback-input {
+        width: 100%;
+        min-height: calc(96 * var(--hu));
+        padding: calc(10 * var(--hu));
+        color: #c5d4e0;
+        font-size: calc(14 * var(--hu));
+        line-height: 1.5;
+        resize: vertical;
+      }
+
+      #feedback-status {
+        min-height: 1.2em;
+        color: #8b98ab;
+        font-size: calc(12 * var(--hu));
+      }
+
+      #feedback-status.is-error {
+        color: #ef8b8b;
+      }
+
+      .feedback-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      #btn-feedback-cancel,
+      #btn-feedback-submit {
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(10 * var(--hu));
@@ -4814,10 +4860,16 @@
               <div id="player-level" class="player-level">胜点 0</div>
             </div>
           </button>
-          <button id="btn-patch-notes" class="topbar-action" type="button" aria-label="查看更新公告">
-            <span class="topbar-action-icon" aria-hidden="true">✦</span>
-            <span class="topbar-action-label">更新公告</span>
-          </button>
+          <div class="lobby-topbar-actions">
+            <button id="btn-patch-notes" class="topbar-action" type="button" aria-label="查看更新公告">
+              <span class="topbar-action-icon" aria-hidden="true">✦</span>
+              <span class="topbar-action-label">更新公告</span>
+            </button>
+            <button id="btn-feedback-open" class="topbar-action" type="button" aria-expanded="false" aria-controls="feedback-dialog" aria-label="提交意见">
+              <span class="topbar-action-icon" aria-hidden="true">✎</span>
+              <span class="topbar-action-label">提意见</span>
+            </button>
+          </div>
         </header>
 
         <section class="lobby-hero">
@@ -4937,6 +4989,24 @@
                 <button id="btn-patch-notes-save" type="button">保存</button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div id="feedback-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="feedback-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭意见反馈" data-feedback-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="feedback-title" class="mode-dialog-title">提意见</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-feedback-close>×</button>
+            </header>
+            <form id="feedback-form" class="feedback-form">
+              <textarea id="feedback-input" maxlength="500" rows="4" placeholder="说说你遇到的问题或想要的改动…"></textarea>
+              <p id="feedback-status" role="status" aria-live="polite"></p>
+              <div class="feedback-actions">
+                <button id="btn-feedback-cancel" type="button" data-feedback-close>取消</button>
+                <button id="btn-feedback-submit" type="submit">提交</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>

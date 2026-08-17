@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { checkBasicAuth, writeUnauthorized } from './basicAuth.js';
 import { buildDashboardStatus, type ServiceDescriptor } from './dashboardStatus.js';
 import { DeployRunner, workspaceReady } from './deployRunner.js';
-import { clearGamePlayers } from './gameStatus.js';
+import { clearGamePlayers, fetchGameFeedback } from './gameStatus.js';
 import { readGameMeta } from './gameMeta.js';
 import { listLanIPv4, writeLanIpsJson } from './lanIps.js';
 import { executeOpsRestart, planOpsRestart } from './opsRestart.js';
@@ -127,6 +127,16 @@ async function handleApi(
       writeJson(res, 413, { ok: false, message: limited.error });
       return;
     }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/feedback') {
+    const result = await fetchGameFeedback(runtime.resolveGameBaseUrl());
+    writeJson(res, 200, {
+      ok: result.reachable,
+      feedback: result.feedback,
+      message: result.error,
+    });
+    return;
   }
 
   if (req.method === 'GET' && pathname === '/api/status') {

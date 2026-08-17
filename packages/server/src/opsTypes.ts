@@ -62,6 +62,22 @@ export interface OpsPlayersStatus {
   players: OpsPlayerRecord[];
 }
 
+/** 运维站反馈行：玩家提交的意见原文，不含处理状态。 */
+export interface OpsFeedbackRecord {
+  id: string;
+  content: string;
+  playerId: string;
+  displayName: string;
+  appVersion: string;
+  createdAt: number;
+}
+
+/** 游戏服意见反馈只读接口载荷。 */
+export interface OpsFeedbackStatus {
+  ok: true;
+  feedback: OpsFeedbackRecord[];
+}
+
 /** 游戏服只读状态接口载荷。 */
 export interface OpsServerStatus {
   ok: true;

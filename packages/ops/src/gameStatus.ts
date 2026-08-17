@@ -1,4 +1,4 @@
-import type { GameServerStatus, OpsPlayerRecord } from './types.js';
+import type { GameServerStatus, OpsFeedbackRecord, OpsPlayerRecord } from './types.js';
 
 export interface FetchGameStatusResult {
   reachable: boolean;
@@ -9,6 +9,12 @@ export interface FetchGameStatusResult {
 export interface FetchGamePlayersResult {
   reachable: boolean;
   players: OpsPlayerRecord[];
+  error: string | null;
+}
+
+export interface FetchGameFeedbackResult {
+  reachable: boolean;
+  feedback: OpsFeedbackRecord[];
   error: string | null;
 }
 
@@ -108,6 +114,46 @@ export async function fetchGamePlayers(
 }
 
 /**
+ * 拉取游戏服意见反馈；旧服无此接口或失败时返回空列表。
+ */
+export async function fetchGameFeedback(
+  baseUrl: string,
+  timeoutMs = 1500,
+): Promise<FetchGameFeedbackResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/ops/feedback`, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      return {
+        reachable: false,
+        feedback: [],
+        error: `游戏服反馈接口返回 HTTP ${response.status}`,
+      };
+    }
+    const data = (await response.json()) as { ok?: unknown; feedback?: unknown };
+    if (!data || data.ok !== true || !Array.isArray(data.feedback)) {
+      return { reachable: false, feedback: [], error: '游戏服反馈载荷无效' };
+    }
+    return { reachable: true, feedback: sanitizeFeedback(data.feedback), error: null };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === 'AbortError'
+          ? '拉取游戏服反馈超时'
+          : error.message
+        : '拉取游戏服反馈失败';
+    return { reachable: false, feedback: [], error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * 转发清空玩家档案；不传 playerId 则清全部。
  * 游戏服不可达或超时归一化为 502，不抛到 HTTP 层。
  */
@@ -195,6 +241,27 @@ function sanitizePlayers(rows: unknown[]): OpsPlayerRecord[] {
     });
   }
   return players;
+}
+
+/** 只保留结构完整的意见行，避免坏数据把运维表打挂。 */
+function sanitizeFeedback(rows: unknown[]): OpsFeedbackRecord[] {
+  const feedback: OpsFeedbackRecord[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const item = row as Record<string, unknown>;
+    if (typeof item.id !== 'string' || !item.id.trim()) continue;
+    if (typeof item.content !== 'string' || !item.content.trim()) continue;
+    if (typeof item.createdAt !== 'number' || !Number.isFinite(item.createdAt)) continue;
+    feedback.push({
+      id: item.id,
+      content: item.content,
+      playerId: typeof item.playerId === 'string' ? item.playerId : '',
+      displayName: typeof item.displayName === 'string' ? item.displayName : 'player',
+      appVersion: typeof item.appVersion === 'string' ? item.appVersion : '',
+      createdAt: item.createdAt,
+    });
+  }
+  return feedback;
 }
 
 /** 只放行已知位置；旧服或坏值回退大厅，避免运维表空白。 */

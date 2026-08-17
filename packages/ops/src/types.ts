@@ -48,6 +48,16 @@ export interface OpsPlayerRecord {
   roomName: string | null;
 }
 
+/** 游戏服 /ops/feedback 中的意见行。 */
+export interface OpsFeedbackRecord {
+  id: string;
+  content: string;
+  playerId: string;
+  displayName: string;
+  appVersion: string;
+  createdAt: number;
+}
+
 /** 游戏服 /ops/status 成功响应。 */
 export interface GameServerStatus {
   ok: true;

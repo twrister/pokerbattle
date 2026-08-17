@@ -13,6 +13,8 @@ const els = {
   roomTbody: document.getElementById('room-tbody'),
   playerTbody: document.getElementById('player-tbody'),
   playerHint: document.getElementById('player-hint'),
+  feedbackTbody: document.getElementById('feedback-tbody'),
+  feedbackHint: document.getElementById('feedback-hint'),
   refreshHint: document.getElementById('refresh-hint'),
   opsUptime: document.getElementById('ops-uptime'),
   gameReachable: document.getElementById('game-reachable'),
@@ -277,6 +279,52 @@ function renderRooms(rooms) {
         <td>${room.connectedCount ?? 0}</td>
         <td><div class="seat-list">${players || '—'}</div></td>
         <td>${formatRelative(room.lastActiveAt)}</td>
+      </tr>`;
+    })
+    .join('');
+}
+
+/** 拉取意见反馈并刷新表格；与 /api/status 分开，避免把正文塞进主轮询。 */
+async function refreshFeedback() {
+  if (!els.feedbackTbody) return;
+  try {
+    const response = await fetch(resolveAppUrl('api/feedback'), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (response.status === 401) throw new Error('需要登录');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const rows = Array.isArray(data?.feedback) ? data.feedback : [];
+    renderFeedback(rows, data?.ok === true ? null : data?.message || '游戏服不可达');
+  } catch (error) {
+    renderFeedback([], error instanceof Error ? error.message : '反馈刷新失败');
+  }
+}
+
+/** 按时间倒序渲染意见；正文只读展示，换行保留。 */
+function renderFeedback(rows, error) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (els.feedbackHint) {
+    if (error && list.length === 0) {
+      els.feedbackHint.textContent = error;
+    } else {
+      els.feedbackHint.textContent = list.length ? `共 ${list.length} 条` : '暂无反馈';
+    }
+  }
+  if (!els.feedbackTbody) return;
+  if (list.length === 0) {
+    els.feedbackTbody.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(error && !list.length ? error : '暂无反馈')}</td></tr>`;
+    return;
+  }
+  els.feedbackTbody.innerHTML = list
+    .map((row) => {
+      return `<tr>
+        <td>${escapeHtml(formatTime(row.createdAt))}</td>
+        <td>${escapeHtml(row.displayName || 'player')}</td>
+        <td class="muted">${escapeHtml(row.playerId || '—')}</td>
+        <td>${escapeHtml(row.appVersion || '—')}</td>
+        <td class="feedback-content">${escapeHtml(row.content || '')}</td>
       </tr>`;
     })
     .join('');
@@ -685,8 +733,12 @@ els.serviceEntries.addEventListener('click', (event) => {
 });
 
 await refreshStatus();
+void refreshFeedback();
 pollTimer = setInterval(() => {
-  if (!busy || deployBusy) void refreshStatus();
+  if (!busy || deployBusy) {
+    void refreshStatus();
+    void refreshFeedback();
+  }
 }, POLL_MS);
 
 window.addEventListener('beforeunload', () => {

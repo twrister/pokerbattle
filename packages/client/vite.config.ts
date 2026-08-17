@@ -261,6 +261,11 @@ const wsProxy = {
   '/ws': { target: 'ws://localhost:9090', ws: true },
 } as const;
 
+/** 开发服与正式预览共用：把同源意见接口转到权威服。 */
+const httpApiProxy = {
+  '/feedback': { target: 'http://localhost:9090' },
+} as const;
+
 /** 部署到子路径时由 VITE_PUBLIC_BASE 注入（如 /poker-battle），本地开发保持根路径。 */
 function resolvePublicBase(): string {
   const raw = process.env.VITE_PUBLIC_BASE?.trim();
@@ -299,7 +304,7 @@ export default defineConfig({
     host: true,
     port: 9081,
     open: true,
-    proxy: { ...wsProxy },
+    proxy: { ...wsProxy, ...httpApiProxy },
   },
   // 与 sim 一样直接吃 TS 源码，改协议可热更新
   optimizeDeps: { exclude: ['@pb/sim', '@pb/net'] },
@@ -310,7 +315,7 @@ export default defineConfig({
     strictPort: true,
     // 允许机器名访问；纯 IP 默认已放行
     allowedHosts: true,
-    proxy: { ...wsProxy },
+    proxy: { ...wsProxy, ...httpApiProxy },
   },
   build: { target: 'es2022' },
 });

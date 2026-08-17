@@ -3,7 +3,8 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { OpsPlayersStatus, OpsServerStatus } from './opsTypes.js';
+import type { OpsFeedbackStatus, OpsPlayersStatus, OpsServerStatus } from './opsTypes.js';
+import { FeedbackStore } from './feedbackStore.js';
 import { LobbyPresence } from './lobbyPresence.js';
 import { listAllOpsPlayers, normalizePlayerId, PlayerStatsStore } from './playerStatsStore.js';
 import { RoomManager, sendRoomError } from './roomManager.js';
@@ -23,6 +24,10 @@ const DIST_DIR = process.env.DIST_DIR || path.resolve(process.cwd(), 'dist');
 const PLAYER_STATS_PATH =
   process.env.PLAYER_STATS_PATH || path.resolve(process.cwd(), 'data', 'player-stats.json');
 const playerStats = new PlayerStatsStore({ filePath: PLAYER_STATS_PATH });
+/** 玩家意见落盘；发布只覆盖 dist，data/ 会保留。 */
+const FEEDBACK_PATH =
+  process.env.FEEDBACK_PATH || path.resolve(process.cwd(), 'data', 'feedback.json');
+const feedback = new FeedbackStore({ filePath: FEEDBACK_PATH });
 
 /** 本地联机：多房间并行，支持快速匹配与自定义房号，以及短时断线重连。 */
 const rooms = new RoomManager({ playerStats });
@@ -50,6 +55,14 @@ const httpServer = http.createServer((req, res) => {
   }
   if (isRead && pathname === '/ops/players') {
     writeJson(res, 200, buildOpsPlayers());
+    return;
+  }
+  if (isRead && pathname === '/ops/feedback') {
+    writeJson(res, 200, buildOpsFeedback());
+    return;
+  }
+  if (method === 'POST' && pathname === '/feedback') {
+    void handleSubmitFeedback(req, res);
     return;
   }
   if (method === 'POST' && pathname === '/ops/players/clear') {
@@ -158,6 +171,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`[pb-server] ws://${HOST === '0.0.0.0' ? '0.0.0.0' : HOST}:${PORT}  (multi-room + reconnect)`);
   console.log(`[pb-server] ops status: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/ops/status`);
   console.log(`[pb-server] player stats: ${PLAYER_STATS_PATH}`);
+  console.log(`[pb-server] feedback: ${FEEDBACK_PATH}`);
   const lanIps = listLanIPv4();
   if (lanIps.length === 0) {
     console.log('[pb-server] 未检测到局域网 IPv4；本机请用 http://localhost:9080/');
@@ -260,6 +274,76 @@ function requestPath(req: http.IncomingMessage): string {
 function isNginxProxied(req: http.IncomingMessage): boolean {
   const headers = req.headers;
   return Boolean(headers['x-forwarded-for'] || headers['x-real-ip'] || headers['x-forwarded-prefix']);
+}
+
+/** 组装运维反馈载荷，按时间倒序。 */
+function buildOpsFeedback(): OpsFeedbackStatus {
+  return { ok: true, feedback: feedback.list() };
+}
+
+/** 玩家提交意见；公网必须可达，因此不拦 nginx 反代。 */
+async function handleSubmitFeedback(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  const limited = await readBodyLimited(req, 4096);
+  if (!limited.ok) {
+    writeJson(res, 413, { ok: false, message: limited.error });
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(limited.body) as unknown;
+  } catch {
+    writeJson(res, 400, { ok: false, message: '无效的请求' });
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    writeJson(res, 400, { ok: false, message: '无效的请求' });
+    return;
+  }
+  const body = parsed as Record<string, unknown>;
+  const result = feedback.add({
+    content: body.content,
+    playerId: body.playerId,
+    displayName: body.displayName,
+    appVersion: body.appVersion,
+  });
+  if (!result.ok) {
+    if (result.reason === 'too-fast') {
+      writeJson(res, 429, { ok: false, message: '提交过于频繁，请稍后再试' });
+      return;
+    }
+    writeJson(res, 400, { ok: false, message: '请填写意见内容' });
+    return;
+  }
+  writeJson(res, 200, { ok: true });
+}
+
+/** 读取并限制 POST 正文大小，避免异常大包拖垮进程。 */
+function readBodyLimited(
+  req: http.IncomingMessage,
+  maxBytes: number,
+): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.destroy();
+        resolve({ ok: false, error: '请求体过大' });
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      resolve({ ok: true, body: Buffer.concat(chunks).toString('utf8') });
+    });
+    req.on('error', () => {
+      resolve({ ok: false, error: '读取请求体失败' });
+    });
+  });
 }
 
 /** 运维一键清空全部服务端战绩档案。 */
