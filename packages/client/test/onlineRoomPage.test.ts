@@ -66,4 +66,45 @@ describe('联机房间页', () => {
     expect(onSetMatchMode).toHaveBeenCalledWith('1v1');
     page.dispose();
   });
+
+  it('房主换到新席后仍显示开始游戏按钮', () => {
+    const page = createOnlineRoomPage({
+      onLeave: vi.fn(),
+      onStartMatch: vi.fn(),
+      onSetReady: vi.fn(),
+      onSetMatchMode: vi.fn(),
+      onPickSeat: vi.fn(),
+    });
+    page.applyRoomState(
+      {
+        type: 'roomState',
+        roomId: '101',
+        roomName: '双人房',
+        hostSeat: 0,
+        phase: 'waiting',
+        matchMode: '2v2',
+        maxPlayers: 4,
+        members: [{ seat: 0, name: 'A', ready: true, isHost: true, faction: Faction.Blue }],
+      },
+      0,
+    );
+    expect(document.querySelector('#btn-online-room-start')?.classList.contains('is-hidden')).toBe(false);
+
+    page.applyRoomState(
+      {
+        type: 'roomState',
+        roomId: '101',
+        roomName: '双人房',
+        hostSeat: 2,
+        phase: 'waiting',
+        matchMode: '2v2',
+        maxPlayers: 4,
+        members: [{ seat: 2, name: 'A', ready: true, isHost: true, faction: Faction.Red }],
+      },
+      2,
+    );
+    expect(document.querySelector('#btn-online-room-start')?.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#btn-online-room-ready')?.classList.contains('is-hidden')).toBe(true);
+    page.dispose();
+  });
 });

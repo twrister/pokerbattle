@@ -478,8 +478,9 @@ export class MatchRoom {
     seat.faction = factionForSeat(target, this.matchMode);
     this.seats[target] = seat;
     if (this.hostSeat === from) this.hostSeat = target;
-    this.broadcastRoomState();
+    // 先通知换座者新席位，再广播快照，避免客户端用旧 seat 刷新开始按钮。
     this.sendWelcome(seat, this.seed);
+    this.broadcastRoomState();
   }
 
   /** 非房主在 waiting 切换准备；房主始终准备，取消会被拒绝。 */

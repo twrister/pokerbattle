@@ -288,6 +288,142 @@ describe('connectRoomSession', () => {
     expect(loop.lastConfirmedTick).toBe(2);
     close();
   });
+
+  it('换座后用新席位重放房间快照，保持房主身份', async () => {
+    const onRoomState = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Host',
+      onRoomState,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '301',
+      roomName: '换座房',
+      reconnectToken: 'tok-seat',
+      opponentName: '',
+    });
+    ws.pushServer({
+      type: 'roomState',
+      roomId: '301',
+      roomName: '换座房',
+      hostSeat: 0,
+      phase: 'waiting',
+      matchMode: '2v2',
+      maxPlayers: 4,
+      members: [{ seat: 0, name: 'Host', ready: true, isHost: true, faction: Faction.Blue }],
+    });
+    const session = await done;
+    expect(session.seat).toBe(0);
+    expect(session.isHost).toBe(true);
+
+    const movedState = {
+      type: 'roomState' as const,
+      roomId: '301',
+      roomName: '换座房',
+      hostSeat: 2,
+      phase: 'waiting' as const,
+      matchMode: '2v2' as const,
+      maxPlayers: 4,
+      members: [{ seat: 2, name: 'Host', ready: true, isHost: true, faction: Faction.Red }],
+    };
+    onRoomState.mockClear();
+    // 快照先到、welcome 后到：本机 seat 仍是旧值时不得刷新房间页。
+    ws.pushServer(movedState);
+    expect(session.seat).toBe(0);
+    expect(onRoomState).not.toHaveBeenCalled();
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 2,
+      faction: Faction.Red,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '301',
+      roomName: '换座房',
+      reconnectToken: 'tok-seat',
+      opponentName: '',
+      matchMode: '2v2',
+      members: movedState.members,
+    });
+    expect(session.seat).toBe(2);
+    expect(session.isHost).toBe(true);
+    expect(onRoomState).toHaveBeenCalledTimes(1);
+    expect(onRoomState).toHaveBeenLastCalledWith(expect.objectContaining({ hostSeat: 2 }));
+    close();
+  });
+
+  it('换座 welcome 先到时按新席位刷新快照', async () => {
+    const onRoomState = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Host',
+      onRoomState,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '301',
+      roomName: '换座房',
+      reconnectToken: 'tok-seat-2',
+      opponentName: '',
+    });
+    ws.pushServer({
+      type: 'roomState',
+      roomId: '301',
+      roomName: '换座房',
+      hostSeat: 0,
+      phase: 'waiting',
+      matchMode: '2v2',
+      maxPlayers: 4,
+      members: [{ seat: 0, name: 'Host', ready: true, isHost: true, faction: Faction.Blue }],
+    });
+    const session = await done;
+    onRoomState.mockClear();
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 2,
+      faction: Faction.Red,
+      seed: 0,
+      inputDelay: 4,
+      roomId: '301',
+      roomName: '换座房',
+      reconnectToken: 'tok-seat-2',
+      opponentName: '',
+      matchMode: '2v2',
+      members: [{ seat: 2, name: 'Host', ready: true, isHost: true, faction: Faction.Red }],
+    });
+    expect(session.seat).toBe(2);
+    expect(session.isHost).toBe(true);
+    // 旧快照里还没有新席，此时不应按旧座位刷新
+    expect(onRoomState).not.toHaveBeenCalled();
+
+    ws.pushServer({
+      type: 'roomState',
+      roomId: '301',
+      roomName: '换座房',
+      hostSeat: 2,
+      phase: 'waiting',
+      matchMode: '2v2',
+      maxPlayers: 4,
+      members: [{ seat: 2, name: 'Host', ready: true, isHost: true, faction: Faction.Red }],
+    });
+    expect(onRoomState).toHaveBeenCalledTimes(1);
+    expect(onRoomState).toHaveBeenLastCalledWith(expect.objectContaining({ hostSeat: 2 }));
+    close();
+  });
 });
 
 describe('createLobbyPresence', () => {

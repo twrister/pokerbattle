@@ -131,8 +131,16 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
     let reconnectToken = '';
     let reconnectDeadline = 0;
     let reconnectAttempt = 0;
+    /** 最近一次房间快照；换座 welcome 更新本机席位后再重放，避免开始按钮按旧席隐藏。 */
+    let lastRoomState: RoomStateMessage | null = null;
     /** welcome 建好 loop 前可能先到的下行，建好后立刻回放。 */
     const pending: ServerMessage[] = [];
+
+    /** 本机已在快照里时才刷新房间页，避免换座瞬间用旧 seat 把房主按钮藏掉。 */
+    const emitRoomStateIfSeated = (state: RoomStateMessage): void => {
+      if (!state.members.some((member) => member.seat === seat)) return;
+      options.onRoomState?.(state);
+    };
 
     const fail = (error: Error): void => {
       if (settled) return;
@@ -248,7 +256,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         }
         const peer = message.members.find((member) => member.seat !== seat);
         opponentName = peer?.name ?? '';
-        options.onRoomState?.(message);
+        lastRoomState = message;
+        emitRoomStateIfSeated(message);
         return;
       }
 
@@ -362,9 +371,13 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
           if (typeof message.opponentName === 'string') {
             opponentName = message.opponentName;
           }
+          const hostMember = message.members?.find((member) => member.isHost);
+          if (hostMember) hostSeat = hostMember.seat;
           finishJoin();
 
           if (message.seed === 0) {
+            // 等待期换座只更新本机席位，不会再走 onRoomState；用新座位重放快照才能认出房主。
+            if (lastRoomState) emitRoomStateIfSeated(lastRoomState);
             return;
           }
 

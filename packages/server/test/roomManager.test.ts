@@ -634,6 +634,23 @@ describe('2v2 房间', () => {
     manager.dispose();
   });
 
+  it('房主换空席时身份跟人走，且先发 welcome 再广播快照', () => {
+    const room = new MatchRoom({ roomId: '302', roomName: '换座房', matchMode: '2v2' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    expect(room.handleJoin(a as never, 'A')).toBe(true);
+    expect(room.handleJoin(b as never, 'B')).toBe(true);
+
+    const beforePick = a.messages().length;
+    a.receive({ type: 'pickSeat', seat: 2 });
+    const afterPick = a.messages().slice(beforePick);
+    expect(afterPick[0]).toMatchObject({ type: 'welcome', seat: 2 });
+    const state = afterPick.find((m) => m.type === 'roomState');
+    expect(state && state.type === 'roomState' && state.hostSeat).toBe(2);
+    expect(afterPick.findIndex((m) => m.type === 'roomState')).toBeGreaterThan(0);
+    room.dispose();
+  });
+
   it('房主切回 1v1 时人数超席拒绝，两人则可挤座', () => {
     const room = new MatchRoom({ roomId: '201', roomName: '切模式', matchMode: '2v2' });
     const a = new FakeWebSocket();
