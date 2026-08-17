@@ -97,6 +97,7 @@
     "attackKind": "projectile_aoe",
     "projectileSpeed": 9,
     "aoeRadius": 2,
+    "canAttackAir": false,
     "tag": "超远程"
   },
   "giant_bomb": {

@@ -49,6 +49,7 @@ describe('兵种图鉴页', () => {
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
     ).toEqual(['战车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
 
     categoryNamed('召唤物')?.click();
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(2);
@@ -59,6 +60,18 @@ describe('兵种图鉴页', () => {
     );
     mage?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
+  });
+
+  it('战车图鉴写明无法攻击空中单位', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const chariot = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+      (button) => button.textContent?.includes('战车'),
+    );
+    chariot?.click();
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
+    page.dispose();
   });
 
   it('详情不展示等级切换', () => {

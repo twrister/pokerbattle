@@ -273,7 +273,14 @@ function getSkill(config: UnitConfig): { title: string; description: string } {
       description: `部署后每秒自动损失 ${TOWER_HP_DECAY_PER_SECOND} 点生命，生命耗尽后倒塌。`,
     };
   }
-  if (config.attack.kind === 'projectile_aoe') return { title: '范围攻击', description: '弹道命中后会对落点附近敌人造成范围伤害。' };
+  if (config.attack.kind === 'projectile_aoe') {
+    return {
+      title: '范围攻击',
+      description: config.canAttackAir
+        ? '弹道命中后会对落点附近敌人造成范围伤害。'
+        : '弹道命中后会对落点附近地面敌人造成范围伤害，无法攻击空中单位。',
+    };
+  }
   if (config.attack.kind === 'melee_aoe') return { title: '横扫', description: '每次近战攻击都会伤害攻击范围内的多个敌人。' };
   return { title: '常规攻击', description: '持续攻击当前目标，适合编入阵型参与正面交战。' };
 }

@@ -120,6 +120,11 @@ export interface UnitConfig {
   sightRange: Fx;
   /** 移动碰撞层；空中与地面单位互不推挤。 */
   movementLayer: MovementLayer;
+  /**
+   * 能否锁定并攻击空中单位。
+   * 近战默认 false，远程默认 true；战车等地面炮可单独关掉。
+   */
+  canAttackAir: boolean;
   attack: AttackKind;
   /**
    * 占地边长（整数格）。> 0 表示建筑：不移动、不索敌，碰撞按方形处理。
@@ -199,6 +204,8 @@ export interface UnitConfigDraft {
   moveSpeed: number;
   sightRange: number;
   movementLayer: MovementLayer;
+  /** 缺省时按攻击方式推断：近战 false，远程 true */
+  canAttackAir?: boolean;
   attackKind: 'melee' | 'melee_aoe' | 'projectile' | 'projectile_aoe';
   /** 仅弹道攻击时有意义 */
   projectileSpeed: number;
@@ -268,6 +275,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.moveSpeed = source.moveSpeed;
   target.sightRange = source.sightRange;
   target.movementLayer = source.movementLayer;
+  target.canAttackAir = source.canAttackAir;
   target.footprint = source.footprint;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
@@ -362,6 +370,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     moveSpeed: fromFloat(draft.moveSpeed),
     sightRange: fromFloat(draft.sightRange),
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
+    canAttackAir: resolveCanAttackAir(draft.attackKind, draft.canAttackAir),
     footprint: normalizeFootprint(draft.footprint),
     attack: attackFromDraft(draft),
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
@@ -375,6 +384,20 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
 /** 标签只保留可见文本；空/空白视为未配置。 */
 function normalizeUnitTag(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+/** 近战默认不对空；远程默认可对空。 */
+function defaultCanAttackAir(attackKind: AttackKind['kind']): boolean {
+  return attackKind === 'projectile' || attackKind === 'projectile_aoe';
+}
+
+/** JSON 显式覆盖优先，否则按攻击方式给默认值。 */
+function resolveCanAttackAir(
+  attackKind: AttackKind['kind'],
+  override: boolean | undefined,
+): boolean {
+  if (typeof override === 'boolean') return override;
+  return defaultCanAttackAir(attackKind);
 }
 
 /** 最小射程缺省/非法回落为 0（无近距限制）。 */
@@ -467,6 +490,10 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
         : 9,
     aoeRadius: config.attack.kind === 'projectile_aoe' ? toFloat(config.attack.aoeRadius) : 0,
   };
+  // 只写出与攻击方式默认值不同的覆盖，避免每个近战都带 false
+  if (config.canAttackAir !== defaultCanAttackAir(config.attack.kind)) {
+    draft.canAttackAir = config.canAttackAir;
+  }
   if (config.tag) draft.tag = config.tag;
   if (config.footprint > 0) draft.footprint = config.footprint;
   if (config.charge) {

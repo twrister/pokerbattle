@@ -27,7 +27,7 @@ export function isUntargetableBomb(unit: Unit): boolean {
 }
 
 /**
- * 攻击层规则：近战/近战范围打不到空中；投放炸弹不可锁定；远程默认可打地/空。
+ * 攻击层规则：canAttackAir=false 打不到空中；投放炸弹不可锁定。
  * 索敌与战斗结算共用，避免规则漂移。
  */
 export function canAttackTarget(attacker: Unit, target: Unit): boolean {
@@ -40,8 +40,8 @@ export function canAttackTarget(attacker: Unit, target: Unit): boolean {
  * 投放炸弹自身不可被锁定，若用 canAttackTarget 反查会永远判无威胁。
  */
 export function canThreatenTarget(attacker: Unit, target: Unit): boolean {
-  const kind = attacker.config.attack.kind;
-  if ((kind === 'melee' || kind === 'melee_aoe') && target.config.movementLayer === 'air') {
+  // 近战默认、战车等配置覆盖：不能对空则整段威胁链失效
+  if (!attacker.config.canAttackAir && target.config.movementLayer === 'air') {
     return false;
   }
   return true;

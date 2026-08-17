@@ -34,6 +34,7 @@ describe('战车', () => {
     expect(toFloat(chariot.config.minRange)).toBeCloseTo(3, 3);
     expect(toFloat(chariot.stats.moveSpeed)).toBeCloseTo(1, 3);
     expect(chariot.config.movementLayer).toBe('ground');
+    expect(chariot.config.canAttackAir).toBe(false);
     expect(chariot.config.attack.kind).toBe('projectile_aoe');
     if (chariot.config.attack.kind === 'projectile_aoe') {
       expect(toFloat(chariot.config.attack.speed)).toBeCloseTo(9, 3);
@@ -186,5 +187,33 @@ describe('战车', () => {
 
     expect(target.hp).toBeLessThan(targetHp);
     expect(projectile.dead).toBe(true);
+  });
+
+  it('不能锁定或命中空中单位，改打更远的地面目标', () => {
+    const world = new World(1);
+    const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(8), fromFloat(8));
+    const dragon = world.spawnUnit(Faction.Red, 'dragon', fromFloat(8), fromFloat(14));
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(20));
+    dragon.stats.damage = 0;
+    ground.stats.damage = 0;
+
+    for (let i = 0; i < 40; i++) world.step();
+
+    expect(chariot.targetId).toBe(ground.id);
+    expect(dragon.hp).toBe(dragon.stats.maxHp);
+  });
+
+  it('手动锁定空中目标时不起手前摇', () => {
+    const world = new World(1);
+    const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(8), fromFloat(8));
+    const dragon = world.spawnUnit(Faction.Red, 'dragon', fromFloat(8), fromFloat(14));
+    chariot.targetId = dragon.id;
+    chariot.state = UnitState.Attack;
+    chariot.attackCooldown = 0;
+    chariot.windupLeft = 0;
+
+    updateCombat(world);
+    expect(chariot.windupLeft).toBe(0);
+    expect(world.projectiles).toHaveLength(0);
   });
 });
