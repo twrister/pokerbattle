@@ -84,7 +84,7 @@ import {
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
-import { createSpectatorHands } from './ui/spectatorHands.js';
+import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
@@ -1612,10 +1612,7 @@ function runReplaySession(record: ReplayRecord): () => void {
   battleHud.setCatchingUp(false);
   battleHud.setContext(record.context);
   battleResult.setContext(record.context);
-  spectatorHands.setNames(
-    joinReplayTeamName(record.context, true),
-    joinReplayTeamName(record.context, false),
-  );
+  spectatorHands.setNames(replayHandNames(record.context));
   spectatorHands.show();
   battleHud.show();
 
@@ -1714,15 +1711,19 @@ function runReplaySession(record: ReplayRecord): () => void {
   };
 }
 
-/** 回放手牌条按阵营拼显示名，2v2 用斜线连接同队两人。 */
-function joinReplayTeamName(context: ReplaySideContext, blue: boolean): string {
+/** 回放手牌按席位拆名，2v2 同队两人各占一栏。 */
+function replayHandNames(context: ReplaySideContext): SpectatorHandNames {
   const localIsBlue = context.localFaction === Faction.Blue;
-  if (blue === localIsBlue) {
-    return context.teammateName ? `${context.localName} / ${context.teammateName}` : context.localName;
-  }
-  return context.extraOpponentName
-    ? `${context.opponentName} / ${context.extraOpponentName}`
-    : context.opponentName;
+  const self = { name: context.localName, mate: context.teammateName };
+  const opp = { name: context.opponentName, mate: context.extraOpponentName };
+  const blue = localIsBlue ? self : opp;
+  const red = localIsBlue ? opp : self;
+  return {
+    blue: blue.name,
+    blueMate: blue.mate,
+    red: red.name,
+    redMate: red.mate,
+  };
 }
 
 function enterSpectate(): () => void {
@@ -1768,7 +1769,12 @@ function runSpectateSession(
   };
   battleHud.setContext(spectateContext);
   battleResult.setContext(spectateContext);
-  spectatorHands.setNames(blueName, redName);
+  spectatorHands.setNames({
+    blue: spectateContext.localName,
+    blueMate: spectateContext.teammateName,
+    red: spectateContext.opponentName,
+    redMate: spectateContext.extraOpponentName,
+  });
   spectatorHands.show();
   battleHud.setCatchingUp(netLoop.pendingTicks > 0);
   battleHud.show();

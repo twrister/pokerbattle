@@ -1825,16 +1825,25 @@
         display: none;
       }
 
-      #spectator-hands {
+      /* 手牌在上、回放条在下，避免播放按钮压住牌面 */
+      #watch-bottom-stack {
         position: absolute;
         right: 0;
         bottom: max(10px, var(--stage-safe-bottom));
         left: 0;
-        z-index: 12;
+        z-index: 13;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: calc(8 * var(--hu));
+        pointer-events: none;
+      }
+
+      #spectator-hands {
         display: none;
         flex-direction: column;
         gap: calc(10 * var(--hu));
-        padding: 0 calc(10 * var(--hu)) calc(8 * var(--hu));
+        padding: 0 calc(10 * var(--hu));
         pointer-events: none;
       }
 
@@ -1844,18 +1853,15 @@
       }
 
       #replay-controls {
-        position: absolute;
-        left: 50%;
-        bottom: calc(132 * var(--hu));
-        z-index: 13;
         display: none;
+        align-self: center;
         align-items: center;
         gap: calc(8 * var(--hu));
+        margin-bottom: calc(8 * var(--hu));
         padding: calc(8 * var(--hu)) calc(12 * var(--hu));
         border: 1px solid rgba(153, 207, 237, 0.28);
         border-radius: calc(14 * var(--hu));
         background: rgba(8, 16, 26, 0.82);
-        transform: translateX(-50%);
         pointer-events: auto;
       }
 
@@ -1891,12 +1897,34 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: calc(8 * var(--hu));
+      }
+
+      /* 2v2 同队两人并排，中间留缝，避免手牌拼成一排 */
+      #spectator-hands.is-2v2 .spectator-hand-row {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: calc(14 * var(--hu));
+      }
+
+      .spectator-hand-group {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        align-items: stretch;
         gap: calc(4 * var(--hu));
+        min-width: 0;
+      }
+
+      #spectator-hands.is-2v2 .spectator-hand-group + .spectator-hand-group {
+        padding-left: calc(14 * var(--hu));
+        border-left: 1px solid rgba(185, 207, 225, 0.22);
       }
 
       .spectator-hand-label {
         align-self: flex-start;
         overflow: hidden;
+        max-width: 100%;
         padding: calc(2 * var(--hu)) calc(8 * var(--hu));
         border-radius: 999px;
         background: rgba(79, 141, 253, 0.16);
@@ -5358,14 +5386,6 @@
       <div id="battle-announce" class="is-hidden" role="status" aria-live="polite">
         <span id="battle-announce-text"></span>
       </div>
-      <section id="replay-controls" class="is-hidden" aria-label="回放控制">
-        <button id="btn-replay-pause" type="button">暂停</button>
-        <button type="button" data-replay-speed="1" class="is-active">1x</button>
-        <button type="button" data-replay-speed="2">2x</button>
-        <button type="button" data-replay-speed="4">4x</button>
-        <button id="btn-replay-restart" type="button">重播</button>
-        <span id="replay-progress">0:00 / 0:00</span>
-      </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true" role="dialog" aria-labelledby="battle-result-title">
         <div class="battle-result-panel">
           <h2 id="battle-result-title">胜利</h2>
@@ -5633,16 +5653,38 @@
         <div><kbd>空格</kbd> 暂停 · <kbd>N</kbd> 单步 · <kbd>R</kbd> 重新开局</div>
       </section>
 
-      <section id="spectator-hands" class="is-hidden" aria-label="观战手牌">
-        <div class="spectator-hand-row">
-          <span class="spectator-hand-label" id="spectator-hand-blue-label">蓝方</span>
-          <div id="spectator-hand-blue" class="spectator-hand-cards"></div>
-        </div>
-        <div class="spectator-hand-row is-red">
-          <span class="spectator-hand-label" id="spectator-hand-red-label">红方</span>
-          <div id="spectator-hand-red" class="spectator-hand-cards"></div>
-        </div>
-      </section>
+      <div id="watch-bottom-stack">
+        <section id="spectator-hands" class="is-hidden" aria-label="观战手牌">
+          <div class="spectator-hand-row">
+            <div class="spectator-hand-group">
+              <span class="spectator-hand-label" id="spectator-hand-blue-label">蓝方</span>
+              <div id="spectator-hand-blue" class="spectator-hand-cards"></div>
+            </div>
+            <div class="spectator-hand-group is-hidden" id="spectator-hand-blue-mate-group">
+              <span class="spectator-hand-label" id="spectator-hand-blue-mate-label">蓝方2</span>
+              <div id="spectator-hand-blue-mate" class="spectator-hand-cards"></div>
+            </div>
+          </div>
+          <div class="spectator-hand-row is-red">
+            <div class="spectator-hand-group">
+              <span class="spectator-hand-label" id="spectator-hand-red-label">红方</span>
+              <div id="spectator-hand-red" class="spectator-hand-cards"></div>
+            </div>
+            <div class="spectator-hand-group is-hidden" id="spectator-hand-red-mate-group">
+              <span class="spectator-hand-label" id="spectator-hand-red-mate-label">红方2</span>
+              <div id="spectator-hand-red-mate" class="spectator-hand-cards"></div>
+            </div>
+          </div>
+        </section>
+        <section id="replay-controls" class="is-hidden" aria-label="回放控制">
+          <button id="btn-replay-pause" type="button">暂停</button>
+          <button type="button" data-replay-speed="1" class="is-active">1x</button>
+          <button type="button" data-replay-speed="2">2x</button>
+          <button type="button" data-replay-speed="4">4x</button>
+          <button id="btn-replay-restart" type="button">重播</button>
+          <span id="replay-progress">0:00 / 0:00</span>
+        </section>
+      </div>
 
       <section id="solo-hand" aria-label="手牌">
         <div class="hand-bar">
