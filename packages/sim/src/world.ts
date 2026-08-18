@@ -1,4 +1,4 @@
-import { type Fx, fromFloat, toFloat } from './math/fixed.js';
+import { type Fx, fromFloat, ONE, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
@@ -84,6 +84,8 @@ export class World {
   readonly buildingRows: number;
 
   tick = 0;
+  /** 单位逻辑本帧推进倍率；决胜/结算可由 MatchState 调高。对局时钟仍 20Hz。 */
+  unitTimeScale: Fx = ONE;
   private nextEntityId = 1;
   private nextEffectId = 1;
   private readonly unitsById = new Map<number, Unit>();
@@ -535,6 +537,7 @@ export class World {
     this.buildingCells.fill(0);
     this.nav.clearBlocked();
     this.tick = 0;
+    this.unitTimeScale = ONE;
     this.nextEntityId = 1;
     this.nextEffectId = 1;
     this.rng.setState(this.seed);
@@ -617,6 +620,7 @@ export class World {
       h = mix(h, effect.kind === 'giant_bomb' ? 1 : 0);
       h = mix(h, effect.remainingTicks);
     }
+    h = mix(h, this.unitTimeScale);
     return h >>> 0;
   }
 }

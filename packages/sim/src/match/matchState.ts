@@ -27,7 +27,7 @@ import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { UNIT_CONFIGS } from '../config/units.js';
 import { Faction, type Unit } from '../entity/unit.js';
-import { fromFloat, toFloat } from '../math/fixed.js';
+import { type Fx, fromFloat, ONE, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
 import {
   allSlots,
@@ -37,8 +37,8 @@ import {
   type MatchMode,
 } from './matchMode.js';
 
-/** 对局的三个可发牌阶段。 */
-export type MatchPhase = 'normal' | 'double_speed' | 'final' | 'ended';
+/** 对局可玩阶段含停发后的结算；ended 是冻结收局。 */
+export type MatchPhase = 'normal' | 'double_speed' | 'final' | 'settlement' | 'ended';
 /** 结算原因由 sim 产出，UI 和联机协议只负责展示与转发。 */
 export type MatchEndReason = 'base_destroyed' | 'time_limit' | 'simultaneous_destroyed';
 export interface MatchResult {
@@ -47,15 +47,29 @@ export interface MatchResult {
   endTick: number;
 }
 
-/** 每个阶段默认 2 分钟。 */
+/** 常规阶段默认 2 分钟。 */
 export const DEFAULT_PHASE_DURATION_SECONDS = 120;
 export const DEFAULT_PHASE_DURATION_TICKS = TICK_RATE * DEFAULT_PHASE_DURATION_SECONDS;
+/** 倍速 / 决胜默认各 3 分钟。 */
+export const DEFAULT_DOUBLE_SPEED_DURATION_SECONDS = 180;
+export const DEFAULT_FINAL_DURATION_SECONDS = 180;
+export const DEFAULT_DOUBLE_SPEED_DURATION_TICKS = TICK_RATE * DEFAULT_DOUBLE_SPEED_DURATION_SECONDS;
+export const DEFAULT_FINAL_DURATION_TICKS = TICK_RATE * DEFAULT_FINAL_DURATION_SECONDS;
+/** 停发后的结算阶段默认 1 分钟。 */
+export const DEFAULT_SETTLEMENT_DURATION_SECONDS = 60;
+export const DEFAULT_SETTLEMENT_DURATION_TICKS = TICK_RATE * DEFAULT_SETTLEMENT_DURATION_SECONDS;
+/** 决胜与结算的单位逻辑加速，默认 1.5 倍。 */
+export const DEFAULT_FINAL_UNIT_TIME_SCALE = 1.5;
+export const FINAL_UNIT_TIME_SCALE_MIN = 1;
+export const FINAL_UNIT_TIME_SCALE_MAX = 3;
 /** 默认 2:00 进入倍速阶段。 */
 export const DOUBLE_SPEED_START_TICKS = DEFAULT_PHASE_DURATION_TICKS;
-/** 默认 4:00 进入决胜阶段。 */
-export const FINAL_START_TICKS = DEFAULT_PHASE_DURATION_TICKS * 2;
-/** 默认 6:00 决胜结束。 */
-export const MATCH_END_TICKS = DEFAULT_PHASE_DURATION_TICKS * 3;
+/** 默认 5:00 进入决胜阶段。 */
+export const FINAL_START_TICKS = DEFAULT_PHASE_DURATION_TICKS + DEFAULT_DOUBLE_SPEED_DURATION_TICKS;
+/** 默认 8:00 停发并进入结算。 */
+export const SETTLEMENT_START_TICKS = FINAL_START_TICKS + DEFAULT_FINAL_DURATION_TICKS;
+/** 默认 9:00 结算结束、按血量收局。 */
+export const MATCH_END_TICKS = SETTLEMENT_START_TICKS + DEFAULT_SETTLEMENT_DURATION_TICKS;
 export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
 export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
 export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
@@ -77,11 +91,12 @@ export interface MatchDrawIntervals {
   finalTicks: number;
 }
 
-/** 三阶段持续时长。 */
+/** 各阶段持续时长。 */
 export interface MatchPhaseDurations {
   normalTicks: number;
   doubleSpeedTicks: number;
   finalTicks: number;
+  settlementTicks: number;
 }
 
 /** 三阶段手牌上限。 */
@@ -97,6 +112,8 @@ export interface MatchRules {
   phaseDurations: MatchPhaseDurations;
   drawIntervals: MatchDrawIntervals;
   handLimits: MatchHandLimits;
+  /** 决胜与结算的单位逻辑加速倍率。 */
+  finalUnitTimeScale: number;
 }
 
 /** 内置默认节奏，单机/联机/服务端都从这里起步。 */
@@ -105,8 +122,9 @@ export function defaultMatchRules(): MatchRules {
     initialHandSize: INITIAL_HAND_SIZE,
     phaseDurations: {
       normalTicks: DEFAULT_PHASE_DURATION_TICKS,
-      doubleSpeedTicks: DEFAULT_PHASE_DURATION_TICKS,
-      finalTicks: DEFAULT_PHASE_DURATION_TICKS,
+      doubleSpeedTicks: DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
+      finalTicks: DEFAULT_FINAL_DURATION_TICKS,
+      settlementTicks: DEFAULT_SETTLEMENT_DURATION_TICKS,
     },
     drawIntervals: {
       normalTicks: NORMAL_DRAW_INTERVAL_TICKS,
@@ -118,6 +136,7 @@ export function defaultMatchRules(): MatchRules {
       doubleSpeed: HAND_LIMIT_DOUBLE_SPEED,
       final: HAND_LIMIT_FINAL,
     },
+    finalUnitTimeScale: DEFAULT_FINAL_UNIT_TIME_SCALE,
   };
 }
 
@@ -136,8 +155,10 @@ export class MatchState {
   private readonly packStates: CastlePackState[];
   private initialHandSize = INITIAL_HAND_SIZE;
   private normalPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
-  private doubleSpeedPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
-  private finalPhaseTicks = DEFAULT_PHASE_DURATION_TICKS;
+  private doubleSpeedPhaseTicks = DEFAULT_DOUBLE_SPEED_DURATION_TICKS;
+  private finalPhaseTicks = DEFAULT_FINAL_DURATION_TICKS;
+  private settlementPhaseTicks = DEFAULT_SETTLEMENT_DURATION_TICKS;
+  private finalUnitTimeScale: Fx = fromFloat(DEFAULT_FINAL_UNIT_TIME_SCALE);
   private normalDrawIntervalTicks = NORMAL_DRAW_INTERVAL_TICKS;
   private doubleSpeedDrawIntervalTicks = DOUBLE_SPEED_DRAW_INTERVAL_TICKS;
   private finalDrawIntervalTicks = FINAL_DRAW_INTERVAL_TICKS;
@@ -236,6 +257,8 @@ export class MatchState {
     h = mix(h, this.normalPhaseTicks);
     h = mix(h, this.doubleSpeedPhaseTicks);
     h = mix(h, this.finalPhaseTicks);
+    h = mix(h, this.settlementPhaseTicks);
+    h = mix(h, this.finalUnitTimeScale);
     h = mix(h, this.normalDrawIntervalTicks);
     h = mix(h, this.doubleSpeedDrawIntervalTicks);
     h = mix(h, this.finalDrawIntervalTicks);
@@ -258,6 +281,7 @@ export class MatchState {
     }
     this.phase = 'normal';
     this.result = null;
+    this.syncUnitTimeScale();
     this.dealStartingHands();
     // 保留调试覆盖的节奏参数，只重置本局倒计时与待发
     this.resetDrawClocks(this.normalDrawIntervalTicks);
@@ -370,13 +394,20 @@ export class MatchState {
    * 有待发牌时视为 0（读条收起）；未传时默认蓝方席 0，兼容旧调用。
    */
   getTicksUntilDraw(slot: number = Faction.Blue): number {
-    if (this.result || this.pendingDraw[slot] || this.isSlotEliminated(slot)) return 0;
+    if (this.result || this.phase === 'settlement' || this.pendingDraw[slot] || this.isSlotEliminated(slot)) {
+      return 0;
+    }
     return Math.max(0, this.nextDrawTicks[slot]! - this.world.tick);
   }
 
   /** 该席是否有一张周期已到、因满手尚未发出的待发牌。 */
   hasPendingDraw(slot: number): boolean {
-    return !this.result && !this.isSlotEliminated(slot) && this.pendingDraw[slot] === true;
+    return (
+      !this.result
+      && this.phase !== 'settlement'
+      && !this.isSlotEliminated(slot)
+      && this.pendingDraw[slot] === true
+    );
   }
 
   /** 当前阶段一次补牌周期的逻辑帧数（不含队友阵亡加速）。 */
@@ -394,12 +425,22 @@ export class MatchState {
     return this.currentHandLimit();
   }
 
-  /** 当前阶段结束 tick，供 HUD 倒计时；已结束则停在结算帧。 */
+  /** 当前阶段结束 tick，供阶段播报倒数；已结束则停在收局帧。 */
   getPhaseDeadlineTick(): number {
     if (this.phase === 'ended' || this.result) return this.result?.endTick ?? this.matchEndTick();
     if (this.phase === 'double_speed') return this.finalStartTick();
-    if (this.phase === 'final') return this.matchEndTick();
+    if (this.phase === 'final') return this.settlementStartTick();
+    if (this.phase === 'settlement') return this.matchEndTick();
     return this.doubleSpeedStartTick();
+  }
+
+  /**
+   * HUD 倒计时截止：前三段显示发牌合计剩余，结算阶段显示结算剩余。
+   */
+  getHudDeadlineTick(): number {
+    if (this.phase === 'ended' || this.result) return this.result?.endTick ?? this.matchEndTick();
+    if (this.phase === 'settlement') return this.matchEndTick();
+    return this.settlementStartTick();
   }
 
   /**
@@ -413,11 +454,22 @@ export class MatchState {
     this.clampDrawCountdown();
   }
 
-  /** 覆盖三阶段时长；边界从 tick 0 重算，下一帧按 >= 切换。 */
+  /** 覆盖各阶段时长；边界从 tick 0 重算，并立刻按当前 tick 切阶段。 */
   setPhaseDurations(durations: MatchPhaseDurations): void {
     this.normalPhaseTicks = clampPositiveTicks(durations.normalTicks);
     this.doubleSpeedPhaseTicks = clampPositiveTicks(durations.doubleSpeedTicks);
     this.finalPhaseTicks = clampPositiveTicks(durations.finalTicks);
+    this.settlementPhaseTicks = clampPositiveTicks(durations.settlementTicks);
+    // 未播种主堡时不启用对局结算，避免沙盒/单测被改时长直接收局
+    if (!this.result && this.castleIds.some((id) => id !== null)) {
+      this.advancePhases();
+    }
+  }
+
+  /** 覆盖决胜/结算单位加速；已在这两阶段时立即写回 World。 */
+  setFinalUnitTimeScale(scale: number): void {
+    this.finalUnitTimeScale = fromFloat(clampUnitTimeScale(scale));
+    this.syncUnitTimeScale();
   }
 
   /** 覆盖三阶段手牌上限，立即同步到各席牌堆。 */
@@ -444,7 +496,7 @@ export class MatchState {
 
   /**
    * 在战斗清理后按队伍主堡存活和时间边界裁决对局。
-   * 2v2 必须一队主堡全灭才结束；同帧双灭判平；决胜到点比队伍总血量。
+   * 2v2 必须一队主堡全灭才结束；同帧双灭判平；结算到点比队伍总血量。
    */
   private updateMatchState(): void {
     // 沙盒/确定性测试可复用 MatchState 而不播种主堡，此时不启用对局结算。
@@ -464,22 +516,34 @@ export class MatchState {
       this.maybeTriggerCastlePack(slot, this.getSlotCastleHp(slot));
     }
     this.clampDrawCountdown();
+    this.advancePhases();
+  }
 
+  /**
+   * 按当前 tick 连续越过已到期的阶段边界。
+   * 调试改时长时也走这里，避免暂停或同帧改数后阶段仍停在旧边界。
+   */
+  private advancePhases(): void {
     if (this.phase === 'normal' && this.world.tick >= this.doubleSpeedStartTick()) {
       this.enterPhase('double_speed');
     }
     if (this.phase === 'double_speed' && this.world.tick >= this.finalStartTick()) {
       this.enterPhase('final');
     }
-    if (this.phase === 'final' && this.world.tick >= this.matchEndTick()) {
+    if (this.phase === 'final' && this.world.tick >= this.settlementStartTick()) {
+      this.enterPhase('settlement');
+    }
+    if (this.phase === 'settlement' && this.world.tick >= this.matchEndTick()) {
       this.finish(compareHp(this.getCastleHp(Faction.Blue), this.getCastleHp(Faction.Red)), 'time_limit');
     }
   }
 
-  /** 切阶段：同步手牌上限，未待发且未淘汰的席位从当前 tick 重开读条。 */
-  private enterPhase(phase: 'double_speed' | 'final'): void {
+  /** 切阶段：同步手牌上限与单位加速；发牌阶段才重开读条。 */
+  private enterPhase(phase: 'double_speed' | 'final' | 'settlement'): void {
     this.phase = phase;
     this.syncHandLimits();
+    this.syncUnitTimeScale();
+    if (phase === 'settlement') return;
     for (const slot of allSlots(this.mode)) {
       if (this.pendingDraw[slot] || this.isSlotEliminated(slot)) continue;
       this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
@@ -490,6 +554,13 @@ export class MatchState {
   private finish(winner: Faction | null, reason: MatchEndReason): void {
     this.phase = 'ended';
     this.result = { winner, reason, endTick: this.world.tick };
+    this.syncUnitTimeScale();
+  }
+
+  /** 决胜与结算写入配置倍率，其余阶段（含 ended）回到 1 倍。 */
+  private syncUnitTimeScale(): void {
+    this.world.unitTimeScale =
+      this.phase === 'final' || this.phase === 'settlement' ? this.finalUnitTimeScale : ONE;
   }
 
   /** 当前阶段的基础补牌间隔。 */
@@ -509,7 +580,9 @@ export class MatchState {
 
   private currentHandLimit(): number {
     if (this.phase === 'double_speed') return this.doubleSpeedHandLimit;
-    if (this.phase === 'final' || this.phase === 'ended') return this.finalHandLimit;
+    if (this.phase === 'final' || this.phase === 'settlement' || this.phase === 'ended') {
+      return this.finalHandLimit;
+    }
     return this.normalHandLimit;
   }
 
@@ -532,7 +605,7 @@ export class MatchState {
    * 满手拒抽只冻结该席计时；牌堆抽空仍推进周期，避免空堆把读条卡死。
    */
   private tryDrawForSlot(slot: number): void {
-    if (this.isSlotEliminated(slot)) return;
+    if (this.phase === 'settlement' || this.isSlotEliminated(slot)) return;
     const deck = this.decks[slot]!;
     if (this.pendingDraw[slot]) {
       if (deck.hand.length >= deck.maxHandSize) return;
@@ -582,15 +655,21 @@ export class MatchState {
     return this.normalPhaseTicks + this.doubleSpeedPhaseTicks;
   }
 
-  private matchEndTick(): number {
+  /** 三段发牌结束、进入停发结算的 tick。 */
+  private settlementStartTick(): number {
     return this.normalPhaseTicks + this.doubleSpeedPhaseTicks + this.finalPhaseTicks;
+  }
+
+  private matchEndTick(): number {
+    return this.settlementStartTick() + this.settlementPhaseTicks;
   }
 
   private phaseCode(): number {
     if (this.phase === 'normal') return 1;
     if (this.phase === 'double_speed') return 2;
     if (this.phase === 'final') return 3;
-    return 4;
+    if (this.phase === 'settlement') return 4;
+    return 5;
   }
 
   /**
@@ -685,6 +764,12 @@ function commandSlot(cmd: { slot?: number; faction: Faction }): number {
 function clampPositiveTicks(ticks: number): number {
   if (!Number.isFinite(ticks)) return 1;
   return Math.max(1, Math.floor(ticks));
+}
+
+/** 调试覆盖加速倍率时夹到 1–3，非法值回落默认 1.5。 */
+function clampUnitTimeScale(scale: number): number {
+  if (!Number.isFinite(scale)) return DEFAULT_FINAL_UNIT_TIME_SCALE;
+  return Math.min(FINAL_UNIT_TIME_SCALE_MAX, Math.max(FINAL_UNIT_TIME_SCALE_MIN, scale));
 }
 
 function compareHp(blueHp: number, redHp: number): Faction | null {

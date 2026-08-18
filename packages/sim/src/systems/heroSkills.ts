@@ -108,11 +108,11 @@ function updateQueenHeals(world: World): void {
 
     // 冷却与前摇并行倒计时，节奏对齐普攻（完整周期 ≈ cooldown）
     if (queen.healCooldown > 0) {
-      queen.healCooldown = Math.max(0, queen.healCooldown - ONE);
+      queen.healCooldown = Math.max(0, queen.healCooldown - world.unitTimeScale);
     }
 
     if (queen.healWindupLeft > 0) {
-      queen.healWindupLeft -= ONE;
+      queen.healWindupLeft -= world.unitTimeScale;
       if (queen.healWindupLeft <= 0) {
         queen.healWindupLeft = 0;
         resolveQueenHeal(world, queen);
@@ -166,11 +166,11 @@ function updateMageSummons(world: World): void {
     if (mage.dead || !summon) continue;
 
     if (mage.summonCooldown > 0) {
-      mage.summonCooldown = Math.max(0, mage.summonCooldown - ONE);
+      mage.summonCooldown = Math.max(0, mage.summonCooldown - world.unitTimeScale);
     }
 
     if (mage.summonWindupLeft > 0) {
-      mage.summonWindupLeft -= ONE;
+      mage.summonWindupLeft -= world.unitTimeScale;
       if (mage.summonWindupLeft <= 0) {
         mage.summonWindupLeft = 0;
         resolveMageSummon(world, mage);

@@ -3,10 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CASTLE_PROTECT_HP,
-  DOUBLE_SPEED_START_TICKS,
   Faction,
-  FINAL_START_TICKS,
   MatchState,
+  TICK_RATE,
   applyArenaPreset,
   fromFloat,
   opposingFaction,
@@ -109,7 +108,7 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
     expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('8:00');
     expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
       `${match.decks[Faction.Red].hand.length} / ${match.getMaxHandSize()}`,
     );
@@ -160,10 +159,39 @@ describe('对局 HUD 与结算弹窗', () => {
     );
   });
 
+  it('同一 tick 修改阶段时长时立即刷新倒计时', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const hud = createBattleHud();
+    hud.setContext({
+      localFaction: Faction.Blue,
+      localName: 'A',
+      opponentName: 'B',
+    });
+    hud.update(match);
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('8:00');
+
+    match.setPhaseDurations({
+      normalTicks: TICK_RATE * 30,
+      doubleSpeedTicks: TICK_RATE * 30,
+      finalTicks: TICK_RATE * 30,
+      settlementTicks: TICK_RATE * 30,
+    });
+    hud.update(match);
+
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('1:30');
+  });
+
   it('进入决胜后切换阶段与倒计时文案', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
-    while (match.world.tick < FINAL_START_TICKS) match.step();
+    match.setPhaseDurations({
+      normalTicks: 2,
+      doubleSpeedTicks: 2,
+      finalTicks: TICK_RATE * 180,
+      settlementTicks: TICK_RATE * 60,
+    });
+    while (match.world.tick < 4) match.step();
     const hud = createBattleHud();
     hud.setContext({
       localFaction: Faction.Blue,
@@ -175,14 +203,45 @@ describe('对局 HUD 与结算弹窗', () => {
 
     expect(match.phase).toBe('final');
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('决胜阶段');
-    expect(document.querySelector('#battle-timer-label')?.textContent).toBe('决胜剩余：');
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('2:00');
+    expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('3:00');
+  });
+
+  it('结算阶段显示结算剩余', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    match.setPhaseDurations({
+      normalTicks: 2,
+      doubleSpeedTicks: 2,
+      finalTicks: 2,
+      settlementTicks: TICK_RATE * 60,
+    });
+    while (match.world.tick < 6) match.step();
+    const hud = createBattleHud();
+    hud.setContext({
+      localFaction: Faction.Blue,
+      localName: 'A',
+      opponentName: 'B',
+    });
+
+    hud.update(match);
+
+    expect(match.phase).toBe('settlement');
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('结算阶段');
+    expect(document.querySelector('#battle-timer-label')?.textContent).toBe('结算剩余：');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('1:00');
   });
 
   it('倍速阶段展示对应阶段名', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
-    while (match.world.tick < DOUBLE_SPEED_START_TICKS) match.step();
+    match.setPhaseDurations({
+      normalTicks: 2,
+      doubleSpeedTicks: 20,
+      finalTicks: 20,
+      settlementTicks: 20,
+    });
+    while (match.world.tick < 2) match.step();
     const hud = createBattleHud();
     hud.setContext({
       localFaction: Faction.Blue,

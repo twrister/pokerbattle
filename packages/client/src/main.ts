@@ -892,8 +892,11 @@ function enterBattleSession(mode: BattleMode): () => void {
       })
     : null;
 
+  // 本局调试面板改过的节奏；重开时再写回，避免 clear 后看起来像改时长没生效
+  let soloMatchRulesView = defaultMatchRulesView();
   const clearBattlefield = (): void => {
     loop.reset();
+    if (isSolo && loop.match) applyMatchRulesView(loop.match, soloMatchRulesView);
     battleView.invalidateUnitViews();
     dealFromCastle = false;
     prevPackState = loop.match?.getCastlePackState(Faction.Blue) ?? 'none';
@@ -969,8 +972,11 @@ function enterBattleSession(mode: BattleMode): () => void {
               onChange: (value) => sceneContext.setSoloViewBottomExtra(value),
             },
             soloMatchRules: {
-              initial: defaultMatchRulesView(),
-              onChange: (rules) => applyMatchRulesView(loop.match!, rules),
+              initial: soloMatchRulesView,
+              onChange: (rules) => {
+                soloMatchRulesView = rules;
+                applyMatchRulesView(loop.match!, rules);
+              },
             },
           }
         : {}

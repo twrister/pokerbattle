@@ -60,7 +60,7 @@ export function updateProjectiles(world: World): void {
       continue;
     }
 
-    const step: Fx = div(projectile.speed, TICK_RATE_FX);
+    const step: Fx = mul(div(projectile.speed, TICK_RATE_FX), world.unitTimeScale);
     const dx = projectile.impactPos.x - projectile.pos.x;
     const dy = projectile.impactPos.y - projectile.pos.y;
     const gap = lengthOf(dx, dy);

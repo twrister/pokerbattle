@@ -1,4 +1,3 @@
-import { ONE } from '../math/fixed.js';
 import { MAX_UNIT_RADIUS, canBuildingAttack, isBuildingConfig } from '../config/units.js';
 import { ATTACK_RANGE_TOLERANCE } from '../config/tuning.js';
 import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
@@ -29,19 +28,19 @@ export function updateCombat(world: World): void {
     if (unit.config.detonate) continue;
     // 冲刺中不普攻，冷却仍照常走，避免落地瞬间连砍
     if (unit.state === UnitState.Charge) {
-      if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
+      if (unit.attackCooldown > 0) unit.attackCooldown -= world.unitTimeScale;
       continue;
     }
     // 英雄技能前摇期间不普攻，避免与技能动作和结算重叠
     if (unit.healWindupLeft > 0 || unit.summonWindupLeft > 0) {
-      if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
+      if (unit.attackCooldown > 0) unit.attackCooldown -= world.unitTimeScale;
       continue;
     }
 
-    if (unit.attackCooldown > 0) unit.attackCooldown -= ONE;
+    if (unit.attackCooldown > 0) unit.attackCooldown -= world.unitTimeScale;
 
     if (unit.windupLeft > 0) {
-      unit.windupLeft -= ONE;
+      unit.windupLeft -= world.unitTimeScale;
       if (unit.windupLeft <= 0) {
         unit.windupLeft = 0;
         resolveAttack(world, unit);

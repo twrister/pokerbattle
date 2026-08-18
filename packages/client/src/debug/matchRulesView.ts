@@ -1,4 +1,6 @@
 import {
+  FINAL_UNIT_TIME_SCALE_MAX,
+  FINAL_UNIT_TIME_SCALE_MIN,
   TICK_RATE,
   clampHandSize,
   defaultMatchRules,
@@ -16,6 +18,8 @@ export interface MatchRulesView {
   normalPhaseSeconds: number;
   doubleSpeedPhaseSeconds: number;
   finalPhaseSeconds: number;
+  settlementPhaseSeconds: number;
+  finalUnitTimeScale: number;
   normalDrawIntervalSeconds: number;
   doubleSpeedDrawIntervalSeconds: number;
   finalDrawIntervalSeconds: number;
@@ -32,6 +36,8 @@ export function defaultMatchRulesView(): MatchRulesView {
     normalPhaseSeconds: ticksToSeconds(rules.phaseDurations.normalTicks),
     doubleSpeedPhaseSeconds: ticksToSeconds(rules.phaseDurations.doubleSpeedTicks),
     finalPhaseSeconds: ticksToSeconds(rules.phaseDurations.finalTicks),
+    settlementPhaseSeconds: ticksToSeconds(rules.phaseDurations.settlementTicks),
+    finalUnitTimeScale: rules.finalUnitTimeScale,
     normalDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.normalTicks),
     doubleSpeedDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.doubleSpeedTicks),
     finalDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.finalTicks),
@@ -51,6 +57,11 @@ export function clampPhaseSeconds(seconds: number): number {
   return clampRange(seconds, PHASE_SECONDS_MIN, PHASE_SECONDS_MAX);
 }
 
+/** 决胜单位加速控件合法区间。 */
+export function clampFinalUnitTimeScale(scale: number): number {
+  return clampRange(scale, FINAL_UNIT_TIME_SCALE_MIN, FINAL_UNIT_TIME_SCALE_MAX);
+}
+
 /** 把控件值写回当前局；不持久化，避免单机与联机分叉。 */
 export function applyMatchRulesView(match: MatchState, view: MatchRulesView): void {
   const next = sanitizeMatchRulesView(view);
@@ -59,7 +70,9 @@ export function applyMatchRulesView(match: MatchState, view: MatchRulesView): vo
     normalTicks: secondsToTicks(next.normalPhaseSeconds),
     doubleSpeedTicks: secondsToTicks(next.doubleSpeedPhaseSeconds),
     finalTicks: secondsToTicks(next.finalPhaseSeconds),
+    settlementTicks: secondsToTicks(next.settlementPhaseSeconds),
   });
+  match.setFinalUnitTimeScale(next.finalUnitTimeScale);
   match.setDrawIntervals({
     normalTicks: secondsToTicks(next.normalDrawIntervalSeconds),
     doubleSpeedTicks: secondsToTicks(next.doubleSpeedDrawIntervalSeconds),
@@ -83,6 +96,11 @@ export function sanitizeMatchRulesView(values: Partial<MatchRulesView>): MatchRu
       fallback.doubleSpeedPhaseSeconds,
     ),
     finalPhaseSeconds: readPhaseSeconds(values.finalPhaseSeconds, fallback.finalPhaseSeconds),
+    settlementPhaseSeconds: readPhaseSeconds(
+      values.settlementPhaseSeconds,
+      fallback.settlementPhaseSeconds,
+    ),
+    finalUnitTimeScale: readUnitTimeScale(values.finalUnitTimeScale, fallback.finalUnitTimeScale),
     normalDrawIntervalSeconds: readDrawInterval(
       values.normalDrawIntervalSeconds,
       fallback.normalDrawIntervalSeconds,
@@ -113,6 +131,10 @@ function readPhaseSeconds(value: unknown, fallback: number): number {
 
 function readHandSize(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? clampHandSize(value) : fallback;
+}
+
+function readUnitTimeScale(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? clampFinalUnitTimeScale(value) : fallback;
 }
 
 function clampRange(seconds: number, min: number, max: number): number {

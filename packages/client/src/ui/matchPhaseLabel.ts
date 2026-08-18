@@ -9,6 +9,8 @@ export function matchPhaseLabel(phase: MatchPhase): string {
       return '倍速阶段';
     case 'final':
       return '决胜阶段';
+    case 'settlement':
+      return '结算阶段';
     case 'ended':
       return '';
     default:

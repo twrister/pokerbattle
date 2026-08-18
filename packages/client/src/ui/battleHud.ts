@@ -85,6 +85,8 @@ export function createBattleHud(): BattleHudHandle {
   const allyCastle: CastleHudCache = emptyCastleCache();
   const opp2Castle: CastleHudCache = emptyCastleCache();
   let lastTick = -1;
+  let lastDeadlineTick = -1;
+  let lastPhase: MatchState['phase'] | '' = '';
   let lastSelfName = '';
   let lastOppName = '';
   let lastPhaseText = '';
@@ -101,6 +103,8 @@ export function createBattleHud(): BattleHudHandle {
     hide() {
       root.classList.add('is-hidden');
       lastTick = -1;
+      lastDeadlineTick = -1;
+      lastPhase = '';
       spectators.classList.add('is-hidden');
       catchup.classList.add('is-hidden');
     },
@@ -124,8 +128,12 @@ export function createBattleHud(): BattleHudHandle {
     },
     update(match) {
       const tick = match.world.tick;
-      if (tick === lastTick) return;
+      const deadline = match.getHudDeadlineTick();
+      // 调试改时长不推进 tick，必须把截止帧和阶段也算进脏检查，否则倒计时会停在 8:00
+      if (tick === lastTick && deadline === lastDeadlineTick && match.phase === lastPhase) return;
       lastTick = tick;
+      lastDeadlineTick = deadline;
+      lastPhase = match.phase;
 
       const local = context.localFaction;
       const localSlot = context.localSlot ?? local;
@@ -174,8 +182,8 @@ export function createBattleHud(): BattleHudHandle {
         lastPhaseText = value;
       }, lastPhaseText);
 
-      const remainingTicks = Math.max(0, match.getPhaseDeadlineTick() - match.world.tick);
-      const nextTimerLabel = match.phase === 'final' ? '决胜剩余：' : '剩余时间：';
+      const remainingTicks = Math.max(0, match.getHudDeadlineTick() - match.world.tick);
+      const nextTimerLabel = match.phase === 'settlement' ? '结算剩余：' : '剩余时间：';
       writeText(timerLabel, nextTimerLabel, (value) => {
         lastTimerLabel = value;
       }, lastTimerLabel);

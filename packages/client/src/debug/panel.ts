@@ -9,6 +9,7 @@ import {
 import type { SimLoop } from '../loop.js';
 import {
   clampDrawIntervalSeconds,
+  clampFinalUnitTimeScale,
   clampPhaseSeconds,
   defaultMatchRulesView,
   sanitizeMatchRulesView,
@@ -131,6 +132,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const normalPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-normal');
   const doubleSpeedPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-double');
   const finalPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-final');
+  const settlementPhaseDurationInput = required<HTMLInputElement>('#solo-phase-duration-settlement');
+  const finalUnitTimeScaleInput = required<HTMLInputElement>('#solo-final-unit-time-scale');
   const normalDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-normal');
   const doubleSpeedDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-double');
   const finalDrawIntervalInput = required<HTMLInputElement>('#solo-draw-interval-final');
@@ -142,6 +145,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
     normalPhaseDurationInput,
     doubleSpeedPhaseDurationInput,
     finalPhaseDurationInput,
+    settlementPhaseDurationInput,
+    finalUnitTimeScaleInput,
     normalDrawIntervalInput,
     doubleSpeedDrawIntervalInput,
     finalDrawIntervalInput,
@@ -175,6 +180,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
     normalPhaseDurationInput.value = String(next.normalPhaseSeconds);
     doubleSpeedPhaseDurationInput.value = String(next.doubleSpeedPhaseSeconds);
     finalPhaseDurationInput.value = String(next.finalPhaseSeconds);
+    settlementPhaseDurationInput.value = String(next.settlementPhaseSeconds);
+    finalUnitTimeScaleInput.value = String(next.finalUnitTimeScale);
     normalDrawIntervalInput.value = String(next.normalDrawIntervalSeconds);
     doubleSpeedDrawIntervalInput.value = String(next.doubleSpeedDrawIntervalSeconds);
     finalDrawIntervalInput.value = String(next.finalDrawIntervalSeconds);
@@ -312,6 +319,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
       normalPhaseSeconds: Number(normalPhaseDurationInput.value),
       doubleSpeedPhaseSeconds: Number(doubleSpeedPhaseDurationInput.value),
       finalPhaseSeconds: Number(finalPhaseDurationInput.value),
+      settlementPhaseSeconds: Number(settlementPhaseDurationInput.value),
+      finalUnitTimeScale: Number(finalUnitTimeScaleInput.value),
       normalDrawIntervalSeconds: Number(normalDrawIntervalInput.value),
       doubleSpeedDrawIntervalSeconds: Number(doubleSpeedDrawIntervalInput.value),
       finalDrawIntervalSeconds: Number(finalDrawIntervalInput.value),
@@ -325,6 +334,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
       normalPhaseSeconds: clampPhaseSeconds(raw.normalPhaseSeconds),
       doubleSpeedPhaseSeconds: clampPhaseSeconds(raw.doubleSpeedPhaseSeconds),
       finalPhaseSeconds: clampPhaseSeconds(raw.finalPhaseSeconds),
+      settlementPhaseSeconds: clampPhaseSeconds(raw.settlementPhaseSeconds),
+      finalUnitTimeScale: clampFinalUnitTimeScale(raw.finalUnitTimeScale),
       normalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.normalDrawIntervalSeconds),
       doubleSpeedDrawIntervalSeconds: clampDrawIntervalSeconds(raw.doubleSpeedDrawIntervalSeconds),
       finalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.finalDrawIntervalSeconds),

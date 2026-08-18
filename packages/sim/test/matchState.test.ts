@@ -12,6 +12,7 @@ import {
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
   MATCH_END_TICKS,
+  SETTLEMENT_START_TICKS,
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
   TICK_RATE,
@@ -46,20 +47,28 @@ describe('MatchState.clear', () => {
 });
 
 describe('MatchState 对局规则', () => {
+  it('默认时间线为 2+3+3 分钟发牌再加 1 分钟结算', () => {
+    expect(DOUBLE_SPEED_START_TICKS).toBe(TICK_RATE * 120);
+    expect(FINAL_START_TICKS).toBe(TICK_RATE * 300);
+    expect(SETTLEMENT_START_TICKS).toBe(TICK_RATE * 480);
+    expect(MATCH_END_TICKS).toBe(TICK_RATE * 540);
+  });
+
   it('按阶段重置下一张牌倒计时，且不在倍速结束时结算', () => {
     const match = createMatch();
+    shortenPhases(match);
     expect(match.getDrawIntervalTicks()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
     expect(match.decks[Faction.Blue].hand).toHaveLength(INITIAL_HAND_SIZE);
     expect(match.getMaxHandSize()).toBe(HAND_LIMIT_NORMAL);
 
-    stepTo(match, DOUBLE_SPEED_START_TICKS);
+    stepTo(match, 30);
     expect(match.phase).toBe('double_speed');
     expect(match.result).toBeNull();
     expect(match.getTicksUntilDraw()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
     expect(match.getDrawIntervalTicks()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
     expect(match.getMaxHandSize()).toBe(HAND_LIMIT_DOUBLE_SPEED);
 
-    stepTo(match, FINAL_START_TICKS);
+    stepTo(match, 60);
     expect(match.phase).toBe('final');
     expect(match.result).toBeNull();
     expect(match.getTicksUntilDraw()).toBe(FINAL_DRAW_INTERVAL_TICKS);
@@ -69,6 +78,7 @@ describe('MatchState 对局规则', () => {
 
   it('可覆盖三阶段发牌间隔并夹住当前倒计时', () => {
     const match = createMatch();
+    shortenPhases(match);
     expect(match.getTicksUntilDraw()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
 
     match.setDrawIntervals({
@@ -79,11 +89,11 @@ describe('MatchState 对局规则', () => {
     expect(match.getDrawIntervalTicks()).toBe(20);
     expect(match.getTicksUntilDraw()).toBe(20);
 
-    stepTo(match, DOUBLE_SPEED_START_TICKS);
+    stepTo(match, 30);
     expect(match.getDrawIntervalTicks()).toBe(10);
     expect(match.getTicksUntilDraw()).toBe(10);
 
-    stepTo(match, FINAL_START_TICKS);
+    stepTo(match, 60);
     expect(match.getDrawIntervalTicks()).toBe(8);
     expect(match.getTicksUntilDraw()).toBe(8);
   });
@@ -145,22 +155,28 @@ describe('MatchState 对局规则', () => {
     expect(match.result).toMatchObject({ winner: null, reason: 'simultaneous_destroyed' });
   });
 
-  it('倍速结束时血量不同也不结算，决胜到点才比血', () => {
+  it('倍速结束时血量不同也不结算，结算到点才比血', () => {
     const match = createMatch();
+    shortenPhases(match);
     castle(match, Faction.Red).hp -= 1;
 
-    stepTo(match, FINAL_START_TICKS);
+    stepTo(match, 60);
     expect(match.phase).toBe('final');
     expect(match.result).toBeNull();
 
-    stepTo(match, MATCH_END_TICKS);
+    stepTo(match, 90);
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+
+    stepTo(match, 120);
     expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
   });
 
-  it('决胜结束时血量相同则平局', () => {
+  it('结算结束时血量相同则平局', () => {
     const match = createMatch();
+    shortenPhases(match);
 
-    stepTo(match, MATCH_END_TICKS);
+    stepTo(match, 120);
 
     expect(match.result).toMatchObject({ winner: null, reason: 'time_limit' });
   });
@@ -171,6 +187,7 @@ describe('MatchState 对局规则', () => {
       normalTicks: TICK_RATE * 2,
       doubleSpeedTicks: TICK_RATE * 2,
       finalTicks: TICK_RATE * 2,
+      settlementTicks: TICK_RATE * 2,
     });
     match.setHandLimits({ normal: 5, doubleSpeed: 6, final: 7 });
     match.setInitialHandSize(2);
@@ -187,7 +204,45 @@ describe('MatchState 对局规则', () => {
     expect(match.getMaxHandSize()).toBe(7);
 
     stepTo(match, TICK_RATE * 6);
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+
+    stepTo(match, TICK_RATE * 8);
     expect(match.result?.reason).toBe('time_limit');
+  });
+
+  it('缩短阶段时长后立刻越过已到期边界', () => {
+    const match = createMatch();
+    stepTo(match, 50);
+    expect(match.phase).toBe('normal');
+
+    match.setPhaseDurations({
+      normalTicks: 10,
+      doubleSpeedTicks: 10,
+      finalTicks: 10,
+      settlementTicks: 10,
+    });
+
+    expect(match.phase).toBe('ended');
+    expect(match.result?.reason).toBe('time_limit');
+  });
+
+  it('结算期停止补牌，读条视为 0', () => {
+    const match = createMatch();
+    match.setPhaseDurations({
+      normalTicks: 1,
+      doubleSpeedTicks: 1,
+      finalTicks: 1,
+      settlementTicks: TICK_RATE * 6,
+    });
+    stepTo(match, 3);
+    expect(match.phase).toBe('settlement');
+    const before = match.decks[Faction.Blue].hand.length;
+    stepTo(match, 3 + NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.phase).toBe('settlement');
+    expect(match.decks[Faction.Blue].hand.length).toBe(before);
+    expect(match.getTicksUntilDraw()).toBe(0);
+    expect(match.hasPendingDraw(Faction.Blue)).toBe(false);
   });
 });
 
@@ -283,8 +338,18 @@ function createMatch(): MatchState {
   return match;
 }
 
+/** 把四段时长压到各 30 tick，避免测试空转默认 9 分钟。 */
+function shortenPhases(match: MatchState): void {
+  match.setPhaseDurations({
+    normalTicks: 30,
+    doubleSpeedTicks: 30,
+    finalTicks: 30,
+    settlementTicks: 30,
+  });
+}
+
 function stepTo(match: MatchState, targetTick: number): void {
-  while (match.world.tick < targetTick) match.step();
+  while (match.world.tick < targetTick && !match.result) match.step();
 }
 
 function castle(match: MatchState, faction: Faction) {
@@ -384,12 +449,12 @@ describe('MatchState 2v2', () => {
     const right = new MatchState(7, '2v2');
     left.seedStartingCastles();
     right.seedStartingCastles();
-    left.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2 });
-    right.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2 });
+    left.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2, settlementTicks: 2 });
+    right.setPhaseDurations({ normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2, settlementTicks: 2 });
     castleOfSlot(left, 2).hp -= 10;
     castleOfSlot(right, 2).hp -= 10;
-    stepTo(left, 6);
-    stepTo(right, 6);
+    stepTo(left, 8);
+    stepTo(right, 8);
     expect(left.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
     expect(left.hash()).toBe(right.hash());
   });

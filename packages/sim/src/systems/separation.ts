@@ -66,7 +66,10 @@ export function resolveSeparation(world: World): void {
 
       // 多邻居累加后可能超大，按本 tick 移动能力裁剪，防止被弹飞
       const pushLen = lengthOf(unit.push.x, unit.push.y);
-      const maxPush = mul(div(unit.stats.moveSpeed, TICK_RATE_FX), PUSH_MAX_MOVE_RATIO);
+      const maxPush = mul(
+        mul(div(unit.stats.moveSpeed, TICK_RATE_FX), world.unitTimeScale),
+        PUSH_MAX_MOVE_RATIO,
+      );
       if (pushLen > maxPush && pushLen > 0) {
         const scale = div(maxPush, pushLen);
         unit.push.x = mul(unit.push.x, scale);

@@ -26,7 +26,7 @@ export function updateMovement(world: World): void {
       continue;
     }
 
-    let remaining: Fx = div(unit.stats.moveSpeed, TICK_RATE_FX);
+    let remaining: Fx = mul(div(unit.stats.moveSpeed, TICK_RATE_FX), world.unitTimeScale);
     // 每 tick 只按首个有效路段转向一次，避免连跨多路点时 TURN_RATE 被叠乘
     let facedPath = false;
 

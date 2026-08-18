@@ -1,4 +1,4 @@
-import { type Fx, ONE, fromFloat, mul } from '../math/fixed.js';
+import { type Fx, fromFloat, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
 import { isBuildingConfig } from '../config/units.js';
 import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
@@ -25,7 +25,7 @@ export function updateDetonate(world: World): void {
     }
 
     if (unit.detonateWindupLeft > 0) {
-      unit.detonateWindupLeft -= ONE;
+      unit.detonateWindupLeft -= world.unitTimeScale;
       if (unit.detonateWindupLeft <= 0) {
         unit.detonateWindupLeft = 0;
         resolveDetonate(world, unit);

@@ -192,7 +192,8 @@ export class SoloBotController {
     const playerThreat = this.difficulty === 'hard'
       ? predictedThreat(match.decks[Faction.Blue].hand) * 2.5
       : 0;
-    const phaseUrgency = match.phase === 'normal' ? 0 : 7;
+    const phaseUrgency =
+      match.phase === 'normal' ? 0 : match.phase === 'final' || match.phase === 'settlement' ? 12 : 7;
     const noise = this.rng.nextInt(this.difficulty === 'easy' ? 12 : 4);
     return (
       categoryScore * 10

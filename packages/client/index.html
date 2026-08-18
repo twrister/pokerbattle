@@ -2226,6 +2226,11 @@
         animation: battle-announce-pop 2.8s ease-out both;
       }
 
+      /* 倒计时数字单独放大到 2 倍，停留后再淡出，避免和阶段文案共用轻微弹跳 */
+      #battle-announce.is-visible.is-countdown {
+        animation: battle-announce-countdown-pop 1.4s ease-out both;
+      }
+
       #battle-announce-text {
         color: #fff;
         font-size: calc(48 * var(--hu));
@@ -2257,6 +2262,25 @@
         100% {
           opacity: 0;
           transform: translate(-50%, -50%) scale(1.04);
+        }
+      }
+
+      @keyframes battle-announce-countdown-pop {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(1);
+        }
+        10% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(2);
+        }
+        78% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(2);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(2);
         }
       }
 
@@ -5798,7 +5822,7 @@
                   min="10"
                   max="600"
                   step="10"
-                  value="120"
+                  value="180"
                 />
               </label>
               <label for="solo-phase-duration-final">
@@ -5809,7 +5833,29 @@
                   min="10"
                   max="600"
                   step="10"
-                  value="120"
+                  value="180"
+                />
+              </label>
+              <label for="solo-phase-duration-settlement">
+                结算时长
+                <input
+                  id="solo-phase-duration-settlement"
+                  type="number"
+                  min="10"
+                  max="600"
+                  step="10"
+                  value="60"
+                />
+              </label>
+              <label for="solo-final-unit-time-scale">
+                决胜加速
+                <input
+                  id="solo-final-unit-time-scale"
+                  type="number"
+                  min="1"
+                  max="3"
+                  step="0.1"
+                  value="1.5"
                 />
               </label>
             </div>

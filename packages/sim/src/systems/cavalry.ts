@@ -25,7 +25,7 @@ export function updateCharge(world: World): void {
     if (unit.dead) continue;
     if (!unit.config.charge) continue;
 
-    if (unit.chargeCooldown > 0) unit.chargeCooldown -= ONE;
+    if (unit.chargeCooldown > 0) unit.chargeCooldown -= world.unitTimeScale;
 
     if (unit.state !== UnitState.Charge) continue;
 
@@ -38,13 +38,13 @@ export function updateCharge(world: World): void {
 function advanceCharge(world: World, unit: Unit): void {
   // 原地前摇：站定蓄力，方向已在 AI 切入时锁定
   if (unit.chargeWindupLeft > 0) {
-    unit.chargeWindupLeft -= ONE;
+    unit.chargeWindupLeft -= world.unitTimeScale;
     return;
   }
 
   const charge = unit.config.charge!;
   const stepSpeed = mul(unit.stats.moveSpeed, charge.speedMul);
-  let step: Fx = div(stepSpeed, TICK_RATE_FX);
+  let step: Fx = mul(div(stepSpeed, TICK_RATE_FX), world.unitTimeScale);
   if (step > unit.chargeRemaining) step = unit.chargeRemaining;
 
   const prevX = unit.pos.x;
