@@ -59,7 +59,7 @@ describe('战斗行为', () => {
     run(world, 10);
     expect(attacker.targetId).toBe(far.id);
 
-    // 远处刷第二个敌人（圆心距 3，未进攻击射程），追击中不够着则仍粘远敌
+    // 远处刷第二个敌人（圆心距 3 > 民兵搜索 2），圈外不够着则仍粘远敌
     const other = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(13));
     run(world, 5);
     expect(attacker.targetId).toBe(far.id);
@@ -68,6 +68,28 @@ describe('战斗行为', () => {
     far.dead = true;
     run(world, 5);
     expect(attacker.targetId).toBe(other.id);
+  });
+
+  it('追击城堡时搜索圈内近敌应改火（不必进攻击射程）', () => {
+    const world = new World(1);
+    const cavalry = world.spawnUnit(Faction.Blue, 'melee_cavalry', fromFloat(9), fromFloat(6));
+    const castle = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    cavalry.retargetIn = 0;
+
+    run(world, 5);
+    expect(cavalry.targetId).toBe(castle.id);
+    expect(cavalry.state).toBe(UnitState.Seek);
+
+    // 圆心距 3：骑士搜索 4、近战出手约 1.8，圈内但未贴脸也应打断推家
+    const near = world.spawnUnit(
+      Faction.Red,
+      'melee_grunt',
+      cavalry.pos.x + fromFloat(3),
+      cavalry.pos.y,
+    );
+    near.stats.damage = 0;
+    run(world, 5);
+    expect(cavalry.targetId).toBe(near.id);
   });
 
   it('近战兵会寻路接近远处的敌人并最终进入攻击状态', () => {

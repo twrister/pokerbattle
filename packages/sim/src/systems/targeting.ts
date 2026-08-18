@@ -16,7 +16,7 @@ const buildingsRed: Unit[] = [];
 /**
  * 选敌策略：
  * - 交战中（已够得着）粘性不换火。
- * - 地面：够不着时若有射程内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
+ * - 地面：够不着时若有搜索范围内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；箭塔/单位仍要在圈内。
@@ -53,7 +53,7 @@ export function updateTargeting(world: World): void {
           continue;
         }
         // fall through
-      } else if (!hasInReachEnemyThreat(unit, current)) {
+      } else if (!hasInSightEnemyThreat(unit, current)) {
         continue;
       }
     }
@@ -135,9 +135,10 @@ function hasInReachAttackable(unit: Unit, current: Unit): boolean {
 }
 
 /**
- * 地面追击中是否存在「已进入攻击射程」的其它敌军（含推家威胁过滤）。
+ * 地面追击中是否存在「已进入搜索范围」的其它敌军（含推家威胁过滤）。
+ * 够不着当前目标时，圈内近敌即可打断粘性，不必等贴进攻击射程。
  */
-function hasInReachEnemyThreat(unit: Unit, current: Unit): boolean {
+function hasInSightEnemyThreat(unit: Unit, current: Unit): boolean {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
   const buildingInSight = hasEnemyBuildingInSight(unit, sightSq);
 
@@ -145,8 +146,7 @@ function hasInReachEnemyThreat(unit: Unit, current: Unit): boolean {
     if (other.id === current.id) continue;
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
-    if (d > sightSq) continue;
-    if (isWithinAttackReach(unit, other)) return true;
+    if (d <= sightSq) return true;
   }
   return false;
 }
