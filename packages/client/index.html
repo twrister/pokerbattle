@@ -593,24 +593,35 @@
         line-height: 1;
       }
 
+      /* 公告比普通弹层更高更宽，列表占满剩余高度，滚动条隐藏改用拖拽翻看 */
       #patch-notes-dialog .mode-dialog-panel {
-        width: min(100%, calc(360 * var(--hu)));
+        width: min(100%, calc(540 * var(--hu)));
+        height: min(calc(900 * var(--hu)), calc(var(--stage-h) - calc(80 * var(--hu))));
+        grid-template-rows: auto minmax(0, 1fr) auto;
       }
 
       html.is-dev #patch-notes-dialog .mode-dialog-panel {
-        width: min(100%, calc(400 * var(--hu)));
+        width: min(100%, calc(580 * var(--hu)));
       }
 
       .patch-notes-list {
         display: grid;
+        align-content: start;
         gap: calc(18 * var(--hu));
-        max-height: calc(420 * var(--hu));
+        min-height: 0;
         overflow-y: auto;
-        padding-right: calc(4 * var(--hu));
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        touch-action: none;
+        cursor: grab;
       }
 
-      html.is-dev .patch-notes-list {
-        max-height: calc(480 * var(--hu));
+      .patch-notes-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      .patch-notes-list.is-dragging {
+        cursor: grabbing;
       }
 
       .patch-note {

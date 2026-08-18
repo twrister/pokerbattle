@@ -28,6 +28,7 @@ export function createPatchNotesPanel(): PatchNotesPanelHandle {
 
   let drafts = clonePatchNotes(PATCH_NOTES);
   let saveSeq = 0;
+  const stopDragScroll = enableDragScroll(list);
 
   const close = (): void => {
     root.classList.add('is-hidden');
@@ -143,6 +144,7 @@ export function createPatchNotesPanel(): PatchNotesPanelHandle {
     open,
     close,
     dispose() {
+      stopDragScroll();
       for (const button of closeButtons) {
         button.removeEventListener('click', close);
       }
@@ -192,6 +194,59 @@ function createBlankNote(): PatchNote {
     version: APP_VERSION.replace(/^v/i, ''),
     date: `${now.getFullYear()}-${month}-${day}`,
     items: [''],
+  };
+}
+
+/** 隐藏滚动条后用指针拖拽翻看正文；输入框留给编辑，避免和选区抢手势。 */
+function enableDragScroll(element: HTMLElement): () => void {
+  let pointerId: number | null = null;
+  let lastY = 0;
+
+  const onPointerDown = (event: PointerEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('input, textarea, button, a')) return;
+    if (element.scrollHeight <= element.clientHeight) return;
+
+    pointerId = event.pointerId;
+    lastY = event.clientY;
+    element.classList.add('is-dragging');
+    try {
+      element.setPointerCapture(event.pointerId);
+    } catch {
+      // jsdom 没有真实指针捕获，后续仍靠 pointermove 滚动
+    }
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    if (pointerId === null || event.pointerId !== pointerId) return;
+    element.scrollTop -= event.clientY - lastY;
+    lastY = event.clientY;
+  };
+
+  const onPointerUp = (event: PointerEvent): void => {
+    if (pointerId === null || event.pointerId !== pointerId) return;
+    pointerId = null;
+    element.classList.remove('is-dragging');
+    try {
+      if (element.hasPointerCapture(event.pointerId)) {
+        element.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // 同上：测试环境可能没有指针捕获状态
+    }
+  };
+
+  element.addEventListener('pointerdown', onPointerDown);
+  element.addEventListener('pointermove', onPointerMove);
+  element.addEventListener('pointerup', onPointerUp);
+  element.addEventListener('pointercancel', onPointerUp);
+
+  return () => {
+    element.removeEventListener('pointerdown', onPointerDown);
+    element.removeEventListener('pointermove', onPointerMove);
+    element.removeEventListener('pointerup', onPointerUp);
+    element.removeEventListener('pointercancel', onPointerUp);
   };
 }
 

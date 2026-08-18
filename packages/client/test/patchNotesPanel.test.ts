@@ -102,6 +102,38 @@ describe('更新公告面板', () => {
     expect(body[0].items).toEqual(['测试公告一行', '另一行']);
   });
 
+  it('拖拽公告正文会滚动列表，开发服输入框不抢手势', () => {
+    const panel = createPatchNotesPanel();
+    const list = document.querySelector<HTMLElement>('#patch-notes-list')!;
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    list.scrollTop = 0;
+
+    const text = document.querySelector('.patch-note-items')!;
+    text.dispatchEvent(pointerEvent('pointerdown', 1, 40, 120));
+    list.dispatchEvent(pointerEvent('pointermove', 1, 40, 80));
+    expect(list.scrollTop).toBe(40);
+    expect(list.classList.contains('is-dragging')).toBe(true);
+
+    list.dispatchEvent(pointerEvent('pointerup', 1, 40, 80));
+    expect(list.classList.contains('is-dragging')).toBe(false);
+    panel.dispose();
+  });
+
+  it('开发服拖拽条目输入框不会滚动列表', () => {
+    envState.isDev = true;
+    createPatchNotesPanel();
+    const list = document.querySelector<HTMLElement>('#patch-notes-list')!;
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    list.scrollTop = 0;
+
+    const items = document.querySelector<HTMLTextAreaElement>('.patch-note-items-input')!;
+    items.dispatchEvent(pointerEvent('pointerdown', 2, 40, 120));
+    list.dispatchEvent(pointerEvent('pointermove', 2, 40, 80));
+    expect(list.scrollTop).toBe(0);
+  });
+
   it('开发服空条目保存失败且不写盘', () => {
     envState.isDev = true;
     const fetchMock = vi.fn();
@@ -118,3 +150,10 @@ describe('更新公告面板', () => {
     expect(PATCH_NOTES[0]!.items[0]).not.toBe('');
   });
 });
+
+/** 给 jsdom 的 MouseEvent 补 pointerId，覆盖公告拖拽滚动的最小 PointerEvent 契约。 */
+function pointerEvent(type: string, pointerId: number, clientX: number, clientY: number): Event {
+  const event = new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  return event;
+}
