@@ -57,6 +57,20 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('卡包超手牌上限时写入重叠布局变量', () => {
+    const deck = new PokerDeck(createPokerCards(), new Rng(1));
+    deck.drawMany(11);
+    for (let index = 0; index < 5; index += 1) {
+      expect(deck.drawIgnoringLimit()).toBeDefined();
+    }
+    const panel = createHandPanel({ deck });
+    const cards = document.querySelector<HTMLElement>('#hand-cards')!;
+    expect(deck.hand).toHaveLength(16);
+    expect(cards.style.getPropertyValue('--hand-count')).toBe('16');
+    expect(cards.style.getPropertyValue('--fan-center')).toBe('7.5');
+    panel.dispose();
+  });
+
   it('新牌从牌堆顶牌出发，满手后继续涨进度，发牌失败才晃动且无遮罩', () => {
     const panel = createHandPanel();
     const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;

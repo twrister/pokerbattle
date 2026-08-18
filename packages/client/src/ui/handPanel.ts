@@ -633,7 +633,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       cardElement.classList.add('is-reflowing');
       cardElement.style.transition = 'none';
       // 先叠加上旧→新的位移差，视觉上停在原位；清掉后由 CSS 过渡到目标 transform。
-      cardElement.style.transform = `translate(${dx}px, ${dy}px) translateY(var(--card-lift)) rotate(calc((var(--card-index) - 4.5) * 0.35deg))`;
+      cardElement.style.transform = `translate(${dx}px, ${dy}px) translateY(var(--card-lift)) rotate(calc((var(--card-index) - var(--fan-center)) * 0.35deg))`;
       void cardElement.offsetWidth;
       cardElement.style.transition = `transform ${LAYOUT_MOVE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
       cardElement.style.transform = '';
@@ -671,9 +671,17 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     }
   }
 
+  /** 把张数和扇形中心写到容器，供 CSS 按可用宽加大重叠。 */
+  function syncHandLayoutVars(): void {
+    const count = deck.hand.length;
+    cardsElement.style.setProperty('--hand-count', String(count));
+    cardsElement.style.setProperty('--fan-center', String(count > 0 ? (count - 1) / 2 : 0));
+  }
+
   /** 重建手牌 DOM，并只给本次新牌附加翻转发牌动画。 */
   function render(): void {
     const previousRects = captureCardRects();
+    syncHandLayoutVars();
     const fragment = document.createDocumentFragment();
     deck.hand.forEach((card, index) => {
       const isNew = !knownCardIds.has(card.id);
