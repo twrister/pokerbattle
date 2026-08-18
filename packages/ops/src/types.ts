@@ -121,6 +121,10 @@ export interface OpsDeployInfo {
   lastError: string | null;
   lastFinishedAt: number | null;
   lastOk: boolean | null;
+  /** 当前线上/工作区版本，供发布区展示。 */
+  version: string | null;
+  /** 勾选升级后将写成的下一号；无法解析当前号时为 null。 */
+  nextVersion: string | null;
 }
 
 /** 运维站聚合给前端的总状态。 */

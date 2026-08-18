@@ -146,6 +146,46 @@ h2 {
   color: #fca5a5;
 }
 
+.deploy-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.deploy-version {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.deploy-version strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.deploy-bump {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.deploy-bump input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.deploy-bump:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .button-row {
   display: flex;
   gap: 10px;

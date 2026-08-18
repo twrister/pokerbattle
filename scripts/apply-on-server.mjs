@@ -119,8 +119,10 @@ function writeReleaseMeta(filePath, previous, release) {
 ensurePnpm();
 const pnpm = resolveTool('pnpm') || 'pnpm';
 const previousMeta = readLocalGameMeta(GAME_META);
-const { version, contentHash } = resolveAndSyncReleaseVersion(root, previousMeta);
-console.log(`[apply-on-server] version=${version} hash=${contentHash.slice(0, 12)}`);
+// 线上由运维站勾选传入；未传则不升版本，避免热修误加号
+const bumpVersion = process.env.DEPLOY_BUMP_VERSION === '1';
+const { version, contentHash } = resolveAndSyncReleaseVersion(root, previousMeta, { bumpVersion });
+console.log(`[apply-on-server] version=${version} bump=${bumpVersion} hash=${contentHash.slice(0, 12)}`);
 run(pnpm, ['install', '--frozen-lockfile']);
 run(pnpm, ['run', 'build:prod'], { VITE_PUBLIC_BASE: PUBLIC_BASE, VITE_APP_VERSION: version });
 

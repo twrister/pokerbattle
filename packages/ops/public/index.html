@@ -56,6 +56,16 @@
           <h2>发布到服务器</h2>
           <span id="deploy-hint" class="hint">本机执行 pnpm deploy；线上从工作区构建并重启</span>
         </div>
+        <div class="deploy-options">
+          <div class="deploy-version">
+            当前版本：<strong id="deploy-version">—</strong>
+            <span id="deploy-next-version" class="hint" hidden></span>
+          </div>
+          <label class="deploy-bump" for="chk-bump-version">
+            <input id="chk-bump-version" type="checkbox" />
+            升级版本号
+          </label>
+        </div>
         <div class="button-row">
           <button id="btn-deploy" type="button">pnpm deploy</button>
         </div>

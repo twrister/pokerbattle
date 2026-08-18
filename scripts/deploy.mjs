@@ -60,8 +60,10 @@ async function main() {
   try {
     await bootstrapServer(conn);
     const previous = await readRemoteReleaseMeta(conn);
-    const { version, contentHash } = resolveAndSyncReleaseVersion(root, previous);
-    console.log(`[deploy] version=${version} hash=${contentHash.slice(0, 12)}`);
+    // 本机 pnpm deploy 默认仍自动 +1；运维站会显式传 DEPLOY_BUMP_VERSION=0/1
+    const bumpVersion = process.env.DEPLOY_BUMP_VERSION !== '0';
+    const { version, contentHash } = resolveAndSyncReleaseVersion(root, previous, { bumpVersion });
+    console.log(`[deploy] version=${version} bump=${bumpVersion} hash=${contentHash.slice(0, 12)}`);
 
     process.env.VITE_PUBLIC_BASE = ROUTE;
     process.env.VITE_APP_VERSION = version;

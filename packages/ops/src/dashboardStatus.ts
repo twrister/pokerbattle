@@ -86,6 +86,8 @@ export async function buildDashboardStatus(
       lastError: null,
       lastFinishedAt: null,
       lastOk: null,
+      version: null,
+      nextVersion: null,
     },
   };
 }

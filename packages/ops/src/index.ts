@@ -8,6 +8,7 @@ import { buildDashboardStatus, type ServiceDescriptor } from './dashboardStatus.
 import { DeployRunner, workspaceReady } from './deployRunner.js';
 import { clearGamePlayers, fetchGameFeedback } from './gameStatus.js';
 import { readGameMeta } from './gameMeta.js';
+import { parseDeployRequest, readWorkspaceVersion, resolveDashboardVersion } from './releaseInfo.js';
 import { listLanIPv4, writeLanIpsJson } from './lanIps.js';
 import { executeOpsRestart, planOpsRestart } from './opsRestart.js';
 import { ProcessManager } from './processManager.js';
@@ -121,12 +122,14 @@ async function handleApi(
   res: http.ServerResponse,
   pathname: string,
 ): Promise<void> {
+  let postBody = '';
   if (req.method === 'POST') {
     const limited = await readBodyLimited(req, 4096);
     if (!limited.ok) {
       writeJson(res, 413, { ok: false, message: limited.error });
       return;
     }
+    postBody = limited.body;
   }
 
   if (req.method === 'GET' && pathname === '/api/feedback') {
@@ -149,7 +152,10 @@ async function handleApi(
       production: IS_PROD,
       services: runtime.serviceDescriptors,
       lanIps: IS_PROD ? [] : listLanIPv4(),
-      deploy: deployRunner.getInfo(),
+      deploy: {
+        ...deployRunner.getInfo(),
+        ...resolveCurrentReleaseVersion(),
+      },
     });
     writeJson(res, 200, status);
     return;
@@ -170,7 +176,7 @@ async function handleApi(
 
   // 立即 202，发布在后台跑；线上成功后会重启运维站
   if (req.method === 'POST' && pathname === '/api/deploy') {
-    const result = deployRunner.start();
+    const result = deployRunner.start(parseDeployRequest(postBody));
     writeJson(res, result.started ? 202 : 409, { ok: result.ok, message: result.message });
     return;
   }
@@ -386,16 +392,28 @@ function createProductionRuntime(): OpsRuntime {
   };
 }
 
+/** 线上优先 deploy.meta，本机回落根 package.json，供发布区展示当前号。 */
+function resolveCurrentReleaseVersion(): { version: string | null; nextVersion: string | null } {
+  const metaPath = process.env.GAME_META || '/opt/projects/poker-battle/deploy.meta.json';
+  const metaVersion = IS_PROD ? (readGameMeta(metaPath)?.version ?? null) : null;
+  return resolveDashboardVersion(metaVersion, readWorkspaceVersion(resolveWorkspaceRoot()));
+}
+
+/** 本机为仓库根；线上为已同步的 workspace。 */
+function resolveWorkspaceRoot(): string {
+  if (IS_PROD) return process.env.OPS_WORKSPACE || '/opt/projects/poker-battle/workspace';
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+}
+
 /** 本机跑 pnpm deploy；线上在已同步的工作区构建并覆盖运行包。 */
 function createDeployRunner(): DeployRunner {
   // 生产包是 CJS，没有 import.meta.url；本地路径只在 tsx 开发时解析
   if (!IS_PROD) {
-    const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
     return new DeployRunner({
       commandLabel: 'pnpm deploy',
       command: 'pnpm',
       args: ['deploy'],
-      cwd: workspaceRoot,
+      cwd: resolveWorkspaceRoot(),
     });
   }
 

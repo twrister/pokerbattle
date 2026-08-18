@@ -5,6 +5,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeployRunner, workspaceReady } from '../src/deployRunner.js';
 
+/** 取出 spawn 第三参的 env，避免 mock.calls 元组被推断成空。 */
+function spawnEnv(spawnFn: ReturnType<typeof vi.fn>): NodeJS.ProcessEnv {
+  const options = spawnFn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv } | undefined;
+  return options?.env ?? {};
+}
+
 class FakeChild extends EventEmitter {
   pid = 7788;
   stdout = new EventEmitter();
@@ -119,6 +125,38 @@ describe('DeployRunner', () => {
     const done = runner.run();
     child.emit('close', 0);
     await done;
+  });
+
+  it('把 bumpVersion 写入 DEPLOY_BUMP_VERSION', async () => {
+    const child = new FakeChild();
+    const spawnFn = vi.fn(() => child);
+    const runner = new DeployRunner({
+      commandLabel: 'pnpm deploy',
+      command: 'pnpm',
+      args: ['deploy'],
+      cwd: '.',
+      spawnFn: spawnFn as never,
+    });
+    const done = runner.run({ bumpVersion: true });
+    child.emit('close', 0);
+    await done;
+    expect(spawnEnv(spawnFn).DEPLOY_BUMP_VERSION).toBe('1');
+  });
+
+  it('未勾选升级时 DEPLOY_BUMP_VERSION=0', async () => {
+    const child = new FakeChild();
+    const spawnFn = vi.fn(() => child);
+    const runner = new DeployRunner({
+      commandLabel: 'pnpm deploy',
+      command: 'pnpm',
+      args: ['deploy'],
+      cwd: '.',
+      spawnFn: spawnFn as never,
+    });
+    const done = runner.run();
+    child.emit('close', 0);
+    await done;
+    expect(spawnEnv(spawnFn).DEPLOY_BUMP_VERSION).toBe('0');
   });
 
   it('新进程读到他人 pid 的 running 标记时视为中断', async () => {

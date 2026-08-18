@@ -29,6 +29,9 @@ const els = {
   playerClearCol: document.getElementById('player-clear-col'),
   deployState: document.getElementById('deploy-state'),
   deployHint: document.getElementById('deploy-hint'),
+  deployVersion: document.getElementById('deploy-version'),
+  deployNextVersion: document.getElementById('deploy-next-version'),
+  chkBumpVersion: document.getElementById('chk-bump-version'),
   subtitle: document.getElementById('ops-subtitle'),
   entryHint: document.getElementById('entry-hint'),
   trustBanner: document.querySelector('.trust-banner'),
@@ -51,6 +54,8 @@ let latestPlayers = [];
 let showClearActions = false;
 /** 清空结果需短暂保留，避免 2s 轮询把失败原因冲掉。 */
 let holdMessageUntil = 0;
+/** 最近一次状态里的下一版本号，勾选变化时用来刷新预览。 */
+let latestDeployNextVersion = null;
 
 /** 相对当前页面目录解析 API/静态资源，兼容 /poker-battle-ops/ 子路径。 */
 function resolveAppUrl(rel) {
@@ -425,11 +430,19 @@ function renderDeploy(deploy) {
   const info = deploy ?? {};
   const running = Boolean(info.running);
   if (running) deployBusy = true;
-  if (deployBusy && !running && info.lastOk != null) deployBusy = false;
-  els.btnDeploy.disabled = running || deployBusy || info.available === false;
+  if (deployBusy && !running && info.lastOk != null) {
+    deployBusy = false;
+    // 发布结束后回到默认不升级，避免下次误勾
+    if (els.chkBumpVersion) els.chkBumpVersion.checked = false;
+  }
+  const blocked = running || deployBusy || info.available === false;
+  els.btnDeploy.disabled = blocked;
+  if (els.chkBumpVersion) els.chkBumpVersion.disabled = blocked;
+  renderDeployVersion(info);
   // 旧运维进程没有 /api/status.deploy，发布会 404；提示必须可见，不能被 hideDeployMessage 清掉
   if (deploy == null) {
     els.btnDeploy.disabled = false;
+    if (els.chkBumpVersion) els.chkBumpVersion.disabled = false;
     showDeployMessage('当前运维进程过旧，请重启 pnpm ops 后再发布', false);
     return;
   }
@@ -451,6 +464,30 @@ function renderDeploy(deploy) {
     return;
   }
   if (!deployBusy) hideDeployMessage();
+}
+
+/** 展示当前版本；勾选升级时附带下一号预览。不改 checkbox，以免轮询冲掉用户选择。 */
+function renderDeployVersion(info) {
+  latestDeployNextVersion = info.nextVersion ?? null;
+  if (els.deployVersion) {
+    els.deployVersion.textContent = formatDeployVersion(info.version);
+  }
+  updateDeployNextVersion(latestDeployNextVersion);
+}
+
+function updateDeployNextVersion(nextVersion) {
+  if (!els.deployNextVersion) return;
+  const next = formatDeployVersion(nextVersion);
+  const showNext = Boolean(els.chkBumpVersion?.checked) && next !== '—';
+  els.deployNextVersion.hidden = !showNext;
+  els.deployNextVersion.textContent = showNext ? `（发布后将升为 ${next}）` : '';
+}
+
+function formatDeployVersion(version) {
+  const trimmed = String(version ?? '')
+    .trim()
+    .replace(/^v/i, '');
+  return trimmed ? `v${trimmed}` : '—';
 }
 
 function showDeployMessage(text, info) {
@@ -521,16 +558,23 @@ async function waitForOpsResume() {
 async function invokeDeploy() {
   deployBusy = true;
   if (els.btnDeploy) els.btnDeploy.disabled = true;
-  showDeployMessage('已开始 pnpm deploy…', true);
+  if (els.chkBumpVersion) els.chkBumpVersion.disabled = true;
+  const bumpVersion = Boolean(els.chkBumpVersion?.checked);
+  showDeployMessage(bumpVersion ? '已开始 pnpm deploy（升级版本）…' : '已开始 pnpm deploy…', true);
   try {
     const response = await fetch(resolveAppUrl('api/deploy'), {
       method: 'POST',
       credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bumpVersion }),
     });
     const result = await response.json().catch(() => ({}));
     const text = result.message || (response.ok ? '已开始 pnpm deploy' : `启动失败（HTTP ${response.status}）`);
     showDeployMessage(text, response.ok);
-    if (!response.ok) deployBusy = false;
+    if (!response.ok) {
+      deployBusy = false;
+      if (els.chkBumpVersion) els.chkBumpVersion.disabled = false;
+    }
   } catch {
     showDeployMessage('发布进行中，运维站可能短暂重启…', true);
   }
@@ -691,6 +735,9 @@ els.btnStart.addEventListener('click', () => invokeControl('api/server/start'));
 els.btnStop.addEventListener('click', () => invokeControl('api/server/stop'));
 els.btnRestart.addEventListener('click', () => invokeControl('api/server/restart'));
 els.btnDeploy?.addEventListener('click', () => void invokeDeploy());
+els.chkBumpVersion?.addEventListener('change', () => {
+  updateDeployNextVersion(latestDeployNextVersion);
+});
 els.btnRestartOps?.addEventListener('click', () => void invokeRestartOps());
 els.btnToggleClear?.addEventListener('click', () => {
   showClearActions = !showClearActions;

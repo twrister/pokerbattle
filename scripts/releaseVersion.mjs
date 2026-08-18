@@ -93,10 +93,12 @@ export function writePackageVersion(rootDir, version) {
 /**
  * 按上次发布记录算出版本，写回 package.json 后返回本次 version / contentHash。
  * 先比哈希再写版本：version 已从哈希中剔除，回写不会触发下一次误加号。
+ * options.bumpVersion 为 false 时即使内容变了也保持原版本（运维站默认不升级）。
  */
-export function resolveAndSyncReleaseVersion(rootDir, previous) {
+export function resolveAndSyncReleaseVersion(rootDir, previous, options = {}) {
+  const bumpVersion = options.bumpVersion !== false;
   const contentHash = hashSourceTree(rootDir);
-  const version = nextReleaseVersion(previous, contentHash, readPackageVersion(rootDir));
+  const version = nextReleaseVersion(previous, contentHash, readPackageVersion(rootDir), bumpVersion);
   writePackageVersion(rootDir, version);
   return { version, contentHash };
 }
@@ -104,13 +106,14 @@ export function resolveAndSyncReleaseVersion(rootDir, previous) {
 /**
  * 根据上次部署记录与当前源码哈希决定展示版本。
  * 无上次哈希视为首次：沿用已有 version 或 seed，不先 +1。
+ * bumpVersion=false 时内容变化也保持原号，只更新 contentHash。
  */
-export function nextReleaseVersion(previous, contentHash, seedVersion = '0.1.0') {
+export function nextReleaseVersion(previous, contentHash, seedVersion = '0.1.0', bumpVersion = true) {
   const lastVersion = parseSemver(previous?.version) ? previous.version : null;
   const lastHash = typeof previous?.contentHash === 'string' && previous.contentHash ? previous.contentHash : null;
-  if (!lastHash) return lastVersion ?? seedVersion;
-  if (lastHash === contentHash) return lastVersion ?? seedVersion;
-  return bumpPatch(lastVersion ?? seedVersion);
+  const fallback = lastVersion ?? seedVersion;
+  if (!lastHash || lastHash === contentHash || !bumpVersion) return fallback;
+  return bumpPatch(fallback);
 }
 
 /** 把 x.y.z 的 patch +1；无法解析时原样返回，避免写出非法版本。 */

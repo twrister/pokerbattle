@@ -53,6 +53,8 @@ export class DeployRunner {
   private lastFinishedAt: number | null = null;
   private lastOk: boolean | null = null;
   private inflight: Promise<{ ok: boolean; message: string }> | null = null;
+  /** 本次发布是否升版本；仅 start({ bumpVersion: true }) 时为 true。 */
+  private pendingBumpVersion = false;
 
   constructor(options: DeployRunnerOptions) {
     this.commandLabel = options.commandLabel;
@@ -77,13 +79,16 @@ export class DeployRunner {
       lastError: this.lastError,
       lastFinishedAt: this.lastFinishedAt,
       lastOk: this.lastOk,
+      version: null,
+      nextVersion: null,
     };
   }
 
   /**
    * 立即返回并在后台执行。HTTP 接口用这个，避免发布把请求挂到超时。
+   * bumpVersion 仅当运维站勾选时为 true，写入 DEPLOY_BUMP_VERSION 给发布脚本。
    */
-  start(): { ok: boolean; started: boolean; message: string } {
+  start(options?: { bumpVersion?: boolean }): { ok: boolean; started: boolean; message: string } {
     if (!this.workspaceExists) {
       return {
         ok: false,
@@ -96,6 +101,7 @@ export class DeployRunner {
     }
     this.running = true;
     this.lastError = null;
+    this.pendingBumpVersion = options?.bumpVersion === true;
     this.persist();
     this.inflight = this.execute().finally(() => {
       this.inflight = null;
@@ -104,9 +110,9 @@ export class DeployRunner {
   }
 
   /** 测试或同步调用：等到发布结束。 */
-  async run(): Promise<{ ok: boolean; message: string }> {
+  async run(options?: { bumpVersion?: boolean }): Promise<{ ok: boolean; message: string }> {
     if (this.inflight) return this.inflight;
-    const started = this.start();
+    const started = this.start(options);
     if (!started.started) {
       return { ok: false, message: started.message };
     }
@@ -151,7 +157,11 @@ export class DeployRunner {
     return new Promise((resolve, reject) => {
       const child = this.spawnFn(this.command, this.args, {
         cwd: this.cwd,
-        env: { ...process.env, ...this.env } as NodeJS.ProcessEnv,
+        env: {
+          ...process.env,
+          ...this.env,
+          DEPLOY_BUMP_VERSION: this.pendingBumpVersion ? '1' : '0',
+        } as NodeJS.ProcessEnv,
         shell: true,
         windowsHide: true,
       });
