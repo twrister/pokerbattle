@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Faction, UnitState } from '../src/entity/unit.js';
+import { Faction, NO_TARGET, type Unit, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { dist } from '../src/math/vec2.js';
 import { World } from '../src/world.js';
@@ -295,5 +295,52 @@ describe('拥挤与攻击环', () => {
     // 软碰撞允许短暂重叠，但不该长期深度穿透
     expect(peakPen).toBeLessThan(0.55);
     expect(attackTicks).toBeGreaterThan(200);
+  });
+});
+
+describe('短视野索敌：城堡无视距离', () => {
+  /** 只改本单位索敌，避免写回全局配置表污染其它用例。 */
+  function shrinkSight(unit: Unit, sight = 3): void {
+    Object.assign(unit, { config: { ...unit.config, sightRange: fromFloat(sight) } });
+  }
+
+  it('圈内无敌军时能直接锁上远处城堡', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(6));
+    const castle = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    shrinkSight(attacker);
+    attacker.retargetIn = 0;
+
+    run(world, 5);
+
+    expect(attacker.targetId).toBe(castle.id);
+    expect(attacker.state).toBe(UnitState.Seek);
+  });
+
+  it('圈内有敌军时锁圈内单位，不锁远处城堡', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(6));
+    const near = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(8));
+    world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24));
+    shrinkSight(attacker);
+    attacker.retargetIn = 0;
+    near.stats.damage = 0;
+
+    run(world, 5);
+
+    expect(attacker.targetId).toBe(near.id);
+  });
+
+  it('圈内无敌军时不会锁远处箭塔', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(6));
+    world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(9), fromFloat(24));
+    shrinkSight(attacker);
+    attacker.retargetIn = 0;
+
+    run(world, 5);
+
+    expect(attacker.targetId).toBe(NO_TARGET);
+    expect(attacker.state).toBe(UnitState.Idle);
   });
 });

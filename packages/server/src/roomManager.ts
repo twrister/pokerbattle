@@ -239,8 +239,7 @@ export class RoomManager {
         if (current === room) this.rooms.delete(id);
       },
       onPlayerJoin: (playerId, name) => this.playerStats?.upsertPlayer(playerId, name),
-      onDecisiveMatch: (winnerId, loserId, names) =>
-        this.playerStats?.recordDecisiveMatch(winnerId, loserId, names),
+      onDecisiveMatch: (sides) => this.playerStats?.recordDecisiveSides(sides),
     });
     this.rooms.set(roomId, room);
     return room;

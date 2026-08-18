@@ -49,6 +49,12 @@ describe('单位参数页', () => {
     const headFields = Array.from(
       document.querySelectorAll<HTMLTableCellElement>('.unit-stats-table thead th'),
     ).map((th) => th.dataset.field);
+    const rangeIdx = headFields.indexOf('range');
+    expect(headFields.slice(rangeIdx, rangeIdx + 3)).toEqual([
+      'range',
+      'sightRange',
+      'moveSpeed',
+    ]);
     const moveIdx = headFields.indexOf('moveSpeed');
     expect(headFields.slice(moveIdx, moveIdx + 5)).toEqual([
       'moveSpeed',
@@ -57,6 +63,14 @@ describe('单位参数页', () => {
       'attackWindup',
       'dps',
     ]);
+    expect(
+      document.querySelector<HTMLInputElement>(
+        'input[data-unit="melee_grunt"][data-field="sightRange"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      document.querySelector('.unit-stats-more-fields input[data-field="sightRange"]'),
+    ).toBeNull();
     expect(headFields).toContain('aoeRadius');
     expect(headFields).toContain('skill');
     expect(
@@ -85,7 +99,7 @@ describe('单位参数页', () => {
         'input[data-unit="melee_grunt"][data-field="bodyScale"]',
       ),
     ).toBeTruthy();
-    for (const field of ['radius', 'bodyScale', 'attackWindup'] as const) {
+    for (const field of ['sightRange', 'radius', 'bodyScale', 'attackWindup'] as const) {
       expect(
         document.querySelector(`td[data-field="${field}"] .unit-stats-mini-bar`),
       ).toBeTruthy();

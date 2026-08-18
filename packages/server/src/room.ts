@@ -21,7 +21,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import type { RawData, WebSocket } from 'ws';
 import type { OpsRoomPhase, OpsRoomSnapshot } from './opsTypes.js';
-import { resolveDecisiveMatch, type OnlinePresence } from './playerStatsStore.js';
+import { resolveDecisiveMatch, type DecisiveMatchSides, type OnlinePresence } from './playerStatsStore.js';
 import { factionForSeat, validateSeatCommand } from './validate.js';
 
 const STEP_MS = 1000 / TICK_RATE;
@@ -64,12 +64,8 @@ export interface MatchRoomOptions {
   onDispose?: (roomId: string) => void;
   /** 入座且带有 playerId 时登记昵称。 */
   onPlayerJoin?: (playerId: string, name: string) => void;
-  /** 对局分出胜负且双方都有 playerId 时记账。 */
-  onDecisiveMatch?: (
-    winnerId: string,
-    loserId: string,
-    names: { winner: string; loser: string },
-  ) => void;
+  /** 对局分出胜负且入座双方都有 playerId 时记账（1v1 / 2v2）。 */
+  onDecisiveMatch?: (sides: DecisiveMatchSides) => void;
 }
 
 /**
@@ -81,11 +77,7 @@ export class MatchRoom {
   readonly roomName: string;
   private readonly onDispose?: (roomId: string) => void;
   private readonly onPlayerJoin?: (playerId: string, name: string) => void;
-  private readonly onDecisiveMatch?: (
-    winnerId: string,
-    loserId: string,
-    names: { winner: string; loser: string },
-  ) => void;
+  private readonly onDecisiveMatch?: (sides: DecisiveMatchSides) => void;
   private seats: Array<Seat | null>;
   private matchMode: MatchMode;
   private readonly spectators: Spectator[] = [];
@@ -894,12 +886,12 @@ export class MatchRoom {
     ws.send(encodeMessage(message));
   }
 
-  /** 仅在权威结算且一方获胜、双方都有设备 ID 时写战绩；ended 保证每局一次。 */
+  /** 仅在权威结算且一方获胜、入座双方都有设备 ID 时写战绩；ended 保证每局一次。 */
   private recordDecisiveMatchIfNeeded(): void {
     const winner = this.match?.result?.winner ?? null;
     const sides = resolveDecisiveMatch(this.seats, winner);
     if (!sides) return;
-    this.onDecisiveMatch?.(sides.winnerId, sides.loserId, sides.names);
+    this.onDecisiveMatch?.(sides);
   }
 
   /** 将私有状态映射为运维阶段枚举。 */

@@ -67,10 +67,16 @@ export interface PlayerStatsStoreOptions {
   now?: () => number;
 }
 
+/** 结算记账中的一名玩家。 */
+export interface DecisiveMatchPlayer {
+  playerId: string;
+  name: string;
+}
+
+/** 分出胜负后的记账双方；1v1 各一人，2v2 同队两人各记一场。 */
 export interface DecisiveMatchSides {
-  winnerId: string;
-  loserId: string;
-  names: { winner: string; loser: string };
+  winners: DecisiveMatchPlayer[];
+  losers: DecisiveMatchPlayer[];
 }
 
 /** 清洗设备 ID；空串或非法字符视为未上报，避免把同名玩家揉在一起。 */
@@ -91,7 +97,8 @@ export function normalizeDisplayName(raw: unknown): string {
 
 /**
  * 从席位与胜者阵营解析记账双方。
- * 平局、缺席或任一方未带 playerId 时返回 null，避免记半场或匿名对局。
+ * 1v1 / 2v2 都写入个人胜负（同队每人一场），积分与 1v1 共用。
+ * 平局、队形不完整、缺 ID 或同一人占多席时返回 null，避免记半场。
  */
 export function resolveDecisiveMatch(
   seats: ReadonlyArray<{ playerId: string | null; name: string; faction: Faction } | null>,
@@ -99,16 +106,18 @@ export function resolveDecisiveMatch(
 ): DecisiveMatchSides | null {
   if (winner === null) return null;
   const occupied = seats.filter((seat): seat is NonNullable<(typeof seats)[number]> => seat !== null);
-  // 2v2 同队多人共享胜负，暂不写入个人胜点，避免污染 1v1 排行榜。
-  if (occupied.length !== 2) return null;
-  const winSeat = occupied.find((seat) => seat.faction === winner);
-  const loseSeat = occupied.find((seat) => seat.faction !== winner);
-  if (!winSeat?.playerId || !loseSeat?.playerId) return null;
-  if (winSeat.playerId === loseSeat.playerId) return null;
+  const winners = occupied.filter((seat) => seat.faction === winner);
+  const losers = occupied.filter((seat) => seat.faction !== winner);
+  // 只接受完整 1v1 或 2v2，三人局 / 同队对打不记。
+  if (winners.length !== losers.length || (winners.length !== 1 && winners.length !== 2)) {
+    return null;
+  }
+  if (winners.some((seat) => !seat.playerId) || losers.some((seat) => !seat.playerId)) return null;
+  const ids = [...winners, ...losers].map((seat) => seat.playerId as string);
+  if (new Set(ids).size !== ids.length) return null;
   return {
-    winnerId: winSeat.playerId,
-    loserId: loseSeat.playerId,
-    names: { winner: winSeat.name, loser: loseSeat.name },
+    winners: winners.map((seat) => ({ playerId: seat.playerId as string, name: seat.name })),
+    losers: losers.map((seat) => ({ playerId: seat.playerId as string, name: seat.name })),
   };
 }
 
@@ -162,20 +171,34 @@ export class PlayerStatsStore {
     this.persist();
   }
 
-  /** 只在一方获胜时记账；双方各 +1 场，胜者 +1 胜，负者 +1 负。 */
+  /** 1v1 便捷入口：胜负各一人，积分规则与 recordDecisiveSides 相同。 */
   recordDecisiveMatch(
     winnerId: string,
     loserId: string,
     names: { winner: string; loser: string },
   ): void {
-    const winId = normalizePlayerId(winnerId);
-    const loseId = normalizePlayerId(loserId);
-    if (!winId || !loseId || winId === loseId) return;
-    this.ensurePlayer(winId, names.winner);
-    this.ensurePlayer(loseId, names.loser);
+    this.recordDecisiveSides({
+      winners: [{ playerId: winnerId, name: names.winner }],
+      losers: [{ playerId: loserId, name: names.loser }],
+    });
+  }
+
+  /**
+   * 按人记账：每人 +1 场，胜者 +1 胜 / 积分 +1，负者 +1 负（超门槛才 -1）。
+   * 1v1 与 2v2 共用同一套积分；任一侧缺合法 ID 或胜负两侧有同一人则整场不记。
+   */
+  recordDecisiveSides(sides: DecisiveMatchSides): void {
+    const winners = collectNamedPlayers(sides.winners);
+    const losers = collectNamedPlayers(sides.losers);
+    if (winners.length === 0 || losers.length === 0) return;
+    if (winners.length !== sides.winners.length || losers.length !== sides.losers.length) return;
+    const winnerIds = new Set(winners.map((player) => player.playerId));
+    if (losers.some((player) => winnerIds.has(player.playerId))) return;
+    for (const player of winners) this.ensurePlayer(player.playerId, player.name);
+    for (const player of losers) this.ensurePlayer(player.playerId, player.name);
     const now = this.now();
-    this.applyOutcome(winId, 'win', now);
-    this.applyOutcome(loseId, 'loss', now);
+    for (const player of winners) this.applyOutcome(player.playerId, 'win', now);
+    for (const player of losers) this.applyOutcome(player.playerId, 'loss', now);
     this.persist();
   }
 
@@ -444,6 +467,19 @@ function presenceRank(location: OnlinePresence['location']): number {
 function readPositiveInt(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0;
   return Math.floor(value);
+}
+
+/** 清洗并去重记账名单；非法 ID 丢弃，同 ID 只留第一次出现。 */
+function collectNamedPlayers(players: readonly DecisiveMatchPlayer[]): DecisiveMatchPlayer[] {
+  const seen = new Set<string>();
+  const collected: DecisiveMatchPlayer[] = [];
+  for (const player of players) {
+    const playerId = normalizePlayerId(player.playerId);
+    if (!playerId || seen.has(playerId)) continue;
+    seen.add(playerId);
+    collected.push({ playerId, name: player.name });
+  }
+  return collected;
 }
 
 /** 胜 +1；仅当积分已超过门槛才扣分，避免新手一直负分。 */

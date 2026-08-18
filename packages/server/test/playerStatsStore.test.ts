@@ -46,18 +46,64 @@ describe('resolveDecisiveMatch', () => {
 
   it('有胜者且双方都有 ID 时返回记账双方', () => {
     expect(resolveDecisiveMatch(seats, Faction.Blue)).toEqual({
-      winnerId: 'blue-1',
-      loserId: 'red-1',
-      names: { winner: '蓝', loser: '红' },
+      winners: [{ playerId: 'blue-1', name: '蓝' }],
+      losers: [{ playerId: 'red-1', name: '红' }],
     });
   });
 
-  it('2v2 四席暂不记入排行榜', () => {
+  it('2v2 四席同队两人各记一场', () => {
     expect(
       resolveDecisiveMatch(
         [
           { playerId: 'a', name: 'A', faction: Faction.Blue },
           { playerId: 'b', name: 'B', faction: Faction.Blue },
+          { playerId: 'c', name: 'C', faction: Faction.Red },
+          { playerId: 'd', name: 'D', faction: Faction.Red },
+        ],
+        Faction.Blue,
+      ),
+    ).toEqual({
+      winners: [
+        { playerId: 'a', name: 'A' },
+        { playerId: 'b', name: 'B' },
+      ],
+      losers: [
+        { playerId: 'c', name: 'C' },
+        { playerId: 'd', name: 'D' },
+      ],
+    });
+  });
+
+  it('2v2 缺席或缺 ID 不记账', () => {
+    expect(
+      resolveDecisiveMatch(
+        [
+          { playerId: 'a', name: 'A', faction: Faction.Blue },
+          { playerId: 'b', name: 'B', faction: Faction.Blue },
+          { playerId: 'c', name: 'C', faction: Faction.Red },
+        ],
+        Faction.Blue,
+      ),
+    ).toBeNull();
+    expect(
+      resolveDecisiveMatch(
+        [
+          { playerId: 'a', name: 'A', faction: Faction.Blue },
+          { playerId: null, name: 'B', faction: Faction.Blue },
+          { playerId: 'c', name: 'C', faction: Faction.Red },
+          { playerId: 'd', name: 'D', faction: Faction.Red },
+        ],
+        Faction.Blue,
+      ),
+    ).toBeNull();
+  });
+
+  it('同一人占多席不记账', () => {
+    expect(
+      resolveDecisiveMatch(
+        [
+          { playerId: 'same', name: 'A', faction: Faction.Blue },
+          { playerId: 'same', name: 'B', faction: Faction.Blue },
           { playerId: 'c', name: 'C', faction: Faction.Red },
           { playerId: 'd', name: 'D', faction: Faction.Red },
         ],
@@ -124,6 +170,26 @@ describe('PlayerStatsStore', () => {
     store.recordDecisiveMatch('', 'loser-1', { winner: '胜', loser: '负' });
     store.recordDecisiveMatch('same', 'same', { winner: 'A', loser: 'B' });
     expect(store.listPlayers()).toEqual([]);
+  });
+
+  it('2v2 同队两人各记一场，积分与 1v1 共用', () => {
+    const store = tempStore();
+    store.recordDecisiveMatch('solo-win', 'a', { winner: '单挑胜', loser: 'A' });
+    store.recordDecisiveSides({
+      winners: [
+        { playerId: 'a', name: 'A' },
+        { playerId: 'b', name: 'B' },
+      ],
+      losers: [
+        { playerId: 'c', name: 'C' },
+        { playerId: 'd', name: 'D' },
+      ],
+    });
+    expect(store.lookup('a')).toMatchObject({ matches: 2, wins: 1, losses: 1, score: 1 });
+    expect(store.lookup('b')).toMatchObject({ matches: 1, wins: 1, losses: 0, score: 1 });
+    expect(store.lookup('c')).toMatchObject({ matches: 1, wins: 0, losses: 1, score: 0 });
+    expect(store.lookup('d')).toMatchObject({ matches: 1, wins: 0, losses: 1, score: 0 });
+    expect(store.lookup('solo-win')).toMatchObject({ matches: 1, wins: 1, score: 1 });
   });
 
   it('重连刷新 lastOnlineAt，断线再写离开时刻', () => {

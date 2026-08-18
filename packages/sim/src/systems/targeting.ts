@@ -1,6 +1,6 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
-import { canBuildingAttack, isBuildingConfig } from '../config/units.js';
+import { canBuildingAttack, isBuildingConfig, isCastleId } from '../config/units.js';
 import { Faction, NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
@@ -19,6 +19,7 @@ const buildingsRed: Unit[] = [];
  * - 地面：够不着时若有射程内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
+ * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；箭塔/单位仍要在圈内。
  *
  * 有治疗技能的单位在无敌军时，会改锁最近受伤友军以便寻路过治疗半径；
  * 友军目标不粘性挡敌——每帧仍优先扫描敌军，保证敌方入场后立刻切回进攻。
@@ -153,6 +154,7 @@ function hasInReachEnemyThreat(unit: Unit, current: Unit): boolean {
 /**
  * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
  * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
+ * 城堡（building_base）无视索敌距离，圈外仍可纳入远敌候选。
  *
  * 这里刻意不用空间哈希：索敌半径覆盖整个场地，按半径查哈希等于把所有格子
  * 都遍历一遍，反而比直接扫单位数组更慢。等以后出现「短视野」兵种再按需切换。
@@ -178,7 +180,8 @@ function findNearestEnemy(unit: Unit): number {
       }
     }
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
-    if (d > sightSq) continue;
+    // 城堡无视索敌圈；箭塔与单位仍要在圈内
+    if (d > sightSq && !isCastleId(other.typeId)) continue;
     // 等距时取 id 小的，保证任何机器上选出的都是同一个目标
     if (farId === NO_TARGET || d < farDistSq || (d === farDistSq && other.id < farId)) {
       farId = other.id;

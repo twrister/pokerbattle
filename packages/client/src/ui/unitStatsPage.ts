@@ -541,6 +541,7 @@ function primaryToCompareKey(
     case 'maxHp':
     case 'damage':
     case 'range':
+    case 'sightRange':
     case 'moveSpeed':
       return key;
     case 'attackInterval':

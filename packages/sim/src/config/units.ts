@@ -116,7 +116,7 @@ export interface UnitConfig {
   minRange: Fx;
   /** 移动速度，单位/秒 */
   moveSpeed: Fx;
-  /** 索敌半径。默认给到能覆盖全场，等价于「攻击场上最近的敌人」 */
+  /** 索敌半径。默认给到能覆盖全场；城堡不受此限制，圈外仍可锁定 */
   sightRange: Fx;
   /** 移动碰撞层；空中与地面单位互不推挤。 */
   movementLayer: MovementLayer;
@@ -427,6 +427,11 @@ export function isArcherTowerId(id: UnitTypeId): boolean {
   return id === 'building_tower'
     || id === 'building_tower_advanced'
     || id === 'building_tower_triple';
+}
+
+/** 城堡（基地）：索敌时无视 sightRange，圈外仍可锁定 */
+export function isCastleId(id: UnitTypeId): boolean {
+  return id === 'building_base';
 }
 
 /** 从 units.json 加载全部兵种并转成定点配置表。 */

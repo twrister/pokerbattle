@@ -133,6 +133,7 @@ export const PRIMARY_NUMERIC_KEYS = [
   'damage',
   'attackInterval',
   'range',
+  'sightRange',
   'moveSpeed',
 ] as const satisfies ReadonlyArray<keyof UnitConfigDraft>;
 

@@ -74,6 +74,7 @@ export {
   canBuildingAttack,
   isArcherTowerId,
   isBuildingConfig,
+  isCastleId,
   recomputeMaxUnitRadius,
   resetUnitConfigsToDefault,
   toUnitConfigDraft,
