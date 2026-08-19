@@ -349,14 +349,17 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloMatchRules?.onChange(rules);
   };
 
-  /** 把当前镜头滑条写入本地默认；对局节奏不持久化，以免单机与联机分叉。 */
+  /** 把当前镜头与对局节奏写入本地默认，供下次进局沿用。 */
   const onSaveDefaults = (): void => {
     const cameraAngle = Number(cameraAngleInput.value);
     const viewBottomExtra = Number(bottomExtraInput.value);
     if (!Number.isFinite(cameraAngle) || !Number.isFinite(viewBottomExtra)) {
       return;
     }
-    saveRuntimeDefaults({ cameraAngle, viewBottomExtra });
+    const matchRules = options.soloMatchRules ? readMatchRules() : undefined;
+    // 节奏控件半成品时不落盘，避免把非法时长写成默认
+    if (options.soloMatchRules && !matchRules) return;
+    saveRuntimeDefaults({ cameraAngle, viewBottomExtra, matchRules: matchRules ?? undefined });
     saveDefaultsButton.textContent = '已保存';
     window.clearTimeout(saveDefaultsTimer);
     saveDefaultsTimer = window.setTimeout(() => {
@@ -408,7 +411,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
         input.addEventListener('input', onMatchRulesInput);
       }
     }
-    if (options.soloCameraAngle || options.soloViewBottomExtra) {
+    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
       saveDefaultsButton.addEventListener('click', onSaveDefaults);
     }
   }
@@ -486,7 +489,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
             input.removeEventListener('input', onMatchRulesInput);
           }
         }
-        if (options.soloCameraAngle || options.soloViewBottomExtra) {
+        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
           saveDefaultsButton.removeEventListener('click', onSaveDefaults);
         }
         window.clearTimeout(saveDefaultsTimer);

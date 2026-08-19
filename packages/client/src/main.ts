@@ -562,8 +562,11 @@ function enterBattleSession(mode: BattleMode): () => void {
   // 每局随机 seed（对齐服务端 room.ts），避免开局手牌永远相同
   const battleSeed = isSolo ? createBattleSeed() : 20260806;
   const loop = new SimLoop(battleSeed, { withMatch: isSolo });
+  // 开发服「保存为默认」后的节奏；本局改数只动这份内存，重开/再进局都套它
+  let soloMatchRulesView = isSolo ? loadRuntimeDefaults().matchRules : defaultMatchRulesView();
   if (isSolo) {
     loop.match!.seedStartingCastles();
+    applyMatchRulesView(loop.match!, soloMatchRulesView);
     // 立刻拍一帧快照，首帧就能看到城堡
     loop.curr = takeSnapshot(loop.world, loop.curr);
     loop.prev = takeSnapshot(loop.world, loop.prev);
@@ -892,8 +895,6 @@ function enterBattleSession(mode: BattleMode): () => void {
       })
     : null;
 
-  // 本局调试面板改过的节奏；重开时再写回，避免 clear 后看起来像改时长没生效
-  let soloMatchRulesView = defaultMatchRulesView();
   const clearBattlefield = (): void => {
     loop.reset();
     if (isSolo && loop.match) applyMatchRulesView(loop.match, soloMatchRulesView);

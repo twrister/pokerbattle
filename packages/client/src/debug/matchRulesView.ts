@@ -62,7 +62,7 @@ export function clampFinalUnitTimeScale(scale: number): number {
   return clampRange(scale, FINAL_UNIT_TIME_SCALE_MIN, FINAL_UNIT_TIME_SCALE_MAX);
 }
 
-/** 把控件值写回当前局；不持久化，避免单机与联机分叉。 */
+/** 把控件值写回当前局；持久化由运行控制「保存为默认」另走 localStorage。 */
 export function applyMatchRulesView(match: MatchState, view: MatchRulesView): void {
   const next = sanitizeMatchRulesView(view);
   match.setInitialHandSize(next.initialHandSize);
