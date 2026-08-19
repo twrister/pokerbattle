@@ -85,7 +85,7 @@
     "radius": 0.8,
     "bodyScale": 1.2,
     "mass": 2,
-    "maxHp": 1200,
+    "maxHp": 600,
     "damage": 120,
     "attackInterval": 38,
     "attackWindup": 12,
@@ -136,7 +136,7 @@
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
     "projectileSpeed": 20,
-    "aoeRadius": 2
+    "aoeRadius": 2.5
   },
   "melee_cavalry": {
     "id": "melee_cavalry",
@@ -376,7 +376,7 @@
     "radius": 1,
     "bodyScale": 2,
     "mass": 9999,
-    "maxHp": 2200,
+    "maxHp": 2500,
     "damage": 120,
     "attackInterval": 10,
     "attackWindup": 6,
@@ -397,7 +397,7 @@
     "radius": 1,
     "bodyScale": 2,
     "mass": 9999,
-    "maxHp": 2600,
+    "maxHp": 3000,
     "damage": 150,
     "attackInterval": 8,
     "attackWindup": 4,
