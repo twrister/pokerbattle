@@ -225,7 +225,7 @@ export class MatchState {
 
   /**
    * 校验出牌：席位手牌齐全、牌型匹配阵型、落点在己方半场。
-   * 基地已陷落的席位不能再出牌或领包。
+   * 基地已陷落仍可打完手牌，但不能再领保护卡包。
    */
   validate(cmd: Command): boolean {
     if (this.result) return false;
@@ -716,10 +716,9 @@ export class MatchState {
     this.packStates[slot] = 'claimed';
   }
 
-  /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠 / 席位未淘汰。 */
+  /** PlayFormation 专属规则：手牌 / 牌型 / 半场 / 建筑重叠。淘汰席仍可打完剩余手牌。 */
   private validatePlayFormation(cmd: PlayFormationCommand): boolean {
     const slot = commandSlot(cmd);
-    if (this.isSlotEliminated(slot)) return false;
     const template = findFormationById(cmd.formationId);
     if (!template) return false;
 

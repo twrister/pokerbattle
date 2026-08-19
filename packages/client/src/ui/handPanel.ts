@@ -931,7 +931,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       root.classList.toggle('is-play-locked', locked);
       if (locked) {
         selected.clear();
-        setActionStatus('基地陷落 · 无法出牌');
+        setActionStatus('基地陷落 · 停止发牌');
       }
       syncStatus();
     },

@@ -1319,7 +1319,6 @@ function runVersusSession(
     formation: CardFormation,
     point: { clientX: number; clientY: number } | null,
   ): boolean => {
-    if (netLoop.match.isSlotEliminated(localSlot)) return false;
     if (isFuseBombFormation(formation)) {
       if (!point) return false;
       const anchor = screenToSim(
@@ -1525,7 +1524,6 @@ function runVersusSession(
     const nowEliminated = netLoop.match.isSlotEliminated(localSlot);
     if (nowEliminated && !selfEliminated) {
       battleAnnounce.show(BASE_DOWN_ANNOUNCE);
-      handPanel.setPlayLocked(true);
     }
     selfEliminated = nowEliminated;
     if (mate != null) {

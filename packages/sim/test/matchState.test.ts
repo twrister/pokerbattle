@@ -405,7 +405,7 @@ describe('MatchState 2v2', () => {
     expect(match.getSlotCastlePosition(3)).toEqual({ x: 18, y: fullH - 3 });
   });
 
-  it('单座阵亡后该席禁出牌且停抽，对局继续', () => {
+  it('单座阵亡后该席停抽但仍可打完手牌，对局继续', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     expect(match.world.units.filter((unit) => unit.typeId === 'building_base')).toHaveLength(4);
@@ -420,9 +420,25 @@ describe('MatchState 2v2', () => {
     match.step();
     expect(match.world.tick).toBe(tick + 2);
     expect(match.result).toBeNull();
-    expect(match.validate(playFormationCommand(Faction.Blue, 'single_grunt', ['x'], fromFloat(4), fromFloat(4), 0))).toBe(false);
+
+    const numberCard = match.decks[0]!.hand.find(
+      (card) => card.rank !== 'JOKER' && card.rank !== 'A' && card.rank !== 'J' && card.rank !== 'Q' && card.rank !== 'K',
+    );
+    expect(numberCard).toBeDefined();
+    const play = playFormationCommand(
+      Faction.Blue,
+      'single_grunt',
+      [numberCard!.id],
+      fromFloat(4),
+      fromFloat(4),
+      0,
+    );
+    expect(match.validate(play)).toBe(true);
+    match.step([play]);
+    expect(match.decks[0]!.hand).toHaveLength(before - 1);
+
     stepTo(match, NORMAL_DRAW_INTERVAL_TICKS);
-    expect(match.decks[0]!.hand).toHaveLength(before);
+    expect(match.decks[0]!.hand).toHaveLength(before - 1);
     expect(match.decks[1]!.hand.length).toBeGreaterThan(before);
   });
 

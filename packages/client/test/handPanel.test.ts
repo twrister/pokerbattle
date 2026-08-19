@@ -966,7 +966,7 @@ describe('单机手牌交互', () => {
     });
     panel.setPlayLocked(true);
     expect(document.querySelector('#solo-hand')?.classList.contains('is-play-locked')).toBe(true);
-    expect(document.querySelector('#hand-status')?.textContent).toContain('无法出牌');
+    expect(document.querySelector('#hand-status')?.textContent).toContain('停止发牌');
     document.querySelector<HTMLButtonElement>('.hand-formation')?.click();
     expect(onPlay).not.toHaveBeenCalled();
     panel.dispose();
