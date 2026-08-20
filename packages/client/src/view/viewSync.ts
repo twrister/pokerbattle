@@ -17,6 +17,7 @@ import { ExplosionEffectView } from './explosionEffectView.js';
 import { GroundHazardView } from './groundHazardView.js';
 import { AoeGroundMark } from './aoeGroundMark.js';
 import { CastlePackView } from './castlePackView.js';
+import { PROJECTILE_TRAIL_COLORS, ProjectileTrailView } from './projectileTrailView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
@@ -190,6 +191,10 @@ export class BattleView {
   private readonly orbProjectilePool: THREE.Mesh[] = [];
   private readonly bombProjectilePool: THREE.Mesh[] = [];
   private readonly arrowProjectilePool: THREE.Mesh[] = [];
+  /** 拖尾挂在独立容器里，避免 scene.children 里的 Mesh 查找把光带当成弹体。 */
+  private readonly trailRoot = new THREE.Group();
+  private readonly activeProjectileTrails = new Map<number, ProjectileTrailView>();
+  private readonly projectileTrailPool: ProjectileTrailView[] = [];
   private readonly activeHealEffects = new Map<number, HealEffectView>();
   private readonly healEffectPool: HealEffectView[] = [];
   private readonly activeAoePulses = new Map<number, AoePulseEffectView>();
@@ -224,6 +229,7 @@ export class BattleView {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.attackRangeMark.group.name = 'attack-range-mark';
+    this.trailRoot.name = 'projectile-trails';
   }
 
   /** 选中场上一个单位；传 null 取消。同一时刻只保留一个选中。 */
@@ -593,6 +599,17 @@ export class BattleView {
         orientArrowMesh(mesh, fromX, fromH, fromZ, toX, toH, toZ, camera);
         mesh.renderOrder = 7;
       }
+
+      this.updateProjectileTrail(
+        projectile.id,
+        mesh.position.x,
+        mesh.position.y,
+        mesh.position.z,
+        camera,
+        visualFaction(projectile.faction, this.localFaction),
+        size,
+        projectile.landed,
+      );
     }
 
     for (const [id, mesh] of this.activeProjectiles) {
@@ -601,6 +618,53 @@ export class BattleView {
       this.activeProjectiles.delete(id);
       this.releaseProjectileMesh(mesh);
     }
+    this.recycleUnseenProjectileTrails();
+  }
+
+  /** 取池化拖尾并追加当前弹体位置；首次出现时才把容器挂进场景。 */
+  private updateProjectileTrail(
+    id: number,
+    x: number,
+    y: number,
+    z: number,
+    camera: THREE.Camera,
+    faction: Faction,
+    widthScale: number,
+    landed: boolean,
+  ): void {
+    let trail = this.activeProjectileTrails.get(id);
+    if (!trail) {
+      trail = this.projectileTrailPool.pop() ?? new ProjectileTrailView();
+      this.activeProjectileTrails.set(id, trail);
+      this.trailRoot.add(trail.mesh);
+      if (!this.trailRoot.parent) this.scene.add(this.trailRoot);
+    }
+    trail.update(x, y, z, camera, PROJECTILE_TRAIL_COLORS[faction]!, widthScale, landed);
+  }
+
+  /** 弹道消失后回收对应拖尾；全部清空时卸下容器，避免空 Group 留在场景。 */
+  private recycleUnseenProjectileTrails(): void {
+    for (const [id, trail] of this.activeProjectileTrails) {
+      if (this.seen.has(id)) continue;
+      this.trailRoot.remove(trail.mesh);
+      this.activeProjectileTrails.delete(id);
+      trail.reset();
+      this.projectileTrailPool.push(trail);
+    }
+    if (this.activeProjectileTrails.size === 0 && this.trailRoot.parent) {
+      this.scene.remove(this.trailRoot);
+    }
+  }
+
+  /** 把所有拖尾收回池子并卸下容器。 */
+  private releaseAllProjectileTrails(): void {
+    for (const [, trail] of this.activeProjectileTrails) {
+      this.trailRoot.remove(trail.mesh);
+      trail.reset();
+      this.projectileTrailPool.push(trail);
+    }
+    this.activeProjectileTrails.clear();
+    if (this.trailRoot.parent) this.scene.remove(this.trailRoot);
   }
 
   /** 按弹道外观取池化网格；炸弹/箭矢用贴图面片，其余用阵营色球 */
@@ -675,6 +739,7 @@ export class BattleView {
       this.activeProjectiles.delete(id);
       this.releaseProjectileMesh(mesh);
     }
+    this.releaseAllProjectileTrails();
     for (const [id, view] of this.activeHealEffects) {
       this.scene.remove(view.group);
       this.activeHealEffects.delete(id);
@@ -726,6 +791,7 @@ export class BattleView {
       this.releaseProjectileMesh(mesh);
     }
     this.activeProjectiles.clear();
+    this.releaseAllProjectileTrails();
     for (const [id, view] of this.activeHealEffects) {
       this.scene.remove(view.group);
       this.activeHealEffects.delete(id);

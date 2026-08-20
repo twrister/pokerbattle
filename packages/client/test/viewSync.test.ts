@@ -443,6 +443,37 @@ describe('渲染同步', () => {
     expect(scene.children.some((child) => child.name === 'aoe-ground-mark')).toBe(false);
   });
 
+  it('弹道带阵营色拖尾，弹体消失后回收', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    camera.position.set(0, 12, 12);
+    camera.updateMatrixWorld();
+    const world = new World(1);
+    const archer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
+    archer.attackCooldown = fromFloat(9999);
+    const projectile = world.spawnProjectile(archer, target, archer.stats.damage, fromFloat(9));
+    const first = takeSnapshot(world);
+    view.render(first, first, 1, camera);
+
+    const trailRoot = scene.children.find((child) => child.name === 'projectile-trails');
+    expect(trailRoot).toBeInstanceOf(THREE.Group);
+    expect(trailRoot?.children).toHaveLength(1);
+    // 箭矢面片仍是 scene 的直接 Mesh 子节点，拖尾不污染这条查找链路
+    const arrow = scene.children.find((child) => child instanceof THREE.Mesh) as THREE.Mesh;
+    expect(arrow.userData.visual).toBe('arrow');
+
+    for (let i = 0; i < 6 && !projectile.dead; i += 1) world.step();
+    const flying = takeSnapshot(world);
+    view.render(first, flying, 1, camera);
+    expect(trailRoot?.children[0]?.visible).toBe(true);
+
+    for (let i = 0; i < 80 && !projectile.dead; i += 1) world.step();
+    const after = takeSnapshot(world);
+    view.render(flying, after, 1, camera);
+    expect(scene.children.some((child) => child.name === 'projectile-trails')).toBe(false);
+  });
+
   it('选中单位后显示白色无填充攻击范围圈，且同时只存在一个', () => {
     const scene = new THREE.Scene();
     const view = new BattleView(scene);
