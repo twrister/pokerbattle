@@ -5,6 +5,7 @@ export type UnitTypeId =
   | 'melee_grunt'
   | 'melee_guard'
   | 'melee_golem'
+  | 'melee_golem_small'
   | 'ranged_archer'
   | 'ranged_ballista'
   | 'ranged_chariot'

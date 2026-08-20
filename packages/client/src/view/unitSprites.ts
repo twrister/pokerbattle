@@ -45,6 +45,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 241 / 218,
     sourceFacing: 1,
   },
+  melee_golem_small: {
+    frontUrl: 'units/small-golem-front.png',
+    backUrl: 'units/small-golem-back.png',
+    // 倍率沿用石头人；视觉高度由更小的 bodyScale 压低
+    heightMul: 3.4,
+    aspect: 187 / 166,
+    sourceFacing: 1,
+  },
   ranged_archer: {
     frontUrl: 'units/archer-front.png',
     backUrl: 'units/archer-back.png',

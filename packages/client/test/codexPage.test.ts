@@ -19,7 +19,7 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(22);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(23);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 6.25%/);
@@ -37,17 +37,17 @@ describe('兵种图鉴页', () => {
     expect(categoryNamed('全部兵种')?.classList.contains('is-active')).toBe(true);
 
     categoryNamed('单兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(9);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(10);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['民兵', '弓手', '卫士', '石头人', '女王', '国王', '皇家骑士', '法师', '大法师']);
+    ).toEqual(['民兵', '弓手', '卫士', '石头人', '小石头人', '女王', '国王', '皇家骑士', '法师', '大法师']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(11);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['投弹车', '连弩车', '冲锋战车', '巨型炸弹', '小炸弹', '巨龙', '喷火龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
+    ).toEqual(['投弹车', '连弩车', '冲锋战车', '巨型炸弹', '小炸弹', '飞龙', '喷火龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('投弹车');
     expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
 

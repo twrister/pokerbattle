@@ -281,6 +281,8 @@ describe('渲染同步', () => {
     expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');
     expect(SPRITE_DEFS.fire_dragon?.frontUrl).toBe('units/fire-dragon-front.png');
     expect(SPRITE_DEFS.fire_dragon?.backUrl).toBe('units/fire-dragon-back.png');
+    expect(SPRITE_DEFS.melee_golem_small?.frontUrl).toBe('units/small-golem-front.png');
+    expect(SPRITE_DEFS.melee_golem_small?.backUrl).toBe('units/small-golem-back.png');
     expect(SPRITE_DEFS.ranged_chariot?.frontUrl).toBe('units/chariot-front.png');
     expect(SPRITE_DEFS.ranged_chariot?.backUrl).toBe('units/chariot-back.png');
     expect(SPRITE_DEFS.ranged_ballista?.frontUrl).toBe('units/ballista-front.png');

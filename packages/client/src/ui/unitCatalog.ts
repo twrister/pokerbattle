@@ -37,6 +37,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'ranged_archer',
   'melee_guard',
   'melee_golem',
+  'melee_golem_small',
   'hero_queen',
   'hero_king',
   'melee_cavalry',
