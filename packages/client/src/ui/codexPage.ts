@@ -269,7 +269,7 @@ function formatDeathSpawnText(config: UnitConfig): string {
 function getSkill(config: UnitConfig): { title: string; description: string } {
   if (config.charge) return { title: '冲锋', description: '与可移动敌人保持合适距离时发动突击，对路径上的单位造成伤害并击退，不对建筑生效。' };
   if (config.inspire) return { title: '振奋', description: '提升附近友军的攻击速度与移动速度。' };
-  if (config.heal) return { title: '治疗', description: '优先治疗范围内受伤的友军；无伤员时才攻击射程内的敌人。' };
+  if (config.heal) return { title: '治疗', description: '优先治疗场上受伤的友军，不治疗机械单位；无伤员时跟随最近友军，射程内有敌人才攻击。' };
   if (config.summon) {
     return {
       title: '召唤',

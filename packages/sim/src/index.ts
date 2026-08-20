@@ -82,6 +82,7 @@ export {
   isArcherTowerId,
   isBuildingConfig,
   isCastleId,
+  isMechanicalUnit,
   usesArrowVisual,
   usesDragonProjectile,
   recomputeMaxUnitRadius,

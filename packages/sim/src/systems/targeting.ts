@@ -1,6 +1,6 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
-import { canBuildingAttack, isBuildingConfig, isCastleId } from '../config/units.js';
+import { canBuildingAttack, isBuildingConfig, isCastleId, isMechanicalUnit } from '../config/units.js';
 import { Faction, NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
@@ -26,8 +26,8 @@ let hasCastleRed = false;
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；有城堡时箭塔/单位仍要在圈内。
  *   无敌方城堡（牌型验证混编 / 阵型对拆）则圈外敌军也纳入，否则双方会原地 Idle。
  *
- * 有治疗技能的单位友军优先：视野内残血友军先锁并寻路治疗；
- * 无伤员时才锁已进入攻击射程的敌军，不追圈外远敌、不跨图推城堡。
+ * 有治疗技能的单位友军优先：全场残血友军先锁并寻路治疗；
+ * 无伤员时才锁已进入攻击射程的敌军，否则跟随最近友军，不追圈外远敌、不跨图推城堡。
  *
  * spawnUnit 时按 id 打散了首次索敌倒计时（retargetIn），避免同批出场挤在同一帧全场扫描。
  * 新锁定敌军时立刻分配攻击环槽位；治疗友军不占槽位。
@@ -88,7 +88,7 @@ export function updateTargeting(world: World): void {
 }
 
 /**
- * 治疗单位索敌：残血友军优先于敌军，且不主动追敌。
+ * 治疗单位索敌：全场残血友军优先；无伤员才打射程内敌军；再否则跟随最近友军。
  * 从敌军切到友军时清普攻前摇——结算读 targetId 且不验阵营，否则会误伤友军。
  */
 function updateHealUnitTargeting(world: World, unit: Unit): void {
@@ -100,13 +100,9 @@ function updateHealUnitTargeting(world: World, unit: Unit): void {
     return;
   }
 
-  const allyId = findNearestInjuredAlly(unit);
-  if (allyId !== NO_TARGET) {
-    if (isAlive(current) && current.faction !== unit.faction) {
-      unit.windupLeft = 0;
-    }
-    unit.targetId = allyId;
-    unit.engageSlot = NO_ENGAGE_SLOT;
+  const injuredId = findNearestInjuredAlly(unit);
+  if (injuredId !== NO_TARGET) {
+    lockHealAllyTarget(unit, current, injuredId);
     return;
   }
 
@@ -129,17 +125,47 @@ function updateHealUnitTargeting(world: World, unit: Unit): void {
     return;
   }
 
+  // 无近敌则跟上当前友军；没有粘性目标再锁全场最近友军，避免孤立停走
+  if (isValidFollowAlly(unit, current)) {
+    unit.engageSlot = NO_ENGAGE_SLOT;
+    return;
+  }
+
+  const followId = findNearestAlly(unit);
+  if (followId !== NO_TARGET) {
+    lockHealAllyTarget(unit, current, followId);
+    return;
+  }
+
   unit.targetId = NO_TARGET;
   unit.engageSlot = NO_ENGAGE_SLOT;
 }
 
-/** 治疗寻路粘性：活着、同阵营、非自身、非建筑、未满血。不做成类型谓词，避免失败时把敌军收窄成 never。 */
-function isValidInjuredAlly(unit: Unit, current: Unit | undefined): boolean {
+/** 切到友军寻路目标：若上一帧锁的是敌军则清普攻前摇，避免结算误伤。 */
+function lockHealAllyTarget(unit: Unit, current: Unit | undefined, allyId: number): void {
+  if (isAlive(current) && current.faction !== unit.faction) {
+    unit.windupLeft = 0;
+  }
+  unit.targetId = allyId;
+  unit.engageSlot = NO_ENGAGE_SLOT;
+}
+
+/** 跟随粘性：活着、同阵营、非自身、非建筑（满血也算）。 */
+function isValidFollowAlly(unit: Unit, current: Unit | undefined): boolean {
   return (
     isAlive(current)
     && current.faction === unit.faction
     && current.id !== unit.id
     && !isBuildingConfig(current.config)
+  );
+}
+
+/** 治疗寻路粘性：在跟随条件上再要求未满血、非机械。不做成类型谓词，避免失败时把敌军收窄成 never。 */
+function isValidInjuredAlly(unit: Unit, current: Unit | undefined): boolean {
+  return (
+    isValidFollowAlly(unit, current)
+    && !!current
+    && !isMechanicalUnit(current.config)
     && current.hp < current.stats.maxHp
   );
 }
@@ -324,18 +350,25 @@ function findNearestInReachEnemy(unit: Unit): number {
   return bestId;
 }
 
-/** 视野内最近的受伤友军（排除自身与建筑），供治疗单位优先寻路接近。 */
+/** 全场最近的受伤友军（排除自身、建筑与机械），不受 sightRange 限制。 */
 function findNearestInjuredAlly(unit: Unit): number {
-  const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
+  return findNearestAlly(unit, true);
+}
+
+/**
+ * 全场最近友军（排除自身与建筑）。injuredOnly 时只收可治疗残血（再排除机械）；
+ * 否则满血/机械也算，供无伤员时跟随，避免女王孤立停走。
+ */
+function findNearestAlly(unit: Unit, injuredOnly = false): number {
   let bestId = NO_TARGET;
   let bestDistSq: Fx = 0;
 
   for (const other of alliesOf(unit)) {
     if (other.id === unit.id) continue;
     if (isBuildingConfig(other.config)) continue;
-    if (other.hp >= other.stats.maxHp) continue;
+    if (injuredOnly && isMechanicalUnit(other.config)) continue;
+    if (injuredOnly && other.hp >= other.stats.maxHp) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
-    if (d > sightSq) continue;
     if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
       bestId = other.id;
       bestDistSq = d;

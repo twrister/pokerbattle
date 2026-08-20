@@ -556,6 +556,13 @@ export function isBuildingConfig(config: UnitConfig): boolean {
   return config.footprint > 0;
 }
 
+/** 投弹车 / 冲锋战车 / 连弩车：机械单位，不吃女王治疗。 */
+export function isMechanicalUnit(config: UnitConfig): boolean {
+  return config.id === 'ranged_chariot'
+    || config.id === 'melee_charge_wagon'
+    || config.id === 'ranged_ballista';
+}
+
 /** 有攻击参数的建筑才参与索敌/出手；无伤害或无射程的建筑仍跳过 */
 export function canBuildingAttack(config: UnitConfig): boolean {
   return isBuildingConfig(config) && config.damage > 0 && config.range > 0;

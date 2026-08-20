@@ -121,6 +121,49 @@ describe('国王与女王', () => {
     expect(base!.hp).toBe(baseBefore);
   });
 
+  it('女王不能治疗机械单位，仅有受伤战车时不施放', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const ballista = world.spawnUnit(Faction.Blue, 'ranged_ballista', fromFloat(10), fromFloat(8));
+    const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(10.5), fromFloat(8));
+    const wagon = world.spawnUnit(Faction.Blue, 'melee_charge_wagon', fromFloat(11), fromFloat(8));
+    ballista.hp -= fromFloat(200);
+    chariot.hp -= fromFloat(200);
+    wagon.hp -= fromFloat(200);
+    const ballistaBefore = ballista.hp;
+    const chariotBefore = chariot.hp;
+    const wagonBefore = wagon.hp;
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9.5), fromFloat(8));
+    ally.hp -= fromFloat(150);
+    const allyBefore = ally.hp;
+    queen.retargetIn = 0;
+
+    world.step();
+
+    // 范围内更残的战车也不锁机械；起手锁地面友军
+    expect(queen.healCastTargetId).toBe(ally.id);
+    expect(queen.targetId).toBe(ally.id);
+    expect(queen.healCooldown).toBe(queen.config.heal!.cooldown);
+    for (let i = 0; i < toFloat(queen.stats.attackWindup); i++) world.step();
+
+    expect(ally.hp).toBeGreaterThan(allyBefore);
+    expect(ballista.hp).toBe(ballistaBefore);
+    expect(chariot.hp).toBe(chariotBefore);
+    expect(wagon.hp).toBe(wagonBefore);
+
+    // 仅剩受伤机械时不进入治疗，但仍可跟随最近战车
+    ally.dead = true;
+    queen.healCooldown = 0;
+    queen.healWindupLeft = 0;
+    queen.healCastTargetId = 0;
+    queen.retargetIn = 0;
+    world.step();
+    expect(queen.healCooldown).toBe(0);
+    expect(queen.healCastTargetId).toBe(0);
+    expect(ballista.hp).toBe(ballistaBefore);
+    expect(queen.targetId).toBe(ballista.id);
+  });
+
   it('女王不能以自身为目标回血', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
@@ -153,7 +196,7 @@ describe('国王与女王', () => {
   it('无敌军时女王寻路接近远处受伤友军并治疗，不普攻友军', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
-    // 治疗半径 5、视野 5.5：两名伤员都在视野内且够不着治疗，应锁更近者并 Seek
+    // 治疗半径 5：两名伤员都够不着治疗，应锁更近者并 Seek
     const far = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(13.45));
     const nearer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(13.2));
     far.hp -= fromFloat(200);
@@ -186,11 +229,27 @@ describe('国王与女王', () => {
     expect(nearer.hp).toBeGreaterThan(nearer.stats.maxHp - fromFloat(100));
   });
 
-  it('射程内有敌军时仍优先锁视野内受伤友军，不进入攻击', () => {
+  it('视野外的残血友军也会被锁定并寻路接近', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
-    // 治疗半径 5、视野 5.5：放在两者之间，验证会 Seek 过去而不是原地打旁边的敌人
-    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(13.3));
+    // 旧 sightRange 5.5：8 格外原先看不见，现应全场锁定
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
+    ally.hp -= fromFloat(150);
+    queen.retargetIn = 0;
+
+    const startY = queen.pos.y;
+    world.step();
+
+    expect(queen.targetId).toBe(ally.id);
+    expect(queen.state).toBe(UnitState.Seek);
+    expect(toFloat(queen.pos.y)).toBeGreaterThan(toFloat(startY));
+  });
+
+  it('射程内有敌军时仍优先锁场上受伤友军，不进入攻击', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    // 伤员在治疗半径外、旧视野外，仍应 Seek 过去而不是原地打旁边的敌人
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
     const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(11));
     ally.hp -= fromFloat(150);
     queen.retargetIn = 0;
@@ -219,7 +278,7 @@ describe('国王与女王', () => {
     expect(queen.state).toBe(UnitState.Attack);
   });
 
-  it('无残血友军但敌军不在攻击射程内时女王原地待命，不主动追击', () => {
+  it('无残血友军且场上无友军、敌军不在攻击射程内时女王原地待命，不主动追击', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
     const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(18));
@@ -232,6 +291,53 @@ describe('国王与女王', () => {
     expect(queen.state).toBe(UnitState.Idle);
     expect(queen.pos.y).toBe(startY);
     expect(toFloat(queen.pos.y)).toBeLessThan(toFloat(enemy.pos.y) - 5);
+  });
+
+  it('无残血友军时跟随场上最近满血友军，进入治疗半径后站定', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const nearer = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
+    const farther = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(20));
+    queen.retargetIn = 0;
+
+    const startY = queen.pos.y;
+    world.step();
+
+    expect(queen.targetId).toBe(nearer.id);
+    expect(queen.targetId).not.toBe(farther.id);
+    expect(queen.state).toBe(UnitState.Seek);
+    expect(toFloat(queen.pos.y)).toBeGreaterThan(toFloat(startY));
+
+    // 走到治疗半径内后站定等待，不进入治疗冷却（友军满血）
+    let arrived = false;
+    for (let i = 0; i < 400; i++) {
+      expect(queen.state).not.toBe(UnitState.Attack);
+      world.step();
+      if (queen.state === UnitState.Idle && queen.targetId === nearer.id) {
+        arrived = true;
+        break;
+      }
+    }
+    expect(arrived).toBe(true);
+    expect(queen.healCooldown).toBe(0);
+  });
+
+  it('跟随满血友军时远处出现残血友军则立刻改锁伤员', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const fullAlly = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(12));
+    queen.retargetIn = 0;
+
+    world.step();
+    expect(queen.targetId).toBe(fullAlly.id);
+
+    const injured = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(16));
+    injured.hp -= fromFloat(150);
+    queen.retargetIn = 0;
+    world.step();
+
+    expect(queen.targetId).toBe(injured.id);
+    expect(queen.state).toBe(UnitState.Seek);
   });
 
   it('射程内有敌且治疗半径内有残血友军时只治疗不攻击', () => {

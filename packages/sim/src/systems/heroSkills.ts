@@ -1,6 +1,6 @@
 import { type Fx, ONE, fromFloat, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
-import { getUnitConfig, isBuildingConfig } from '../config/units.js';
+import { getUnitConfig, isBuildingConfig, isMechanicalUnit } from '../config/units.js';
 import { BuffOp, type Buff } from '../stats/buff.js';
 import { NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -145,7 +145,7 @@ function resolveQueenHeal(world: World, queen: Unit): void {
 
   const target = world.getUnit(targetId);
   if (!isAlive(target) || target.faction !== queen.faction || target.id === queen.id) return;
-  if (isBuildingConfig(target.config)) return;
+  if (isBuildingConfig(target.config) || isMechanicalUnit(target.config)) return;
   if (target.hp >= target.stats.maxHp) return;
 
   const rangeSq = mul(heal.targetRange, heal.targetRange);
@@ -201,14 +201,14 @@ function resolveMageSummon(world: World, mage: Unit): void {
   world.spawnUnit(mage.faction, summon.unitTypeId, x, y, mage.ownerSlot);
 }
 
-/** 按生命比例、再按实体 id 选出单体治疗目标，保证所有端作出相同决定；排除女王自身与建筑。 */
+/** 按生命比例、再按实体 id 选出单体治疗目标，保证所有端作出相同决定；排除自身、建筑与机械。 */
 function findLowestHpAlly(world: World, queen: Unit, range: Fx): Unit | undefined {
   const rangeSq = mul(range, range);
   let selected: Unit | undefined;
   for (const ally of world.units) {
     if (ally.dead || ally.id === queen.id || ally.faction !== queen.faction) continue;
-    // 建筑走防御塔/基地逻辑，不吃女王单体治疗
-    if (isBuildingConfig(ally.config)) continue;
+    // 建筑与机械单位不吃女王单体治疗
+    if (isBuildingConfig(ally.config) || isMechanicalUnit(ally.config)) continue;
     if (ally.hp >= ally.stats.maxHp) continue;
     if (distSq(queen.pos.x, queen.pos.y, ally.pos.x, ally.pos.y) > rangeSq) continue;
     if (!selected || isLowerHpRatio(ally, selected)) selected = ally;
