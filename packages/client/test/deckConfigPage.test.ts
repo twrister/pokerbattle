@@ -87,6 +87,20 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
+  it('同花按 J～A 张数分成两档', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    clickCategory('同花');
+    expect(situationNames()).toEqual(['含 0～1 张 J～A', '含 2+ 张 J～A']);
+    expect(formationNames()).toEqual(['箭塔', '巨龙', '石头人']);
+
+    clickSituation('含 2+ 张 J～A');
+    expect(formationNames()).toEqual(['箭塔', '巨龙', '石头人']);
+
+    page.dispose();
+  });
+
   it('同花顺只有任意情况，其下列出全部阵型', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
@@ -312,7 +326,14 @@ describe('卡组阵型配置页', () => {
     page.show();
 
     clickCategory('五顺');
-    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3-4-5', '9-10-J-Q-K', '10-J-Q-K-A', '任意']);
+    expect(situationNames()).toEqual([
+      '数字牌 2～10',
+      'A-2-3-4-5',
+      '7-8-9-10-J',
+      '8-9-10-J-Q',
+      '9-10-J-Q-K',
+      '10-J-Q-K-A',
+    ]);
 
     clickSituation('10-J-Q-K-A');
     expect(formationNames()).toEqual(['10-J-Q-K-A']);

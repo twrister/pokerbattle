@@ -346,7 +346,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     editor.appendChild(remove);
   }
 
-  /** 牌面匹配编辑：数字牌 / 指定点数 / 大小王 / 任意。 */
+  /** 牌面匹配编辑：数字牌 / 指定点数 / 点数张数 / 大小王 / 任意。 */
   function renderMatchEditor(draft: FormationDraft): HTMLElement {
     const section = document.createElement('section');
     section.className = 'deck-rows';
@@ -362,6 +362,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     const kindOptions: Array<{ value: FormationMatchRule['kind']; label: string }> = [
       { value: 'numbers', label: '数字牌 2～10' },
       { value: 'ranks', label: '指定点数' },
+      { value: 'tripleRanks', label: '三条点数' },
+      { value: 'rankCount', label: '指定点数张数' },
       { value: 'joker', label: '大小王' },
       { value: 'any', label: '任意（牌型命中即可）' },
     ];
@@ -377,7 +379,11 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       if (kind === 'numbers') draft.match = { kind: 'numbers' };
       else if (kind === 'any') draft.match = { kind: 'any' };
       else if (kind === 'joker') draft.match = { kind: 'joker', joker: 'black' };
-      else draft.match = { kind: 'ranks', ranks: ['5'] };
+      else if (kind === 'tripleRanks') {
+        draft.match = { kind: 'tripleRanks', ranks: ['2', '3', '4', '5', '6', '7', '8', '9', '10'] };
+      } else if (kind === 'rankCount') {
+        draft.match = { kind: 'rankCount', ranks: ['J', 'Q', 'K', 'A'], min: 2 };
+      } else draft.match = { kind: 'ranks', ranks: ['5'] };
       renderAll();
     });
     kindRow.appendChild(kindSelect);
@@ -406,7 +412,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       section.appendChild(jokerRow);
     }
 
-    if (draft.match.kind === 'ranks') {
+    if (draft.match.kind === 'ranks' || draft.match.kind === 'tripleRanks' || draft.match.kind === 'rankCount') {
+      const matchKind = draft.match.kind;
       const ranksBox = document.createElement('div');
       ranksBox.className = 'deck-rank-checks';
       const selectedRanks = new Set(draft.match.ranks);
@@ -417,20 +424,59 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
         input.type = 'checkbox';
         input.checked = selectedRanks.has(rank);
         input.addEventListener('change', () => {
-          const next = new Set((draft.match as { kind: 'ranks'; ranks: CardRank[] }).ranks);
+          const current = draft.match as {
+            kind: 'ranks' | 'tripleRanks' | 'rankCount';
+            ranks: CardRank[];
+            min?: number;
+            max?: number;
+          };
+          const next = new Set(current.ranks);
           if (input.checked) next.add(rank);
           else next.delete(rank);
           // 保持 FORMATION_MATCH_RANKS 顺序，便于预览样例稳定。
-          draft.match = {
-            kind: 'ranks',
-            ranks: FORMATION_MATCH_RANKS.filter((item) => next.has(item)),
-          };
+          const ranks = FORMATION_MATCH_RANKS.filter((item) => next.has(item));
+          draft.match =
+            matchKind === 'rankCount'
+              ? {
+                  kind: 'rankCount',
+                  ranks,
+                  ...(current.min === undefined ? {} : { min: current.min }),
+                  ...(current.max === undefined ? {} : { max: current.max }),
+                }
+              : { kind: matchKind, ranks };
           refreshNavAfterMatchChange();
         });
         label.append(input, document.createTextNode(rank));
         ranksBox.appendChild(label);
       }
       section.appendChild(ranksBox);
+    }
+
+    if (draft.match.kind === 'rankCount') {
+      section.appendChild(
+        rankCountBoundField('至少张数', draft.match.min, (value) => {
+          if (draft.match.kind !== 'rankCount') return;
+          draft.match = {
+            kind: 'rankCount',
+            ranks: [...draft.match.ranks],
+            ...(value === undefined ? {} : { min: value }),
+            ...(draft.match.max === undefined ? {} : { max: draft.match.max }),
+          };
+          refreshNavAfterMatchChange();
+        }),
+      );
+      section.appendChild(
+        rankCountBoundField('至多张数', draft.match.max, (value) => {
+          if (draft.match.kind !== 'rankCount') return;
+          draft.match = {
+            kind: 'rankCount',
+            ranks: [...draft.match.ranks],
+            ...(draft.match.min === undefined ? {} : { min: draft.match.min }),
+            ...(value === undefined ? {} : { max: value }),
+          };
+          refreshNavAfterMatchChange();
+        }),
+      );
     }
 
     return section;
@@ -811,8 +857,46 @@ async function persist(drafts: CardFormationDrafts): Promise<{ ok: true } | { ok
 /** 新增阵型时拷贝当前情况的 match，避免和分组对象共享引用。 */
 function copyMatchRule(match: FormationMatchRule): FormationMatchRule {
   if (match.kind === 'ranks') return { kind: 'ranks', ranks: [...match.ranks] };
+  if (match.kind === 'tripleRanks') return { kind: 'tripleRanks', ranks: [...match.ranks] };
+  if (match.kind === 'rankCount') {
+    return {
+      kind: 'rankCount',
+      ranks: [...match.ranks],
+      ...(match.min === undefined ? {} : { min: match.min }),
+      ...(match.max === undefined ? {} : { max: match.max }),
+    };
+  }
   if (match.kind === 'joker') return { kind: 'joker', joker: match.joker };
   return { kind: match.kind };
+}
+
+/** 点数张数的下限/上限输入；留空表示不限。 */
+function rankCountBoundField(
+  label: string,
+  value: number | undefined,
+  onChange: (value: number | undefined) => void,
+): HTMLLabelElement {
+  const row = document.createElement('label');
+  row.className = 'deck-field';
+  row.append(document.createTextNode(label));
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.step = '1';
+  input.placeholder = '不限';
+  input.value = value === undefined ? '' : String(value);
+  input.addEventListener('input', () => {
+    const raw = input.value.trim();
+    if (raw === '') {
+      onChange(undefined);
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0) return;
+    onChange(parsed);
+  });
+  row.appendChild(input);
+  return row;
 }
 
 

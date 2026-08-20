@@ -89,7 +89,11 @@ export function rankTierOfMatch(match: FormationMatchRule): number {
       return -1;
     case 'joker':
       return match.joker === 'black' ? 5 : 6;
-    case 'ranks': {
+    case 'ranks':
+    case 'tripleRanks':
+    case 'rankCount': {
+      // 仅有上限的低档（如同花 0～1 张 J～A）按数字牌计；有下限才取指定点数最高档。
+      if (match.kind === 'rankCount' && (match.min === undefined || match.min <= 0)) return 0;
       let best = -1;
       for (const rank of match.ranks) {
         const tier = rankTierOfCardRank(rank);

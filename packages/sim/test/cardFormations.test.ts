@@ -400,7 +400,7 @@ describe('牌型兵种阵型配置', () => {
     }
   });
 
-  it('五顺按点数段匹配可配置站位，且箭塔战车全局可选', () => {
+  it('五顺按点数段匹配可配置站位，7-J / 8-Q 各有独立方案', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const idsFor = (cardIds: string[]) =>
       getFormationsFor(['straight5'], cards(...cardIds)).map((formation) => formation.id);
@@ -410,16 +410,17 @@ describe('牌型兵种阵型配置', () => {
     expect(CARD_FORMATIONS.straight5.map((entry) => entry.id)).toEqual([
       'straight5_number',
       'straight5_A2345',
+      'straight5_78910J',
+      'straight5_8910JQ',
       'straight5_910JQK',
       'straight5_10JQKA',
-      'straight5_tower',
-      'straight5_chariot',
+      'straight5_custom_7',
+      'straight5_custom_8',
     ]);
 
     expect(idsFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'])).toEqual([
       'straight5_number',
-      'straight5_tower',
-      'straight5_chariot',
+      'straight5_custom_7',
     ]);
     expect(
       formationFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'], 'straight5_number').units,
@@ -430,44 +431,53 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'])).toEqual([
       'straight5_A2345',
-      'straight5_tower',
-      'straight5_chariot',
+      'straight5_custom_8',
     ]);
     expect(
       formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'], 'straight5_A2345').rows,
     ).toEqual([
-      ['melee_cavalry', 'melee_grunt', 'melee_grunt'],
-      ['ranged_archer', 'ranged_archer'],
+      ['melee_grunt', 'melee_cavalry', 'melee_grunt', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
+    ]);
+
+    expect(idsFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'])).toEqual([
+      'straight5_78910J',
+    ]);
+    expect(
+      formationFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'], 'straight5_78910J').rows,
+    ).toEqual([
+      ['melee_grunt', 'melee_guard', 'melee_grunt', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
+    ]);
+
+    expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds', 'Q-spades'])).toEqual([
+      'straight5_8910JQ',
+    ]);
+    expect(
+      formationFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds', 'Q-spades'], 'straight5_8910JQ').rows,
+    ).toEqual([
+      ['melee_grunt', 'melee_guard', 'melee_grunt', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer', 'ranged_archer'],
     ]);
 
     expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'])).toEqual([
       'straight5_910JQK',
-      'straight5_tower',
-      'straight5_chariot',
     ]);
     expect(
       formationFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'], 'straight5_910JQK').rows,
     ).toEqual([
-      ['melee_grunt', 'melee_guard'],
-      ['ranged_archer', 'ranged_archer', 'hero_queen'],
+      ['melee_grunt', 'melee_grunt', 'melee_guard', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer', 'ranged_archer'],
     ]);
 
     expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'])).toEqual([
       'straight5_10JQKA',
-      'straight5_tower',
-      'straight5_chariot',
     ]);
     expect(
       formationFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'], 'straight5_10JQKA').rows,
     ).toEqual([
-      ['melee_guard', 'hero_king', 'melee_cavalry'],
-      ['hero_queen', 'ranged_archer'],
-    ]);
-
-    // 未分段的五顺只保留箭塔/战车
-    expect(idsFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'])).toEqual([
-      'straight5_tower',
-      'straight5_chariot',
+      ['melee_guard', 'melee_cavalry', 'hero_king', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer', 'ranged_archer'],
     ]);
   });
 
@@ -695,6 +705,20 @@ describe('牌型兵种阵型配置', () => {
     resetCardFormationsToDefault();
   });
 
+  it('葫芦按三条点数分档匹配，对子点数不参与分档', () => {
+    const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
+    const idsFor = (cardIds: string[]) =>
+      getFormationsFor(['full_house'], cards(...cardIds)).map((formation) => formation.id);
+    const lowIds = ['full_house_tower_2_10', 'full_house_dragon_2_10', 'full_house_custom_4_2_10'];
+    const highIds = ['full_house_tower_JA', 'full_house_dragon_JA', 'full_house_custom_4_JA'];
+
+    expect(CARD_FORMATIONS.full_house.map((entry) => entry.id)).toEqual([...lowIds, ...highIds]);
+    expect(idsFor(['5-spades', '5-hearts', '5-clubs', '9-diamonds', '9-spades'])).toEqual(lowIds);
+    expect(idsFor(['8-spades', '8-hearts', '8-clubs', '2-diamonds', '2-spades'])).toEqual(lowIds);
+    expect(idsFor(['J-spades', 'J-hearts', 'J-clubs', '9-diamonds', '9-spades'])).toEqual(highIds);
+    expect(idsFor(['A-spades', 'A-hearts', 'A-clubs', '2-diamonds', '2-spades'])).toEqual(highIds);
+  });
+
   it('缺少 match 的草稿被严格拒绝', () => {
     const missingMatch = dumpCardFormationDrafts();
     delete (missingMatch.single[0] as { match?: unknown }).match;
@@ -703,6 +727,10 @@ describe('牌型兵种阵型配置', () => {
     const badRanks = dumpCardFormationDrafts();
     badRanks.single[0]!.match = { kind: 'ranks', ranks: [] };
     expect(validateCardFormationDrafts(badRanks)).toContain('点数匹配不能为空');
+
+    const missingBounds = dumpCardFormationDrafts();
+    missingBounds.flush[0]!.match = { kind: 'rankCount', ranks: ['J', 'Q', 'K', 'A'] };
+    expect(validateCardFormationDrafts(missingBounds)).toContain('至少要设置下限或上限');
   });
 
   it('dump 保留炸弹点数伤害，非法表被拒绝', () => {
@@ -735,6 +763,25 @@ describe('牌型兵种阵型配置', () => {
     const negativeFlat = dumpCardFormationDrafts();
     negativeFlat.rocket.find((entry) => entry.id === 'rocket_bomb')!.damage = -1;
     expect(validateCardFormationDrafts(negativeFlat)).toContain('炸弹伤害必须是不小于 0 的数字');
+  });
+
+  it('同花按 J～A 张数分档，两档互斥', () => {
+    const lowCards = ['2-spades', '4-spades', '6-spades', '8-spades', 'J-spades'].map(
+      (id) => getPokerCardById(id)!,
+    );
+    const highCards = ['2-spades', '4-spades', '6-spades', 'J-spades', 'Q-spades'].map(
+      (id) => getPokerCardById(id)!,
+    );
+    expect(getFormationsFor(['flush'], lowCards).map((entry) => entry.id)).toEqual([
+      'flush_tower',
+      'flush_dragon',
+      'flush_custom_3',
+    ]);
+    expect(getFormationsFor(['flush'], highCards).map((entry) => entry.id)).toEqual([
+      'flush_tower_JA',
+      'flush_dragon_JA',
+      'flush_custom_3_JA',
+    ]);
   });
 
   it('同花与炸弹出兵以配置 rows 为准', () => {
@@ -846,10 +893,31 @@ describe('牌型兵种阵型配置', () => {
     expect(matchRuleKey({ kind: 'ranks', ranks: ['3', 'A', '2'] })).toBe(
       matchRuleKey({ kind: 'ranks', ranks: ['A', '2', '3'] }),
     );
+    expect(matchRuleKey({ kind: 'tripleRanks', ranks: ['10', '2', '5'] })).toBe(
+      matchRuleKey({ kind: 'tripleRanks', ranks: ['2', '5', '10'] }),
+    );
+    expect(matchRuleKey({ kind: 'rankCount', ranks: ['A', 'J'], min: 2 })).toBe(
+      matchRuleKey({ kind: 'rankCount', ranks: ['J', 'A'], min: 2 }),
+    );
     expect(formatMatchRuleLabel({ kind: 'any' })).toBe('任意');
     expect(formatMatchRuleLabel({ kind: 'numbers' })).toBe('数字牌 2～10');
     expect(formatMatchRuleLabel({ kind: 'joker', joker: 'red' })).toBe('大王');
     expect(formatMatchRuleLabel({ kind: 'ranks', ranks: ['Q', 'K', 'A'] })).toBe('Q-K-A');
+    expect(
+      formatMatchRuleLabel({
+        kind: 'tripleRanks',
+        ranks: ['2', '3', '4', '5', '6', '7', '8', '9', '10'],
+      }),
+    ).toBe('三条 2～10');
+    expect(formatMatchRuleLabel({ kind: 'tripleRanks', ranks: ['J', 'Q', 'K', 'A'] })).toBe(
+      '三条 J～A',
+    );
+    expect(formatMatchRuleLabel({ kind: 'rankCount', ranks: ['J', 'Q', 'K', 'A'], min: 2 })).toBe(
+      '含 2+ 张 J～A',
+    );
+    expect(formatMatchRuleLabel({ kind: 'rankCount', ranks: ['J', 'Q', 'K', 'A'], max: 1 })).toBe(
+      '含 0～1 张 J～A',
+    );
   });
 
   it('groupFormationsByMatch 按首次出现顺序合并同一 match', () => {
@@ -869,9 +937,35 @@ describe('牌型兵种阵型配置', () => {
       '单弓手',
     ]);
 
-    const flush = groupFormationsByMatch(drafts.straight_flush);
-    expect(flush).toHaveLength(1);
-    expect(flush[0]!.label).toBe('任意');
-    expect(flush[0]!.indices).toHaveLength(drafts.straight_flush.length);
+    const flushGroups = groupFormationsByMatch(drafts.flush);
+    expect(flushGroups.map((group) => group.label)).toEqual(['含 0～1 张 J～A', '含 2+ 张 J～A']);
+    expect(flushGroups[0]!.indices.map((index) => drafts.flush[index]!.name)).toEqual([
+      '箭塔',
+      '巨龙',
+      '石头人',
+    ]);
+    expect(flushGroups[1]!.indices.map((index) => drafts.flush[index]!.name)).toEqual([
+      '箭塔',
+      '巨龙',
+      '石头人',
+    ]);
+
+    const straightFlush = groupFormationsByMatch(drafts.straight_flush);
+    expect(straightFlush).toHaveLength(1);
+    expect(straightFlush[0]!.label).toBe('任意');
+    expect(straightFlush[0]!.indices).toHaveLength(drafts.straight_flush.length);
+
+    const fullHouse = groupFormationsByMatch(drafts.full_house);
+    expect(fullHouse.map((group) => group.label)).toEqual(['三条 2～10', '三条 J～A']);
+    expect(fullHouse[0]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual([
+      '双射手箭塔',
+      '飞龙',
+      '小石头人',
+    ]);
+    expect(fullHouse[1]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual([
+      '三射手箭塔',
+      '喷火龙',
+      '大石头人',
+    ]);
   });
 });

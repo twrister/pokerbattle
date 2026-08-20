@@ -89,6 +89,13 @@ export type FormationMatchRule =
   | { kind: 'any' }
   | { kind: 'numbers' }
   | { kind: 'ranks'; ranks: CardRank[] }
+  /** 只看出现 3 次的点数（葫芦的三条），对子点数不参与匹配。 */
+  | { kind: 'tripleRanks'; ranks: CardRank[] }
+  /**
+   * 按「指定点数出现张数」分档，min/max 至少填一个。
+   * 同花用它把「含 2+ 张 J～A」与其余手牌拆开，避免 any 与高档重叠。
+   */
+  | { kind: 'rankCount'; ranks: CardRank[]; min?: number; max?: number }
   | { kind: 'joker'; joker: 'black' | 'red' };
 
 /** 一条「牌型 → 兵种搭配」配置，含可配置前后站位。 */
@@ -173,8 +180,22 @@ function resolveThumbScale(value: number | undefined): number {
 /** 深拷贝牌面匹配规则，避免编辑草稿互相污染。 */
 function cloneMatchRule(match: FormationMatchRule): FormationMatchRule {
   if (match.kind === 'ranks') return { kind: 'ranks', ranks: [...match.ranks] };
+  if (match.kind === 'tripleRanks') return { kind: 'tripleRanks', ranks: [...match.ranks] };
+  if (match.kind === 'rankCount') return cloneRankCountMatch(match);
   if (match.kind === 'joker') return { kind: 'joker', joker: match.joker };
   return { kind: match.kind };
+}
+
+/** 拷贝点数张数规则，只带上已配置的 min/max。 */
+function cloneRankCountMatch(
+  match: Extract<FormationMatchRule, { kind: 'rankCount' }>,
+): Extract<FormationMatchRule, { kind: 'rankCount' }> {
+  return {
+    kind: 'rankCount',
+    ranks: [...match.ranks],
+    ...(match.min === undefined ? {} : { min: match.min }),
+    ...(match.max === undefined ? {} : { max: match.max }),
+  };
 }
 
 /** 卡组页按 match 分组后的一条「情况」。 */
@@ -191,6 +212,47 @@ function sortMatchRanks(ranks: readonly CardRank[]): CardRank[] {
   return FORMATION_MATCH_RANKS.filter((rank) => ranks.includes(rank));
 }
 
+/** 标签区间按牌力 2…A，避免 A 排最前把 2～10 拆开。 */
+const POKER_LABEL_RANK_ORDER: readonly CardRank[] = [
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  'J',
+  'Q',
+  'K',
+  'A',
+];
+
+/** 把连续点数收成 2～10 / J～A 这类区间，方便情况列阅读。 */
+function formatRankRanges(ranks: readonly CardRank[]): string {
+  const ordered = POKER_LABEL_RANK_ORDER.filter((rank) => ranks.includes(rank));
+  if (ordered.length === 0) return '';
+  const ranges: string[] = [];
+  let start = ordered[0]!;
+  let prev = start;
+  const flush = (end: CardRank): void => {
+    ranges.push(start === end ? start : `${start}～${end}`);
+  };
+  for (let index = 1; index < ordered.length; index += 1) {
+    const rank = ordered[index]!;
+    if (POKER_LABEL_RANK_ORDER.indexOf(rank) === POKER_LABEL_RANK_ORDER.indexOf(prev) + 1) {
+      prev = rank;
+      continue;
+    }
+    flush(prev);
+    start = rank;
+    prev = rank;
+  }
+  flush(prev);
+  return ranges.join('、');
+}
+
 /** 把 match 收成稳定键，供情况列去重。 */
 export function matchRuleKey(match: FormationMatchRule): string {
   switch (match.kind) {
@@ -202,6 +264,10 @@ export function matchRuleKey(match: FormationMatchRule): string {
       return `joker:${match.joker}`;
     case 'ranks':
       return `ranks:${sortMatchRanks(match.ranks).join(',')}`;
+    case 'tripleRanks':
+      return `tripleRanks:${sortMatchRanks(match.ranks).join(',')}`;
+    case 'rankCount':
+      return `rankCount:${sortMatchRanks(match.ranks).join(',')}:${match.min ?? ''}:${match.max ?? ''}`;
   }
 }
 
@@ -217,7 +283,26 @@ export function formatMatchRuleLabel(match: FormationMatchRule): string {
     case 'ranks':
       // 展示沿用配置顺序（如 Q-K-A），不要按点数表重排成 A-Q-K。
       return match.ranks.join('-');
+    case 'tripleRanks': {
+      const ranges = formatRankRanges(match.ranks);
+      return ranges ? `三条 ${ranges}` : '三条';
+    }
+    case 'rankCount':
+      return formatRankCountLabel(match);
   }
+}
+
+/** 点数张数规则的情况列文案，如「含 2+ 张 J～A」。 */
+function formatRankCountLabel(match: Extract<FormationMatchRule, { kind: 'rankCount' }>): string {
+  const ranges = formatRankRanges(match.ranks);
+  const rankText = ranges || '指定点数';
+  const { min, max } = match;
+  if (min !== undefined && max !== undefined) {
+    return min === max ? `含 ${min} 张 ${rankText}` : `含 ${min}～${max} 张 ${rankText}`;
+  }
+  if (min !== undefined) return `含 ${min}+ 张 ${rankText}`;
+  if (max !== undefined) return max === 0 ? `不含 ${rankText}` : `含 0～${max} 张 ${rankText}`;
+  return `含 ${rankText}`;
 }
 
 /** 按首次出现顺序把阵型草稿收成情况组。 */
@@ -447,7 +532,9 @@ function validateMatchRule(id: string, match: FormationMatchRule | undefined): s
         return `阵型「${id}」王牌匹配必须是 black 或 red`;
       }
       return null;
-    case 'ranks': {
+    case 'ranks':
+    case 'tripleRanks':
+    case 'rankCount': {
       if (!Array.isArray(match.ranks) || match.ranks.length === 0) {
         return `阵型「${id}」点数匹配不能为空`;
       }
@@ -457,11 +544,31 @@ function validateMatchRule(id: string, match: FormationMatchRule | undefined): s
         if (seen.has(rank)) return `阵型「${id}」点数「${rank}」重复`;
         seen.add(rank);
       }
+      if (match.kind === 'rankCount') {
+        return validateRankCountBounds(id, match.min, match.max);
+      }
       return null;
     }
     default:
       return `阵型「${id}」牌面匹配类型无效`;
   }
+}
+
+/** 点数张数规则必须带合法下限或上限，且下限不能大于上限。 */
+function validateRankCountBounds(id: string, min: number | undefined, max: number | undefined): string | null {
+  if (min === undefined && max === undefined) {
+    return `阵型「${id}」点数张数至少要设置下限或上限`;
+  }
+  if (min !== undefined && (!Number.isInteger(min) || min < 0)) {
+    return `阵型「${id}」点数张数下限必须是不小于 0 的整数`;
+  }
+  if (max !== undefined && (!Number.isInteger(max) || max < 0)) {
+    return `阵型「${id}」点数张数上限必须是不小于 0 的整数`;
+  }
+  if (min !== undefined && max !== undefined && min > max) {
+    return `阵型「${id}」点数张数下限不能大于上限`;
+  }
+  return null;
 }
 
 /** 校验引信炸弹伤害表；未配置时跳过，非法键或负数拒绝。 */

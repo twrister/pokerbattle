@@ -65,6 +65,20 @@ function strongestCard(cards: readonly PlayingCard[]): PlayingCard {
   return cards.reduce((strongest, card) => (getCardStrength(card) > getCardStrength(strongest) ? card : strongest));
 }
 
+/** 取出恰好出现 3 次的点数；王牌或没有三条时返回 null。 */
+function tripleRankOf(cards: readonly PlayingCard[]): CardRank | null {
+  if (cards.some((card) => card.joker || card.rank === 'JOKER')) return null;
+  const counts = new Map<CardRank, number>();
+  for (const card of cards) {
+    const rank = card.rank as CardRank;
+    counts.set(rank, (counts.get(rank) ?? 0) + 1);
+  }
+  for (const [rank, count] of counts) {
+    if (count === 3) return rank;
+  }
+  return null;
+}
+
 /** 手牌是否命中配置的牌面匹配规则。 */
 export function cardsMatchRule(cards: readonly PlayingCard[], match: FormationMatchRule): boolean {
   if (cards.length === 0) return false;
@@ -82,7 +96,26 @@ export function cardsMatchRule(cards: readonly PlayingCard[], match: FormationMa
       if (unique.size !== match.ranks.length) return false;
       return match.ranks.every((rank) => unique.has(rank));
     }
+    case 'tripleRanks': {
+      const tripleRank = tripleRankOf(cards);
+      return tripleRank !== null && match.ranks.includes(tripleRank);
+    }
+    case 'rankCount':
+      return cardsMatchRankCount(cards, match);
   }
+}
+
+/** 统计指定点数出现张数，再对照 min/max；王牌不参与点数张数分档。 */
+function cardsMatchRankCount(
+  cards: readonly PlayingCard[],
+  match: Extract<FormationMatchRule, { kind: 'rankCount' }>,
+): boolean {
+  if (cards.some((card) => card.joker)) return false;
+  const wanted = new Set(match.ranks);
+  const count = cards.filter((card) => wanted.has(card.rank as CardRank)).length;
+  if (match.min !== undefined && count < match.min) return false;
+  if (match.max !== undefined && count > match.max) return false;
+  return true;
 }
 
 /**
@@ -241,5 +274,45 @@ export function getPreviewCardsForFormation(
   if (match.kind === 'ranks') {
     return previewCardsFromRanks(match.ranks, previewCopiesForCategory(category), card);
   }
+  if (match.kind === 'tripleRanks') {
+    return previewCardsForTripleRanks(match.ranks, card);
+  }
+  if (match.kind === 'rankCount') {
+    return previewCardsForRankCount(match, card);
+  }
   return previewCardsForNumbersOrAny(category, card);
+}
+
+/**
+ * 点数张数预览：用同花色牌拼出恰好满足 min（或不超过 max）的样例。
+ * 同花分档要看得见 J～A 张数差异，因此高档至少放 2 张 J～A。
+ */
+function previewCardsForRankCount(
+  match: Extract<FormationMatchRule, { kind: 'rankCount' }>,
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  const highWanted = match.min !== undefined ? match.min : Math.min(match.max ?? 0, 1);
+  const highs = match.ranks.slice(0, highWanted);
+  const numberPool: CardRank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  const lows = numberPool.filter((rank) => !match.ranks.includes(rank)).slice(0, Math.max(0, 5 - highs.length));
+  return [...lows, ...highs].map((rank) => card(`${rank}-spades`));
+}
+
+/** 葫芦预览：第一条点数做三条，再配一对不冲突的数字牌。 */
+function previewCardsForTripleRanks(
+  ranks: readonly CardRank[],
+  card: (id: string) => PlayingCard,
+): PlayingCard[] {
+  const tripleRank = ranks[0];
+  if (!tripleRank) return [];
+  const pairRank = pickPairRankForTriplePreview(tripleRank);
+  return [
+    ...previewCardsFromRanks([tripleRank], 3, card),
+    ...previewCardsFromRanks([pairRank], 2, card),
+  ];
+}
+
+/** 优先 9、其次 5，避免与三条同点导致预览不是葫芦。 */
+function pickPairRankForTriplePreview(tripleRank: CardRank): CardRank {
+  return tripleRank !== '9' ? '9' : '5';
 }
