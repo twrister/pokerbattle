@@ -83,6 +83,7 @@ export {
   isBuildingConfig,
   isCastleId,
   isMechanicalUnit,
+  isRangedAttackKind,
   usesArrowVisual,
   usesDragonProjectile,
   recomputeMaxUnitRadius,

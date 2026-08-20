@@ -132,10 +132,13 @@ export interface UnitConfig {
   attackInterval: Fx;
   /** 出手前摇（tick），走完前摇才结算伤害，给动画和「打断」留位置 */
   attackWindup: Fx;
-  /** 最大射程，按边缘到边缘算，不含双方半径 */
+  /**
+   * 最大射程。近战按边缘到边缘（再加双方半径）；
+   * 远程按自身圆心到对方边缘 / 建筑表面，不再叠自身半径。
+   */
   range: Fx;
   /**
-   * 最小射程（边缘到边缘）。目标贴得比这更近则无法出手；0 表示无近距限制。
+   * 最小射程。口径与最大射程一致；目标贴得比这更近则无法出手；0 表示无近距限制。
    * 不进 Attributes，不可被 Buff。
    */
   minRange: Fx;
@@ -156,8 +159,13 @@ export interface UnitConfig {
    */
   preferAir: boolean;
   /**
+   * 索敌时是否优先建筑。
+   * 候选里有建筑则锁最近建筑（可跨桶压过已进射程的单位）；无建筑再锁最近敌人。
+   */
+  preferBuildings: boolean;
+  /**
    * 索敌与普攻是否只以建筑为合法目标。
-   * 缺省 false；攻城单位写出 true。
+   * 缺省 false；硬攻城单位写出 true。
    */
   targetsBuildingsOnly: boolean;
   attack: AttackKind;
@@ -269,7 +277,9 @@ export interface UnitConfigDraft {
   canAttackAir?: boolean;
   /** 缺省 false；仅对空优先兵种写出 true */
   preferAir?: boolean;
-  /** 缺省 false；仅攻城单位写出 true */
+  /** 缺省 false；仅优先打建筑的兵种写出 true */
+  preferBuildings?: boolean;
+  /** 缺省 false；仅硬攻城单位写出 true */
   targetsBuildingsOnly?: boolean;
   attackKind: 'melee' | 'melee_aoe' | 'projectile' | 'projectile_aoe';
   /** 仅弹道攻击时有意义 */
@@ -346,6 +356,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.movementLayer = source.movementLayer;
   target.canAttackAir = source.canAttackAir;
   target.preferAir = source.preferAir;
+  target.preferBuildings = source.preferBuildings;
   target.targetsBuildingsOnly = source.targetsBuildingsOnly;
   target.footprint = source.footprint;
   target.attack = cloneAttack(source.attack);
@@ -464,6 +475,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
     canAttackAir: resolveCanAttackAir(draft.attackKind, draft.canAttackAir),
     preferAir: draft.preferAir === true,
+    preferBuildings: draft.preferBuildings === true,
     targetsBuildingsOnly: draft.targetsBuildingsOnly === true,
     footprint: normalizeFootprint(draft.footprint),
     attack: attackFromDraft(draft),
@@ -482,9 +494,14 @@ function normalizeUnitTag(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** 弹道攻击（单体/落点范围）视为远程，射程不叠自身半径。 */
+export function isRangedAttackKind(kind: AttackKind['kind']): boolean {
+  return kind === 'projectile' || kind === 'projectile_aoe';
+}
+
 /** 近战默认不对空；远程默认可对空。 */
 function defaultCanAttackAir(attackKind: AttackKind['kind']): boolean {
-  return attackKind === 'projectile' || attackKind === 'projectile_aoe';
+  return isRangedAttackKind(attackKind);
 }
 
 /** JSON 显式覆盖优先，否则按攻击方式给默认值。 */
@@ -659,6 +676,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.canAttackAir = config.canAttackAir;
   }
   if (config.preferAir) draft.preferAir = true;
+  if (config.preferBuildings) draft.preferBuildings = true;
   if (config.targetsBuildingsOnly) draft.targetsBuildingsOnly = true;
   if (config.tag) draft.tag = config.tag;
   if (config.footprint > 0) draft.footprint = config.footprint;

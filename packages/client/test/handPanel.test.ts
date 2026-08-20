@@ -510,11 +510,13 @@ describe('单机手牌交互', () => {
   it('拖出按钮后才显示指引线；拖回按钮变红且松手取消', () => {
     const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => true);
     const onPlaceableHighlightStart = vi.fn();
+    const onPlaceableHighlightMove = vi.fn();
     const onPlaceableHighlightEnd = vi.fn();
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
       onRequestSpawn,
       onPlaceableHighlightStart,
+      onPlaceableHighlightMove,
       onPlaceableHighlightEnd,
     });
     selectAllCards();
@@ -534,6 +536,7 @@ describe('单机手牌交互', () => {
     });
     formations.dispatchEvent(pointerEvent('pointermove', 40, 200, 300));
     expect(onPlaceableHighlightStart).toHaveBeenCalledOnce();
+    expect(onPlaceableHighlightMove).toHaveBeenCalledWith(200, 300);
     expect(arrow.classList.contains('is-visible')).toBe(true);
     expect(arrow.classList.contains('is-invalid')).toBe(false);
     // 箭头尖固定朝上：只有平移，不随弧线切线旋转
@@ -551,6 +554,7 @@ describe('单机手牌交互', () => {
     expect(Number(quad![4])).toBe(300);
 
     formations.dispatchEvent(pointerEvent('pointermove', 40, 122, 502));
+    expect(onPlaceableHighlightMove).toHaveBeenLastCalledWith(122, 502);
     expect(arrow.classList.contains('is-visible')).toBe(true);
     expect(arrow.classList.contains('is-invalid')).toBe(true);
 

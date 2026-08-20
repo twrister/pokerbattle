@@ -467,7 +467,7 @@ describe('渲染同步', () => {
     const line = mark.children.find((child) => child instanceof THREE.LineLoop) as THREE.LineLoop;
     expect(line).toBeDefined();
     expect((line.material as THREE.LineBasicMaterial).color.getHex()).toBe(0xffffff);
-    expect(line.scale.x).toBeCloseTo(archerSnap.range + archerSnap.radius, 5);
+    expect(line.scale.x).toBeCloseTo(archerSnap.range, 5);
 
     view.selectUnit(grunt.id);
     view.render(snap, snap, 1, camera);

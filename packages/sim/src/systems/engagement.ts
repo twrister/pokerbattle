@@ -7,7 +7,7 @@ import {
 } from '../config/tuning.js';
 import { isBuildingConfig } from '../config/units.js';
 import type { Unit } from '../entity/unit.js';
-import { computeBuildingEngageGoal } from './combatRange.js';
+import { attackerRangePadding, computeBuildingEngageGoal } from './combatRange.js';
 
 /** ≈ 1/√2，用于对角槽位方向；配置期常量，tick 内不再出现浮点 */
 const INV_SQRT2: Fx = 46341; // fromFloat(0.707107) ≈ 46341
@@ -89,7 +89,7 @@ export function computeEngageGoal(attacker: Unit, target: Unit, out: Vec2): Vec2
   }
 
   const contact = attacker.config.radius + target.config.radius;
-  const reach = attacker.stats.range + contact;
+  const reach = attacker.stats.range + attackerRangePadding(attacker) + target.config.radius;
   // 远端停在射程内侧；inset 吃掉全部近战 range 时贴碰撞外缘，保证仍能进 Attack
   let ring = reach - ENGAGEMENT_SLOT_INSET;
   if (ring < contact) ring = contact;

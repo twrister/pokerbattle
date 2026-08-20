@@ -8,6 +8,7 @@ import {
   type Snapshot,
   type UnitSnapshot,
 } from '@pb/sim';
+import { attackReachPreviewRadius } from '../input/attackRangePreview.js';
 import { projectWorldToClient, toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey, visualFaction, visualSide } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
@@ -460,7 +461,7 @@ export class BattleView {
   }
 
   /**
-   * 选中单位脚下画白色攻击范围圈（range + 自身半径，与打到点目标/建筑表面的口径一致）。
+   * 选中单位脚下画白色攻击范围圈（远程只算 range，近战仍加自身半径）。
    * 单位已死或取消选中时从场景拿掉，避免空圈留在场上。
    */
   private syncAttackRangeMark(curr: Snapshot, alpha: number): void {
@@ -476,7 +477,7 @@ export class BattleView {
     this.attackRangeMark.update(
       toSceneX(lerp(from.x, selected.x, alpha)),
       toSceneZ(lerp(from.y, selected.y, alpha)),
-      selected.range + selected.radius,
+      attackReachPreviewRadius(selected.typeId, selected.range),
     );
     if (!this.attackRangeMark.group.parent) this.scene.add(this.attackRangeMark.group);
   }

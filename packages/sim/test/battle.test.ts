@@ -131,7 +131,7 @@ describe('战斗行为', () => {
     run(world, 400);
 
     expect(dummy.hp).toBeLessThan(fullHp);
-    // 射程 5 加上双方半径，停下的位置不该明显超过这个距离
+    // 远程只按 range 起算，停下的位置不该明显超过射程 + 对方半径
     const gap = toFloat(dist(archer.pos.x, archer.pos.y, dummy.pos.x, dummy.pos.y));
     expect(gap).toBeLessThan(6.5);
   });

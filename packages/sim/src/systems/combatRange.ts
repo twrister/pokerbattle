@@ -1,6 +1,6 @@
 import { type Fx, abs, div, fromFloat, max, mul } from '../math/fixed.js';
 import { type Vec2, distSq, set } from '../math/vec2.js';
-import { isBuildingConfig } from '../config/units.js';
+import { isBuildingConfig, isRangedAttackKind } from '../config/units.js';
 import { ENGAGEMENT_SLOT_INSET } from '../config/tuning.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, clampToArena } from '../config/arena.js';
 import type { Unit } from '../entity/unit.js';
@@ -50,18 +50,25 @@ export function canThreatenTarget(attacker: Unit, target: Unit): boolean {
 }
 
 /**
+ * 近战把身体算进挥砍距离；远程弹道只按配置 range 起算，不再叠自身半径。
+ */
+export function attackerRangePadding(attacker: Unit): Fx {
+  return isRangedAttackKind(attacker.config.attack.kind) ? 0 : attacker.config.radius;
+}
+
+/**
  * 攻击者是否够得着目标（未超出最大射程）。
- * 单位：圆心距 vs range + 双方半径；
- * 建筑：圆心到占地表面距 vs range + 自身半径（与方形挤出一致）。
- * reachBonus 用于退出迟滞 / 出手容差。
+ * 单位：圆心距 vs range + 自身补丁 + 对方半径；
+ * 建筑：圆心到占地表面距 vs range + 自身补丁（与方形挤出一致）。
+ * 远程自身补丁为 0；reachBonus 用于退出迟滞 / 出手容差。
  */
 export function isWithinAttackReach(attacker: Unit, target: Unit, reachBonus: Fx = 0): boolean {
   if (isBuildingConfig(target.config)) {
-    const reach = attacker.stats.range + attacker.config.radius + reachBonus;
+    const reach = attacker.stats.range + attackerRangePadding(attacker) + reachBonus;
     return distSqToBuildingFootprint(attacker.pos.x, attacker.pos.y, target) <= mul(reach, reach);
   }
   const reach =
-    attacker.stats.range + attacker.config.radius + target.config.radius + reachBonus;
+    attacker.stats.range + attackerRangePadding(attacker) + target.config.radius + reachBonus;
   return distSq(attacker.pos.x, attacker.pos.y, target.pos.x, target.pos.y) <= mul(reach, reach);
 }
 
@@ -73,10 +80,10 @@ export function isOutsideMinAttackRange(attacker: Unit, target: Unit): boolean {
   const minRange = attacker.config.minRange;
   if (minRange <= 0) return true;
   if (isBuildingConfig(target.config)) {
-    const minReach = minRange + attacker.config.radius;
+    const minReach = minRange + attackerRangePadding(attacker);
     return distSqToBuildingFootprint(attacker.pos.x, attacker.pos.y, target) >= mul(minReach, minReach);
   }
-  const minReach = minRange + attacker.config.radius + target.config.radius;
+  const minReach = minRange + attackerRangePadding(attacker) + target.config.radius;
   return distSq(attacker.pos.x, attacker.pos.y, target.pos.x, target.pos.y) >= mul(minReach, minReach);
 }
 
@@ -105,7 +112,7 @@ export function computeBuildingEngageGoal(
   // 与圆形环一致：优先略进入射程；近战 range 被 inset 吃光时贴碰撞外缘
   let stopGap = attacker.stats.range - ENGAGEMENT_SLOT_INSET;
   if (stopGap < 0) stopGap = 0;
-  let expand = attacker.config.radius + stopGap;
+  let expand = attackerRangePadding(attacker) + stopGap;
 
   // 从中心沿 dir 打到扩大 AABB 边界：t = halfExt / max(|dx|,|dy|)
   const ax = abs(dir.x);

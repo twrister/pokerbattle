@@ -108,6 +108,8 @@ export interface HandPanelOptions {
   onAoeDragEnd?: () => void;
   /** 非建筑阵型拖出按钮后：显示场地可放置区域。 */
   onPlaceableHighlightStart?: (formation: CardFormation) => void;
+  /** 非建筑阵型拖拽时同步指针（攻击范围圈跟手）。 */
+  onPlaceableHighlightMove?: (clientX: number, clientY: number) => void;
   /** 非建筑阵型拖拽结束或取消：隐藏场地可放置区域。 */
   onPlaceableHighlightEnd?: () => void;
   /** 出兵成功且出牌动画结束后的回调。 */
@@ -531,6 +533,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     drawArrow(clientX, clientY);
     if (draggingBuilding) options.onBuildingDragMove?.(clientX, clientY);
     else if (draggingAoe) options.onAoeDragMove?.(clientX, clientY);
+    else options.onPlaceableHighlightMove?.(clientX, clientY);
   }
 
   /** 首次拖出按钮：锁定瞄准态，之后回到按钮也只显示红色取消指引。 */
@@ -549,6 +552,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       options.onAoeDragMove?.(clientX, clientY);
     } else {
       options.onPlaceableHighlightStart?.(formation);
+      options.onPlaceableHighlightMove?.(clientX, clientY);
     }
     drawArrow(clientX, clientY);
   }

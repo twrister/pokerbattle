@@ -13,6 +13,8 @@ import {
   type World,
 } from '@pb/sim';
 import { ARENA_H, ARENA_W, toSceneX, toSceneZ } from '../view/coords.js';
+import { AoeGroundMark } from '../view/aoeGroundMark.js';
+import { attackReachPreviewRadius, showsAttackRangeOnPlace } from './attackRangePreview.js';
 import { screenToSim } from './placement.js';
 
 export interface BuildingPlacementOptions {
@@ -128,7 +130,8 @@ export function collectPlaceableBuildingCells(
 
 /**
  * 建筑放置模式：场景铺满可放置白色目标格，指针吸附预览（合法绿 / 非法红），
- * 点击合法格下发 PlaceBuilding。与放兵点击监听互斥，由调用方切换。
+ * 箭塔等远程建筑再叠白色攻击范围圈。点击合法格下发 PlaceBuilding。
+ * 与放兵点击监听互斥，由调用方切换。
  */
 export function enableBuildingPlacement(options: BuildingPlacementOptions): BuildingPlacementHandle {
   const {
@@ -178,6 +181,12 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
   edges.rotation.x = -Math.PI / 2;
   edges.position.y = 0.06;
   preview.add(fill, edges);
+
+  // 箭塔等远程建筑：白圈挂在占地预览下，跟着吸附中心走
+  const rangeMark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  rangeMark.group.name = 'attack-range-placement';
+  rangeMark.group.visible = false;
+  preview.add(rangeMark.group);
 
   const slotMat = new THREE.MeshBasicMaterial({
     color: SLOT_COLOR,
@@ -257,7 +266,7 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     slotFadeFrameId = requestAnimationFrame(tick);
   };
 
-  /** 按当前兵种占地刷新光标预览尺寸与颜色 */
+  /** 按当前兵种占地刷新光标预览尺寸、颜色，以及箭塔攻击范围圈 */
   const syncPreview = (clientX: number, clientY: number): void => {
     const typeId = getTypeId();
     const config = UNIT_CONFIGS[typeId];
@@ -293,6 +302,13 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
     }
 
     preview.position.set(toSceneX(cx), 0, toSceneZ(cy));
+    if (showsAttackRangeOnPlace(typeId)) {
+      // 本地坐标置 0，圈心与占地框中心重合
+      rangeMark.update(0, 0, attackReachPreviewRadius(typeId));
+      rangeMark.group.visible = true;
+    } else {
+      rangeMark.group.visible = false;
+    }
     preview.visible = true;
   };
 
@@ -364,6 +380,7 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
         edges.geometry.dispose();
         lineMat.dispose();
         slotMat.dispose();
+        rangeMark.dispose();
       });
     },
   };

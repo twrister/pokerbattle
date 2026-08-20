@@ -59,6 +59,13 @@ import {
   screenToSim,
 } from './input/placement.js';
 import { enableAoePlacement, type AoePlacementHandle } from './input/aoePlacement.js';
+import {
+  attackReachPreviewRadius,
+  enableAttackRangePlacement,
+  formationAttackRangePreviewRadius,
+  showsAttackRangeOnPlace,
+  type AttackRangePlacementHandle,
+} from './input/attackRangePreview.js';
 import { enableCastlePackClick } from './input/castlePackClick.js';
 import { enableUnitSelection } from './input/unitSelection.js';
 import {
@@ -612,6 +619,7 @@ function enterBattleSession(mode: BattleMode): () => void {
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
   let aoePreview: AoePlacementHandle | null = null;
+  let attackRangePreview: AttackRangePlacementHandle | null = null;
 
   const stopSoloBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
@@ -632,13 +640,29 @@ function enterBattleSession(mode: BattleMode): () => void {
     aoePreview = null;
   };
 
-  /** 显示蓝方半场白色部署区；落点锚点落在该区域内即可放置。 */
-  const startPlaceableHighlight = (): void => {
+  /** 清除连弩车/投弹车拖拽时的攻击范围圈。 */
+  const stopAttackRangePreview = (): void => {
+    attackRangePreview?.dispose();
+    attackRangePreview = null;
+  };
+
+  /** 显示蓝方半场白色部署区；含射程预览兵种时再叠白圈。 */
+  const startPlaceableHighlight = (formation?: CardFormation): void => {
     stopPlaceableHighlight();
+    stopAttackRangePreview();
     placeableHighlight = showPlaceableHighlight(
       sceneContext.scene,
       collectHalfCourtPlaceableCells(Faction.Blue),
     );
+    const radius = formation ? formationAttackRangePreviewRadius(formation) : null;
+    if (radius == null) return;
+    attackRangePreview = enableAttackRangePlacement({
+      domElement: sceneContext.renderer.domElement,
+      camera: sceneContext.camera,
+      groundPlane: sceneContext.groundPlane,
+      scene: sceneContext.scene,
+      radius,
+    });
   };
 
   const onBuildingDragStart = (formation: CardFormation): void => {
@@ -893,7 +917,11 @@ function enterBattleSession(mode: BattleMode): () => void {
         onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
         onAoeDragEnd: stopAoePreview,
         onPlaceableHighlightStart: startPlaceableHighlight,
-        onPlaceableHighlightEnd: stopPlaceableHighlight,
+        onPlaceableHighlightMove: (clientX, clientY) => attackRangePreview?.syncPointer(clientX, clientY),
+        onPlaceableHighlightEnd: () => {
+          stopPlaceableHighlight();
+          stopAttackRangePreview();
+        },
       })
     : null;
 
@@ -1011,6 +1039,7 @@ function enterBattleSession(mode: BattleMode): () => void {
           stopPlaceableHighlight();
           stopSoloBuildingPreview();
           stopAoePreview();
+          stopAttackRangePreview();
           aoePreview = enableAoePlacement({
             domElement: sceneContext.renderer.domElement,
             camera: sceneContext.camera,
@@ -1023,6 +1052,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         if (isArcherTowerId(typeId)) {
           stopPlaceableHighlight();
           stopAoePreview();
+          stopAttackRangePreview();
           stopSoloBuildingPreview();
           soloBuildingPreview = enableBuildingPlacement({
             domElement: sceneContext.renderer.domElement,
@@ -1041,14 +1071,25 @@ function enterBattleSession(mode: BattleMode): () => void {
         stopAoePreview();
         stopSoloBuildingPreview();
         startPlaceableHighlight();
+        if (showsAttackRangeOnPlace(typeId)) {
+          attackRangePreview = enableAttackRangePlacement({
+            domElement: sceneContext.renderer.domElement,
+            camera: sceneContext.camera,
+            groundPlane: sceneContext.groundPlane,
+            scene: sceneContext.scene,
+            radius: attackReachPreviewRadius(typeId),
+          });
+        }
       },
       onDragMove: (typeId, clientX, clientY) => {
         if (isFuseBombTypeId(typeId)) aoePreview?.syncPointer(clientX, clientY);
         if (isArcherTowerId(typeId)) soloBuildingPreview?.syncPointer(clientX, clientY);
+        attackRangePreview?.syncPointer(clientX, clientY);
       },
       onDragEnd: () => {
         stopPlaceableHighlight();
         stopAoePreview();
+        stopAttackRangePreview();
         stopSoloBuildingPreview();
       },
     });
@@ -1293,6 +1334,7 @@ function runVersusSession(
   let soloBuildingPreview: BuildingPlacementHandle | null = null;
   let placeableHighlight: PlaceableHighlightHandle | null = null;
   let aoePreview: AoePlacementHandle | null = null;
+  let attackRangePreview: AttackRangePlacementHandle | null = null;
   const stopBuildingPreview = (): void => {
     if (!soloBuildingPreview) return;
     soloBuildingPreview.dispose();
@@ -1312,10 +1354,26 @@ function runVersusSession(
     aoePreview = null;
   };
 
-  /** 显示本地阵营白色部署区；落点锚点落在该区域内即可放置。 */
-  const startPlaceableHighlight = (): void => {
+  /** 清除连弩车/投弹车拖拽时的攻击范围圈。 */
+  const stopAttackRangePreview = (): void => {
+    attackRangePreview?.dispose();
+    attackRangePreview = null;
+  };
+
+  /** 显示本地阵营白色部署区；含射程预览兵种时再叠白圈。 */
+  const startPlaceableHighlight = (formation?: CardFormation): void => {
     stopPlaceableHighlight();
+    stopAttackRangePreview();
     placeableHighlight = showPlaceableHighlight(sceneContext.scene, collectHalfCourtPlaceableCells(faction));
+    const radius = formation ? formationAttackRangePreviewRadius(formation) : null;
+    if (radius == null) return;
+    attackRangePreview = enableAttackRangePlacement({
+      domElement: sceneContext.renderer.domElement,
+      camera: sceneContext.camera,
+      groundPlane: sceneContext.groundPlane,
+      scene: sceneContext.scene,
+      radius,
+    });
   };
 
   const canSpawnAt = (
@@ -1459,7 +1517,11 @@ function runVersusSession(
     onAoeDragMove: (clientX, clientY) => aoePreview?.syncPointer(clientX, clientY),
     onAoeDragEnd: stopAoePreview,
     onPlaceableHighlightStart: startPlaceableHighlight,
-    onPlaceableHighlightEnd: stopPlaceableHighlight,
+    onPlaceableHighlightMove: (clientX, clientY) => attackRangePreview?.syncPointer(clientX, clientY),
+    onPlaceableHighlightEnd: () => {
+      stopPlaceableHighlight();
+      stopAttackRangePreview();
+    },
   });
 
   // 联机禁用运行控制；面板只读 world 统计，挂一个只读壳避免改 SimLoop API
