@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Faction, NO_TARGET, type Unit, UnitState } from '../src/entity/unit.js';
+import { Faction, type Unit, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { dist } from '../src/math/vec2.js';
 import { World } from '../src/world.js';
@@ -59,8 +59,8 @@ describe('战斗行为', () => {
     run(world, 10);
     expect(attacker.targetId).toBe(far.id);
 
-    // 远处刷第二个敌人（圆心距 3 > 民兵搜索 2），圈外不够着则仍粘远敌
-    const other = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(13));
+    // 圈外再刷一个敌人（圆心距 4.5 > 民兵搜索 3），不够着则仍粘当前远敌
+    const other = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(14.5));
     run(world, 5);
     expect(attacker.targetId).toBe(far.id);
 
@@ -353,16 +353,30 @@ describe('短视野索敌：城堡无视距离', () => {
     expect(attacker.targetId).toBe(near.id);
   });
 
-  it('圈内无敌军时不会锁远处箭塔', () => {
+  it('有敌方城堡时圈内无敌军不会锁远处箭塔', () => {
     const world = new World(1);
     const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(6));
-    world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(9), fromFloat(24));
+    world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(9), fromFloat(18));
+    const castle = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
     shrinkSight(attacker);
     attacker.retargetIn = 0;
 
     run(world, 5);
 
-    expect(attacker.targetId).toBe(NO_TARGET);
-    expect(attacker.state).toBe(UnitState.Idle);
+    expect(attacker.targetId).toBe(castle.id);
+    expect(attacker.state).toBe(UnitState.Seek);
+  });
+
+  it('无敌方城堡时能锁索敌圈外的敌军', () => {
+    const world = new World(1);
+    const attacker = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(6));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(12));
+    shrinkSight(attacker);
+    attacker.retargetIn = 0;
+
+    run(world, 5);
+
+    expect(attacker.targetId).toBe(enemy.id);
+    expect(attacker.state).toBe(UnitState.Seek);
   });
 });

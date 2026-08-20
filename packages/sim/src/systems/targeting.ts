@@ -12,6 +12,9 @@ const liveRed: Unit[] = [];
 /** 建筑远少于单位，单独缓存供视野内推家判断 */
 const buildingsBlue: Unit[] = [];
 const buildingsRed: Unit[] = [];
+/** 本帧是否还有存活城堡；无敌方城堡时圈外敌军也纳入，避免沙盒对局原地待命 */
+let hasCastleBlue = false;
+let hasCastleRed = false;
 
 /**
  * 选敌策略：
@@ -19,7 +22,8 @@ const buildingsRed: Unit[] = [];
  * - 地面：够不着时若有搜索范围内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
- * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；箭塔/单位仍要在圈内。
+ * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；有城堡时箭塔/单位仍要在圈内。
+ *   无敌方城堡（牌型验证混编 / 阵型对拆）则圈外敌军也纳入，否则双方会原地 Idle。
  *
  * 有治疗技能的单位友军优先：视野内残血友军先锁并寻路治疗；
  * 无伤员时才锁已进入攻击射程的敌军，不追圈外远敌、不跨图推城堡。
@@ -142,16 +146,25 @@ function collectLiveFactions(world: World): void {
   liveRed.length = 0;
   buildingsBlue.length = 0;
   buildingsRed.length = 0;
+  hasCastleBlue = false;
+  hasCastleRed = false;
   for (const unit of world.units) {
     if (unit.dead) continue;
     if (unit.faction === Faction.Blue) {
       liveBlue.push(unit);
       if (isBuildingConfig(unit.config)) buildingsBlue.push(unit);
+      if (isCastleId(unit.typeId)) hasCastleBlue = true;
     } else {
       liveRed.push(unit);
       if (isBuildingConfig(unit.config)) buildingsRed.push(unit);
+      if (isCastleId(unit.typeId)) hasCastleRed = true;
     }
   }
+}
+
+/** 对方是否还有可推的城堡；没有时索敌不能只靠视野，否则沙盒对局无人可锁。 */
+function enemyHasCastle(unit: Unit): boolean {
+  return unit.faction === Faction.Blue ? hasCastleRed : hasCastleBlue;
 }
 
 function enemiesOf(unit: Unit): readonly Unit[] {
@@ -200,6 +213,7 @@ function hasInSightEnemyThreat(unit: Unit, current: Unit): boolean {
  * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
  * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
  * 城堡（building_base）无视索敌距离，圈外仍可纳入远敌候选。
+ * 无敌方城堡时圈外单位/箭塔同样纳入，保证混编对局能对冲。
  *
  * 这里刻意不用空间哈希：索敌半径覆盖整个场地，按半径查哈希等于把所有格子
  * 都遍历一遍，反而比直接扫单位数组更慢。等以后出现「短视野」兵种再按需切换。
@@ -225,8 +239,8 @@ function findNearestEnemy(unit: Unit): number {
       }
     }
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
-    // 城堡无视索敌圈；箭塔与单位仍要在圈内
-    if (d > sightSq && !isCastleId(other.typeId)) continue;
+    // 城堡无视索敌圈；有城堡可推时箭塔/单位仍要在圈内
+    if (d > sightSq && !isCastleId(other.typeId) && enemyHasCastle(unit)) continue;
     // 等距时取 id 小的，保证任何机器上选出的都是同一个目标
     if (farId === NO_TARGET || d < farDistSq || (d === farDistSq && other.id < farId)) {
       farId = other.id;

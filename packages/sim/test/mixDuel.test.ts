@@ -130,6 +130,18 @@ describe('混编对局', () => {
     expect(['a', 'b', 'draw']).toContain(result.winner);
   });
 
+  it('默认混编会对打，不会双方原地满血超时', () => {
+    const result = runMixSingleGame({
+      seed: 1,
+      maxTicks: 800,
+      mixA: [],
+      mixB: [],
+    });
+    expect(result.timeout).toBe(false);
+    expect(result.hpFracA + result.hpFracB).toBeLessThan(2);
+    expect(result.ticks).toBeGreaterThan(1);
+  });
+
   it('双方混入相同时能正常结束', () => {
     const result = runMixSingleGame({
       seed: 3,
