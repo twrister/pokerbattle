@@ -75,6 +75,7 @@ export {
   isArcherTowerId,
   isBuildingConfig,
   isCastleId,
+  usesArrowVisual,
   recomputeMaxUnitRadius,
   resetUnitConfigsToDefault,
   toUnitConfigDraft,

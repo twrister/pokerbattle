@@ -209,6 +209,36 @@ describe('建筑系统', () => {
     expect(world.nav.isBlockedAt(fromFloat(8), fromFloat(10))).toBe(false);
   });
 
+  it('三种箭塔均优先攻击空中单位', () => {
+    for (const typeId of ['building_tower', 'building_tower_advanced', 'building_tower_triple'] as const) {
+      expect(getUnitConfig(typeId).preferAir).toBe(true);
+    }
+  });
+
+  it('箭塔射程内更远的空中单位优先于更近的地面单位', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(12));
+    const air = world.spawnUnit(Faction.Red, 'dragon', fromFloat(8), fromFloat(16));
+
+    world.step();
+    expect(tower.targetId).toBe(air.id);
+    expect(tower.targetId).not.toBe(ground.id);
+  });
+
+  it('箭塔打地面时射程内出现空中单位应打断粘性换火', () => {
+    const world = new World(1);
+    const tower = world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(8), fromFloat(10))!;
+    const ground = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(12));
+
+    world.step();
+    expect(tower.targetId).toBe(ground.id);
+
+    const air = world.spawnUnit(Faction.Red, 'dragon', fromFloat(8), fromFloat(16));
+    world.step();
+    expect(tower.targetId).toBe(air.id);
+  });
+
   it('防御塔在射程内以投射物攻击敌军', () => {
     const world = new World(1);
     // 塔占地 2，中心 (8,10)；敌军放在射程内正北

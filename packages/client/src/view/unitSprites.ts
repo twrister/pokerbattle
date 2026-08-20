@@ -52,6 +52,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 188 / 229,
     sourceFacing: -1,
   },
+  ranged_ballista: {
+    frontUrl: 'units/ballista-front.png',
+    backUrl: 'units/ballista-back.png',
+    // 正面朝右下、背面朝右上；倍率对齐战车。宽高比取正面贴图，避免图鉴缩略被压扁。
+    heightMul: 4.0,
+    aspect: 269 / 246,
+    sourceFacing: 1,
+  },
   ranged_chariot: {
     frontUrl: 'units/chariot-front.png',
     backUrl: 'units/chariot-back.png',

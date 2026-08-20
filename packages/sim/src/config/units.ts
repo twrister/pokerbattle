@@ -6,6 +6,7 @@ export type UnitTypeId =
   | 'melee_guard'
   | 'melee_golem'
   | 'ranged_archer'
+  | 'ranged_ballista'
   | 'ranged_chariot'
   | 'giant_bomb'
   | 'small_bomb'
@@ -125,6 +126,11 @@ export interface UnitConfig {
    * 近战默认 false，远程默认 true；战车等地面炮可单独关掉。
    */
   canAttackAir: boolean;
+  /**
+   * 索敌时是否优先空中单位。
+   * 射程内空中 > 射程内地面 > 视野内空中 > 视野内地面；缺省 false。
+   */
+  preferAir: boolean;
   attack: AttackKind;
   /**
    * 占地边长（整数格）。> 0 表示建筑：不移动、不索敌，碰撞按方形处理。
@@ -206,6 +212,8 @@ export interface UnitConfigDraft {
   movementLayer: MovementLayer;
   /** 缺省时按攻击方式推断：近战 false，远程 true */
   canAttackAir?: boolean;
+  /** 缺省 false；仅对空优先兵种写出 true */
+  preferAir?: boolean;
   attackKind: 'melee' | 'melee_aoe' | 'projectile' | 'projectile_aoe';
   /** 仅弹道攻击时有意义 */
   projectileSpeed: number;
@@ -276,6 +284,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.sightRange = source.sightRange;
   target.movementLayer = source.movementLayer;
   target.canAttackAir = source.canAttackAir;
+  target.preferAir = source.preferAir;
   target.footprint = source.footprint;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
@@ -371,6 +380,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     sightRange: fromFloat(draft.sightRange),
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
     canAttackAir: resolveCanAttackAir(draft.attackKind, draft.canAttackAir),
+    preferAir: draft.preferAir === true,
     footprint: normalizeFootprint(draft.footprint),
     attack: attackFromDraft(draft),
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
@@ -432,6 +442,14 @@ export function isArcherTowerId(id: UnitTypeId): boolean {
 /** 城堡（基地）：索敌时无视 sightRange，圈外仍可锁定 */
 export function isCastleId(id: UnitTypeId): boolean {
   return id === 'building_base';
+}
+
+/** 弓手、连弩车、箭塔、基地共用箭矢弹道视觉与 explode4 命中。 */
+export function usesArrowVisual(id: UnitTypeId): boolean {
+  return id === 'ranged_archer'
+    || id === 'ranged_ballista'
+    || isArcherTowerId(id)
+    || id === 'building_base';
 }
 
 /** 从 units.json 加载全部兵种并转成定点配置表。 */
@@ -499,6 +517,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
   if (config.canAttackAir !== defaultCanAttackAir(config.attack.kind)) {
     draft.canAttackAir = config.canAttackAir;
   }
+  if (config.preferAir) draft.preferAir = true;
   if (config.tag) draft.tag = config.tag;
   if (config.footprint > 0) draft.footprint = config.footprint;
   if (config.charge) {

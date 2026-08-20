@@ -8,6 +8,7 @@ import {
   getUnitConfig,
   isArcherTowerId,
   isBuildingConfig,
+  usesArrowVisual,
 } from './config/units.js';
 import {
   AIR_PROJECTILE_HEIGHT,
@@ -285,10 +286,7 @@ export class World {
     const startDist = lengthOf(dx, dy);
     // 战车炸弹：抛物线 + 落地爆炸；弓箭手/防御塔/基地用箭矢贴图；其余保持线性彩色球
     const isBomb = from.config.id === 'ranged_chariot';
-    const isArrow =
-      from.config.id === 'ranged_archer'
-      || isArcherTowerId(from.config.id)
-      || from.config.id === 'building_base';
+    const isArrow = usesArrowVisual(from.config.id);
     // 箭系 Explode4；女王/大小王 Explode2；战车与龙用 explode1；其它 AOE 仍用脉冲环
     const isExplode2 =
       from.config.id === 'hero_queen'

@@ -22,6 +22,7 @@ let hasCastleRed = false;
  * - 地面：够不着时若有搜索范围内威胁则改火；远距有建筑时跳过「打不到自己」的单位以保推家。
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
+ * - preferAir：射程内空中优先于射程内地面，视野内同理；打地面时射程内出现空中则打断粘性。
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；有城堡时箭塔/单位仍要在圈内。
  *   无敌方城堡（牌型验证混编 / 阵型对拆）则圈外敌军也纳入，否则双方会原地 Idle。
  *
@@ -55,9 +56,12 @@ export function updateTargeting(world: World): void {
     // 敌军粘性：已能出手则咬住；够不着时按空/地规则决定是否打断
     // 不可打目标（如投放炸弹）立即放弃，避免粘性卡住
     if (isAlive(current) && current.faction !== unit.faction && canAttackTarget(unit, current)) {
-      if (isWithinAttackReach(unit, current)) continue;
-
-      if (unit.config.movementLayer === 'air') {
+      if (isWithinAttackReach(unit, current)) {
+        // 对空优先：打地面时射程内出现空中则打断粘性换火
+        if (!(unit.config.preferAir && current.config.movementLayer !== 'air' && hasInReachAir(unit))) {
+          continue;
+        }
+      } else if (unit.config.movementLayer === 'air') {
         // 非建筑出距立刻弃；建筑出距仅被射程内可打敌军打断
         if (isBuildingConfig(current.config) && !hasInReachAttackable(unit, current)) {
           continue;
@@ -210,8 +214,21 @@ function hasInSightEnemyThreat(unit: Unit, current: Unit): boolean {
 }
 
 /**
+ * 射程内是否存在空中敌军。供 preferAir 打断地面粘性。
+ */
+function hasInReachAir(unit: Unit): boolean {
+  for (const other of enemiesOf(unit)) {
+    if (other.config.movementLayer !== 'air') continue;
+    if (!canAttackTarget(unit, other)) continue;
+    if (isWithinAttackReach(unit, other)) return true;
+  }
+  return false;
+}
+
+/**
  * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
  * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
+ * preferAir 时同一桶内空中优先于地面，同层仍取最近、等距取 id 小。
  * 城堡（building_base）无视索敌距离，圈外仍可纳入远敌候选。
  * 无敌方城堡时圈外单位/箭塔同样纳入，保证混编对局能对冲。
  *
@@ -223,32 +240,51 @@ function findNearestEnemy(unit: Unit): number {
   const buildingInSight = hasEnemyBuildingInSight(unit, sightSq);
   let inReachId = NO_TARGET;
   let inReachDistSq: Fx = 0;
+  let inReachAir = false;
   let farId = NO_TARGET;
   let farDistSq: Fx = 0;
+  let farAir = false;
 
   for (const other of enemiesOf(unit)) {
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (canAttackTarget(unit, other) && isWithinAttackReach(unit, other)) {
-      if (
-        inReachId === NO_TARGET
-        || d < inReachDistSq
-        || (d === inReachDistSq && other.id < inReachId)
-      ) {
+      if (isBetterTarget(unit, other, d, inReachId, inReachDistSq, inReachAir)) {
         inReachId = other.id;
         inReachDistSq = d;
+        inReachAir = other.config.movementLayer === 'air';
       }
     }
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     // 城堡无视索敌圈；有城堡可推时箭塔/单位仍要在圈内
     if (d > sightSq && !isCastleId(other.typeId) && enemyHasCastle(unit)) continue;
-    // 等距时取 id 小的，保证任何机器上选出的都是同一个目标
-    if (farId === NO_TARGET || d < farDistSq || (d === farDistSq && other.id < farId)) {
+    if (isBetterTarget(unit, other, d, farId, farDistSq, farAir)) {
       farId = other.id;
       farDistSq = d;
+      farAir = other.config.movementLayer === 'air';
     }
   }
 
   return inReachId !== NO_TARGET ? inReachId : farId;
+}
+
+/**
+ * 同桶比选：preferAir 时空中压过地面，再比距离，等距取 id 小。
+ */
+function isBetterTarget(
+  unit: Unit,
+  candidate: Unit,
+  candidateDistSq: Fx,
+  bestId: number,
+  bestDistSq: Fx,
+  bestIsAir: boolean,
+): boolean {
+  if (bestId === NO_TARGET) return true;
+  if (unit.config.preferAir) {
+    const candidateAir = candidate.config.movementLayer === 'air';
+    if (candidateAir !== bestIsAir) return candidateAir;
+  }
+  if (candidateDistSq !== bestDistSq) return candidateDistSq < bestDistSq;
+  return candidate.id < bestId;
 }
 
 /**

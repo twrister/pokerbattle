@@ -19,10 +19,10 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(19);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(20);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
-    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 5%/);
+    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 6.25%/);
     expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
 
     /** 页签每次渲染会重建，点击前需重新查询。 */
@@ -44,10 +44,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(8);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(9);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['战车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
+    ).toEqual(['战车', '连弩车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
     expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
 
@@ -60,6 +60,32 @@ describe('兵种图鉴页', () => {
     );
     mage?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
+  });
+
+  it('三种箭塔图鉴写明优先攻击空中单位', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    for (const name of ['箭塔', '双射手箭塔', '三射手箭塔']) {
+      const card = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+        (button) => button.querySelector('.codex-unit-name')?.textContent === name,
+      );
+      card?.click();
+      expect(document.querySelector('#codex-detail')?.textContent).toContain('优先攻击空中单位');
+    }
+    page.dispose();
+  });
+
+  it('连弩车图鉴写明优先攻击空中单位', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const ballista = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+      (button) => button.textContent?.includes('连弩车'),
+    );
+    ballista?.click();
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('优先攻击空中单位');
+    page.dispose();
   });
 
   it('战车图鉴写明无法攻击空中单位', () => {
