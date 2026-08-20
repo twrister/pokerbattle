@@ -51,7 +51,7 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 0.8,
+    "moveSpeed": 1,
     "sightRange": 3,
     "movementLayer": "ground",
     "attackKind": "melee",
@@ -71,7 +71,7 @@
     "attackWindup": 7,
     "range": 0.5,
     "minRange": 0,
-    "moveSpeed": 0.8,
+    "moveSpeed": 1,
     "sightRange": 3,
     "movementLayer": "ground",
     "attackKind": "melee",
@@ -111,7 +111,7 @@
     "attackWindup": 3,
     "range": 7,
     "minRange": 0,
-    "moveSpeed": 0.6,
+    "moveSpeed": 0.8,
     "sightRange": 7,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -132,7 +132,7 @@
     "attackWindup": 12,
     "range": 11,
     "minRange": 0,
-    "moveSpeed": 0.6,
+    "moveSpeed": 0.8,
     "sightRange": 12,
     "movementLayer": "ground",
     "attackKind": "projectile_aoe",
@@ -153,7 +153,7 @@
     "attackWindup": 7,
     "range": 1,
     "minRange": 0,
-    "moveSpeed": 1.2,
+    "moveSpeed": 1.5,
     "sightRange": 40,
     "movementLayer": "ground",
     "attackKind": "melee",
@@ -165,7 +165,7 @@
       "entries": [
         {
           "unitTypeId": "melee_grunt",
-          "count": 4
+          "count": 5
         }
       ]
     }
@@ -276,7 +276,7 @@
     "attackWindup": 9,
     "range": 5.5,
     "minRange": 0,
-    "moveSpeed": 1.2,
+    "moveSpeed": 1.8,
     "sightRange": 5.5,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -284,9 +284,9 @@
     "aoeRadius": 0,
     "tag": "治疗",
     "heal": {
-      "cooldown": 1,
+      "cooldown": 10,
       "targetRange": 5,
-      "amount": 50
+      "amount": 40
     }
   },
   "hero_mage": {
@@ -301,7 +301,7 @@
     "attackWindup": 9,
     "range": 5.5,
     "minRange": 0,
-    "moveSpeed": 0.8,
+    "moveSpeed": 1,
     "sightRange": 5.5,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -325,7 +325,7 @@
     "attackWindup": 9,
     "range": 5.5,
     "minRange": 0,
-    "moveSpeed": 0.8,
+    "moveSpeed": 1,
     "sightRange": 5.5,
     "movementLayer": "ground",
     "attackKind": "projectile",
@@ -434,10 +434,10 @@
     "damage": 120,
     "attackInterval": 10,
     "attackWindup": 9,
-    "range": 8,
+    "range": 9,
     "minRange": 0,
     "moveSpeed": 0,
-    "sightRange": 8,
+    "sightRange": 9,
     "movementLayer": "ground",
     "attackKind": "projectile",
     "projectileSpeed": 9,
