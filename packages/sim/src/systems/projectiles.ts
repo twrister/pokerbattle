@@ -87,6 +87,7 @@ export function updateProjectiles(world: World): void {
           projectile.impactFx,
           hitBuilding,
         );
+        spawnImpactGroundBurn(world, projectile);
       } else {
         resolveSingleImpact(world, projectile, target, hitBuilding);
       }
@@ -202,4 +203,19 @@ function resolveProjectileAoe(
   if (kind) {
     world.spawnExplosionEffect(x, y, radius, kind);
   }
+}
+
+/** 范围弹若带燃烧载荷，在落点生成持续灼烧区（打空中目标时 aoeRadius=0 不会走到这里）。 */
+function spawnImpactGroundBurn(world: World, projectile: Projectile): void {
+  const burn = projectile.groundBurn;
+  if (!burn) return;
+  world.spawnGroundHazard(
+    projectile.impactPos.x,
+    projectile.impactPos.y,
+    projectile.aoeRadius,
+    burn.damage,
+    projectile.faction,
+    burn.durationTicks,
+    burn.intervalTicks,
+  );
 }

@@ -7,6 +7,7 @@ import {
   resetUnitConfigsToDefault,
   type ChargeConfigDraft,
   type DetonateConfigDraft,
+  type GroundBurnConfigDraft,
   type HealConfigDraft,
   type InspireConfigDraft,
   type UnitConfigDraft,
@@ -36,7 +37,7 @@ export const NUMERIC_FIELDS: ReadonlyArray<{
 ];
 
 /** 技能配置块键；与 UnitConfigDraft 可选技能字段一一对应。 */
-export type SkillBlockKey = 'charge' | 'inspire' | 'heal' | 'summon' | 'detonate' | 'deathSpawn';
+export type SkillBlockKey = 'charge' | 'inspire' | 'heal' | 'summon' | 'detonate' | 'deathSpawn' | 'groundBurn';
 
 /** 技能数值字段元数据。 */
 export type SkillNumericFieldMeta = {
@@ -126,6 +127,15 @@ export const SKILL_GROUPS: readonly SkillGroupMeta[] = [
     fields: [
       { key: 'count', label: '人数', step: '1', hint: '阵亡后原地生成', kind: 'number' },
       { key: 'unitTypeId', label: '生成兵种', kind: 'select', options: UNIT_TYPE_IDS },
+    ],
+  },
+  {
+    key: 'groundBurn',
+    title: '落地燃烧',
+    fields: [
+      { key: 'durationTicks', label: '持续', step: '1', hint: 'tick，20≈1秒', kind: 'number' },
+      { key: 'intervalTicks', label: '间隔', step: '1', hint: 'tick，20≈1秒', kind: 'number' },
+      { key: 'damage', label: '灼烧伤', step: '1', kind: 'number' },
     ],
   },
 ];
@@ -388,6 +398,12 @@ export function assignSkillNumericField(
       if (field === 'count') block.count = value;
       break;
     }
+    case 'groundBurn': {
+      const block = draft.groundBurn;
+      if (!block) return;
+      assignGroundBurnNumeric(block, field, value);
+      break;
+    }
     default:
       break;
   }
@@ -439,6 +455,18 @@ function assignDetonateNumeric(block: DetonateConfigDraft, field: string, value:
   switch (field) {
     case 'fuse':
     case 'aoeRadius':
+      block[field] = value;
+      break;
+    default:
+      break;
+  }
+}
+
+function assignGroundBurnNumeric(block: GroundBurnConfigDraft, field: string, value: number): void {
+  switch (field) {
+    case 'durationTicks':
+    case 'intervalTicks':
+    case 'damage':
       block[field] = value;
       break;
     default:

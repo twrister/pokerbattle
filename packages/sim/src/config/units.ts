@@ -17,6 +17,7 @@ export type UnitTypeId =
   | 'hero_mage'
   | 'hero_archmage'
   | 'dragon'
+  | 'fire_dragon'
   | 'summoned_skeleton'
   | 'summoned_bomber'
   | 'building_base'
@@ -91,6 +92,16 @@ export interface DeathSpawnConfig {
   count: number;
 }
 
+/** 弹道落地后在地面生成燃烧区的持续伤害参数。 */
+export interface GroundBurnConfig {
+  /** 燃烧持续（tick），20 tick = 1 秒 */
+  durationTicks: Fx;
+  /** 两次灼烧间隔（tick），20 tick = 1 秒 */
+  intervalTicks: Fx;
+  /** 每次灼烧伤害 */
+  damage: Fx;
+}
+
 /**
  * 兵种配置。所有数值都是定点数，扩到 10 个兵种只是往 UNIT_CONFIGS 里加行，
  * 不需要新增任何类或分支逻辑（有技能的兵种除外，需接对应系统）。
@@ -161,6 +172,8 @@ export interface UnitConfig {
   detonate?: DetonateConfig;
   /** 可选阵亡生成；有此字段的兵种由 cleanup 在死亡点生成新单位 */
   deathSpawn?: DeathSpawnConfig;
+  /** 可选落地燃烧；有此字段的范围弹在落点生成持续灼烧区 */
+  groundBurn?: GroundBurnConfig;
 }
 
 /** 冲刺技能浮点草稿（与 JSON / 面板往返一致） */
@@ -208,6 +221,13 @@ export interface DeathSpawnConfigDraft {
   count: number;
 }
 
+/** 落地燃烧浮点草稿 */
+export interface GroundBurnConfigDraft {
+  durationTicks: number;
+  intervalTicks: number;
+  damage: number;
+}
+
 /**
  * 人类可读的浮点草稿。调试面板与 units.json 都用这套，
  * 写入模拟前再 fromFloat，避免在 UI 层直接碰定点。
@@ -250,6 +270,7 @@ export interface UnitConfigDraft {
   summon?: SummonConfigDraft;
   detonate?: DetonateConfigDraft;
   deathSpawn?: DeathSpawnConfigDraft;
+  groundBurn?: GroundBurnConfigDraft;
 }
 
 /**
@@ -279,6 +300,7 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     summon: config.summon ? { ...config.summon } : undefined,
     detonate: config.detonate ? { ...config.detonate } : undefined,
     deathSpawn: config.deathSpawn ? { ...config.deathSpawn } : undefined,
+    groundBurn: config.groundBurn ? { ...config.groundBurn } : undefined,
   };
 }
 
@@ -318,6 +340,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.summon = source.summon ? { ...source.summon } : undefined;
   target.detonate = source.detonate ? { ...source.detonate } : undefined;
   target.deathSpawn = source.deathSpawn ? { ...source.deathSpawn } : undefined;
+  target.groundBurn = source.groundBurn ? { ...source.groundBurn } : undefined;
 }
 
 /** 把草稿里的攻击方式还原成运行时 AttackKind */
@@ -393,6 +416,15 @@ function deathSpawnFromDraft(draft: DeathSpawnConfigDraft): DeathSpawnConfig {
   };
 }
 
+/** 浮点燃烧草稿 → 定点；持续/间隔至少 1 tick，避免 0 间隔死循环。 */
+function groundBurnFromDraft(draft: GroundBurnConfigDraft): GroundBurnConfig {
+  return {
+    durationTicks: fromFloat(normalizeGroundBurnTicks(draft.durationTicks)),
+    intervalTicks: fromFloat(normalizeGroundBurnTicks(draft.intervalTicks)),
+    damage: fromFloat(Number.isFinite(draft.damage) ? draft.damage : 0),
+  };
+}
+
 /** 单条浮点草稿转运行时定点配置 */
 function configFromDraft(draft: UnitConfigDraft): UnitConfig {
   return {
@@ -424,6 +456,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
     detonate: draft.detonate ? detonateFromDraft(draft.detonate) : undefined,
     deathSpawn: draft.deathSpawn ? deathSpawnFromDraft(draft.deathSpawn) : undefined,
+    groundBurn: draft.groundBurn ? groundBurnFromDraft(draft.groundBurn) : undefined,
   };
 }
 
@@ -464,6 +497,12 @@ function normalizeDeathSpawnCount(value: number | undefined): number {
   return Math.floor(value as number);
 }
 
+/** 燃烧持续/间隔：缺省或非法回落为 1，避免 0 间隔每帧刷伤。 */
+function normalizeGroundBurnTicks(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value as number) <= 0) return 1;
+  return Math.floor(value as number);
+}
+
 /** 有占地即为建筑：不移动、碰撞按方形处理；是否索敌/出手见 canBuildingAttack */
 export function isBuildingConfig(config: UnitConfig): boolean {
   return config.footprint > 0;
@@ -492,6 +531,11 @@ export function usesArrowVisual(id: UnitTypeId): boolean {
     || id === 'ranged_ballista'
     || isArcherTowerId(id)
     || id === 'building_base';
+}
+
+/** 巨龙 / 喷火龙：非追踪落点火球，explode1 命中。 */
+export function usesDragonProjectile(id: UnitTypeId): boolean {
+  return id === 'dragon' || id === 'fire_dragon';
 }
 
 /** 从 units.json 加载全部兵种并转成定点配置表。 */
@@ -606,6 +650,13 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.deathSpawn = {
       unitTypeId: config.deathSpawn.unitTypeId,
       count: config.deathSpawn.count,
+    };
+  }
+  if (config.groundBurn) {
+    draft.groundBurn = {
+      durationTicks: toFloat(config.groundBurn.durationTicks),
+      intervalTicks: toFloat(config.groundBurn.intervalTicks),
+      damage: toFloat(config.groundBurn.damage),
     };
   }
   return draft;

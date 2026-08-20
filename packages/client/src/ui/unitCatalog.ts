@@ -13,7 +13,7 @@ export interface UnitCatalogEntry {
   name: string;
 }
 
-/** 特殊兵种：战车、连弩车、冲锋战车、巨型/小炸弹、巨龙、基地、防御塔。 */
+/** 特殊兵种：战车、连弩车、冲锋战车、巨型/小炸弹、巨龙、喷火龙、基地、防御塔。 */
 const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'ranged_chariot',
   'ranged_ballista',
@@ -21,6 +21,7 @@ const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'giant_bomb',
   'small_bomb',
   'dragon',
+  'fire_dragon',
   'building_base',
   'building_tower',
   'building_tower_advanced',
@@ -47,6 +48,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'giant_bomb',
   'small_bomb',
   'dragon',
+  'fire_dragon',
   'building_base',
   'building_tower',
   'building_tower_advanced',
@@ -55,7 +57,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'summoned_bomber',
 ];
 
-/** 按图鉴页签归类：召唤物看前缀，战车/连弩车/巨龙/基地/防御塔归特殊，其余可移动单位归单兵种。 */
+/** 按图鉴页签归类：召唤物看前缀，战车/连弩车/巨龙/喷火龙/基地/防御塔归特殊，其余可移动单位归单兵种。 */
 export function getUnitCatalogCategory(typeId: UnitTypeId): UnitCatalogCategory {
   if (typeId.startsWith('summoned_')) return 'summoned';
   if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';

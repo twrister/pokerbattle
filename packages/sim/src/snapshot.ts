@@ -93,6 +93,15 @@ export interface ExplosionEffectSnapshot {
   progress: number;
 }
 
+/** 地面燃烧区：半径内持续灼烧，progress 供火圈脉动。 */
+export interface GroundHazardSnapshot {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  progress: number;
+}
+
 export interface Snapshot {
   tick: number;
   units: UnitSnapshot[];
@@ -100,6 +109,7 @@ export interface Snapshot {
   healEffects: HealEffectSnapshot[];
   aoePulseEffects: AoePulseEffectSnapshot[];
   explosionEffects: ExplosionEffectSnapshot[];
+  groundHazards: GroundHazardSnapshot[];
 }
 
 /**
@@ -113,6 +123,7 @@ export function takeSnapshot(world: World, out?: Snapshot): Snapshot {
   writeHealSnapshots(world, snap.healEffects);
   writeAoePulseSnapshots(world, snap.aoePulseEffects);
   writeExplosionSnapshots(world, snap.explosionEffects);
+  writeGroundHazardSnapshots(world, snap.groundHazards ?? (snap.groundHazards = []));
   return snap;
 }
 
@@ -219,6 +230,20 @@ function writeExplosionSnapshots(world: World, effects: ExplosionEffectSnapshot[
   effects.length = n;
 }
 
+function writeGroundHazardSnapshots(world: World, hazards: GroundHazardSnapshot[]): void {
+  let n = 0;
+  for (const hazard of world.groundHazards) {
+    const slot = hazards[n] ?? (hazards[n] = {} as GroundHazardSnapshot);
+    slot.id = hazard.id;
+    slot.x = toFloat(hazard.x);
+    slot.y = toFloat(hazard.y);
+    slot.radius = toFloat(hazard.radius);
+    slot.progress = 1 - hazard.remainingTicks / hazard.totalTicks;
+    n++;
+  }
+  hazards.length = n;
+}
+
 /** 空快照，供渲染层在第一帧之前占位 */
 export function emptySnapshot(): Snapshot {
   return {
@@ -228,5 +253,6 @@ export function emptySnapshot(): Snapshot {
     healEffects: [],
     aoePulseEffects: [],
     explosionEffects: [],
+    groundHazards: [],
   };
 }

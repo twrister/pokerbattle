@@ -58,6 +58,8 @@ export {
   type DeathSpawnConfigDraft,
   type DetonateConfig,
   type DetonateConfigDraft,
+  type GroundBurnConfig,
+  type GroundBurnConfigDraft,
   type HealConfig,
   type HealConfigDraft,
   type InspireConfig,
@@ -78,6 +80,7 @@ export {
   isBuildingConfig,
   isCastleId,
   usesArrowVisual,
+  usesDragonProjectile,
   recomputeMaxUnitRadius,
   resetUnitConfigsToDefault,
   toUnitConfigDraft,
@@ -262,6 +265,7 @@ export {
 export {
   type AoePulseEffectSnapshot,
   type ExplosionEffectSnapshot,
+  type GroundHazardSnapshot,
   type HealEffectSnapshot,
   type ProjectileSnapshot,
   type Snapshot,
@@ -275,6 +279,7 @@ export {
   type ExplosionEffect,
   type HealEffect,
 } from './entity/effect.js';
+export { type GroundHazard } from './entity/groundHazard.js';
 export { World } from './world.js';
 export {
   DEFAULT_BALANCE_OPTIONS,

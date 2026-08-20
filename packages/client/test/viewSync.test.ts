@@ -279,6 +279,8 @@ describe('渲染同步', () => {
   it('巨龙使用正背面精灵并让角色悬浮在地面标记上方', () => {
     expect(SPRITE_DEFS.dragon?.frontUrl).toBe('units/dragon-front.png');
     expect(SPRITE_DEFS.dragon?.backUrl).toBe('units/dragon-back.png');
+    expect(SPRITE_DEFS.fire_dragon?.frontUrl).toBe('units/fire-dragon-front.png');
+    expect(SPRITE_DEFS.fire_dragon?.backUrl).toBe('units/fire-dragon-back.png');
     expect(SPRITE_DEFS.ranged_chariot?.frontUrl).toBe('units/chariot-front.png');
     expect(SPRITE_DEFS.ranged_chariot?.backUrl).toBe('units/chariot-back.png');
     expect(SPRITE_DEFS.ranged_ballista?.frontUrl).toBe('units/ballista-front.png');
@@ -340,7 +342,7 @@ describe('渲染同步', () => {
   });
 
   it('战车与巨龙的范围弹在落点显示预警圈', () => {
-    for (const typeId of ['ranged_chariot', 'dragon'] as const) {
+    for (const typeId of ['ranged_chariot', 'dragon', 'fire_dragon'] as const) {
       const scene = new THREE.Scene();
       const view = new BattleView(scene);
       const world = new World(1);
@@ -360,6 +362,35 @@ describe('渲染同步', () => {
       expect(warning?.position.x).toBeCloseTo(toSceneX(12), 5);
       expect(warning?.position.z).toBeCloseTo(toSceneZ(10), 5);
     }
+  });
+
+  it('喷火龙落地后显示燃烧地面圈', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const world = new World(1);
+    const shooter = world.spawnUnit(Faction.Blue, 'fire_dragon', fromFloat(5), fromFloat(10));
+    const target = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(12), fromFloat(10));
+    shooter.attackCooldown = fromFloat(9999);
+    const aoeRadius =
+      shooter.config.attack.kind === 'projectile_aoe'
+        ? shooter.config.attack.aoeRadius
+        : fromFloat(0);
+    const projectile = world.spawnProjectile(
+      shooter,
+      target,
+      shooter.stats.damage,
+      fromFloat(9),
+      aoeRadius,
+    );
+    for (let i = 0; i < 80 && !projectile.dead; i += 1) world.step();
+    const snap = takeSnapshot(world);
+    expect(snap.groundHazards).toHaveLength(1);
+
+    view.render(snap, snap, 1, camera);
+    const mark = scene.children.find((child) => child.name === 'ground-hazard');
+    expect(mark).toBeDefined();
+    expect(mark?.position.x).toBeCloseTo(toSceneX(12), 5);
+    expect(mark?.position.z).toBeCloseTo(toSceneZ(10), 5);
   });
 
   it('普通箭矢不显示爆炸范围预警圈', () => {

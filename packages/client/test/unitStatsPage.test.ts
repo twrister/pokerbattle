@@ -44,7 +44,7 @@ describe('单位参数页', () => {
     page.show();
 
     const rows = document.querySelectorAll('.unit-stats-table tbody tr');
-    expect(rows.length).toBe(21);
+    expect(rows.length).toBe(22);
     expect(document.querySelector('.unit-stats-table')?.textContent).toContain('DPS');
     const headFields = Array.from(
       document.querySelectorAll<HTMLTableCellElement>('.unit-stats-table thead th'),
@@ -175,7 +175,7 @@ describe('单位参数页', () => {
     ).toBeTruthy();
     expect(
       document.querySelector(
-        'input[data-unit="melee_charge_wagon"][data-skill="deathSpawn"][data-field="count"]',
+        'input[data-unit="fire_dragon"][data-skill="groundBurn"][data-field="damage"]',
       ),
     ).toBeTruthy();
     const gruntSkill = document.querySelector<HTMLTableCellElement>(

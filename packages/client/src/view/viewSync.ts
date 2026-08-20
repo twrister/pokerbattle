@@ -13,6 +13,7 @@ import { UnitView, viewKey, visualFaction, visualSide } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
+import { GroundHazardView } from './groundHazardView.js';
 import { AoeGroundMark } from './aoeGroundMark.js';
 import { CastlePackView } from './castlePackView.js';
 
@@ -159,6 +160,8 @@ export class BattleView {
   private readonly aoePulsePool: AoePulseEffectView[] = [];
   private readonly activeExplosions = new Map<number, ExplosionEffectView>();
   private readonly explosionPool: ExplosionEffectView[] = [];
+  private readonly activeGroundHazards = new Map<number, GroundHazardView>();
+  private readonly groundHazardPool: GroundHazardView[] = [];
   private readonly activeAoeWarnings = new Map<number, AoeGroundMark>();
   private readonly aoeWarningPool: AoeGroundMark[] = [];
   /** 选中单位的攻击范围圈：预警圈同款描边、无填充、白色。 */
@@ -288,6 +291,7 @@ export class BattleView {
     this.renderProjectiles(curr, alpha, camera);
     this.renderHealEffects(curr);
     this.renderAoePulses(curr);
+    this.renderGroundHazards(curr);
     this.renderExplosions(curr, camera);
   }
 
@@ -396,6 +400,27 @@ export class BattleView {
       this.scene.remove(view.group);
       this.activeAoePulses.delete(id);
       this.aoePulsePool.push(view);
+    }
+  }
+
+  /** 将落地燃烧区同步为橙红地面圈。 */
+  private renderGroundHazards(curr: Snapshot): void {
+    this.seen.clear();
+    for (const hazard of curr.groundHazards ?? []) {
+      this.seen.add(hazard.id);
+      let view = this.activeGroundHazards.get(hazard.id);
+      if (!view) {
+        view = this.groundHazardPool.pop() ?? new GroundHazardView();
+        this.activeGroundHazards.set(hazard.id, view);
+        this.scene.add(view.group);
+      }
+      view.update(hazard);
+    }
+    for (const [id, view] of this.activeGroundHazards) {
+      if (this.seen.has(id)) continue;
+      this.scene.remove(view.group);
+      this.activeGroundHazards.delete(id);
+      this.groundHazardPool.push(view);
     }
   }
 
@@ -621,6 +646,11 @@ export class BattleView {
       view.reset();
       this.explosionPool.push(view);
     }
+    for (const [id, view] of this.activeGroundHazards) {
+      this.scene.remove(view.group);
+      this.activeGroundHazards.delete(id);
+      this.groundHazardPool.push(view);
+    }
     for (const [id, mark] of this.activeAoeWarnings) {
       this.scene.remove(mark.group);
       this.activeAoeWarnings.delete(id);
@@ -670,6 +700,12 @@ export class BattleView {
       this.explosionPool.push(view);
     }
     this.activeExplosions.clear();
+    for (const [id, view] of this.activeGroundHazards) {
+      this.scene.remove(view.group);
+      this.activeGroundHazards.delete(id);
+      this.groundHazardPool.push(view);
+    }
+    this.activeGroundHazards.clear();
     for (const [id, mark] of this.activeAoeWarnings) {
       this.scene.remove(mark.group);
       this.activeAoeWarnings.delete(id);

@@ -8,6 +8,13 @@ export type ProjectileImpactFx = 'pulse' | 'explosion' | 'explode2' | 'explode4'
 /** 客户端弹道外观：彩色球、炸弹贴图或箭矢贴图 */
 export type ProjectileVisual = 'orb' | 'bomb' | 'arrow';
 
+/** 弹道落地后铺燃烧区的载荷；缺省表示不留火。 */
+export interface ProjectileGroundBurn {
+  durationTicks: number;
+  intervalTicks: number;
+  damage: Fx;
+}
+
 /**
  * 远程单位发射的弹道。
  * homing 为 true 时是必中追踪弹：目标存活就每帧飞向它。
@@ -63,6 +70,8 @@ export interface Projectile {
    * false 时（龙/战车）发射瞬间锁定 impactPos，目标可走开打空。
    */
   homing: boolean;
+  /** 落地后在 impactPos 生成燃烧区；打空中目标时为 null。 */
+  groundBurn: ProjectileGroundBurn | null;
   dead: boolean;
 }
 
@@ -86,6 +95,7 @@ export function createProjectile(
   visual: ProjectileVisual = 'orb',
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null = null,
   homing = true,
+  groundBurn: ProjectileGroundBurn | null = null,
 ): Projectile {
   return {
     id,
@@ -108,6 +118,7 @@ export function createProjectile(
     landed: false,
     fuseBombKind,
     homing,
+    groundBurn,
     dead: false,
   };
 }

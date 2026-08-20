@@ -9,6 +9,7 @@ import {
   isArcherTowerId,
   isBuildingConfig,
   usesArrowVisual,
+  usesDragonProjectile,
 } from './config/units.js';
 import {
   AIR_PROJECTILE_HEIGHT,
@@ -29,6 +30,7 @@ import {
   type ExplosionEffect,
   type HealEffect,
 } from './entity/effect.js';
+import type { GroundHazard } from './entity/groundHazard.js';
 import { Faction, type Unit, createUnit } from './entity/unit.js';
 import { evictionDeltaOutOfAabb } from './nav/buildingEvict.js';
 import { evictUnitFromRiver } from './nav/riverEvict.js';
@@ -51,6 +53,7 @@ import { updateCharge } from './systems/cavalry.js';
 import { resolveSeparation } from './systems/separation.js';
 import { updateCombat } from './systems/combat.js';
 import { updateProjectiles } from './systems/projectiles.js';
+import { updateGroundHazards } from './systems/groundHazards.js';
 import { updateDetonate } from './systems/detonate.js';
 import { tickPresentationFx, updateHeroSkills } from './systems/heroSkills.js';
 import { cleanup } from './systems/cleanup.js';
@@ -79,6 +82,7 @@ export class World {
   readonly healEffects: HealEffect[] = [];
   readonly aoePulseEffects: AoePulseEffect[] = [];
   readonly explosionEffects: ExplosionEffect[] = [];
+  readonly groundHazards: GroundHazard[] = [];
   /** 1 格分辨率的建筑占格表，用于放置重叠校验（与 NAV 半格网格独立） */
   private readonly buildingCells: Uint8Array;
   readonly buildingCols: number;
@@ -292,7 +296,7 @@ export class World {
       from.config.id === 'hero_queen'
       || from.config.id === 'hero_mage'
       || from.config.id === 'hero_archmage';
-    const usesExplode1 = isBomb || from.config.id === 'dragon';
+    const usesExplode1 = isBomb || usesDragonProjectile(from.config.id);
     const arcApex = isBomb ? BOMB_ARC_APEX : 0;
     const impactFx: ProjectileImpactFx = usesExplode1
       ? 'explosion'
@@ -303,7 +307,17 @@ export class World {
           : 'pulse';
     const visual: ProjectileVisual = isBomb ? 'bomb' : isArrow ? 'arrow' : 'orb';
     // 龙/战车发射时锁定落点，飞行中不再追踪；弓箭等仍必中跟随
-    const homing = from.config.id !== 'dragon' && from.config.id !== 'ranged_chariot';
+    const homing = !usesDragonProjectile(from.config.id) && from.config.id !== 'ranged_chariot';
+    const burn = from.config.groundBurn;
+    // 打空中时 aoeRadius 已被关掉，不把燃烧载荷挂上弹道
+    const groundBurn =
+      burn && aoeRadius > 0
+        ? {
+            durationTicks: Math.max(1, Math.round(toFloat(burn.durationTicks))),
+            intervalTicks: Math.max(1, Math.round(toFloat(burn.intervalTicks))),
+            damage: burn.damage,
+          }
+        : null;
     const projectile = createProjectile(
       this.nextEntityId++,
       from.faction,
@@ -324,6 +338,7 @@ export class World {
       visual,
       null,
       homing,
+      groundBurn,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -473,6 +488,32 @@ export class World {
     });
   }
 
+  /** 在落点生成持续燃烧区；首次灼烧在 intervalTicks 之后，避免与落地爆炸叠伤。 */
+  spawnGroundHazard(
+    x: Fx,
+    y: Fx,
+    radius: Fx,
+    damage: Fx,
+    faction: Faction,
+    durationTicks: number,
+    intervalTicks: number,
+  ): void {
+    const totalTicks = Math.max(1, durationTicks);
+    const interval = Math.max(1, intervalTicks);
+    this.groundHazards.push({
+      id: this.nextEffectId++,
+      x,
+      y,
+      radius,
+      damage,
+      faction,
+      intervalTicks: interval,
+      ticksUntilNextDamage: interval,
+      remainingTicks: totalTicks,
+      totalTicks,
+    });
+  }
+
   /**
    * 推进一个逻辑帧。系统顺序写死在这里，任何调整都会改变模拟结果，
    * 改动前请确认两端会同时更新。
@@ -492,6 +533,7 @@ export class World {
     updateHeroSkills(this);
     updateCombat(this);
     updateProjectiles(this);
+    updateGroundHazards(this);
     // 在 cleanup 前引爆，保证死亡当帧仍能结算 AOE 与特效
     updateDetonate(this);
     // 箭塔损耗放在出手之后，生命耗尽的当帧仍能射完这一轮
@@ -531,6 +573,7 @@ export class World {
     this.healEffects.length = 0;
     this.aoePulseEffects.length = 0;
     this.explosionEffects.length = 0;
+    this.groundHazards.length = 0;
     this.unitsById.clear();
     this.buildingCells.fill(0);
     this.nav.clearBlocked();
@@ -617,6 +660,17 @@ export class World {
       h = mix(h, effect.y);
       h = mix(h, effect.kind === 'giant_bomb' ? 1 : 0);
       h = mix(h, effect.remainingTicks);
+    }
+    for (const hazard of this.groundHazards) {
+      h = mix(h, hazard.id);
+      h = mix(h, hazard.x);
+      h = mix(h, hazard.y);
+      h = mix(h, hazard.radius);
+      h = mix(h, hazard.damage);
+      h = mix(h, hazard.faction);
+      h = mix(h, hazard.intervalTicks);
+      h = mix(h, hazard.ticksUntilNextDamage);
+      h = mix(h, hazard.remainingTicks);
     }
     h = mix(h, this.unitTimeScale);
     return h >>> 0;
