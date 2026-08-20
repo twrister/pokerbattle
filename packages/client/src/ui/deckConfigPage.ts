@@ -30,6 +30,11 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { IS_DEV_SERVER } from '../env.js';
+import {
+  appendFormationBombDamage,
+  fuseBombDisplayDamage,
+  withBombDamageAriaLabel,
+} from './formationBombDamage.js';
 import { appendFormationTag, applyFormationNameFallback } from './formationTag.js';
 import { createFormationPreview, type FormationPreviewHandle } from '../view/formationPreview.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
@@ -180,15 +185,21 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     const formation = previewFormationFromDraft(draft);
     if (!formation) return;
 
+    const previewCards = getPreviewCardsForFormation(category, draft);
+    const damage = fuseBombDisplayDamage(formation, previewCards);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'formation-option';
-    button.setAttribute('aria-label', `${formation.name}：${formatFormationUnits(formation)}`);
+    button.setAttribute(
+      'aria-label',
+      withBombDamageAriaLabel(`${formation.name}：${formatFormationUnits(formation)}`, damage),
+    );
     const image = document.createElement('img');
     image.className = 'formation-thumb';
     image.alt = '';
     button.appendChild(image);
     appendFormationTag(button, formation);
+    appendFormationBombDamage(button, formation, previewCards);
     buttonPreviewRoot.appendChild(button);
 
     const url = await getFormationThumbnail(formation);

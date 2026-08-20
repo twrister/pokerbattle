@@ -14,6 +14,11 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
+import {
+  appendFormationBombDamage,
+  fuseBombDisplayDamage,
+  withBombDamageAriaLabel,
+} from './formationBombDamage.js';
 import { appendFormationTag, applyFormationNameFallback } from './formationTag.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
@@ -738,7 +743,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     refreshStatus();
   }
 
-  /** 根据正式选中牌识别牌型并列出兵种搭配按钮（只放 3D 缩略图，说明走 aria-label）。 */
+  /** 根据正式选中牌识别牌型并列出兵种搭配按钮（3D 缩略图；炸弹另叠伤害）。 */
   function renderFormations(force: boolean): void {
     const selectedCards = deck.hand.filter((card) => selected.has(card.id));
     const categories = detectHandCategories(selectedCards);
@@ -751,6 +756,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
               formation.id,
               formation.slots.map((slot) => `${slot.typeId}:${slot.row}:${slot.col}`).join(','),
               getExclusiveFormationUnitTag(formation),
+              fuseBombDisplayDamage(formation, selectedCards) ?? '',
             ].join('#'),
           )
           .join('\0')
@@ -772,13 +778,18 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       button.type = 'button';
       button.className = 'formation-option';
       button.dataset.formationId = formation.id;
-      button.setAttribute('aria-label', `${formation.name}：${formatFormationUnits(formation)}`);
+      const damage = fuseBombDisplayDamage(formation, selectedCards);
+      button.setAttribute(
+        'aria-label',
+        withBombDamageAriaLabel(`${formation.name}：${formatFormationUnits(formation)}`, damage),
+      );
       const image = document.createElement('img');
       image.className = 'formation-thumb';
       image.alt = '';
       image.draggable = false;
       button.appendChild(image);
       appendFormationTag(button, formation);
+      appendFormationBombDamage(button, formation, selectedCards);
       fragment.appendChild(button);
       void applyThumbnail(button, image, formation, generation);
     }

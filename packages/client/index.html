@@ -2968,6 +2968,44 @@
         font-size: calc(11 * var(--hu));
       }
 
+      /* 引信炸弹：小爆炸底图叠在缩略图右下，红色伤害数字居中，不抢拖拽。 */
+      .formation-bomb-damage {
+        position: absolute;
+        right: 2px;
+        bottom: 2px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 52px;
+        height: 40px;
+        background: url('%BASE_URL%ui/bomb-damage-burst.png') center / contain no-repeat;
+        color: #e31c1c;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        text-shadow:
+          -1px -1px 0 #fff8c8,
+          1px -1px 0 #fff8c8,
+          -1px 1px 0 #fff8c8,
+          1px 1px 0 #fff8c8;
+        pointer-events: none;
+      }
+
+      #solo-hand .formation-bomb-damage {
+        right: calc(2 * var(--hu));
+        bottom: calc(2 * var(--hu));
+        width: calc(52 * var(--hu));
+        height: calc(40 * var(--hu));
+        font-size: calc(16 * var(--hu));
+        text-shadow:
+          calc(-1 * var(--hu)) calc(-1 * var(--hu)) 0 #fff8c8,
+          calc(1 * var(--hu)) calc(-1 * var(--hu)) 0 #fff8c8,
+          calc(-1 * var(--hu)) calc(1 * var(--hu)) 0 #fff8c8,
+          calc(1 * var(--hu)) calc(1 * var(--hu)) 0 #fff8c8;
+      }
+
       #btn-select-best {
         box-sizing: border-box;
         min-width: calc(64 * var(--hu));

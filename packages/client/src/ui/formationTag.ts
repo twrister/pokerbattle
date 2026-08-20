@@ -13,10 +13,10 @@ export function appendFormationTag(
   button.appendChild(badge);
 }
 
-/** 缩略图缺失改用文字时，避免 textContent 清掉角标。 */
+/** 缩略图缺失改用文字时，避免 textContent 清掉角标和炸弹伤害标。 */
 export function applyFormationNameFallback(button: HTMLElement, name: string): void {
-  const tag = button.querySelector('.formation-tag');
+  const overlays = [...button.querySelectorAll('.formation-tag, .formation-bomb-damage')];
   button.replaceChildren();
   button.append(name);
-  if (tag) button.appendChild(tag);
+  for (const overlay of overlays) button.appendChild(overlay);
 }

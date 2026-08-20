@@ -305,6 +305,37 @@ describe('单机手牌交互', () => {
     mixedPanel.dispose();
   });
 
+  it('引信炸弹按钮显示爆炸伤害，并随点数档位变化', () => {
+    const numbers = createHandPanel({
+      deck: deckWithCards(['5-spades', '5-hearts', '5-clubs']),
+    });
+    selectAllCards();
+    const numberBomb = document.querySelector<HTMLButtonElement>(
+      '.formation-option[data-formation-id="triple_small_bomb"]',
+    );
+    expect(numberBomb?.querySelector('.formation-bomb-damage')?.textContent).toBe('500');
+    expect(numberBomb?.getAttribute('aria-label')).toContain('爆炸伤害 500');
+    numbers.dispose();
+
+    const aces = createHandPanel({
+      deck: deckWithCards(['A-spades', 'A-hearts', 'A-clubs']),
+    });
+    selectAllCards();
+    const aceBomb = document.querySelector<HTMLButtonElement>(
+      '.formation-option[data-formation-id="triple_small_bomb"]',
+    );
+    expect(aceBomb?.querySelector('.formation-bomb-damage')?.textContent).toBe('900');
+    expect(aceBomb?.getAttribute('aria-label')).toContain('爆炸伤害 900');
+    aces.dispose();
+  });
+
+  it('非炸弹阵型按钮不显示爆炸伤害', () => {
+    const panel = createHandPanel({ deck: deckWithCards(['3-spades']) });
+    selectAllCards();
+    expect(document.querySelector('.formation-bomb-damage')).toBeNull();
+    panel.dispose();
+  });
+
   it('手牌未变时 syncFromDeck 不重建搭配按钮，避免悬停闪烁', () => {
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),

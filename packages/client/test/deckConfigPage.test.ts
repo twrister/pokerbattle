@@ -336,6 +336,31 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
+  it('炸弹阵型按钮预览显示爆炸伤害', async () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+
+    clickCategory('三张');
+    clickSituation('任意');
+    const bombButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
+      (button) => button.textContent === '小炸弹',
+    );
+    expect(bombButton).toBeDefined();
+    bombButton!.click();
+
+    document.querySelector<HTMLButtonElement>('#deck-preview-tab-button')!.click();
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('#deck-preview-button .formation-option .formation-bomb-damage')?.textContent,
+      ).toBe('500');
+    });
+    expect(
+      document.querySelector('#deck-preview-button .formation-option')?.getAttribute('aria-label'),
+    ).toContain('爆炸伤害 500');
+
+    page.dispose();
+  });
+
   it('小炸弹阵型可编辑点数伤害', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
