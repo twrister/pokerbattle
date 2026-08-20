@@ -27,11 +27,13 @@ export function isUntargetableBomb(unit: Unit): boolean {
 }
 
 /**
- * 攻击层规则：canAttackAir=false 打不到空中；投放炸弹不可锁定。
- * 索敌与战斗结算共用，避免规则漂移。
+ * 攻击层规则：canAttackAir=false 打不到空中；投放炸弹不可锁定；
+ * targetsBuildingsOnly 只打建筑。索敌与战斗结算共用，避免规则漂移。
  */
 export function canAttackTarget(attacker: Unit, target: Unit): boolean {
   if (isUntargetableBomb(target)) return false;
+  // 攻城单位不锁步兵/飞龙，避免被小兵引开；小兵仍可反向威胁并攻击它
+  if (attacker.config.targetsBuildingsOnly && !isBuildingConfig(target.config)) return false;
   return canThreatenTarget(attacker, target);
 }
 

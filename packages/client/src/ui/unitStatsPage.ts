@@ -418,10 +418,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
           select.dataset.unit = typeId;
           select.dataset.skill = group.key;
           select.dataset.field = field.key;
-          const current =
-            group.key === 'summon' && 'unitTypeId' in block
-              ? String(block.unitTypeId)
-              : '';
+          const current = 'unitTypeId' in block ? String(block.unitTypeId) : '';
           for (const optionId of field.options) {
             const option = document.createElement('option');
             option.value = optionId;

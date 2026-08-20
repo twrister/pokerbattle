@@ -19,7 +19,7 @@ describe('兵种图鉴页', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(20);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(21);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
     expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 6.25%/);
@@ -44,10 +44,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(9);
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(10);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['战车', '连弩车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
+    ).toEqual(['战车', '连弩车', '冲锋战车', '巨型炸弹', '小炸弹', '巨龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('战车');
     expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
 
@@ -85,6 +85,19 @@ describe('兵种图鉴页', () => {
     );
     ballista?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('优先攻击空中单位');
+    page.dispose();
+  });
+
+  it('冲锋战车图鉴写明只攻击建筑并阵亡派出民兵', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const wagon = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+      (button) => button.textContent?.includes('冲锋战车'),
+    );
+    wagon?.click();
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('只攻击建筑');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('派出 5 个民兵');
     page.dispose();
   });
 

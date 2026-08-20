@@ -283,6 +283,8 @@ describe('渲染同步', () => {
     expect(SPRITE_DEFS.ranged_chariot?.backUrl).toBe('units/chariot-back.png');
     expect(SPRITE_DEFS.ranged_ballista?.frontUrl).toBe('units/ballista-front.png');
     expect(SPRITE_DEFS.ranged_ballista?.backUrl).toBe('units/ballista-back.png');
+    expect(SPRITE_DEFS.melee_charge_wagon?.frontUrl).toBe('units/charge-wagon-front.png');
+    expect(SPRITE_DEFS.melee_charge_wagon?.backUrl).toBe('units/charge-wagon-back.png');
 
     const unitView = new UnitView(Faction.Blue, 'dragon');
     camera.position.set(0, 10, 10);

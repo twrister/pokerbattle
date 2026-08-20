@@ -222,6 +222,7 @@ function getSummary(config: UnitConfig): string {
   const range = toFloat(config.range);
   if (isArcherTowerId(config.id)) return '固定防御建筑，优先攻击空中单位，部署后会持续损耗生命。';
   if (config.movementLayer === 'air') return '空中单位，可越过地面部队进行范围打击。';
+  if (config.targetsBuildingsOnly) return '攻城单位，只攻击建筑，适合切开防线直取塔与城堡。';
   if (config.charge) return '重装突击单位，能在合适距离发动冲锋。';
   if (range >= 4) return '远程支援单位，适合在队伍后方持续输出。';
   return '地面作战单位，适合承担前线交战任务。';
@@ -267,6 +268,19 @@ function getSkill(config: UnitConfig): { title: string; description: string } {
     };
   }
   if (config.detonate) return { title: '自爆', description: '接近目标后点燃引信，对范围内敌人造成爆炸伤害。' };
+  if (config.targetsBuildingsOnly || config.deathSpawn) {
+    const spawn = config.deathSpawn;
+    const spawnName = spawn
+      ? displayUnitName(UNIT_CONFIGS[spawn.unitTypeId].name)
+      : '民兵';
+    const count = spawn?.count ?? 0;
+    return {
+      title: '攻城',
+      description: spawn
+        ? `只攻击建筑单位；阵亡后在原地派出 ${count} 个${spawnName}。`
+        : '只攻击建筑单位。',
+    };
+  }
   if (isArcherTowerId(config.id)) {
     return {
       title: '对空优先',

@@ -36,7 +36,7 @@ export const NUMERIC_FIELDS: ReadonlyArray<{
 ];
 
 /** 技能配置块键；与 UnitConfigDraft 可选技能字段一一对应。 */
-export type SkillBlockKey = 'charge' | 'inspire' | 'heal' | 'summon' | 'detonate';
+export type SkillBlockKey = 'charge' | 'inspire' | 'heal' | 'summon' | 'detonate' | 'deathSpawn';
 
 /** 技能数值字段元数据。 */
 export type SkillNumericFieldMeta = {
@@ -118,6 +118,14 @@ export const SKILL_GROUPS: readonly SkillGroupMeta[] = [
     fields: [
       { key: 'fuse', label: '引信', step: '1', hint: 'tick，20≈1秒', kind: 'number' },
       { key: 'aoeRadius', label: '爆径', step: '0.1', hint: '格', kind: 'number' },
+    ],
+  },
+  {
+    key: 'deathSpawn',
+    title: '阵亡生成',
+    fields: [
+      { key: 'count', label: '人数', step: '1', hint: '阵亡后原地生成', kind: 'number' },
+      { key: 'unitTypeId', label: '生成兵种', kind: 'select', options: UNIT_TYPE_IDS },
     ],
   },
 ];
@@ -374,6 +382,12 @@ export function assignSkillNumericField(
       assignDetonateNumeric(block, field, value);
       break;
     }
+    case 'deathSpawn': {
+      const block = draft.deathSpawn;
+      if (!block) return;
+      if (field === 'count') block.count = value;
+      break;
+    }
     default:
       break;
   }
@@ -432,12 +446,26 @@ function assignDetonateNumeric(block: DetonateConfigDraft, field: string, value:
   }
 }
 
-/** 写入召唤目标兵种；仅当召唤块已存在且选项合法时生效。 */
+/** 写入召唤/阵亡生成目标兵种；仅当对应块已存在且选项合法时生效。 */
 export function assignSummonUnitTypeId(
   draft: UnitConfigDraft,
   unitTypeId: string,
 ): void {
-  const block = draft.summon;
+  assignSkillUnitTypeId(draft.summon, unitTypeId);
+}
+
+/** 写入阵亡生成兵种；块不存在或选项非法时跳过。 */
+export function assignDeathSpawnUnitTypeId(
+  draft: UnitConfigDraft,
+  unitTypeId: string,
+): void {
+  assignSkillUnitTypeId(draft.deathSpawn, unitTypeId);
+}
+
+function assignSkillUnitTypeId(
+  block: { unitTypeId: UnitTypeId } | undefined,
+  unitTypeId: string,
+): void {
   if (!block) return;
   if (!(UNIT_TYPE_IDS as readonly string[]).includes(unitTypeId)) return;
   block.unitTypeId = unitTypeId as UnitTypeId;
@@ -495,15 +523,16 @@ export function readControlsIntoDrafts(
   }
 }
 
-/** 按技能块类型写回控件值；summon.unitTypeId 走下拉，其余走数值。 */
+/** 按技能块类型写回控件值；summon / deathSpawn 的 unitTypeId 走下拉，其余走数值。 */
 function readSkillControl(
   draft: UnitConfigDraft,
   skill: SkillBlockKey,
   field: string,
   raw: string,
 ): void {
-  if (skill === 'summon' && field === 'unitTypeId') {
-    assignSummonUnitTypeId(draft, raw);
+  if (field === 'unitTypeId') {
+    if (skill === 'summon') assignSummonUnitTypeId(draft, raw);
+    else if (skill === 'deathSpawn') assignDeathSpawnUnitTypeId(draft, raw);
     return;
   }
   const num = Number(raw);

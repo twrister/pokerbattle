@@ -13,10 +13,11 @@ export interface UnitCatalogEntry {
   name: string;
 }
 
-/** 特殊兵种：战车、连弩车、巨型/小炸弹、巨龙、基地、防御塔。 */
+/** 特殊兵种：战车、连弩车、冲锋战车、巨型/小炸弹、巨龙、基地、防御塔。 */
 const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
   'ranged_chariot',
   'ranged_ballista',
+  'melee_charge_wagon',
   'giant_bomb',
   'small_bomb',
   'dragon',
@@ -42,6 +43,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'hero_archmage',
   'ranged_chariot',
   'ranged_ballista',
+  'melee_charge_wagon',
   'giant_bomb',
   'small_bomb',
   'dragon',

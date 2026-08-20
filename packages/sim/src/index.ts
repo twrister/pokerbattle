@@ -54,6 +54,8 @@ export {
   type AttackKind,
   type ChargeConfig,
   type ChargeConfigDraft,
+  type DeathSpawnConfig,
+  type DeathSpawnConfigDraft,
   type DetonateConfig,
   type DetonateConfigDraft,
   type HealConfig,

@@ -68,6 +68,14 @@ export const SPRITE_DEFS: Partial<Record<UnitTypeId, SpriteDef>> = {
     aspect: 899 / 825,
     sourceFacing: 1,
   },
+  melee_charge_wagon: {
+    frontUrl: 'units/charge-wagon-front.png',
+    backUrl: 'units/charge-wagon-back.png',
+    // 木车立绘偏宽，倍率对齐战车/连弩车；宽高比取正面贴图
+    heightMul: 4.0,
+    aspect: 248 / 236,
+    sourceFacing: 1,
+  },
   giant_bomb: {
     frontUrl: 'projectiles/bomb.png',
     backUrl: 'projectiles/bomb.png',

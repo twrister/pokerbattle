@@ -8,6 +8,7 @@ export type UnitTypeId =
   | 'ranged_archer'
   | 'ranged_ballista'
   | 'ranged_chariot'
+  | 'melee_charge_wagon'
   | 'giant_bomb'
   | 'small_bomb'
   | 'melee_cavalry'
@@ -84,6 +85,12 @@ export interface DetonateConfig {
   aoeRadius: Fx;
 }
 
+/** 阵亡时在原地生成指定兵种。count 为整数人数。 */
+export interface DeathSpawnConfig {
+  unitTypeId: UnitTypeId;
+  count: number;
+}
+
 /**
  * 兵种配置。所有数值都是定点数，扩到 10 个兵种只是往 UNIT_CONFIGS 里加行，
  * 不需要新增任何类或分支逻辑（有技能的兵种除外，需接对应系统）。
@@ -131,6 +138,11 @@ export interface UnitConfig {
    * 射程内空中 > 射程内地面 > 视野内空中 > 视野内地面；缺省 false。
    */
   preferAir: boolean;
+  /**
+   * 索敌与普攻是否只以建筑为合法目标。
+   * 缺省 false；攻城单位写出 true。
+   */
+  targetsBuildingsOnly: boolean;
   attack: AttackKind;
   /**
    * 占地边长（整数格）。> 0 表示建筑：不移动、不索敌，碰撞按方形处理。
@@ -147,6 +159,8 @@ export interface UnitConfig {
   summon?: SummonConfig;
   /** 可选自爆技能；有此字段的兵种由 detonate 系统驱动，不走普攻 */
   detonate?: DetonateConfig;
+  /** 可选阵亡生成；有此字段的兵种由 cleanup 在死亡点生成新单位 */
+  deathSpawn?: DeathSpawnConfig;
 }
 
 /** 冲刺技能浮点草稿（与 JSON / 面板往返一致） */
@@ -188,6 +202,12 @@ export interface DetonateConfigDraft {
   aoeRadius: number;
 }
 
+/** 阵亡生成浮点草稿（count 保持整数，不走定点） */
+export interface DeathSpawnConfigDraft {
+  unitTypeId: UnitTypeId;
+  count: number;
+}
+
 /**
  * 人类可读的浮点草稿。调试面板与 units.json 都用这套，
  * 写入模拟前再 fromFloat，避免在 UI 层直接碰定点。
@@ -214,6 +234,8 @@ export interface UnitConfigDraft {
   canAttackAir?: boolean;
   /** 缺省 false；仅对空优先兵种写出 true */
   preferAir?: boolean;
+  /** 缺省 false；仅攻城单位写出 true */
+  targetsBuildingsOnly?: boolean;
   attackKind: 'melee' | 'melee_aoe' | 'projectile' | 'projectile_aoe';
   /** 仅弹道攻击时有意义 */
   projectileSpeed: number;
@@ -227,6 +249,7 @@ export interface UnitConfigDraft {
   heal?: HealConfigDraft;
   summon?: SummonConfigDraft;
   detonate?: DetonateConfigDraft;
+  deathSpawn?: DeathSpawnConfigDraft;
 }
 
 /**
@@ -255,6 +278,7 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     heal: config.heal ? { ...config.heal } : undefined,
     summon: config.summon ? { ...config.summon } : undefined,
     detonate: config.detonate ? { ...config.detonate } : undefined,
+    deathSpawn: config.deathSpawn ? { ...config.deathSpawn } : undefined,
   };
 }
 
@@ -285,6 +309,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.movementLayer = source.movementLayer;
   target.canAttackAir = source.canAttackAir;
   target.preferAir = source.preferAir;
+  target.targetsBuildingsOnly = source.targetsBuildingsOnly;
   target.footprint = source.footprint;
   target.attack = cloneAttack(source.attack);
   target.charge = source.charge ? { ...source.charge } : undefined;
@@ -292,6 +317,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.heal = source.heal ? { ...source.heal } : undefined;
   target.summon = source.summon ? { ...source.summon } : undefined;
   target.detonate = source.detonate ? { ...source.detonate } : undefined;
+  target.deathSpawn = source.deathSpawn ? { ...source.deathSpawn } : undefined;
 }
 
 /** 把草稿里的攻击方式还原成运行时 AttackKind */
@@ -359,6 +385,14 @@ function detonateFromDraft(draft: DetonateConfigDraft): DetonateConfig {
   };
 }
 
+/** 阵亡生成草稿：人数取非负整数，非法回落为 0（不生成）。 */
+function deathSpawnFromDraft(draft: DeathSpawnConfigDraft): DeathSpawnConfig {
+  return {
+    unitTypeId: draft.unitTypeId,
+    count: normalizeDeathSpawnCount(draft.count),
+  };
+}
+
 /** 单条浮点草稿转运行时定点配置 */
 function configFromDraft(draft: UnitConfigDraft): UnitConfig {
   return {
@@ -381,6 +415,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
     canAttackAir: resolveCanAttackAir(draft.attackKind, draft.canAttackAir),
     preferAir: draft.preferAir === true,
+    targetsBuildingsOnly: draft.targetsBuildingsOnly === true,
     footprint: normalizeFootprint(draft.footprint),
     attack: attackFromDraft(draft),
     charge: draft.charge ? chargeFromDraft(draft.charge) : undefined,
@@ -388,6 +423,7 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     heal: draft.heal ? healFromDraft(draft.heal) : undefined,
     summon: draft.summon ? summonFromDraft(draft.summon) : undefined,
     detonate: draft.detonate ? detonateFromDraft(draft.detonate) : undefined,
+    deathSpawn: draft.deathSpawn ? deathSpawnFromDraft(draft.deathSpawn) : undefined,
   };
 }
 
@@ -418,6 +454,12 @@ function normalizeMinRange(value: number | undefined): number {
 
 /** 占地必须是正整数；缺省/非法回落为 0（普通单位）。 */
 function normalizeFootprint(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value as number) <= 0) return 0;
+  return Math.floor(value as number);
+}
+
+/** 阵亡生成人数：缺省/非法回落为 0，避免负人数或小数。 */
+function normalizeDeathSpawnCount(value: number | undefined): number {
   if (!Number.isFinite(value) || (value as number) <= 0) return 0;
   return Math.floor(value as number);
 }
@@ -518,6 +560,7 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.canAttackAir = config.canAttackAir;
   }
   if (config.preferAir) draft.preferAir = true;
+  if (config.targetsBuildingsOnly) draft.targetsBuildingsOnly = true;
   if (config.tag) draft.tag = config.tag;
   if (config.footprint > 0) draft.footprint = config.footprint;
   if (config.charge) {
@@ -557,6 +600,12 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.detonate = {
       fuse: toFloat(config.detonate.fuse),
       aoeRadius: toFloat(config.detonate.aoeRadius),
+    };
+  }
+  if (config.deathSpawn) {
+    draft.deathSpawn = {
+      unitTypeId: config.deathSpawn.unitTypeId,
+      count: config.deathSpawn.count,
     };
   }
   return draft;

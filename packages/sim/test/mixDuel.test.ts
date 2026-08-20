@@ -33,6 +33,7 @@ describe('混编对局', () => {
     expect(ids).toContain('melee_grunt');
     expect(ids).toContain('ranged_archer');
     expect(ids).toContain('ranged_ballista');
+    expect(ids).toContain('melee_charge_wagon');
     expect(ids).toContain('building_tower');
     expect(ids).toContain('building_tower_advanced');
     expect(ids).toContain('building_tower_triple');
