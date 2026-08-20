@@ -33,26 +33,29 @@ describe('兵种图鉴页', () => {
 
     expect(
       Array.from(document.querySelectorAll('.codex-category')).map((button) => button.textContent),
-    ).toEqual(['全部兵种', '单兵种', '特殊兵种', '召唤物']);
+    ).toEqual(['全部兵种', '单兵种', '高级兵种', '其他']);
     expect(categoryNamed('全部兵种')?.classList.contains('is-active')).toBe(true);
 
     categoryNamed('单兵种')?.click();
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(8);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
+    ).toEqual(['民兵', '弓手', '卫士', '女王', '国王', '皇家骑士', '法师', '大法师']);
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
+
+    categoryNamed('高级兵种')?.click();
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(10);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['民兵', '弓手', '卫士', '石头人', '小石头人', '女王', '国王', '皇家骑士', '法师', '大法师']);
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
-
-    categoryNamed('特殊兵种')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(11);
-    expect(
-      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['投弹车', '连弩车', '冲锋战车', '巨型炸弹', '小炸弹', '飞龙', '喷火龙', '基地', '箭塔', '双射手箭塔', '三射手箭塔']);
+    ).toEqual(['石头人', '小石头人', '投弹车', '连弩车', '冲锋战车', '飞龙', '喷火龙', '箭塔', '双射手箭塔', '三射手箭塔']);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('投弹车');
     expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
 
-    categoryNamed('召唤物')?.click();
-    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(2);
+    categoryNamed('其他')?.click();
+    expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(5);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
+    ).toEqual(['巨型炸弹', '小炸弹', '基地', '骷髅兵', '炸弹兵']);
 
     categoryNamed('单兵种')?.click();
     const mage = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
@@ -130,6 +133,69 @@ describe('兵种图鉴页', () => {
 
     page.hide();
     expect(document.querySelector('#codex')?.classList.contains('is-hidden')).toBe(true);
+    page.dispose();
+  });
+
+  it('小石头人、连弩车、小炸弹的左侧缩略图带缩小标记', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const scaleOf = (name: string): string | undefined =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+        (button) => button.querySelector('.codex-unit-name')?.textContent === name,
+      )?.dataset.thumbScale;
+
+    expect(scaleOf('小石头人')).toBe('0.7');
+    expect(scaleOf('连弩车')).toBe('0.7');
+    expect(scaleOf('小炸弹')).toBe('0.55');
+    expect(scaleOf('巨型炸弹')).toBeUndefined();
+    page.dispose();
+  });
+
+  it('三种箭塔立绘叠弓手，人数与局内部署一致', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const portraitOf = (name: string): HTMLElement | null => {
+      const card = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+        (button) => button.querySelector('.codex-unit-name')?.textContent === name,
+      );
+      return card?.querySelector<HTMLElement>('.codex-portrait') ?? null;
+    };
+
+    expect(portraitOf('箭塔')?.dataset.garrison).toBe('1');
+    expect(portraitOf('箭塔')?.querySelectorAll('.codex-portrait-archer')).toHaveLength(1);
+    expect(portraitOf('双射手箭塔')?.dataset.garrison).toBe('2');
+    expect(portraitOf('双射手箭塔')?.querySelectorAll('.codex-portrait-archer')).toHaveLength(2);
+    expect(portraitOf('三射手箭塔')?.dataset.garrison).toBe('3');
+    expect(portraitOf('三射手箭塔')?.querySelectorAll('.codex-portrait-archer')).toHaveLength(3);
+
+    portraitOf('三射手箭塔')?.closest('button')?.click();
+    expect(
+      document.querySelector<HTMLElement>('#codex-detail .codex-portrait')?.dataset.garrison,
+    ).toBe('3');
+    page.dispose();
+  });
+
+  it('详情在介绍下方按牌型列出一组样例牌', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const clickNamed = (name: string): void => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card'))
+        .find((button) => button.querySelector('.codex-unit-name')?.textContent === name)
+        ?.click();
+    };
+
+    clickNamed('小石头人');
+    const golemHands = Array.from(document.querySelectorAll('.codex-hand-name')).map(
+      (node) => node.textContent,
+    );
+    expect(golemHands).toEqual(['四顺', '连对', '五顺']);
+    expect(document.querySelectorAll('.codex-hand-card').length).toBeGreaterThan(0);
+
+    clickNamed('基地');
+    expect(document.querySelector('.codex-hands-empty')?.textContent).toBe('无法通过出牌获得');
     page.dispose();
   });
 

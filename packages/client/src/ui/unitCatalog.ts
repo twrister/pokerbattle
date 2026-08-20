@@ -5,7 +5,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 
-export type UnitCatalogCategory = 'single' | 'special' | 'summoned';
+export type UnitCatalogCategory = 'single' | 'special' | 'other';
 
 export interface UnitCatalogEntry {
   category: UnitCatalogCategory;
@@ -13,54 +13,60 @@ export interface UnitCatalogEntry {
   name: string;
 }
 
-/** 特殊兵种：战车、连弩车、冲锋战车、巨型/小炸弹、巨龙、喷火龙、基地、防御塔。 */
+/** 高级兵种：石头人、战车、连弩车、冲锋战车、巨龙、喷火龙、防御塔。 */
 const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
+  'melee_golem',
+  'melee_golem_small',
   'ranged_chariot',
   'ranged_ballista',
   'melee_charge_wagon',
-  'giant_bomb',
-  'small_bomb',
   'dragon',
   'fire_dragon',
-  'building_base',
   'building_tower',
   'building_tower_advanced',
   'building_tower_triple',
 ]);
 
+/** 其他：巨型/小炸弹、基地，以及召唤物。 */
+const OTHER_TYPE_IDS = new Set<UnitTypeId>([
+  'giant_bomb',
+  'small_bomb',
+  'building_base',
+]);
+
 /**
- * 图鉴/参数页展示顺序：单兵种按策划指定排列，其后是特殊兵种与召唤物。
+ * 图鉴/参数页展示顺序：单兵种按策划指定排列，其后是高级兵种与其他。
  * 未列入的单位排在同分类末尾，避免新增兵种时被遗漏。
  */
 const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'melee_grunt',
   'ranged_archer',
   'melee_guard',
-  'melee_golem',
-  'melee_golem_small',
   'hero_queen',
   'hero_king',
   'melee_cavalry',
   'hero_mage',
   'hero_archmage',
+  'melee_golem',
+  'melee_golem_small',
   'ranged_chariot',
   'ranged_ballista',
   'melee_charge_wagon',
-  'giant_bomb',
-  'small_bomb',
   'dragon',
   'fire_dragon',
-  'building_base',
   'building_tower',
   'building_tower_advanced',
   'building_tower_triple',
+  'giant_bomb',
+  'small_bomb',
+  'building_base',
   'summoned_skeleton',
   'summoned_bomber',
 ];
 
-/** 按图鉴页签归类：召唤物看前缀，战车/连弩车/巨龙/喷火龙/基地/防御塔归特殊，其余可移动单位归单兵种。 */
+/** 按图鉴页签归类：炸弹/基地/召唤物归其他，石头人/战车/巨龙等归高级，其余可移动单位归单兵种。 */
 export function getUnitCatalogCategory(typeId: UnitTypeId): UnitCatalogCategory {
-  if (typeId.startsWith('summoned_')) return 'summoned';
+  if (typeId.startsWith('summoned_') || OTHER_TYPE_IDS.has(typeId)) return 'other';
   if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';
   return 'single';
 }
@@ -71,10 +77,10 @@ function getDisplayOrder(typeId: UnitTypeId): number {
   return index === -1 ? DISPLAY_ORDER.length : index;
 }
 
-/** 将模拟层配置转为可展示条目；建筑默认排除，特殊列表中的基地/防御塔例外。 */
+/** 将模拟层配置转为可展示条目；建筑默认排除，高级/其他列表中的基地/防御塔例外。 */
 export function getUnitCatalogEntries(): UnitCatalogEntry[] {
   return UNIT_TYPE_IDS.filter((typeId) => {
-    if (SPECIAL_TYPE_IDS.has(typeId)) return true;
+    if (SPECIAL_TYPE_IDS.has(typeId) || OTHER_TYPE_IDS.has(typeId)) return true;
     return !isBuildingConfig(UNIT_CONFIGS[typeId]);
   })
     .map((typeId) => ({

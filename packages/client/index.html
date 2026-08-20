@@ -3580,7 +3580,7 @@
         position: fixed;
         inset: 0;
         z-index: 12;
-        overflow: auto;
+        overflow: hidden;
         background:
           radial-gradient(circle at 78% 12%, rgba(81, 126, 168, 0.24), transparent 35%),
           #0a1018;
@@ -3588,7 +3588,8 @@
 
       .codex-shell {
         gap: calc(20 * var(--hu));
-        overflow: auto;
+        height: 100svh;
+        overflow: hidden;
       }
 
       .codex-header,
@@ -3596,6 +3597,11 @@
       .codex-content {
         position: relative;
         z-index: 1;
+      }
+
+      .codex-header,
+      .codex-toolbar {
+        flex-shrink: 0;
       }
 
       .codex-header {
@@ -3630,6 +3636,7 @@
       .codex-back {
         min-height: calc(34 * var(--hu));
         padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+        font-size: calc(13 * var(--hu));
       }
 
       .codex-toolbar {
@@ -3640,6 +3647,7 @@
       .codex-toolbar-copy {
         margin: 0;
         color: var(--text-dim);
+        font-size: calc(13 * var(--hu));
         line-height: 1.6;
       }
 
@@ -3652,6 +3660,7 @@
       .codex-category {
         padding: calc(7 * var(--hu)) calc(12 * var(--hu));
         color: var(--text-dim);
+        font-size: calc(13 * var(--hu));
       }
 
       .codex-category.is-active,
@@ -3663,51 +3672,64 @@
 
       .codex-content {
         display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(calc(230 * var(--hu)), 0.8fr);
+        flex: 1;
+        min-height: 0;
+        grid-template-columns: minmax(calc(196 * var(--hu)), 0.38fr) minmax(0, 1fr);
         gap: calc(12 * var(--hu));
-        align-items: start;
+        align-items: stretch;
       }
 
       .codex-unit-list,
       .codex-detail {
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
         border: 1px solid var(--panel-border);
         border-radius: calc(12 * var(--hu));
         background: rgba(18, 27, 38, 0.84);
       }
 
       .codex-unit-list {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: calc(8 * var(--hu));
-        padding: calc(10 * var(--hu));
+        display: flex;
+        flex-direction: column;
+        align-content: start;
+        gap: calc(6 * var(--hu));
+        padding: calc(8 * var(--hu));
       }
 
       .codex-unit-card {
         display: grid;
-        min-height: calc(132 * var(--hu));
-        place-items: center;
-        gap: calc(5 * var(--hu));
-        padding: calc(9 * var(--hu)) calc(6 * var(--hu)) calc(7 * var(--hu));
+        grid-template-columns: calc(44 * var(--hu)) minmax(0, 1fr);
+        align-items: center;
+        min-height: calc(52 * var(--hu));
+        gap: calc(8 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(8 * var(--hu));
         overflow: hidden;
-        text-align: center;
+        text-align: left;
       }
 
-      .codex-unit-art {
+      .codex-unit-art,
+      .codex-unit-card .codex-portrait {
         display: block;
-        width: min(100%, calc(82 * var(--hu)));
-        height: calc(82 * var(--hu));
+        width: calc(40 * var(--thumb-scale, 1) * var(--hu));
+        height: calc(40 * var(--thumb-scale, 1) * var(--hu));
+        justify-self: center;
         object-fit: contain;
         image-rendering: pixelated;
       }
 
       .codex-unit-name {
+        overflow: hidden;
         color: inherit;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(14 * var(--hu));
         font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .codex-detail {
         display: grid;
+        align-content: start;
         gap: calc(15 * var(--hu));
         padding: calc(16 * var(--hu));
       }
@@ -3719,12 +3741,68 @@
         min-width: 0;
       }
 
-      .codex-detail-art {
+      .codex-detail-art,
+      .codex-detail-header .codex-portrait {
         width: calc(88 * var(--hu));
         height: calc(88 * var(--hu));
         flex: 0 0 auto;
         object-fit: contain;
         image-rendering: pixelated;
+      }
+
+      .codex-portrait {
+        position: relative;
+      }
+
+      .codex-portrait-tower {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .codex-portrait-archer {
+        position: absolute;
+        width: 42%;
+        height: 48%;
+        object-fit: contain;
+        image-rendering: pixelated;
+        pointer-events: none;
+      }
+
+      .codex-portrait-archer[data-slot='center'] {
+        left: 50%;
+        top: 16%;
+        transform: translateX(-50%);
+      }
+
+      .codex-portrait-archer[data-slot='left'] {
+        left: 14%;
+        top: 18%;
+      }
+
+      .codex-portrait-archer[data-slot='right'] {
+        right: 14%;
+        top: 18%;
+      }
+
+      .codex-portrait-archer[data-slot='back-left'] {
+        left: 12%;
+        top: 10%;
+      }
+
+      .codex-portrait-archer[data-slot='back-right'] {
+        right: 12%;
+        top: 10%;
+      }
+
+      .codex-portrait-archer[data-slot='front'] {
+        left: 50%;
+        top: 22%;
+        z-index: 1;
+        width: 40%;
+        transform: translateX(-50%);
       }
 
       .codex-detail-category {
@@ -3742,6 +3820,7 @@
       .codex-detail-summary {
         margin: 0;
         color: var(--text-dim);
+        font-size: calc(13 * var(--hu));
         line-height: 1.6;
       }
 
@@ -3810,7 +3889,48 @@
       .codex-skill p {
         margin: calc(5 * var(--hu)) 0 0;
         color: var(--text-dim);
+        font-size: calc(13 * var(--hu));
         line-height: 1.55;
+      }
+
+      .codex-hands {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      .codex-hands > span {
+        color: var(--accent);
+        font-size: calc(11 * var(--hu));
+      }
+
+      .codex-hands-empty {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: calc(13 * var(--hu));
+        line-height: 1.55;
+      }
+
+      .codex-hand {
+        display: grid;
+        gap: calc(6 * var(--hu));
+      }
+
+      .codex-hand-name {
+        font-size: calc(13 * var(--hu));
+        font-weight: 650;
+      }
+
+      .codex-hand-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(4 * var(--hu));
+      }
+
+      .codex-hand-card {
+        width: calc(36 * var(--hu));
+        height: calc(50 * var(--hu));
+        object-fit: contain;
+        border-radius: calc(3 * var(--hu));
       }
 
       #hand-odds {
@@ -4905,14 +5025,6 @@
       }
 
       @media (max-width: 580px) {
-        .codex-content {
-          grid-template-columns: 1fr;
-        }
-
-        .codex-unit-list {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
         .deck-content {
           grid-template-columns: 1fr 1fr;
           /* 牌型+情况一行，阵型折到下一行，预览/编辑各占后续行 */

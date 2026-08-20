@@ -5,9 +5,12 @@ import {
   getUnitConfig,
   isArcherTowerId,
   listDeathSpawnEntries,
+  listHandExamplesForUnit,
   toFloat,
   type UnitConfig,
+  type UnitTypeId,
 } from '@pb/sim';
+import { cardImageUrl } from '../cards/cardImageUrl.js';
 import { SPRITE_DEFS } from '../view/unitSprites.js';
 import {
   displayUnitName,
@@ -37,8 +40,8 @@ export interface CodexPageHandle {
 const CATEGORY_NAMES: Record<CodexFilter, string> = {
   all: '全部兵种',
   single: '单兵种',
-  special: '特殊兵种',
-  summoned: '召唤物',
+  special: '高级兵种',
+  other: '其他',
 };
 
 const STAT_NAMES: Record<StatKey, string> = {
@@ -101,7 +104,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     );
   }
 
-  /** 渲染当前分类的兵种立绘卡片。 */
+  /** 渲染当前分类的左侧兵种列表。 */
   function renderUnits(visibleUnits: readonly UnitCatalogEntry[]): void {
     unitList.replaceChildren(
       ...visibleUnits.map((unit) => {
@@ -112,14 +115,13 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
         button.classList.toggle('is-active', selected);
         button.setAttribute('aria-pressed', String(selected));
         button.setAttribute('aria-label', `查看${displayUnitName(unit.name)}档案`);
-        const sprite = SPRITE_DEFS[unit.typeId];
-        if (sprite) {
-          const image = document.createElement('img');
-          image.className = 'codex-unit-art';
-          image.src = sprite.frontUrl;
-          image.alt = '';
-          button.appendChild(image);
+        const thumbScale = LIST_THUMB_SCALE[unit.typeId];
+        if (thumbScale !== undefined) {
+          button.dataset.thumbScale = String(thumbScale);
+          button.style.setProperty('--thumb-scale', String(thumbScale));
         }
+        const portrait = createCodexPortrait(unit.typeId, 'codex-unit-art');
+        if (portrait) button.appendChild(portrait);
         const name = document.createElement('span');
         name.className = 'codex-unit-name';
         name.textContent = displayUnitName(unit.name);
@@ -143,16 +145,10 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
 
     const { typeId } = unit;
     const config = getUnitConfig(typeId);
-    const sprite = SPRITE_DEFS[typeId];
     const header = document.createElement('header');
     header.className = 'codex-detail-header';
-    if (sprite) {
-      const image = document.createElement('img');
-      image.className = 'codex-detail-art';
-      image.src = sprite.frontUrl;
-      image.alt = '';
-      header.appendChild(image);
-    }
+    const portrait = createCodexPortrait(typeId, 'codex-detail-art');
+    if (portrait) header.appendChild(portrait);
     const title = document.createElement('div');
     const categoryLabel = document.createElement('p');
     categoryLabel.className = 'codex-detail-category';
@@ -196,7 +192,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     const skillDescription = document.createElement('p');
     skillDescription.textContent = skill.description;
     skillBlock.append(skillLabel, skillTitle, skillDescription);
-    detail.append(header, summary, stats, skillBlock);
+    detail.append(header, summary, stats, skillBlock, createHandsSection(typeId));
   }
 
   render();
@@ -216,6 +212,96 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       sceneConfigButton?.removeEventListener('click', openSceneConfig);
     },
   };
+}
+
+/** 左侧列表里体量偏大的兵种单独缩小，详情立绘保持原尺寸。 */
+const LIST_THUMB_SCALE: Partial<Record<UnitTypeId, number>> = {
+  melee_golem_small: 0.7,
+  ranged_ballista: 0.7,
+  small_bomb: 0.55,
+};
+
+/** 塔顶弓手数：与局内 garrison 一致，仅影响图鉴立绘。 */
+function towerGarrisonCount(typeId: UnitTypeId): number {
+  if (typeId === 'building_tower_triple') return 3;
+  if (typeId === 'building_tower_advanced') return 2;
+  return isArcherTowerId(typeId) ? 1 : 0;
+}
+
+/** 弓手槽位：1 居中、2 左右、3 前 1 后 2。 */
+function towerGarrisonSlots(count: number): readonly string[] {
+  if (count === 1) return ['center'];
+  if (count === 2) return ['left', 'right'];
+  return ['back-left', 'back-right', 'front'];
+}
+
+/** 图鉴立绘：箭塔叠弓手，其余用正面贴图。 */
+function createCodexPortrait(typeId: UnitTypeId, className: string): HTMLElement | null {
+  const sprite = SPRITE_DEFS[typeId];
+  if (!sprite) return null;
+  const garrison = towerGarrisonCount(typeId);
+  if (garrison === 0) {
+    const image = document.createElement('img');
+    image.className = className;
+    image.src = sprite.frontUrl;
+    image.alt = '';
+    return image;
+  }
+  const portrait = document.createElement('div');
+  portrait.className = `codex-portrait is-tower ${className}`;
+  portrait.dataset.garrison = String(garrison);
+  const tower = document.createElement('img');
+  tower.className = 'codex-portrait-tower';
+  tower.src = sprite.frontUrl;
+  tower.alt = '';
+  portrait.appendChild(tower);
+  const archerUrl = SPRITE_DEFS.ranged_archer?.frontUrl ?? 'units/archer-front.png';
+  for (const slot of towerGarrisonSlots(garrison)) {
+    const archer = document.createElement('img');
+    archer.className = 'codex-portrait-archer';
+    archer.dataset.slot = slot;
+    archer.src = archerUrl;
+    archer.alt = '';
+    portrait.appendChild(archer);
+  }
+  return portrait;
+}
+
+/** 特性下方列出该兵种能凑出的牌型，每种牌型一组样例牌。 */
+function createHandsSection(typeId: UnitTypeId): HTMLElement {
+  const examples = listHandExamplesForUnit(typeId);
+  const section = document.createElement('section');
+  section.className = 'codex-hands';
+  const label = document.createElement('span');
+  label.textContent = '可组成牌型';
+  section.appendChild(label);
+  if (examples.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'codex-hands-empty';
+    empty.textContent = '无法通过出牌获得';
+    section.appendChild(empty);
+    return section;
+  }
+  for (const example of examples) {
+    const row = document.createElement('div');
+    row.className = 'codex-hand';
+    row.dataset.category = example.category;
+    const name = document.createElement('strong');
+    name.className = 'codex-hand-name';
+    name.textContent = example.name;
+    const cards = document.createElement('div');
+    cards.className = 'codex-hand-cards';
+    for (const card of example.cards) {
+      const image = document.createElement('img');
+      image.className = 'codex-hand-card';
+      image.src = cardImageUrl(card);
+      image.alt = card.label;
+      cards.appendChild(image);
+    }
+    row.append(name, cards);
+    section.appendChild(row);
+  }
+  return section;
 }
 
 /** 提供适合详情标题下方的简短战斗定位。 */
