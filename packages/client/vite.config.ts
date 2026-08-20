@@ -16,6 +16,8 @@ const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
 const arena2v2JsonPath = path.resolve(clientDir, '../sim/src/config/arena2v2.json');
 /** 大厅更新公告的唯一落盘路径 */
 const patchNotesJsonPath = path.resolve(clientDir, 'src/data/patchNotes.json');
+/** monorepo 内对局节奏配置的唯一落盘路径 */
+const matchRulesJsonPath = path.resolve(clientDir, '../sim/src/config/matchRules.json');
 
 /** 开发服务器：GET 读盘最新 units.json，POST 覆盖写回。 */
 function unitConfigWritePlugin(): Plugin {
@@ -226,6 +228,63 @@ function patchNotesWritePlugin(): Plugin {
   };
 }
 
+/** 开发服务器：GET 读盘最新 matchRules.json，POST 覆盖写回。 */
+function matchRulesWritePlugin(): Plugin {
+  return {
+    name: 'pb-match-rules-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__pb/match-rules') {
+          next();
+          return;
+        }
+        if (req.method === 'GET') {
+          try {
+            const text = fs.readFileSync(matchRulesJsonPath, 'utf8');
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              sendJson(res, 500, { error: 'matchRules.json is not valid JSON' });
+              return;
+            }
+            sendJson(res, 200, parsed);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          }
+          return;
+        }
+        if (req.method !== 'POST') {
+          next();
+          return;
+        }
+        readRequestBody(req)
+          .then((raw) => {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              sendJson(res, 400, { error: 'invalid JSON' });
+              return;
+            }
+            const validationError = validateMatchRulesBody(parsed);
+            if (validationError) {
+              sendJson(res, 400, { error: validationError });
+              return;
+            }
+            fs.writeFileSync(matchRulesJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
 /** 写盘前做结构校验，避免把残缺场景配置写进 arena.json。 */
 function validateArenaConfigBody(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
@@ -253,6 +312,33 @@ function validateArenaConfigBody(value: unknown): string | undefined {
     return 'camera.mode must be ortho or perspective';
   }
   if (!draft.colors || typeof draft.colors !== 'object') return 'colors must be an object';
+  return undefined;
+}
+
+const MATCH_RULES_NUMBER_KEYS = [
+  'initialHandSize',
+  'normalPhaseSeconds',
+  'doubleSpeedPhaseSeconds',
+  'finalPhaseSeconds',
+  'settlementPhaseSeconds',
+  'finalUnitTimeScale',
+  'normalDrawIntervalSeconds',
+  'doubleSpeedDrawIntervalSeconds',
+  'finalDrawIntervalSeconds',
+  'normalHandLimit',
+  'doubleSpeedHandLimit',
+  'finalHandLimit',
+] as const;
+
+/** 写盘前确认对局节奏字段齐全且为有限数字。 */
+function validateMatchRulesBody(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
+  const rec = value as Record<string, unknown>;
+  for (const key of MATCH_RULES_NUMBER_KEYS) {
+    if (typeof rec[key] !== 'number' || !Number.isFinite(rec[key])) {
+      return `${key} must be a finite number`;
+    }
+  }
   return undefined;
 }
 
@@ -298,6 +384,7 @@ export default defineConfig({
     cardFormationWritePlugin(),
     arenaConfigWritePlugin(),
     patchNotesWritePlugin(),
+    matchRulesWritePlugin(),
   ],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {

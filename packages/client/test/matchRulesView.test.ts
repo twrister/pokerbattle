@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { MatchState, TICK_RATE } from '@pb/sim';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MatchState, restoreMatchRulesFromFile, TICK_RATE } from '@pb/sim';
 import {
   applyMatchRulesView,
   defaultMatchRulesView,
+  persistMatchRulesToFile,
   sanitizeMatchRulesView,
 } from '../src/debug/matchRulesView.js';
+
+afterEach(() => {
+  restoreMatchRulesFromFile();
+  vi.unstubAllGlobals();
+});
 
 describe('对局节奏控件视图', () => {
   it('默认值与 sim 规则一致', () => {
@@ -56,5 +62,39 @@ describe('对局节奏控件视图', () => {
     });
     expect(match.getHudDeadlineTick()).toBe(TICK_RATE * 90);
     expect(match.getPhaseDeadlineTick()).toBe(TICK_RATE * 30);
+  });
+
+  it('写盘成功后把草稿设为运行时默认', async () => {
+    const view = {
+      ...defaultMatchRulesView(),
+      normalPhaseSeconds: 30,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => ({ ok: true }),
+      }),
+    );
+
+    await expect(persistMatchRulesToFile(view)).resolves.toEqual({ ok: true });
+    expect(defaultMatchRulesView().normalPhaseSeconds).toBe(30);
+  });
+
+  it('开发服接口 404 时提示需在 pnpm dev 下保存', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 404,
+        ok: false,
+        json: async () => ({ error: 'not found' }),
+      }),
+    );
+
+    await expect(persistMatchRulesToFile(defaultMatchRulesView())).resolves.toEqual({
+      ok: false,
+      error: '需在 pnpm dev 下保存',
+    });
   });
 });

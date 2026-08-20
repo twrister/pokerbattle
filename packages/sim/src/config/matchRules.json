@@ -1,0 +1,14 @@
+{
+  "initialHandSize": 4,
+  "normalPhaseSeconds": 120,
+  "doubleSpeedPhaseSeconds": 120,
+  "finalPhaseSeconds": 120,
+  "settlementPhaseSeconds": 60,
+  "finalUnitTimeScale": 1.5,
+  "normalDrawIntervalSeconds": 5,
+  "doubleSpeedDrawIntervalSeconds": 3,
+  "finalDrawIntervalSeconds": 2,
+  "normalHandLimit": 9,
+  "doubleSpeedHandLimit": 10,
+  "finalHandLimit": 11
+}

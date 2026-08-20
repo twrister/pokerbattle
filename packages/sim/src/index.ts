@@ -194,6 +194,20 @@ export {
   type HandCategoryOddsSweepResult,
 } from './cards/handCategoryOdds.js';
 export {
+  applyMatchRulesDraft,
+  captureMatchRulesAsDefault,
+  clampDrawIntervalSeconds,
+  clampFinalUnitTimeScale,
+  clampPhaseSeconds,
+  dumpDefaultMatchRulesDraft,
+  dumpMatchRulesDraft,
+  resetMatchRulesToDefault,
+  restoreMatchRulesFromFile,
+  sanitizeMatchRulesDraft,
+  validateMatchRulesDraft,
+  type MatchRulesDraft,
+} from './config/matchRules.js';
+export {
   CASTLE_PROTECT_CARDS,
   CASTLE_PROTECT_HP,
   CASTLE_PROTECT_HP_RATIO,

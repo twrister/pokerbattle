@@ -1,70 +1,34 @@
 import {
-  FINAL_UNIT_TIME_SCALE_MAX,
-  FINAL_UNIT_TIME_SCALE_MIN,
+  applyMatchRulesDraft,
+  captureMatchRulesAsDefault,
+  clampDrawIntervalSeconds,
+  clampFinalUnitTimeScale,
+  clampPhaseSeconds,
+  dumpMatchRulesDraft,
+  sanitizeMatchRulesDraft,
   TICK_RATE,
-  clampHandSize,
-  defaultMatchRules,
+  type MatchRulesDraft,
   type MatchState,
 } from '@pb/sim';
 
-const DRAW_INTERVAL_MIN = 0.25;
-const DRAW_INTERVAL_MAX = 60;
-const PHASE_SECONDS_MIN = 10;
-const PHASE_SECONDS_MAX = 600;
+/** 运行控制用的秒/张数视图，与 sim MatchRulesDraft / matchRules.json 一致。 */
+export type MatchRulesView = MatchRulesDraft;
 
-/** 运行控制用的秒/张数视图，与 sim MatchRules 一一对应。 */
-export interface MatchRulesView {
-  initialHandSize: number;
-  normalPhaseSeconds: number;
-  doubleSpeedPhaseSeconds: number;
-  finalPhaseSeconds: number;
-  settlementPhaseSeconds: number;
-  finalUnitTimeScale: number;
-  normalDrawIntervalSeconds: number;
-  doubleSpeedDrawIntervalSeconds: number;
-  finalDrawIntervalSeconds: number;
-  normalHandLimit: number;
-  doubleSpeedHandLimit: number;
-  finalHandLimit: number;
-}
+export {
+  clampDrawIntervalSeconds,
+  clampFinalUnitTimeScale,
+  clampPhaseSeconds,
+};
 
-/** 从 sim 默认规则生成控件初值，单机与联机开局一致。 */
+/** 从当前运行时草稿生成控件初值，单机与联机开局一致。 */
 export function defaultMatchRulesView(): MatchRulesView {
-  const rules = defaultMatchRules();
-  return {
-    initialHandSize: rules.initialHandSize,
-    normalPhaseSeconds: ticksToSeconds(rules.phaseDurations.normalTicks),
-    doubleSpeedPhaseSeconds: ticksToSeconds(rules.phaseDurations.doubleSpeedTicks),
-    finalPhaseSeconds: ticksToSeconds(rules.phaseDurations.finalTicks),
-    settlementPhaseSeconds: ticksToSeconds(rules.phaseDurations.settlementTicks),
-    finalUnitTimeScale: rules.finalUnitTimeScale,
-    normalDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.normalTicks),
-    doubleSpeedDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.doubleSpeedTicks),
-    finalDrawIntervalSeconds: ticksToSeconds(rules.drawIntervals.finalTicks),
-    normalHandLimit: rules.handLimits.normal,
-    doubleSpeedHandLimit: rules.handLimits.doubleSpeed,
-    finalHandLimit: rules.handLimits.final,
-  };
+  return dumpMatchRulesDraft();
 }
 
-/** 发牌间隔控件合法区间。 */
-export function clampDrawIntervalSeconds(seconds: number): number {
-  return clampRange(seconds, DRAW_INTERVAL_MIN, DRAW_INTERVAL_MAX);
-}
-
-/** 阶段时长控件合法区间。 */
-export function clampPhaseSeconds(seconds: number): number {
-  return clampRange(seconds, PHASE_SECONDS_MIN, PHASE_SECONDS_MAX);
-}
-
-/** 决胜单位加速控件合法区间。 */
-export function clampFinalUnitTimeScale(scale: number): number {
-  return clampRange(scale, FINAL_UNIT_TIME_SCALE_MIN, FINAL_UNIT_TIME_SCALE_MAX);
-}
-
-/** 把控件值写回当前局；持久化由运行控制「保存为默认」另走 localStorage。 */
+/** 把控件值写回当前局；仓库默认由「保存为默认」写 matchRules.json。 */
 export function applyMatchRulesView(match: MatchState, view: MatchRulesView): void {
   const next = sanitizeMatchRulesView(view);
+  applyMatchRulesDraft(next);
   match.setInitialHandSize(next.initialHandSize);
   match.setPhaseDurations({
     normalTicks: secondsToTicks(next.normalPhaseSeconds),
@@ -87,62 +51,41 @@ export function applyMatchRulesView(match: MatchState, view: MatchRulesView): vo
 
 /** 非法字段回落默认，合法则夹紧到控件区间。 */
 export function sanitizeMatchRulesView(values: Partial<MatchRulesView>): MatchRulesView {
-  const fallback = defaultMatchRulesView();
-  return {
-    initialHandSize: readHandSize(values.initialHandSize, fallback.initialHandSize),
-    normalPhaseSeconds: readPhaseSeconds(values.normalPhaseSeconds, fallback.normalPhaseSeconds),
-    doubleSpeedPhaseSeconds: readPhaseSeconds(
-      values.doubleSpeedPhaseSeconds,
-      fallback.doubleSpeedPhaseSeconds,
-    ),
-    finalPhaseSeconds: readPhaseSeconds(values.finalPhaseSeconds, fallback.finalPhaseSeconds),
-    settlementPhaseSeconds: readPhaseSeconds(
-      values.settlementPhaseSeconds,
-      fallback.settlementPhaseSeconds,
-    ),
-    finalUnitTimeScale: readUnitTimeScale(values.finalUnitTimeScale, fallback.finalUnitTimeScale),
-    normalDrawIntervalSeconds: readDrawInterval(
-      values.normalDrawIntervalSeconds,
-      fallback.normalDrawIntervalSeconds,
-    ),
-    doubleSpeedDrawIntervalSeconds: readDrawInterval(
-      values.doubleSpeedDrawIntervalSeconds,
-      fallback.doubleSpeedDrawIntervalSeconds,
-    ),
-    finalDrawIntervalSeconds: readDrawInterval(
-      values.finalDrawIntervalSeconds,
-      fallback.finalDrawIntervalSeconds,
-    ),
-    normalHandLimit: readHandSize(values.normalHandLimit, fallback.normalHandLimit),
-    doubleSpeedHandLimit: readHandSize(values.doubleSpeedHandLimit, fallback.doubleSpeedHandLimit),
-    finalHandLimit: readHandSize(values.finalHandLimit, fallback.finalHandLimit),
-  };
+  return sanitizeMatchRulesDraft(values);
 }
 
-function readDrawInterval(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? clampDrawIntervalSeconds(value)
-    : fallback;
-}
-
-function readPhaseSeconds(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? clampPhaseSeconds(value) : fallback;
-}
-
-function readHandSize(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? clampHandSize(value) : fallback;
-}
-
-function readUnitTimeScale(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? clampFinalUnitTimeScale(value) : fallback;
-}
-
-function clampRange(seconds: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, seconds));
-}
-
-function ticksToSeconds(ticks: number): number {
-  return ticks / TICK_RATE;
+/** POST 到 Vite 开发中间件写盘；preview/build 下接口不存在。 */
+export async function persistMatchRulesToFile(
+  view: MatchRulesView,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const draft = sanitizeMatchRulesView(view);
+  // 先写运行时，写盘失败时本会话下一局仍能用新节奏
+  applyMatchRulesDraft(draft);
+  try {
+    const res = await fetch('/__pb/match-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) detail = body.error;
+      } catch {
+        // 非 JSON 错误体时沿用 status
+      }
+      if (res.status === 404) {
+        return { ok: false, error: '需在 pnpm dev 下保存' };
+      }
+      return { ok: false, error: detail };
+    }
+    captureMatchRulesAsDefault();
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
+  }
 }
 
 function secondsToTicks(seconds: number): number {

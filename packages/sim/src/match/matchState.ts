@@ -24,8 +24,32 @@ import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePos
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import { isBuildingInsideHalfCourt, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
-import { TICK_RATE } from '../config/tuning.js';
 import { UNIT_CONFIGS } from '../config/units.js';
+import {
+  DEFAULT_DOUBLE_SPEED_DURATION_SECONDS,
+  DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
+  DEFAULT_FINAL_DURATION_SECONDS,
+  DEFAULT_FINAL_DURATION_TICKS,
+  DEFAULT_FINAL_UNIT_TIME_SCALE,
+  DEFAULT_PHASE_DURATION_SECONDS,
+  DEFAULT_PHASE_DURATION_TICKS,
+  DEFAULT_SETTLEMENT_DURATION_SECONDS,
+  DEFAULT_SETTLEMENT_DURATION_TICKS,
+  DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
+  DOUBLE_SPEED_START_TICKS,
+  FINAL_DRAW_INTERVAL_TICKS,
+  FINAL_START_TICKS,
+  FINAL_UNIT_TIME_SCALE_MAX,
+  FINAL_UNIT_TIME_SCALE_MIN,
+  MATCH_END_TICKS,
+  NORMAL_DRAW_INTERVAL_TICKS,
+  SETTLEMENT_START_TICKS,
+  defaultMatchRules,
+  type MatchDrawIntervals,
+  type MatchHandLimits,
+  type MatchPhaseDurations,
+  type MatchRules,
+} from '../config/matchRules.js';
 import { Faction, type Unit } from '../entity/unit.js';
 import { type Fx, fromFloat, ONE, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
@@ -37,6 +61,32 @@ import {
   type MatchMode,
 } from './matchMode.js';
 
+export {
+  DEFAULT_DOUBLE_SPEED_DURATION_SECONDS,
+  DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
+  DEFAULT_FINAL_DURATION_SECONDS,
+  DEFAULT_FINAL_DURATION_TICKS,
+  DEFAULT_FINAL_UNIT_TIME_SCALE,
+  DEFAULT_PHASE_DURATION_SECONDS,
+  DEFAULT_PHASE_DURATION_TICKS,
+  DEFAULT_SETTLEMENT_DURATION_SECONDS,
+  DEFAULT_SETTLEMENT_DURATION_TICKS,
+  DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
+  DOUBLE_SPEED_START_TICKS,
+  FINAL_DRAW_INTERVAL_TICKS,
+  FINAL_START_TICKS,
+  FINAL_UNIT_TIME_SCALE_MAX,
+  FINAL_UNIT_TIME_SCALE_MIN,
+  MATCH_END_TICKS,
+  NORMAL_DRAW_INTERVAL_TICKS,
+  SETTLEMENT_START_TICKS,
+  defaultMatchRules,
+  type MatchDrawIntervals,
+  type MatchHandLimits,
+  type MatchPhaseDurations,
+  type MatchRules,
+};
+
 /** 对局可玩阶段含停发后的结算；ended 是冻结收局。 */
 export type MatchPhase = 'normal' | 'double_speed' | 'final' | 'settlement' | 'ended';
 /** 结算原因由 sim 产出，UI 和联机协议只负责展示与转发。 */
@@ -46,33 +96,6 @@ export interface MatchResult {
   reason: MatchEndReason;
   endTick: number;
 }
-
-/** 常规阶段默认 2 分钟。 */
-export const DEFAULT_PHASE_DURATION_SECONDS = 120;
-export const DEFAULT_PHASE_DURATION_TICKS = TICK_RATE * DEFAULT_PHASE_DURATION_SECONDS;
-/** 倍速 / 决胜默认各 3 分钟。 */
-export const DEFAULT_DOUBLE_SPEED_DURATION_SECONDS = 180;
-export const DEFAULT_FINAL_DURATION_SECONDS = 180;
-export const DEFAULT_DOUBLE_SPEED_DURATION_TICKS = TICK_RATE * DEFAULT_DOUBLE_SPEED_DURATION_SECONDS;
-export const DEFAULT_FINAL_DURATION_TICKS = TICK_RATE * DEFAULT_FINAL_DURATION_SECONDS;
-/** 停发后的结算阶段默认 1 分钟。 */
-export const DEFAULT_SETTLEMENT_DURATION_SECONDS = 60;
-export const DEFAULT_SETTLEMENT_DURATION_TICKS = TICK_RATE * DEFAULT_SETTLEMENT_DURATION_SECONDS;
-/** 决胜与结算的单位逻辑加速，默认 1.5 倍。 */
-export const DEFAULT_FINAL_UNIT_TIME_SCALE = 1.5;
-export const FINAL_UNIT_TIME_SCALE_MIN = 1;
-export const FINAL_UNIT_TIME_SCALE_MAX = 3;
-/** 默认 2:00 进入倍速阶段。 */
-export const DOUBLE_SPEED_START_TICKS = DEFAULT_PHASE_DURATION_TICKS;
-/** 默认 5:00 进入决胜阶段。 */
-export const FINAL_START_TICKS = DEFAULT_PHASE_DURATION_TICKS + DEFAULT_DOUBLE_SPEED_DURATION_TICKS;
-/** 默认 8:00 停发并进入结算。 */
-export const SETTLEMENT_START_TICKS = FINAL_START_TICKS + DEFAULT_FINAL_DURATION_TICKS;
-/** 默认 9:00 结算结束、按血量收局。 */
-export const MATCH_END_TICKS = SETTLEMENT_START_TICKS + DEFAULT_SETTLEMENT_DURATION_TICKS;
-export const NORMAL_DRAW_INTERVAL_TICKS = TICK_RATE * 5;
-export const DOUBLE_SPEED_DRAW_INTERVAL_TICKS = TICK_RATE * 3;
-export const FINAL_DRAW_INTERVAL_TICKS = TICK_RATE * 2;
 /** 队友主堡陷落后的发牌加速倍率。 */
 export const TEAMMATE_LOST_DRAW_SPEEDUP = 1.5;
 /** 主堡生命低于最大生命的该比例时触发保护卡包。 */
@@ -83,62 +106,6 @@ export const CASTLE_PROTECT_HP = toFloat(UNIT_CONFIGS.building_base.maxHp) * CAS
 export const CASTLE_PROTECT_CARDS = 5;
 /** 每方每局卡包生命周期：未触发 / 待领取 / 已领取。 */
 export type CastlePackState = 'none' | 'pending' | 'claimed';
-
-/** 三阶段补牌周期。 */
-export interface MatchDrawIntervals {
-  normalTicks: number;
-  doubleSpeedTicks: number;
-  finalTicks: number;
-}
-
-/** 各阶段持续时长。 */
-export interface MatchPhaseDurations {
-  normalTicks: number;
-  doubleSpeedTicks: number;
-  finalTicks: number;
-  settlementTicks: number;
-}
-
-/** 三阶段手牌上限。 */
-export interface MatchHandLimits {
-  normal: number;
-  doubleSpeed: number;
-  final: number;
-}
-
-/** 单机与联机共用的对局节奏；构造时落到 MatchState。 */
-export interface MatchRules {
-  initialHandSize: number;
-  phaseDurations: MatchPhaseDurations;
-  drawIntervals: MatchDrawIntervals;
-  handLimits: MatchHandLimits;
-  /** 决胜与结算的单位逻辑加速倍率。 */
-  finalUnitTimeScale: number;
-}
-
-/** 内置默认节奏，单机/联机/服务端都从这里起步。 */
-export function defaultMatchRules(): MatchRules {
-  return {
-    initialHandSize: INITIAL_HAND_SIZE,
-    phaseDurations: {
-      normalTicks: DEFAULT_PHASE_DURATION_TICKS,
-      doubleSpeedTicks: DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
-      finalTicks: DEFAULT_FINAL_DURATION_TICKS,
-      settlementTicks: DEFAULT_SETTLEMENT_DURATION_TICKS,
-    },
-    drawIntervals: {
-      normalTicks: NORMAL_DRAW_INTERVAL_TICKS,
-      doubleSpeedTicks: DOUBLE_SPEED_DRAW_INTERVAL_TICKS,
-      finalTicks: FINAL_DRAW_INTERVAL_TICKS,
-    },
-    handLimits: {
-      normal: HAND_LIMIT_NORMAL,
-      doubleSpeed: HAND_LIMIT_DOUBLE_SPEED,
-      final: HAND_LIMIT_FINAL,
-    },
-    finalUnitTimeScale: DEFAULT_FINAL_UNIT_TIME_SCALE,
-  };
-}
 
 /**
  * 联机/单机对局的唯一步进入口：World + 各席牌堆。
@@ -182,14 +149,32 @@ export class MatchState {
     this.nextDrawTicks = [];
     this.pendingDraw = [];
     // 各席牌堆共用 world.rng，抽牌顺序固定为 slot 升序，保证确定性
+    const rules = defaultMatchRules();
+    this.applyDefaultRules(rules);
     for (let slot = 0; slot < slots; slot += 1) {
       this.decks.push(new PokerDeck(createPokerCards(), this.world.rng));
       this.castleIds.push(null);
       this.packStates.push('none');
-      this.nextDrawTicks.push(NORMAL_DRAW_INTERVAL_TICKS);
+      this.nextDrawTicks.push(rules.drawIntervals.normalTicks);
       this.pendingDraw.push(false);
     }
     this.dealStartingHands();
+  }
+
+  /** 把当前运行时默认节奏写进本局字段，避免构造后再覆盖漏字段。 */
+  private applyDefaultRules(rules: MatchRules): void {
+    this.initialHandSize = rules.initialHandSize;
+    this.normalPhaseTicks = rules.phaseDurations.normalTicks;
+    this.doubleSpeedPhaseTicks = rules.phaseDurations.doubleSpeedTicks;
+    this.finalPhaseTicks = rules.phaseDurations.finalTicks;
+    this.settlementPhaseTicks = rules.phaseDurations.settlementTicks;
+    this.finalUnitTimeScale = fromFloat(rules.finalUnitTimeScale);
+    this.normalDrawIntervalTicks = rules.drawIntervals.normalTicks;
+    this.doubleSpeedDrawIntervalTicks = rules.drawIntervals.doubleSpeedTicks;
+    this.finalDrawIntervalTicks = rules.drawIntervals.finalTicks;
+    this.normalHandLimit = rules.handLimits.normal;
+    this.doubleSpeedHandLimit = rules.handLimits.doubleSpeed;
+    this.finalHandLimit = rules.handLimits.final;
   }
 
   /**
