@@ -2139,21 +2139,6 @@
       "colSpacing": 3,
       "rowSpacing": 2,
       "thumbScale": 1.3
-    },
-    {
-      "id": "straight_flush_custom_3",
-      "name": "三射手箭塔",
-      "match": {
-        "kind": "any"
-      },
-      "rows": [
-        [
-          "building_tower_triple"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
     }
   ]
 }
