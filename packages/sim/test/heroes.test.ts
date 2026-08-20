@@ -153,8 +153,9 @@ describe('国王与女王', () => {
   it('无敌军时女王寻路接近远处受伤友军并治疗，不普攻友军', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
-    const far = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(20));
-    const nearer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(16));
+    // 治疗半径 5、视野 5.5：两名伤员都在视野内且够不着治疗，应锁更近者并 Seek
+    const far = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(13.45));
+    const nearer = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(13.2));
     far.hp -= fromFloat(200);
     nearer.hp -= fromFloat(100);
     queen.retargetIn = 0;
@@ -185,17 +186,68 @@ describe('国王与女王', () => {
     expect(nearer.hp).toBeGreaterThan(nearer.stats.maxHp - fromFloat(100));
   });
 
-  it('场上有敌军时女王优先锁敌而非受伤友军', () => {
+  it('射程内有敌军时仍优先锁视野内受伤友军，不进入攻击', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    // 治疗半径 5、视野 5.5：放在两者之间，验证会 Seek 过去而不是原地打旁边的敌人
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(13.3));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(11));
+    ally.hp -= fromFloat(150);
+    queen.retargetIn = 0;
+
+    const startY = queen.pos.y;
+    world.step();
+
+    expect(queen.targetId).toBe(ally.id);
+    expect(queen.targetId).not.toBe(enemy.id);
+    expect(queen.state).toBe(UnitState.Seek);
+    expect(queen.state).not.toBe(UnitState.Attack);
+    expect(toFloat(queen.pos.y)).toBeGreaterThan(toFloat(startY));
+  });
+
+  it('无残血友军且敌方已在攻击射程内时女王才普攻', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const fullAlly = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(12));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(11));
+    queen.retargetIn = 0;
+
+    world.step();
+
+    expect(fullAlly.hp).toBe(fullAlly.stats.maxHp);
+    expect(queen.targetId).toBe(enemy.id);
+    expect(queen.state).toBe(UnitState.Attack);
+  });
+
+  it('无残血友军但敌军不在攻击射程内时女王原地待命，不主动追击', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(18));
+    queen.retargetIn = 0;
+
+    const startY = queen.pos.y;
+    for (let i = 0; i < 20; i++) world.step();
+
+    expect(queen.targetId).toBe(0);
+    expect(queen.state).toBe(UnitState.Idle);
+    expect(queen.pos.y).toBe(startY);
+    expect(toFloat(queen.pos.y)).toBeLessThan(toFloat(enemy.pos.y) - 5);
+  });
+
+  it('射程内有敌且治疗半径内有残血友军时只治疗不攻击', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
     const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(12));
-    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(18));
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(11));
     ally.hp -= fromFloat(150);
     queen.retargetIn = 0;
 
     world.step();
 
-    expect(queen.targetId).toBe(enemy.id);
-    expect(queen.state).not.toBe(UnitState.Idle);
+    expect(queen.targetId).toBe(ally.id);
+    expect(queen.targetId).not.toBe(enemy.id);
+    expect(queen.state).not.toBe(UnitState.Attack);
+    expect(queen.healCastTargetId).toBe(ally.id);
+    expect(queen.healWindupLeft).toBeGreaterThan(0);
   });
 });

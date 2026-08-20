@@ -24,8 +24,8 @@ const desiredFacing = vec();
  * Attack 使用进入/退出双阈值：进来用正常射程，退出多留一段迟滞，
  * 避免被软碰撞轻微挤开后立刻改回 Seek 再挤回来。
  *
- * 治疗单位锁友军时只 Seek 到治疗半径内再 Idle，绝不 Attack/Charge，
- * 避免把友军当成普攻目标。
+ * 治疗单位锁友军时只 Seek 到治疗半径内再 Idle，绝不 Attack/Charge；
+ * 锁敌军时只在射程内 Attack，绝不 Seek 追击。
  */
 export function updateAi(world: World): void {
   for (const unit of world.units) {
@@ -70,6 +70,12 @@ export function updateAi(world: World): void {
     // 友军治疗目标：只靠近，不进入攻击态
     if (target.faction === unit.faction) {
       updateHealSeek(unit, target);
+      continue;
+    }
+
+    // 治疗单位不主动追敌：够得着才 Attack，否则原地 Idle
+    if (unit.config.heal) {
+      updateHealCombat(unit, target);
       continue;
     }
 
@@ -131,6 +137,27 @@ function updateBuildingAi(world: World, unit: Unit): void {
   } else {
     unit.state = UnitState.Idle;
   }
+
+  if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {
+    turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);
+  }
+}
+
+/**
+ * 治疗单位对敌军：只在攻击射程内出手，绝不 Seek 追击。
+ * 不用退出迟滞，避免出距后被通用 Attack→Seek 路径拖去赶路。
+ */
+function updateHealCombat(unit: Unit, target: Unit): void {
+  const inReach = isWithinAttackReach(unit, target);
+  const beyondMin = isOutsideMinAttackRange(unit, target);
+  normalize(desiredFacing, target.pos.x - unit.pos.x, target.pos.y - unit.pos.y);
+
+  if (inReach && beyondMin) {
+    unit.state = UnitState.Attack;
+  } else {
+    unit.state = UnitState.Idle;
+  }
+  clearPath(unit);
 
   if (desiredFacing.x !== 0 || desiredFacing.y !== 0) {
     turnToward(unit.facing, unit.facing, desiredFacing.x, desiredFacing.y, TURN_RATE);

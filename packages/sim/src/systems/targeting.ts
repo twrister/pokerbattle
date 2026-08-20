@@ -21,8 +21,8 @@ const buildingsRed: Unit[] = [];
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；箭塔/单位仍要在圈内。
  *
- * 有治疗技能的单位在无敌军时，会改锁最近受伤友军以便寻路过治疗半径；
- * 友军目标不粘性挡敌——每帧仍优先扫描敌军，保证敌方入场后立刻切回进攻。
+ * 有治疗技能的单位友军优先：视野内残血友军先锁并寻路治疗；
+ * 无伤员时才锁已进入攻击射程的敌军，不追圈外远敌、不跨图推城堡。
  *
  * spawnUnit 时按 id 打散了首次索敌倒计时（retargetIn），避免同批出场挤在同一帧全场扫描。
  * 新锁定敌军时立刻分配攻击环槽位；治疗友军不占槽位。
@@ -38,6 +38,12 @@ export function updateTargeting(world: World): void {
     // 仅用于出生错峰；锁定后不再周期重置
     if (unit.retargetIn > 0) {
       unit.retargetIn--;
+      continue;
+    }
+
+    // 治疗单位不走敌军粘性/追远敌，避免地面粘性在够不着时把人拖去 Seek
+    if (unit.config.heal) {
+      updateHealUnitTargeting(world, unit);
       continue;
     }
 
@@ -68,27 +74,66 @@ export function updateTargeting(world: World): void {
       continue;
     }
 
-    if (unit.config.heal) {
-      // 当前受伤友军仍有效则继续跟着走，避免每帧换最近目标导致抖路径；建筑不可作为治疗寻路目标
-      if (
-        isAlive(current)
-        && current.faction === unit.faction
-        && current.id !== unit.id
-        && !isBuildingConfig(current.config)
-        && current.hp < current.stats.maxHp
-      ) {
-        unit.engageSlot = NO_ENGAGE_SLOT;
-        continue;
-      }
-
-      unit.targetId = findNearestInjuredAlly(unit);
-      unit.engageSlot = NO_ENGAGE_SLOT;
-      continue;
-    }
-
     unit.targetId = NO_TARGET;
     unit.engageSlot = NO_ENGAGE_SLOT;
   }
+}
+
+/**
+ * 治疗单位索敌：残血友军优先于敌军，且不主动追敌。
+ * 从敌军切到友军时清普攻前摇——结算读 targetId 且不验阵营，否则会误伤友军。
+ */
+function updateHealUnitTargeting(world: World, unit: Unit): void {
+  const current = world.getUnit(unit.targetId);
+
+  // 当前受伤友军仍有效则继续跟着走，避免每帧换最近目标导致抖路径；建筑不可作为治疗寻路目标
+  if (isValidInjuredAlly(unit, current)) {
+    unit.engageSlot = NO_ENGAGE_SLOT;
+    return;
+  }
+
+  const allyId = findNearestInjuredAlly(unit);
+  if (allyId !== NO_TARGET) {
+    if (isAlive(current) && current.faction !== unit.faction) {
+      unit.windupLeft = 0;
+    }
+    unit.targetId = allyId;
+    unit.engageSlot = NO_ENGAGE_SLOT;
+    return;
+  }
+
+  // 无伤员才打已进入射程的敌军；出距立即放弃，不用粘性迟滞（否则 AI 会改成追击）
+  if (
+    isAlive(current)
+    && current.faction !== unit.faction
+    && canAttackTarget(unit, current)
+    && isWithinAttackReach(unit, current)
+  ) {
+    return;
+  }
+
+  const enemyId = findNearestInReachEnemy(unit);
+  if (enemyId !== NO_TARGET) {
+    if (enemyId === unit.targetId) return;
+    unit.targetId = enemyId;
+    const target = world.getUnit(enemyId);
+    unit.engageSlot = target ? assignEngageSlot(unit, target) : NO_ENGAGE_SLOT;
+    return;
+  }
+
+  unit.targetId = NO_TARGET;
+  unit.engageSlot = NO_ENGAGE_SLOT;
+}
+
+/** 治疗寻路粘性：活着、同阵营、非自身、非建筑、未满血。不做成类型谓词，避免失败时把敌军收窄成 never。 */
+function isValidInjuredAlly(unit: Unit, current: Unit | undefined): boolean {
+  return (
+    isAlive(current)
+    && current.faction === unit.faction
+    && current.id !== unit.id
+    && !isBuildingConfig(current.config)
+    && current.hp < current.stats.maxHp
+  );
 }
 
 /** 按 world.units 原序拆阵营，保证等距选 id 时遍历顺序与全场扫描一致。 */
@@ -213,7 +258,23 @@ function isEnemyTargetCandidate(unit: Unit, other: Unit, buildingInSight: boolea
   return isBuildingConfig(other.config) || canThreatenTarget(other, unit);
 }
 
-/** 全场扫描最近的受伤友军（排除自身与建筑），供治疗单位在无敌军时寻路接近。 */
+/** 只扫已进入攻击射程的可打敌军，治疗单位用此避免追远敌。 */
+function findNearestInReachEnemy(unit: Unit): number {
+  let bestId = NO_TARGET;
+  let bestDistSq: Fx = 0;
+
+  for (const other of enemiesOf(unit)) {
+    if (!canAttackTarget(unit, other) || !isWithinAttackReach(unit, other)) continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
+      bestId = other.id;
+      bestDistSq = d;
+    }
+  }
+  return bestId;
+}
+
+/** 视野内最近的受伤友军（排除自身与建筑），供治疗单位优先寻路接近。 */
 function findNearestInjuredAlly(unit: Unit): number {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
   let bestId = NO_TARGET;
