@@ -91,7 +91,7 @@ describe('兵种图鉴页', () => {
     page.dispose();
   });
 
-  it('冲锋战车图鉴写明只攻击建筑并阵亡派出民兵', () => {
+  it('冲锋战车图鉴写明优先攻击建筑并阵亡派出民兵', () => {
     const page = createCodexPage({ onBack: vi.fn() });
     page.show();
 
@@ -99,8 +99,9 @@ describe('兵种图鉴页', () => {
       (button) => button.textContent?.includes('冲锋战车'),
     );
     wagon?.click();
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('只攻击建筑');
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('派出 5 个民兵');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('优先攻击建筑');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('无敌方建筑时攻击最近敌人');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('派出 4 个民兵');
     page.dispose();
   });
 

@@ -23,6 +23,8 @@ let hasCastleRed = false;
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
  * - preferAir：射程内空中优先于射程内地面，视野内同理；打地面时射程内出现空中则打断粘性。
+ * - preferBuildings：候选里有建筑则锁最近建筑（远距建筑可压过已进射程的单位）；
+ *   打非建筑时出现建筑候选则打断；追/打建筑不被附近单位拉开。
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；有城堡时箭塔/单位仍要在圈内。
  *   无敌方城堡（牌型验证混编 / 阵型对拆）则圈外敌军也纳入，否则双方会原地 Idle。
  *
@@ -56,7 +58,14 @@ export function updateTargeting(world: World): void {
     // 敌军粘性：已能出手则咬住；够不着时按空/地规则决定是否打断
     // 不可打目标（如投放炸弹）立即放弃，避免粘性卡住
     if (isAlive(current) && current.faction !== unit.faction && canAttackTarget(unit, current)) {
-      if (isWithinAttackReach(unit, current)) {
+      // 建筑优先：追/打建筑始终粘住，避免被小兵拉开
+      if (unit.config.preferBuildings && isBuildingConfig(current.config)) {
+        continue;
+      }
+      // 建筑优先：正在打单位时候选里出现建筑则打断换火
+      if (unit.config.preferBuildings && hasBuildingCandidate(unit)) {
+        // fall through
+      } else if (isWithinAttackReach(unit, current)) {
         // 对空优先：打地面时射程内出现空中则打断粘性换火
         if (!(unit.config.preferAir && current.config.movementLayer !== 'air' && hasInReachAir(unit))) {
           continue;
@@ -252,9 +261,25 @@ function hasInReachAir(unit: Unit): boolean {
 }
 
 /**
+ * 是否存在可作为索敌候选的敌方建筑（含圈外城堡）。
+ * 供 preferBuildings 打断非建筑粘性，口径与 findNearestEnemy 远敌纳入规则一致。
+ */
+function hasBuildingCandidate(unit: Unit): boolean {
+  const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
+  for (const other of enemyBuildingsOf(unit)) {
+    if (!canAttackTarget(unit, other)) continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (d > sightSq && !isCastleId(other.typeId) && enemyHasCastle(unit)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
  * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
  * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
  * preferAir 时同一桶内空中优先于地面，同层仍取最近、等距取 id 小。
+ * preferBuildings 时同一桶内建筑优先于单位；返回时远距建筑可压过已进射程的单位。
  * 城堡（building_base）无视索敌距离，圈外仍可纳入远敌候选。
  * 无敌方城堡时圈外单位/箭塔同样纳入，保证混编对局能对冲。
  *
@@ -267,34 +292,43 @@ function findNearestEnemy(unit: Unit): number {
   let inReachId = NO_TARGET;
   let inReachDistSq: Fx = 0;
   let inReachAir = false;
+  let inReachBuilding = false;
   let farId = NO_TARGET;
   let farDistSq: Fx = 0;
   let farAir = false;
+  let farBuilding = false;
 
   for (const other of enemiesOf(unit)) {
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (canAttackTarget(unit, other) && isWithinAttackReach(unit, other)) {
-      if (isBetterTarget(unit, other, d, inReachId, inReachDistSq, inReachAir)) {
+      if (isBetterTarget(unit, other, d, inReachId, inReachDistSq, inReachAir, inReachBuilding)) {
         inReachId = other.id;
         inReachDistSq = d;
         inReachAir = other.config.movementLayer === 'air';
+        inReachBuilding = isBuildingConfig(other.config);
       }
     }
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     // 城堡无视索敌圈；有城堡可推时箭塔/单位仍要在圈内
     if (d > sightSq && !isCastleId(other.typeId) && enemyHasCastle(unit)) continue;
-    if (isBetterTarget(unit, other, d, farId, farDistSq, farAir)) {
+    if (isBetterTarget(unit, other, d, farId, farDistSq, farAir, farBuilding)) {
       farId = other.id;
       farDistSq = d;
       farAir = other.config.movementLayer === 'air';
+      farBuilding = isBuildingConfig(other.config);
     }
   }
 
+  // 建筑优先跨桶：远距建筑压过已进射程的单位，避免贴脸小兵挡住推塔
+  if (unit.config.preferBuildings) {
+    if (inReachId !== NO_TARGET && inReachBuilding) return inReachId;
+    if (farId !== NO_TARGET && farBuilding) return farId;
+  }
   return inReachId !== NO_TARGET ? inReachId : farId;
 }
 
 /**
- * 同桶比选：preferAir 时空中压过地面，再比距离，等距取 id 小。
+ * 同桶比选：preferBuildings 时建筑压过单位，preferAir 时空中压过地面，再比距离，等距取 id 小。
  */
 function isBetterTarget(
   unit: Unit,
@@ -303,8 +337,13 @@ function isBetterTarget(
   bestId: number,
   bestDistSq: Fx,
   bestIsAir: boolean,
+  bestIsBuilding: boolean,
 ): boolean {
   if (bestId === NO_TARGET) return true;
+  if (unit.config.preferBuildings) {
+    const candidateBuilding = isBuildingConfig(candidate.config);
+    if (candidateBuilding !== bestIsBuilding) return candidateBuilding;
+  }
   if (unit.config.preferAir) {
     const candidateAir = candidate.config.movementLayer === 'air';
     if (candidateAir !== bestIsAir) return candidateAir;
