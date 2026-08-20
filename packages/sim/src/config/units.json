@@ -6,7 +6,7 @@
     "bodyScale": 1.1,
     "mass": 2,
     "maxHp": 450,
-    "damage": 60,
+    "damage": 70,
     "attackInterval": 20,
     "attackWindup": 7,
     "range": 0.5,
@@ -200,7 +200,7 @@
     "radius": 0.6,
     "bodyScale": 1,
     "mass": 2,
-    "maxHp": 400,
+    "maxHp": 450,
     "damage": 50,
     "attackInterval": 20,
     "attackWindup": 9,
@@ -249,8 +249,8 @@
     "radius": 0.6,
     "bodyScale": 1.2,
     "mass": 2,
-    "maxHp": 550,
-    "damage": 50,
+    "maxHp": 600,
+    "damage": 60,
     "attackInterval": 20,
     "attackWindup": 9,
     "range": 4.5,
@@ -263,7 +263,7 @@
     "aoeRadius": 0,
     "tag": "召唤",
     "summon": {
-      "cooldown": 70,
+      "cooldown": 60,
       "unitTypeId": "summoned_bomber"
     }
   },
@@ -313,7 +313,7 @@
     "bodyScale": 0.6,
     "mass": 2,
     "maxHp": 250,
-    "damage": 100,
+    "damage": 120,
     "attackInterval": 20,
     "attackWindup": 7,
     "range": 0.5,
@@ -325,7 +325,7 @@
     "projectileSpeed": 9,
     "aoeRadius": 0,
     "detonate": {
-      "fuse": 10,
+      "fuse": 5,
       "aoeRadius": 2
     }
   },
