@@ -26,20 +26,26 @@ const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
 /** 炸弹弹体贴图面片：底边不锚地，中心对齐弹道高度点 */
 const BOMB_PROJECTILE_ASPECT = 138 / 215;
 const BOMB_PROJECTILE_HEIGHT = 0.55;
-const BOMB_PROJECTILE_GEOMETRY = new THREE.PlaneGeometry(
+const bombProjectileGeometry = createPooledPlaneGeometry(
   BOMB_PROJECTILE_HEIGHT * BOMB_PROJECTILE_ASPECT,
   BOMB_PROJECTILE_HEIGHT,
 );
-let bombProjectileMaterial: THREE.MeshBasicMaterial | null = null;
+const getBombProjectileMaterial = createSharedProjectileMaterial('projectiles/bomb.png', {
+  // 落地闪烁时面片下半会穿地，关掉深度测试避免被地面截掉
+  depthTest: false,
+});
 
 /** 箭矢贴图：原图竖直朝上（局部 +Y 为箭头尖），飞行时对齐弹道方向 */
 const ARROW_PROJECTILE_ASPECT = 35 / 120;
 const ARROW_PROJECTILE_LENGTH = 0.72;
-const ARROW_PROJECTILE_GEOMETRY = new THREE.PlaneGeometry(
+const arrowProjectileGeometry = createPooledPlaneGeometry(
   ARROW_PROJECTILE_LENGTH * ARROW_PROJECTILE_ASPECT,
   ARROW_PROJECTILE_LENGTH,
 );
-let arrowProjectileMaterial: THREE.MeshBasicMaterial | null = null;
+const getArrowProjectileMaterial = createSharedProjectileMaterial('projectiles/arrow.png', {
+  // 与炸弹一致：重建场地后深度缓冲变化时，薄面片仍不被地面裁掉
+  depthTest: false,
+});
 
 const _arrowDir = new THREE.Vector3();
 const _arrowToCam = new THREE.Vector3();
@@ -50,53 +56,82 @@ const _arrowBasis = new THREE.Matrix4();
 /** 点击拾取比碰撞圈略大，斜视镜头点到立绘中心时地面落点会往近端偏。 */
 const PICK_SLACK = 0.9;
 
-/** 懒加载共享炸弹材质；测试环境无 DOM 时给占位不可见图 */
-function getBombProjectileMaterial(): THREE.MeshBasicMaterial {
-  if (bombProjectileMaterial) return bombProjectileMaterial;
-  bombProjectileMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    alphaTest: 0.5,
-    side: THREE.DoubleSide,
-    // 落地闪烁时面片下半会穿地，关掉深度测试避免被地面截掉
-    depthWrite: false,
-    depthTest: false,
-    visible: false,
-  });
-  // Node 测试无 DOM，保持隐藏占位即可
-  if (typeof document === 'undefined') return bombProjectileMaterial;
-  const texture = new THREE.TextureLoader().load('projectiles/bomb.png', (loaded) => {
-    loaded.colorSpace = THREE.SRGBColorSpace;
-    loaded.magFilter = THREE.NearestFilter;
-    if (bombProjectileMaterial) {
-      bombProjectileMaterial.visible = true;
-      bombProjectileMaterial.needsUpdate = true;
-    }
-  });
-  bombProjectileMaterial.map = texture;
-  return bombProjectileMaterial;
+/** 共享面片几何被 dispose 后自动重建，避免第二局池里还握着失效 Buffer。 */
+function createPooledPlaneGeometry(width: number, height: number): () => THREE.PlaneGeometry {
+  let geometry: THREE.PlaneGeometry | null = null;
+  return () => {
+    if (geometry && !geometry.userData.disposed) return geometry;
+    const created = new THREE.PlaneGeometry(width, height);
+    created.addEventListener('dispose', () => {
+      created.userData.disposed = true;
+      if (geometry === created) geometry = null;
+    });
+    geometry = created;
+    return created;
+  };
 }
 
-/** 懒加载共享箭矢材质；测试环境无 DOM 时给占位不可见图 */
-function getArrowProjectileMaterial(): THREE.MeshBasicMaterial {
-  if (arrowProjectileMaterial) return arrowProjectileMaterial;
-  arrowProjectileMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    alphaTest: 0.5,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    visible: false,
-  });
-  if (typeof document === 'undefined') return arrowProjectileMaterial;
-  const texture = new THREE.TextureLoader().load('projectiles/arrow.png', (loaded) => {
+/** 贴图是否已解码出像素，供 dispose 后重建材质时立刻复用，不再等 onLoad。 */
+function isTextureImageReady(texture: THREE.Texture | null): boolean {
+  const image = texture?.image as { width?: number } | undefined;
+  return (image?.width ?? 0) > 0;
+}
+
+/**
+ * 弹道贴图材质单例。贴图未到时隐藏以免露出白片；
+ * 被误 dispose 后下次取用重建，否则第二局会一直用失效材质导致箭矢隐形。
+ */
+function createSharedProjectileMaterial(
+  url: string,
+  extra: THREE.MeshBasicMaterialParameters,
+): () => THREE.MeshBasicMaterial {
+  let material: THREE.MeshBasicMaterial | null = null;
+  let texture: THREE.Texture | null = null;
+  let textureLoaded = false;
+
+  const applyLoadedTexture = (loaded: THREE.Texture): void => {
     loaded.colorSpace = THREE.SRGBColorSpace;
     loaded.magFilter = THREE.NearestFilter;
-    if (arrowProjectileMaterial) {
-      arrowProjectileMaterial.visible = true;
-      arrowProjectileMaterial.needsUpdate = true;
+    texture = loaded;
+    textureLoaded = true;
+    if (!material || material.userData.disposed) return;
+    material.map = loaded;
+    material.visible = true;
+    material.needsUpdate = true;
+  };
+
+  return () => {
+    if (material && !material.userData.disposed) {
+      // 上一局贴图已就绪时，防止池化网格仍拿着 visible=false 的旧状态
+      if (textureLoaded) material.visible = true;
+      return material;
     }
-  });
-  arrowProjectileMaterial.map = texture;
-  return arrowProjectileMaterial;
+    const created = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      alphaTest: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      visible: typeof document === 'undefined' ? false : textureLoaded,
+      ...extra,
+    });
+    created.addEventListener('dispose', () => {
+      created.userData.disposed = true;
+      if (material === created) material = null;
+    });
+    material = created;
+    if (typeof document === 'undefined') return created;
+    if (isTextureImageReady(texture)) {
+      applyLoadedTexture(texture!);
+      return created;
+    }
+    if (texture) {
+      created.map = texture;
+      return created;
+    }
+    texture = new THREE.TextureLoader().load(url, applyLoadedTexture);
+    created.map = texture;
+    return created;
+  };
 }
 
 /**
@@ -555,6 +590,7 @@ export class BattleView {
       }
       else if (visual === 'arrow') {
         orientArrowMesh(mesh, fromX, fromH, fromZ, toX, toH, toZ, camera);
+        mesh.renderOrder = 7;
       }
     }
 
@@ -569,15 +605,23 @@ export class BattleView {
   /** 按弹道外观取池化网格；炸弹/箭矢用贴图面片，其余用阵营色球 */
   private obtainProjectileMesh(visual: ProjectileVisual): THREE.Mesh {
     if (visual === 'bomb') {
-      const mesh = this.bombProjectilePool.pop() ?? new THREE.Mesh(BOMB_PROJECTILE_GEOMETRY);
+      const mesh = this.bombProjectilePool.pop() ?? new THREE.Mesh();
+      mesh.geometry = bombProjectileGeometry();
       mesh.material = getBombProjectileMaterial();
       mesh.userData.visual = 'bomb';
+      mesh.frustumCulled = false;
       return mesh;
     }
     if (visual === 'arrow') {
-      const mesh = this.arrowProjectilePool.pop() ?? new THREE.Mesh(ARROW_PROJECTILE_GEOMETRY);
+      const mesh = this.arrowProjectilePool.pop() ?? new THREE.Mesh();
+      // 每局取出都重绑几何/材质：共享资源若在上一局被 dispose，池里旧引用会让箭矢隐形
+      mesh.geometry = arrowProjectileGeometry();
       mesh.material = getArrowProjectileMaterial();
       mesh.userData.visual = 'arrow';
+      mesh.userData.lastArrowDir = undefined;
+      mesh.frustumCulled = false;
+      mesh.visible = true;
+      mesh.scale.setScalar(1);
       return mesh;
     }
     const mesh = this.orbProjectilePool.pop() ?? new THREE.Mesh(PROJECTILE_GEOMETRY);

@@ -154,6 +154,42 @@ describe('渲染同步', () => {
     expect(mesh.geometry).toBeInstanceOf(THREE.PlaneGeometry);
   });
 
+  it('reset 后再开一局，即使共享箭矢材质被 dispose 也仍能看见箭矢面片', () => {
+    const scene = new THREE.Scene();
+    const view = new BattleView(scene);
+    const firstWorld = new World(1);
+    const firstArcher = firstWorld.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(5), fromFloat(10));
+    const firstTarget = firstWorld.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    firstWorld.spawnProjectile(firstArcher, firstTarget, firstArcher.stats.damage, fromFloat(9));
+    const firstSnap = takeSnapshot(firstWorld);
+    view.render(firstSnap, firstSnap, 1, camera);
+    const firstMesh = scene.children.find((child) => child instanceof THREE.Mesh) as THREE.Mesh;
+    const firstMaterial = firstMesh.material as THREE.Material;
+    const firstGeometry = firstMesh.geometry;
+
+    view.reset();
+    // 模拟上一局结束重建场地时误释放了共享资源
+    firstMaterial.dispose();
+    firstGeometry.dispose();
+
+    const secondWorld = new World(2);
+    const secondArcher = secondWorld.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(6), fromFloat(12));
+    const secondTarget = secondWorld.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(12));
+    secondWorld.spawnProjectile(secondArcher, secondTarget, secondArcher.stats.damage, fromFloat(9));
+    const secondSnap = takeSnapshot(secondWorld);
+    view.render(secondSnap, secondSnap, 1, camera);
+
+    const secondMesh = scene.children.find((child) => child instanceof THREE.Mesh) as THREE.Mesh;
+    expect(secondMesh).toBeDefined();
+    expect(secondMesh.visible).toBe(true);
+    expect(secondMesh.userData.visual).toBe('arrow');
+    expect(secondMesh.geometry).toBeInstanceOf(THREE.PlaneGeometry);
+    expect(secondMesh.geometry.userData.disposed).not.toBe(true);
+    expect((secondMesh.material as THREE.Material).userData.disposed).not.toBe(true);
+    expect(secondMesh.material).not.toBe(firstMaterial);
+    expect(secondMesh.geometry).not.toBe(firstGeometry);
+  });
+
   it('治疗事件会创建单体受疗效果，并在事件结束后回收', () => {
     const scene = new THREE.Scene();
     const view = new BattleView(scene);

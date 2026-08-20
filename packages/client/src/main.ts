@@ -510,6 +510,8 @@ function ensureBattleScene(mode: BattleMode, viewFaction: Faction = Faction.Blue
     });
     sharedBattleView = new BattleView(sharedScene.scene);
   } else {
+    // 先收回弹道再重建地形，避免共享箭矢材质/几何被 dispose 后第二局隐形
+    sharedBattleView?.reset();
     sharedScene.rebuildArena();
     sharedScene.setMode(mode, viewFaction);
   }
