@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Faction, UnitState } from '../src/entity/unit.js';
-import { fromFloat, toFloat } from '../src/math/fixed.js';
+import { Faction, type Unit, UnitState } from '../src/entity/unit.js';
+import { mul, ONE, fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
 import { World } from '../src/world.js';
 
@@ -14,28 +14,47 @@ describe('国王与女王', () => {
     expect(king.config.attack.kind).toBe('melee');
   });
 
-  it('国王向范围内友军提供不叠加的振奋，离开范围立即移除', () => {
+  it('国王振奋对自身生效', () => {
+    const world = new World(1);
+    const king = world.spawnUnit(Faction.Blue, 'hero_king', fromFloat(8), fromFloat(8));
+    const inspire = king.config.inspire!;
+
+    world.step();
+    world.step();
+    expectInspiredStats(king, 1, inspire.attackIntervalMul, inspire.moveSpeedMul);
+    expect(king.inspired).toBe(true);
+    expect(inspireStackCount(king)).toBe(1);
+  });
+
+  it('多名国王的振奋可叠加，离开范围只保留仍覆盖的层数', () => {
     const world = new World(1);
     const king = world.spawnUnit(Faction.Blue, 'hero_king', fromFloat(8), fromFloat(8));
     const secondKing = world.spawnUnit(Faction.Blue, 'hero_king', fromFloat(8.5), fromFloat(8));
     const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(8));
-    const baseInterval = ally.base.attackInterval;
-    const baseSpeed = ally.base.moveSpeed;
+    const inspire = king.config.inspire!;
 
     world.step();
     world.step();
-    expect(ally.stats.attackInterval).toBeLessThan(baseInterval);
-    expect(ally.stats.moveSpeed).toBeGreaterThan(baseSpeed);
-    expect(toFloat(ally.stats.attackInterval)).toBeCloseTo(toFloat(baseInterval) * 0.8, 3);
+    expectInspiredStats(ally, 2, inspire.attackIntervalMul, inspire.moveSpeedMul);
+    expectInspiredStats(king, 2, inspire.attackIntervalMul, inspire.moveSpeedMul);
+    expect(inspireStackCount(ally)).toBe(2);
+    expect(inspireStackCount(king)).toBe(2);
     // 国王振奋是持续光环，不触发施法特效
     expect(takeSnapshot(world).units.some((u) => u.typeId === 'hero_king' && u.casting)).toBe(false);
 
     king.pos.x = fromFloat(1);
+    world.step();
+    world.step();
+    expectInspiredStats(ally, 1, inspire.attackIntervalMul, inspire.moveSpeedMul);
+    expect(inspireStackCount(ally)).toBe(1);
+
     secondKing.pos.x = fromFloat(1);
     world.step();
     world.step();
-    expect(ally.stats.attackInterval).toBe(baseInterval);
-    expect(ally.stats.moveSpeed).toBe(baseSpeed);
+    expect(ally.stats.attackInterval).toBe(ally.base.attackInterval);
+    expect(ally.stats.moveSpeed).toBe(ally.base.moveSpeed);
+    expect(ally.inspired).toBe(false);
+    expect(inspireStackCount(ally)).toBe(0);
   });
 
   it('女王单体治疗前摇起手播特效，结束后只治疗锁定的低血友军', () => {
@@ -357,3 +376,19 @@ describe('国王与女王', () => {
     expect(queen.healWindupLeft).toBeGreaterThan(0);
   });
 });
+
+/** 与 recomputeStats 一致：final = base * (1 + stacks * (mul - 1))。 */
+function expectInspiredStats(
+  unit: Unit,
+  stacks: number,
+  attackIntervalMul: number,
+  moveSpeedMul: number,
+): void {
+  expect(unit.stats.attackInterval).toBe(mul(unit.base.attackInterval, ONE + stacks * (attackIntervalMul - ONE)));
+  expect(unit.stats.moveSpeed).toBe(mul(unit.base.moveSpeed, ONE + stacks * (moveSpeedMul - ONE)));
+  expect(unit.inspired).toBe(true);
+}
+
+function inspireStackCount(unit: Unit): number {
+  return unit.buffs.filter((buff) => buff.id === -buff.sourceId && buff.stat === 'moveSpeed').length;
+}

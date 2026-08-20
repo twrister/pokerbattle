@@ -259,9 +259,9 @@
     "aoeRadius": 0,
     "tag": "振奋",
     "inspire": {
-      "radius": 3,
-      "attackIntervalMul": 0.7,
-      "moveSpeedMul": 1.3
+      "radius": 2.5,
+      "attackIntervalMul": 0.8,
+      "moveSpeedMul": 1.2
     }
   },
   "hero_queen": {

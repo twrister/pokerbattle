@@ -73,28 +73,37 @@ function removeExpiredInspires(world: World): void {
   }
 }
 
-/** 对每名国王附近的友军施加不叠加的持续振奋（常驻光环，无施法特效）。 */
+/** 对国王自身及附近友军施加可叠加的持续振奋（常驻光环，无施法特效）。 */
 function updateKingInspires(world: World): void {
   for (let index = 0; index < world.units.length; index++) {
     const king = world.units[index]!;
     const inspire = king.config.inspire;
     if (king.dead || !inspire) continue;
 
+    // 空间哈希可能漏掉自身，自益单独挂一层，不依赖邻域查询
+    applyKingInspire(king, king);
+
     world.unitGrid.query(king.pos.x, king.pos.y, inspire.radius, neighbors);
     for (const neighborIndex of neighbors) {
       const target = world.units[neighborIndex]!;
       if (target.dead || target.id === king.id || target.faction !== king.faction) continue;
       if (!isInInspireRange(king, target)) continue;
-      if (hasInspire(world, target)) continue;
-
-      target.buffs.push(
-        createInspireBuff(king.id, 'attackInterval', inspire.attackIntervalMul - ONE),
-        createInspireBuff(king.id, 'moveSpeed', inspire.moveSpeedMul - ONE),
-      );
-      target.statsDirty = true;
-      target.inspired = true;
+      applyKingInspire(king, target);
     }
   }
+}
+
+/** 同源只挂一层，避免每帧重复施加；不同国王各自一层，由属性结算把倍率加总。 */
+function applyKingInspire(king: Unit, target: Unit): void {
+  const inspire = king.config.inspire!;
+  if (hasInspireFrom(target, king.id)) return;
+
+  target.buffs.push(
+    createInspireBuff(king.id, 'attackInterval', inspire.attackIntervalMul - ONE),
+    createInspireBuff(king.id, 'moveSpeed', inspire.moveSpeedMul - ONE),
+  );
+  target.statsDirty = true;
+  target.inspired = true;
 }
 
 /**
@@ -228,8 +237,8 @@ function isInInspireRange(king: Unit, target: Unit): boolean {
   return distSq(king.pos.x, king.pos.y, target.pos.x, target.pos.y) <= mul(inspire.radius, inspire.radius);
 }
 
-function hasInspire(world: World, unit: Unit): boolean {
-  return unit.buffs.some((buff) => isInspireBuff(world.getUnit(buff.sourceId), buff));
+function hasInspireFrom(unit: Unit, sourceId: number): boolean {
+  return unit.buffs.some((buff) => buff.sourceId === sourceId && isInspireBuff(undefined, buff));
 }
 
 /** 振奋 Buff 被摘掉后按剩余列表重算，避免快照每单位扫描 buffs。 */
