@@ -5,6 +5,7 @@ import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from '
 import {
   FORMATION_MATCH_RANKS,
   FUSE_BOMB_DAMAGE_RANKS,
+  getPreviewCardsForFormation,
   resolveMappedRows,
   type FuseBombDamageRank,
   type MappedFormationUnit,
@@ -72,6 +73,13 @@ export const FORMATION_THUMB_SCALE = 2;
 export interface FormationUnitEntry {
   typeId: UnitTypeId;
   count: number;
+}
+
+/** 图鉴「可组成牌型」一行：一种牌型配一组样例牌。 */
+export interface UnitHandExample {
+  category: HandCategory;
+  name: string;
+  cards: PlayingCard[];
 }
 
 /**
@@ -441,6 +449,26 @@ export function cloneFormationDraft(source: FormationDraft): FormationDraft {
 }
 
 /**
+ * 为新建阵型分配尚未占用的 `${category}_custom_N`。
+ * 不能按当前列表长度编号：内置命名阵型会占名额，删改后再新增会撞上已有 custom id。
+ */
+export function allocateNewFormationIdentity(
+  category: HandCategory,
+  existingIds: ReadonlySet<string>,
+): { id: string; number: number } {
+  const prefix = `${category}_custom_`;
+  let number = 1;
+  for (const id of existingIds) {
+    if (!id.startsWith(prefix)) continue;
+    const suffix = id.slice(prefix.length);
+    if (!/^\d+$/.test(suffix)) continue;
+    number = Math.max(number, Number(suffix) + 1);
+  }
+  while (existingIds.has(`${prefix}${number}`)) number += 1;
+  return { id: `${prefix}${number}`, number };
+}
+
+/**
  * 为副本分配尚未占用的 id / 名称。
  * 连续复制同一谱系时剥掉已有 `_copy` / `副本` 后缀再递增，避免 `foo_copy_copy`。
  */
@@ -769,6 +797,27 @@ export function getFormationsFor(
     }
   }
   return result;
+}
+
+/**
+ * 图鉴反向索引：每种能出该兵种的牌型只取一组样例。
+ * 优先用「只含该兵种」的阵型，避免混编样例误导。
+ */
+export function listHandExamplesForUnit(typeId: UnitTypeId): UnitHandExample[] {
+  const examples: UnitHandExample[] = [];
+  for (const category of HAND_CATEGORY_ORDER) {
+    const matches = CARD_FORMATIONS[category].filter((formation) =>
+      formation.units.some((unit) => unit.typeId === typeId),
+    );
+    if (matches.length === 0) continue;
+    const preferred = matches.find((formation) => formation.units.length === 1) ?? matches[0]!;
+    examples.push({
+      category,
+      name: HAND_CATEGORY_NAMES[category],
+      cards: getPreviewCardsForFormation(category, preferred),
+    });
+  }
+  return examples;
 }
 
 /**

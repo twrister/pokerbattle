@@ -5,6 +5,7 @@ import {
   HAND_CATEGORY_ORDER,
   HAND_CATEGORY_STRENGTH_ORDER,
   allocateCopiedFormationIdentity,
+  allocateNewFormationIdentity,
   applyCardFormationDrafts,
   applyUnitConfigDrafts,
   cloneFormationDraft,
@@ -17,6 +18,7 @@ import {
   getFormationBuildingTypeId,
   getFormationsFor,
   getPokerCardById,
+  listHandExamplesForUnit,
   isBuildingOnlyFormation,
   layoutMappedUnits,
   resetCardFormationsToDefault,
@@ -833,6 +835,32 @@ describe('牌型兵种阵型配置', () => {
     expect(copy.rows).toEqual([['melee_guard', 'melee_grunt'], ['ranged_archer']]);
   });
 
+  it('allocateNewFormationIdentity 按已有 custom 编号递增，不与列表长度挂钩', () => {
+    const existing = new Set(['two_pair_number', 'two_pair_A2', 'two_pair_custom_14']);
+    expect(allocateNewFormationIdentity('two_pair', existing)).toEqual({
+      id: 'two_pair_custom_15',
+      number: 15,
+    });
+    existing.add('two_pair_custom_15');
+    expect(allocateNewFormationIdentity('two_pair', existing).id).toBe('two_pair_custom_16');
+  });
+
+  it('连对按当前配置新增 custom id 后仍能通过全局校验', () => {
+    const drafts = dumpCardFormationDrafts();
+    const existingIds = new Set(
+      HAND_CATEGORY_ORDER.flatMap((category) => drafts[category].map((entry) => entry.id)),
+    );
+    const identity = allocateNewFormationIdentity('two_pair', existingIds);
+    expect(identity.id).toBe('two_pair_custom_15');
+    drafts.two_pair.push({
+      id: identity.id,
+      name: `连对阵型 ${identity.number}`,
+      match: { kind: 'any' },
+      rows: [['melee_grunt']],
+    });
+    expect(validateCardFormationDrafts(drafts)).toBeNull();
+  });
+
   it('allocateCopiedFormationIdentity 在已占用 id 时递增后缀', () => {
     const source: FormationDraft = {
       id: 'single_J',
@@ -967,5 +995,21 @@ describe('牌型兵种阵型配置', () => {
       '喷火龙',
       '大石头人',
     ]);
+  });
+
+  it('listHandExamplesForUnit 每种牌型只给一组样例', () => {
+    const golem = listHandExamplesForUnit('melee_golem_small');
+    expect(golem.map((example) => example.name)).toEqual(['四顺', '连对', '五顺']);
+    expect(golem.every((example) => example.cards.length > 0)).toBe(true);
+
+    const bomb = listHandExamplesForUnit('small_bomb');
+    expect(bomb.map((example) => example.name)).toEqual(['三张']);
+    expect(bomb[0]?.cards).toHaveLength(3);
+
+    const tower = listHandExamplesForUnit('building_tower');
+    expect(tower.map((example) => example.name)).toEqual(['葫芦', '同花']);
+
+    expect(listHandExamplesForUnit('building_base')).toEqual([]);
+    expect(listHandExamplesForUnit('summoned_skeleton')).toEqual([]);
   });
 });

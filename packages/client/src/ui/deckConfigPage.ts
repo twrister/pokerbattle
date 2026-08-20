@@ -8,6 +8,7 @@ import {
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   allocateCopiedFormationIdentity,
+  allocateNewFormationIdentity,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
   cloneFormationDraft,
@@ -607,12 +608,20 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
+  /** 收集全部牌型的阵型 id，新增/复制时按全局唯一分配。 */
+  function allFormationIds(): Set<string> {
+    return new Set(
+      HAND_CATEGORY_ORDER.flatMap((handCategory) => drafts[handCategory].map((entry) => entry.id)),
+    );
+  }
+
+  /** 追加一条空白阵型；id 避开已占用的 custom 编号，避免保存时报重复。 */
   function addFormation(): void {
-    const number = drafts[category].length + 1;
+    const identity = allocateNewFormationIdentity(category, allFormationIds());
     const group = situationGroups().find((item) => item.key === situationKey);
     drafts[category].push({
-      id: `${category}_custom_${number}`,
-      name: `${HAND_CATEGORY_NAMES[category]}阵型 ${number}`,
+      id: identity.id,
+      name: `${HAND_CATEGORY_NAMES[category]}阵型 ${identity.number}`,
       match: copyMatchRule(group?.match ?? { kind: 'any' }),
       rows: [[DEFAULT_MOBILE_TYPE_ID]],
       colSpacing: 1.2,
@@ -627,9 +636,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   function copyFormation(): void {
     const source = selected();
     if (!source) return;
-    const existingIds = new Set(
-      HAND_CATEGORY_ORDER.flatMap((handCategory) => drafts[handCategory].map((entry) => entry.id)),
-    );
+    const existingIds = allFormationIds();
     const copy = cloneFormationDraft(source);
     const identity = allocateCopiedFormationIdentity(
       source,

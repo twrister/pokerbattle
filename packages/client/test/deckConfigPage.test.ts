@@ -10,6 +10,7 @@ vi.mock('../src/view/formationThumbnail.js', () => ({
   getFormationThumbnail: vi.fn(async () => 'data:image/png;base64,preview'),
 }));
 
+import { CARD_FORMATIONS, HAND_CATEGORY_ORDER } from '@pb/sim';
 import { createDeckConfigPage } from '../src/ui/deckConfigPage.js';
 import { getFormationThumbnail } from '../src/view/formationThumbnail.js';
 
@@ -62,6 +63,20 @@ describe('卡组阵型配置页', () => {
     expect(onBack).toHaveBeenCalledOnce();
     page.dispose();
     expect(preview.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('连对新增阵型 id 避开已占用的 custom 编号', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+    clickCategory('连对');
+    document.querySelector<HTMLButtonElement>('#btn-deck-add-formation')!.click();
+    const newId = editorFieldValue('阵型 ID');
+    const existingIds = new Set(
+      HAND_CATEGORY_ORDER.flatMap((category) => CARD_FORMATIONS[category].map((entry) => entry.id)),
+    );
+    expect(newId).toMatch(/^two_pair_custom_\d+$/);
+    expect(existingIds.has(newId!)).toBe(false);
+    page.dispose();
   });
 
   it('牌型验证入口会通知页面控制器', () => {
