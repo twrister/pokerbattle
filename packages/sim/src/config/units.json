@@ -201,7 +201,7 @@
     "bodyScale": 1,
     "mass": 2,
     "maxHp": 400,
-    "damage": 100,
+    "damage": 50,
     "attackInterval": 20,
     "attackWindup": 9,
     "range": 4.5,
@@ -226,7 +226,7 @@
     "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 500,
-    "damage": 110,
+    "damage": 50,
     "attackInterval": 20,
     "attackWindup": 9,
     "range": 4.5,
@@ -239,7 +239,7 @@
     "aoeRadius": 0,
     "tag": "召唤",
     "summon": {
-      "cooldown": 90,
+      "cooldown": 70,
       "unitTypeId": "summoned_skeleton"
     }
   },
@@ -250,7 +250,7 @@
     "bodyScale": 1.2,
     "mass": 2,
     "maxHp": 550,
-    "damage": 110,
+    "damage": 50,
     "attackInterval": 20,
     "attackWindup": 9,
     "range": 4.5,
@@ -263,7 +263,7 @@
     "aoeRadius": 0,
     "tag": "召唤",
     "summon": {
-      "cooldown": 60,
+      "cooldown": 70,
       "unitTypeId": "summoned_bomber"
     }
   },
@@ -293,7 +293,7 @@
     "radius": 0.3,
     "bodyScale": 0.6,
     "mass": 2,
-    "maxHp": 200,
+    "maxHp": 250,
     "damage": 40,
     "attackInterval": 20,
     "attackWindup": 7,
@@ -312,7 +312,7 @@
     "radius": 0.3,
     "bodyScale": 0.6,
     "mass": 2,
-    "maxHp": 200,
+    "maxHp": 250,
     "damage": 100,
     "attackInterval": 20,
     "attackWindup": 7,
