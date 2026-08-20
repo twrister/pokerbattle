@@ -259,8 +259,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const requestSoloDialog = (): void => requestPlayDialog(openSoloDialog);
   const requestOnlinePage = (): void => requestPlayDialog(openOnlinePage);
 
-  /** 开发服与正式服都可进沙盒；单位参数 / 场景配置等调试入口仍只在开发服。 */
+  /** 沙盒仅开发服可进；正式服入口已用 CSS 隐藏。 */
   const startSandbox = (): void => {
+    if (!IS_DEV_SERVER) return;
     options.onStartSandbox();
   };
   /** 关弹层后以人机对战（hard）进入单机。 */
@@ -278,7 +279,11 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     }
     options.onStartSoloDebug();
   };
-  const openDeckConfig = (): void => options.onOpenDeckConfig();
+  /** 卡组页仅开发服入口；正式服按钮已隐藏。 */
+  const openDeckConfig = (): void => {
+    if (!IS_DEV_SERVER) return;
+    options.onOpenDeckConfig();
+  };
   const openCodex = (): void => options.onOpenCodex();
   const openLeaderboard = (): void => options.onOpenLeaderboard();
   const openReplays = (): void => options.onOpenReplays();

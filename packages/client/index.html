@@ -63,7 +63,7 @@
         display: none !important;
       }
 
-      /* 正式服（无 html.is-dev）：只藏调试/写盘入口；大厅卡组与沙盒入口保持可见 */
+      /* 正式服（无 html.is-dev）：藏调试/写盘入口，以及大厅卡组与沙盒入口 */
       html:not(.is-dev) #btn-open-unit-stats,
       html:not(.is-dev) #btn-open-scene-config,
       html:not(.is-dev) #unit-stats,
@@ -5103,7 +5103,7 @@
         </section>
 
         <nav class="lobby-nav" aria-label="功能入口">
-          <button id="btn-deck" class="nav-entry" type="button">
+          <button id="btn-deck" class="nav-entry dev-only" type="button">
             <span class="nav-icon" aria-hidden="true">▣</span>
             <span class="nav-label">卡组</span>
             <span class="nav-tag">编辑阵型</span>
@@ -5113,7 +5113,7 @@
             <span class="nav-label">图鉴</span>
             <span class="nav-tag">兵种档案</span>
           </button>
-          <button id="btn-sandbox" class="nav-entry" type="button">
+          <button id="btn-sandbox" class="nav-entry dev-only" type="button">
             <span class="nav-icon" aria-hidden="true">◎</span>
             <span class="nav-label">模拟沙盒</span>
             <span class="nav-tag">MVP</span>
