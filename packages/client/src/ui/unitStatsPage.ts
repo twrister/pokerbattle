@@ -1,6 +1,7 @@
 import {
   TICK_RATE,
   UNIT_CONFIGS,
+  UNIT_TYPE_IDS,
   type UnitConfigDraft,
   type UnitTypeId,
 } from '@pb/sim';
@@ -10,6 +11,8 @@ import {
   POST_MOVE_NUMERIC_KEYS,
   PRE_ATTACK_NUMERIC_KEYS,
   PRIMARY_NUMERIC_KEYS,
+  addDeathSpawnEntry,
+  ensureDeathSpawnEntries,
   formatDraftNumber,
   clearRememberedUnitDrafts,
   loadUnitDrafts,
@@ -17,6 +20,7 @@ import {
   presentSkillGroups,
   readControlsIntoDrafts,
   rememberUnitDrafts,
+  removeDeathSpawnEntry,
   saveUnitDrafts,
   type UnitDraftMap,
 } from '../debug/unitConfigDraftUi.js';
@@ -71,6 +75,8 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
   let saveSeq = 0;
   let onApplied = options.onApplied ?? (() => {});
   let overlayMode = false;
+  /** 增删阵亡生成条目后重绘时保持该行技能折页展开。 */
+  let reopenSkillFor: UnitTypeId | undefined;
 
   const back = (): void => {
     if (overlayMode) {
@@ -396,6 +402,7 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     }
     const details = document.createElement('details');
     details.className = 'unit-stats-more';
+    if (reopenSkillFor === typeId) details.open = true;
     const summary = document.createElement('summary');
     summary.textContent = groups.map((group) => group.title).join('、');
     details.appendChild(summary);
@@ -408,6 +415,10 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
       title.className = 'unit-stats-skill-group';
       title.textContent = group.title;
       list.appendChild(title);
+      if (group.key === 'deathSpawn') {
+        appendDeathSpawnEditor(list, typeId, draft);
+        continue;
+      }
       for (const field of group.fields) {
         const label = document.createElement('label');
         label.className = 'unit-stats-more-row';
@@ -446,6 +457,83 @@ export function createUnitStatsPage(options: UnitStatsPageOptions): UnitStatsPag
     details.appendChild(list);
     cell.appendChild(details);
     return cell;
+  }
+
+  /** 按条目渲染兵种/人数，并提供增删，避免只能配一种生成物。 */
+  function appendDeathSpawnEditor(
+    list: HTMLElement,
+    typeId: UnitTypeId,
+    draft: UnitConfigDraft,
+  ): void {
+    ensureDeathSpawnEntries(draft);
+    const entries = draft.deathSpawn?.entries ?? [];
+    entries.forEach((entry, index) => {
+      const countLabel = document.createElement('label');
+      countLabel.className = 'unit-stats-more-row';
+      const countCaption = document.createElement('span');
+      countCaption.textContent = entries.length > 1 ? `人数#${index + 1}` : '人数';
+      const countInput = document.createElement('input');
+      countInput.type = 'number';
+      countInput.step = '1';
+      countInput.dataset.unit = typeId;
+      countInput.dataset.skill = 'deathSpawn';
+      countInput.dataset.field = 'count';
+      countInput.dataset.index = String(index);
+      countInput.value = formatDraftNumber(entry.count);
+      countInput.title = '阵亡后原地生成';
+      countLabel.append(countCaption, countInput);
+      list.appendChild(countLabel);
+
+      const typeLabel = document.createElement('label');
+      typeLabel.className = 'unit-stats-more-row';
+      const typeCaption = document.createElement('span');
+      typeCaption.textContent = entries.length > 1 ? `生成兵种#${index + 1}` : '生成兵种';
+      const select = document.createElement('select');
+      select.dataset.unit = typeId;
+      select.dataset.skill = 'deathSpawn';
+      select.dataset.field = 'unitTypeId';
+      select.dataset.index = String(index);
+      for (const optionId of UNIT_TYPE_IDS) {
+        const option = document.createElement('option');
+        option.value = optionId;
+        option.textContent = displayUnitName(UNIT_CONFIGS[optionId].name);
+        option.selected = optionId === entry.unitTypeId;
+        select.appendChild(option);
+      }
+      typeLabel.append(typeCaption, select);
+      list.appendChild(typeLabel);
+
+      if (entries.length > 1) {
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'unit-stats-more-row';
+        removeBtn.dataset.action = 'remove-death-spawn';
+        removeBtn.dataset.index = String(index);
+        removeBtn.textContent = `删除兵种#${index + 1}`;
+        removeBtn.addEventListener('click', () => {
+          refreshDeathSpawnEditor(typeId, () => removeDeathSpawnEntry(drafts[typeId], index));
+        });
+        list.appendChild(removeBtn);
+      }
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'unit-stats-more-row';
+    addBtn.dataset.action = 'add-death-spawn';
+    addBtn.textContent = '添加兵种';
+    addBtn.addEventListener('click', () => {
+      refreshDeathSpawnEditor(typeId, () => addDeathSpawnEntry(drafts[typeId]));
+    });
+    list.appendChild(addBtn);
+  }
+
+  function refreshDeathSpawnEditor(typeId: UnitTypeId, mutate: () => void): void {
+    readControlsIntoDrafts(panelRoot, drafts);
+    mutate();
+    reopenSkillFor = typeId;
+    render();
+    reopenSkillFor = undefined;
   }
 
   function showInternal(asOverlay: boolean): void {

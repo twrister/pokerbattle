@@ -232,6 +232,56 @@ describe('单位参数页', () => {
     page.dispose();
   });
 
+  it('冲锋战车阵亡生成可添加第二种兵并保存', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = createUnitStatsPage({ onBack: vi.fn() });
+    page.show();
+
+    const countInput = document.querySelector<HTMLInputElement>(
+      'input[data-unit="melee_charge_wagon"][data-skill="deathSpawn"][data-field="count"][data-index="0"]',
+    );
+    const typeSelect = document.querySelector<HTMLSelectElement>(
+      'select[data-unit="melee_charge_wagon"][data-skill="deathSpawn"][data-field="unitTypeId"][data-index="0"]',
+    );
+    expect(countInput?.value).toBe('5');
+    expect(typeSelect?.value).toBe('melee_grunt');
+
+    document
+      .querySelector<HTMLButtonElement>(
+        'tr[data-unit="melee_charge_wagon"] button[data-action="add-death-spawn"]',
+      )
+      ?.click();
+
+    const secondSelect = document.querySelector<HTMLSelectElement>(
+      'select[data-unit="melee_charge_wagon"][data-skill="deathSpawn"][data-field="unitTypeId"][data-index="1"]',
+    );
+    const secondCount = document.querySelector<HTMLInputElement>(
+      'input[data-unit="melee_charge_wagon"][data-skill="deathSpawn"][data-field="count"][data-index="1"]',
+    );
+    expect(secondSelect).toBeTruthy();
+    secondCount!.value = '2';
+    secondSelect!.value = 'ranged_archer';
+    secondCount!.dispatchEvent(new Event('change'));
+    secondSelect!.dispatchEvent(new Event('change'));
+
+    document.querySelector<HTMLButtonElement>('#btn-unit-stats-save')?.click();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(dumpUnitConfigDrafts().melee_charge_wagon.deathSpawn?.entries).toEqual([
+      { unitTypeId: 'melee_grunt', count: 5 },
+      { unitTypeId: 'ranged_archer', count: 2 },
+    ]);
+
+    resetUnitConfigsToDefault();
+    page.dispose();
+  });
+
   it('overlay 关闭不走 onBack', () => {
     const onBack = vi.fn();
     const page = createUnitStatsPage({ onBack });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getUnitConfig, toUnitConfigDraft } from '../src/config/units.js';
+import {
+  applyUnitConfigDrafts,
+  dumpUnitConfigDrafts,
+  getUnitConfig,
+  resetUnitConfigsToDefault,
+  toUnitConfigDraft,
+} from '../src/config/units.js';
 import { Faction, NO_TARGET } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { dist } from '../src/math/vec2.js';
@@ -18,23 +24,22 @@ describe('冲锋战车', () => {
     expect(toFloat(wagon.config.radius)).toBeCloseTo(0.8, 3);
     expect(toFloat(wagon.config.bodyScale)).toBeCloseTo(1.2, 3);
     expect(toFloat(wagon.config.mass)).toBeCloseTo(3, 3);
-    expect(toFloat(wagon.stats.maxHp)).toBeCloseTo(1200, 3);
-    expect(toFloat(wagon.stats.damage)).toBeCloseTo(100, 3);
+    expect(toFloat(wagon.stats.maxHp)).toBeCloseTo(1000, 3);
+    expect(toFloat(wagon.stats.damage)).toBeCloseTo(80, 3);
     expect(toFloat(wagon.stats.attackInterval)).toBeCloseTo(20, 3);
     expect(toFloat(wagon.stats.attackWindup)).toBeCloseTo(7, 3);
     expect(toFloat(wagon.stats.range)).toBeCloseTo(0.5, 3);
     expect(toFloat(wagon.stats.moveSpeed)).toBeCloseTo(1.2, 3);
-    expect(toFloat(wagon.config.sightRange)).toBeCloseTo(5, 3);
+    expect(toFloat(wagon.config.sightRange)).toBeCloseTo(3, 3);
     expect(wagon.config.movementLayer).toBe('ground');
     expect(wagon.config.canAttackAir).toBe(false);
     expect(wagon.config.targetsBuildingsOnly).toBe(true);
     expect(wagon.config.attack.kind).toBe('melee');
-    expect(wagon.config.deathSpawn?.unitTypeId).toBe('melee_grunt');
-    expect(wagon.config.deathSpawn?.count).toBe(5);
+    expect(wagon.config.deathSpawn?.entries).toEqual([{ unitTypeId: 'melee_grunt', count: 5 }]);
 
     const draft = toUnitConfigDraft(getUnitConfig('melee_charge_wagon'));
     expect(draft.targetsBuildingsOnly).toBe(true);
-    expect(draft.deathSpawn).toEqual({ unitTypeId: 'melee_grunt', count: 5 });
+    expect(draft.deathSpawn).toEqual({ entries: [{ unitTypeId: 'melee_grunt', count: 5 }] });
     expect(toUnitConfigDraft(getUnitConfig('melee_grunt')).targetsBuildingsOnly).toBeUndefined();
     expect(toUnitConfigDraft(getUnitConfig('melee_grunt')).deathSpawn).toBeUndefined();
   });
@@ -82,18 +87,62 @@ describe('冲锋战车', () => {
     }
   });
 
-  it('deathSpawn.count 改为 2 时只生成 2 个民兵', () => {
+  it('deathSpawn 条目 count 改为 2 时只生成 2 个民兵', () => {
     const world = new World(1);
     const wagon = world.spawnUnit(Faction.Blue, 'melee_charge_wagon', fromFloat(8), fromFloat(8));
     Object.assign(wagon, {
       config: {
         ...wagon.config,
-        deathSpawn: { unitTypeId: 'melee_grunt' as const, count: 2 },
+        deathSpawn: { entries: [{ unitTypeId: 'melee_grunt' as const, count: 2 }] },
       },
     });
     wagon.hp = 0;
     world.step();
 
     expect(world.units.filter((unit) => unit.typeId === 'melee_grunt')).toHaveLength(2);
+  });
+
+  it('旧单兵种 deathSpawn 草稿仍能生成对应人数', () => {
+    const drafts = dumpUnitConfigDrafts();
+    drafts.melee_charge_wagon.deathSpawn = { unitTypeId: 'ranged_archer', count: 2 };
+    applyUnitConfigDrafts(drafts);
+    try {
+      const world = new World(1);
+      const wagon = world.spawnUnit(Faction.Blue, 'melee_charge_wagon', fromFloat(8), fromFloat(8));
+      wagon.hp = 0;
+      world.step();
+
+      expect(world.units.filter((unit) => unit.typeId === 'ranged_archer')).toHaveLength(2);
+      expect(world.units.filter((unit) => unit.typeId === 'melee_grunt')).toHaveLength(0);
+    } finally {
+      resetUnitConfigsToDefault();
+    }
+  });
+
+  it('阵亡后按条目生成多种兵', () => {
+    const world = new World(1);
+    const wagon = world.spawnUnit(Faction.Blue, 'melee_charge_wagon', fromFloat(8), fromFloat(8));
+    Object.assign(wagon, {
+      config: {
+        ...wagon.config,
+        deathSpawn: {
+          entries: [
+            { unitTypeId: 'melee_grunt' as const, count: 3 },
+            { unitTypeId: 'ranged_archer' as const, count: 2 },
+          ],
+        },
+      },
+    });
+    wagon.hp = 0;
+    world.step();
+
+    const militia = world.units.filter((unit) => unit.typeId === 'melee_grunt');
+    const archers = world.units.filter((unit) => unit.typeId === 'ranged_archer');
+    expect(militia).toHaveLength(3);
+    expect(archers).toHaveLength(2);
+    for (const unit of [...militia, ...archers]) {
+      expect(unit.faction).toBe(Faction.Blue);
+      expect(unit.ownerSlot).toBe(wagon.ownerSlot);
+    }
   });
 });

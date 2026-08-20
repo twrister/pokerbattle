@@ -4,6 +4,7 @@ import {
   UNIT_CONFIGS,
   getUnitConfig,
   isArcherTowerId,
+  listDeathSpawnEntries,
   toFloat,
   type UnitConfig,
 } from '@pb/sim';
@@ -256,6 +257,14 @@ function getStatMaxima(units: readonly UnitCatalogEntry[]): Record<StatKey, numb
   return maxima;
 }
 
+/** 把阵亡生成条目拼成「5 个民兵、2 个弓箭手」。 */
+function formatDeathSpawnText(config: UnitConfig): string {
+  if (!config.deathSpawn) return '';
+  return listDeathSpawnEntries(config.deathSpawn)
+    .map((entry) => `${entry.count} 个${displayUnitName(UNIT_CONFIGS[entry.unitTypeId].name)}`)
+    .join('、');
+}
+
 /** 依据配置中的技能块生成图鉴特性文案。 */
 function getSkill(config: UnitConfig): { title: string; description: string } {
   if (config.charge) return { title: '冲锋', description: '与可移动敌人保持合适距离时发动突击，对路径上的单位造成伤害并击退，不对建筑生效。' };
@@ -269,15 +278,11 @@ function getSkill(config: UnitConfig): { title: string; description: string } {
   }
   if (config.detonate) return { title: '自爆', description: '接近目标后点燃引信，对范围内敌人造成爆炸伤害。' };
   if (config.targetsBuildingsOnly || config.deathSpawn) {
-    const spawn = config.deathSpawn;
-    const spawnName = spawn
-      ? displayUnitName(UNIT_CONFIGS[spawn.unitTypeId].name)
-      : '民兵';
-    const count = spawn?.count ?? 0;
+    const spawnText = formatDeathSpawnText(config);
     return {
       title: '攻城',
-      description: spawn
-        ? `只攻击建筑单位；阵亡后在原地派出 ${count} 个${spawnName}。`
+      description: spawnText
+        ? `只攻击建筑单位；阵亡后在原地派出 ${spawnText}。`
         : '只攻击建筑单位。',
     };
   }

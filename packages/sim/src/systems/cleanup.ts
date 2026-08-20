@@ -1,3 +1,4 @@
+import { listDeathSpawnEntries } from '../config/units.js';
 import { fromFloat, max } from '../math/fixed.js';
 import type { Unit } from '../entity/unit.js';
 import type { World } from '../world.js';
@@ -38,11 +39,13 @@ export function cleanup(world: World): void {
   if (projectileEnded) world.removeDeadProjectiles();
 }
 
-/** 在死者坐标生成配置数量的单位，继承阵营与归属槽位。 */
+/** 在死者坐标按条目依次生成单位，继承阵营与归属槽位。 */
 function resolveDeathSpawn(world: World, unit: Unit): void {
   const spawn = unit.config.deathSpawn;
-  if (!spawn || spawn.count <= 0) return;
-  for (let i = 0; i < spawn.count; i++) {
-    world.spawnUnit(unit.faction, spawn.unitTypeId, unit.pos.x, unit.pos.y, unit.ownerSlot);
+  if (!spawn) return;
+  for (const entry of listDeathSpawnEntries(spawn)) {
+    for (let i = 0; i < entry.count; i++) {
+      world.spawnUnit(unit.faction, entry.unitTypeId, unit.pos.x, unit.pos.y, unit.ownerSlot);
+    }
   }
 }

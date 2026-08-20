@@ -147,11 +147,11 @@
     "radius": 0.8,
     "bodyScale": 1.2,
     "mass": 3,
-    "maxHp": 1000,
-    "damage": 80,
+    "maxHp": 1500,
+    "damage": 120,
     "attackInterval": 20,
     "attackWindup": 7,
-    "range": 0.5,
+    "range": 1,
     "minRange": 0,
     "moveSpeed": 1.2,
     "sightRange": 3,
@@ -162,8 +162,16 @@
     "targetsBuildingsOnly": true,
     "tag": "攻城",
     "deathSpawn": {
-      "unitTypeId": "melee_grunt",
-      "count": 5
+      "entries": [
+        {
+          "unitTypeId": "melee_grunt",
+          "count": 6
+        },
+        {
+          "unitTypeId": "hero_king",
+          "count": 1
+        }
+      ]
     }
   },
   "giant_bomb": {
@@ -341,7 +349,7 @@
     "mass": 2,
     "maxHp": 3000,
     "damage": 100,
-    "attackInterval": 20,
+    "attackInterval": 22,
     "attackWindup": 10,
     "range": 2,
     "minRange": 0,
@@ -361,7 +369,7 @@
     "mass": 2,
     "maxHp": 4000,
     "damage": 100,
-    "attackInterval": 20,
+    "attackInterval": 22,
     "attackWindup": 10,
     "range": 2,
     "minRange": 0,

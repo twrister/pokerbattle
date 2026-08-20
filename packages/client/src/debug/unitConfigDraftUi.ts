@@ -124,6 +124,7 @@ export const SKILL_GROUPS: readonly SkillGroupMeta[] = [
   {
     key: 'deathSpawn',
     title: '阵亡生成',
+    // 多兵种条目由参数页按 entries 动态渲染，这里只保留单条形状供文档对照。
     fields: [
       { key: 'count', label: '人数', step: '1', hint: '阵亡后原地生成', kind: 'number' },
       { key: 'unitTypeId', label: '生成兵种', kind: 'select', options: UNIT_TYPE_IDS },
@@ -393,9 +394,7 @@ export function assignSkillNumericField(
       break;
     }
     case 'deathSpawn': {
-      const block = draft.deathSpawn;
-      if (!block) return;
-      if (field === 'count') block.count = value;
+      if (field === 'count') assignDeathSpawnEntryCount(draft, 0, value);
       break;
     }
     case 'groundBurn': {
@@ -482,12 +481,55 @@ export function assignSummonUnitTypeId(
   assignSkillUnitTypeId(draft.summon, unitTypeId);
 }
 
-/** 写入阵亡生成兵种；块不存在或选项非法时跳过。 */
+/** 写入阵亡生成指定条目的兵种；块/下标不存在或选项非法时跳过。 */
 export function assignDeathSpawnUnitTypeId(
   draft: UnitConfigDraft,
   unitTypeId: string,
+  index = 0,
 ): void {
-  assignSkillUnitTypeId(draft.deathSpawn, unitTypeId);
+  const entry = draft.deathSpawn?.entries?.[index];
+  if (!entry) return;
+  assignSkillUnitTypeId(entry, unitTypeId);
+}
+
+/** 写入阵亡生成指定条目的人数。 */
+export function assignDeathSpawnEntryCount(
+  draft: UnitConfigDraft,
+  index: number,
+  count: number,
+): void {
+  const entry = draft.deathSpawn?.entries?.[index];
+  if (!entry) return;
+  entry.count = count;
+}
+
+const DEFAULT_DEATH_SPAWN_ENTRY = { unitTypeId: 'melee_grunt' as const, count: 1 };
+
+/** 面板展示前把旧单兵种字段归一成 entries，避免打开编辑器时条目消失。 */
+export function ensureDeathSpawnEntries(draft: UnitConfigDraft): void {
+  const spawn = draft.deathSpawn;
+  if (!spawn) return;
+  if (spawn.entries && spawn.entries.length > 0) return;
+  if (spawn.unitTypeId) {
+    spawn.entries = [{ unitTypeId: spawn.unitTypeId, count: spawn.count ?? 0 }];
+    return;
+  }
+  spawn.entries = [{ ...DEFAULT_DEATH_SPAWN_ENTRY }];
+}
+
+/** 追加一条阵亡生成；块不存在时跳过，避免凭空创建技能。 */
+export function addDeathSpawnEntry(draft: UnitConfigDraft): void {
+  if (!draft.deathSpawn) return;
+  if (!draft.deathSpawn.entries) draft.deathSpawn.entries = [];
+  draft.deathSpawn.entries.push({ ...DEFAULT_DEATH_SPAWN_ENTRY });
+}
+
+/** 删除一条阵亡生成；至少保留一条，避免面板无字段可编。 */
+export function removeDeathSpawnEntry(draft: UnitConfigDraft, index: number): void {
+  const entries = draft.deathSpawn?.entries;
+  if (!entries || entries.length <= 1) return;
+  if (index < 0 || index >= entries.length) return;
+  entries.splice(index, 1);
 }
 
 function assignSkillUnitTypeId(
@@ -517,7 +559,7 @@ export function readControlsIntoDrafts(
     if (!draft) continue;
     const skill = el.dataset.skill as SkillBlockKey | undefined;
     if (skill) {
-      readSkillControl(draft, skill, field, el.value);
+      readSkillControl(draft, skill, field, el.value, el.dataset.index);
       continue;
     }
     if (field === 'name') {
@@ -557,13 +599,20 @@ function readSkillControl(
   skill: SkillBlockKey,
   field: string,
   raw: string,
+  indexRaw?: string,
 ): void {
+  const index = Number(indexRaw);
+  const entryIndex = Number.isFinite(index) ? index : 0;
   if (field === 'unitTypeId') {
     if (skill === 'summon') assignSummonUnitTypeId(draft, raw);
-    else if (skill === 'deathSpawn') assignDeathSpawnUnitTypeId(draft, raw);
+    else if (skill === 'deathSpawn') assignDeathSpawnUnitTypeId(draft, raw, entryIndex);
     return;
   }
   const num = Number(raw);
   if (!Number.isFinite(num)) return;
+  if (skill === 'deathSpawn' && field === 'count') {
+    assignDeathSpawnEntryCount(draft, entryIndex, num);
+    return;
+  }
   assignSkillNumericField(draft, skill, field, num);
 }

@@ -87,10 +87,15 @@ export interface DetonateConfig {
   aoeRadius: Fx;
 }
 
-/** 阵亡时在原地生成指定兵种。count 为整数人数。 */
-export interface DeathSpawnConfig {
+/** 阵亡生成的一条：一种兵 + 人数。 */
+export interface DeathSpawnEntry {
   unitTypeId: UnitTypeId;
   count: number;
+}
+
+/** 阵亡时在原地按条目依次生成；可配多种兵。 */
+export interface DeathSpawnConfig {
+  entries: DeathSpawnEntry[];
 }
 
 /** 弹道落地后在地面生成燃烧区的持续伤害参数。 */
@@ -216,10 +221,19 @@ export interface DetonateConfigDraft {
   aoeRadius: number;
 }
 
-/** 阵亡生成浮点草稿（count 保持整数，不走定点） */
-export interface DeathSpawnConfigDraft {
+/** 阵亡生成单条草稿（count 保持整数，不走定点） */
+export interface DeathSpawnEntryDraft {
   unitTypeId: UnitTypeId;
   count: number;
+}
+
+/** 阵亡生成浮点草稿；兼容旧的单兵种 { unitTypeId, count }。 */
+export interface DeathSpawnConfigDraft {
+  entries?: DeathSpawnEntryDraft[];
+  /** @deprecated 加载时归一进 entries */
+  unitTypeId?: UnitTypeId;
+  /** @deprecated 加载时归一进 entries */
+  count?: number;
 }
 
 /** 落地燃烧浮点草稿 */
@@ -300,7 +314,7 @@ function cloneConfig(config: UnitConfig): UnitConfig {
     heal: config.heal ? { ...config.heal } : undefined,
     summon: config.summon ? { ...config.summon } : undefined,
     detonate: config.detonate ? { ...config.detonate } : undefined,
-    deathSpawn: config.deathSpawn ? { ...config.deathSpawn } : undefined,
+    deathSpawn: config.deathSpawn ? cloneDeathSpawn(config.deathSpawn) : undefined,
     groundBurn: config.groundBurn ? { ...config.groundBurn } : undefined,
   };
 }
@@ -340,7 +354,7 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.heal = source.heal ? { ...source.heal } : undefined;
   target.summon = source.summon ? { ...source.summon } : undefined;
   target.detonate = source.detonate ? { ...source.detonate } : undefined;
-  target.deathSpawn = source.deathSpawn ? { ...source.deathSpawn } : undefined;
+  target.deathSpawn = source.deathSpawn ? cloneDeathSpawn(source.deathSpawn) : undefined;
   target.groundBurn = source.groundBurn ? { ...source.groundBurn } : undefined;
 }
 
@@ -409,12 +423,14 @@ function detonateFromDraft(draft: DetonateConfigDraft): DetonateConfig {
   };
 }
 
+/** 深拷贝阵亡生成，避免多兵种条目共享引用。 */
+function cloneDeathSpawn(spawn: DeathSpawnConfig): DeathSpawnConfig {
+  return { entries: listDeathSpawnEntries(spawn).map((entry) => ({ ...entry })) };
+}
+
 /** 阵亡生成草稿：人数取非负整数，非法回落为 0（不生成）。 */
 function deathSpawnFromDraft(draft: DeathSpawnConfigDraft): DeathSpawnConfig {
-  return {
-    unitTypeId: draft.unitTypeId,
-    count: normalizeDeathSpawnCount(draft.count),
-  };
+  return { entries: normalizeDeathSpawnEntries(draft) };
 }
 
 /** 浮点燃烧草稿 → 定点；持续/间隔至少 1 tick，避免 0 间隔死循环。 */
@@ -496,6 +512,37 @@ function normalizeFootprint(value: number | undefined): number {
 function normalizeDeathSpawnCount(value: number | undefined): number {
   if (!Number.isFinite(value) || (value as number) <= 0) return 0;
   return Math.floor(value as number);
+}
+
+/** 草稿条目：entries 优先，旧单兵种字段回落成一条。 */
+function normalizeDeathSpawnEntries(draft: DeathSpawnConfigDraft): DeathSpawnEntry[] {
+  if (Array.isArray(draft.entries) && draft.entries.length > 0) {
+    return draft.entries
+      .map((entry) => ({
+        unitTypeId: entry.unitTypeId,
+        count: normalizeDeathSpawnCount(entry.count),
+      }))
+      .filter((entry) => entry.count > 0 && isUnitTypeId(entry.unitTypeId));
+  }
+  const count = normalizeDeathSpawnCount(draft.count);
+  if (!draft.unitTypeId || count <= 0 || !isUnitTypeId(draft.unitTypeId)) return [];
+  return [{ unitTypeId: draft.unitTypeId, count }];
+}
+
+/** 展开可生成的条目；兼容旧运行时 { unitTypeId, count }。 */
+export function listDeathSpawnEntries(spawn: DeathSpawnConfig): DeathSpawnEntry[] {
+  if (Array.isArray(spawn.entries) && spawn.entries.length > 0) {
+    return spawn.entries.filter((entry) => entry.count > 0 && isUnitTypeId(entry.unitTypeId));
+  }
+  const legacy = spawn as DeathSpawnConfig & { unitTypeId?: UnitTypeId; count?: number };
+  const count = normalizeDeathSpawnCount(legacy.count);
+  if (!legacy.unitTypeId || count <= 0 || !isUnitTypeId(legacy.unitTypeId)) return [];
+  return [{ unitTypeId: legacy.unitTypeId, count }];
+}
+
+/** 兵种 id 是否在 JSON 表内；加载期 UNIT_TYPE_IDS 尚未就绪，故读 raw 表。 */
+function isUnitTypeId(value: string | undefined): value is UnitTypeId {
+  return typeof value === 'string' && value in rawUnitConfigs;
 }
 
 /** 燃烧持续/间隔：缺省或非法回落为 1，避免 0 间隔每帧刷伤。 */
@@ -648,10 +695,8 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     };
   }
   if (config.deathSpawn) {
-    draft.deathSpawn = {
-      unitTypeId: config.deathSpawn.unitTypeId,
-      count: config.deathSpawn.count,
-    };
+    const entries = listDeathSpawnEntries(config.deathSpawn);
+    if (entries.length > 0) draft.deathSpawn = { entries: entries.map((entry) => ({ ...entry })) };
   }
   if (config.groundBurn) {
     draft.groundBurn = {
