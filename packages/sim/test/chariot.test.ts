@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOMB_ARC_APEX, GROUND_PROJECTILE_HEIGHT } from '../src/config/tuning.js';
+import { BOMB_ARC_SCALE, GROUND_PROJECTILE_HEIGHT, arcApexForDistance } from '../src/config/tuning.js';
 import { Faction, UnitState } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
@@ -78,7 +78,7 @@ describe('战车', () => {
     );
     expect(projectile.visual).toBe('bomb');
     expect(projectile.impactFx).toBe('explosion');
-    expect(projectile.arcApex).toBe(BOMB_ARC_APEX);
+    expect(projectile.arcApex).toBe(arcApexForDistance(toFloat(projectile.startDist), BOMB_ARC_SCALE));
 
     flyUntilImpact(world, projectile.id);
 
@@ -113,7 +113,9 @@ describe('战车', () => {
 
     expect(projectile.dead).toBe(true);
     // 中点附近应明显高于出生高度与落点 0
-    expect(peak).toBeGreaterThan(GROUND_PROJECTILE_HEIGHT + BOMB_ARC_APEX * 0.5);
+    expect(peak).toBeGreaterThan(
+      GROUND_PROJECTILE_HEIGHT + arcApexForDistance(toFloat(projectile.startDist), BOMB_ARC_SCALE) * 0.5,
+    );
   });
 
   it('快照透出 bomb visual', () => {

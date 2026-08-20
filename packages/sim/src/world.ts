@@ -13,10 +13,12 @@ import {
 } from './config/units.js';
 import {
   AIR_PROJECTILE_HEIGHT,
-  BOMB_ARC_APEX,
+  BOMB_ARC_SCALE,
+  GIANT_BOMB_ARC_SCALE,
   GROUND_PROJECTILE_HEIGHT,
   RETARGET_INTERVAL,
   TOWER_PROJECTILE_HEIGHT,
+  arcApexForDistance,
 } from './config/tuning.js';
 import {
   type Projectile,
@@ -288,7 +290,7 @@ export class World {
     const dx = target.pos.x - from.pos.x;
     const dy = target.pos.y - from.pos.y;
     const startDist = lengthOf(dx, dy);
-    // 战车炸弹：抛物线 + 落地爆炸；弓箭手/防御塔/基地用箭矢贴图；其余保持线性彩色球
+    // 战车炸弹：高抛抛物线 + 落地爆炸；弓箭手/防御塔/基地用箭矢贴图；其余用彩色球
     const isBomb = from.config.id === 'ranged_chariot';
     const isArrow = usesArrowVisual(from.config.id);
     // 箭系 Explode4；女王/大小王 Explode2；战车与龙用 explode1；其它 AOE 仍用脉冲环
@@ -297,7 +299,7 @@ export class World {
       || from.config.id === 'hero_mage'
       || from.config.id === 'hero_archmage';
     const usesExplode1 = isBomb || usesDragonProjectile(from.config.id);
-    const arcApex = isBomb ? BOMB_ARC_APEX : 0;
+    const arcApex = arcApexForDistance(toFloat(startDist), isBomb ? BOMB_ARC_SCALE : 1);
     const impactFx: ProjectileImpactFx = usesExplode1
       ? 'explosion'
       : isArrow
@@ -359,7 +361,7 @@ export class World {
       'giant_bomb',
       targetX,
       targetY,
-      BOMB_ARC_APEX * 2,
+      GIANT_BOMB_ARC_SCALE,
       damageOverride,
     );
   }
@@ -379,7 +381,7 @@ export class World {
       'small_bomb',
       targetX,
       targetY,
-      BOMB_ARC_APEX,
+      BOMB_ARC_SCALE,
       damageOverride,
     );
   }
@@ -390,7 +392,7 @@ export class World {
     typeId: 'giant_bomb' | 'small_bomb',
     targetX: Fx,
     targetY: Fx,
-    arcApex: number,
+    arcScale: number,
     damageOverride?: Fx,
   ): Projectile {
     const config = getUnitConfig(typeId);
@@ -401,6 +403,7 @@ export class World {
     const startY = base?.pos.y ?? (faction === Faction.Blue ? 0 : ARENA_HEIGHT);
     const dx = targetX - startX;
     const dy = targetY - startY;
+    const startDist = lengthOf(dx, dy);
     const speed = config.attack.kind === 'projectile_aoe' ? config.attack.speed : fromFloat(12);
     const radius = config.attack.kind === 'projectile_aoe' ? config.attack.aoeRadius : fromFloat(8);
     const projectile = createProjectile(
@@ -417,8 +420,8 @@ export class World {
       radius,
       GROUND_PROJECTILE_HEIGHT,
       0,
-      lengthOf(dx, dy),
-      arcApex,
+      startDist,
+      arcApexForDistance(toFloat(startDist), arcScale),
       'explosion',
       'bomb',
       typeId,

@@ -76,8 +76,25 @@ export const TOWER_HP_DECAY_PER_TICK: Fx = div(fromFloat(TOWER_HP_DECAY_PER_SECO
  * 让火球从巨龙头吐出而不是脚底。
  */
 export const AIR_PROJECTILE_HEIGHT = 2.5;
-/** 战车炸弹抛物线额外顶点高度（叠在起终点线性插值之上）。 */
-export const BOMB_ARC_APEX = 2;
+/** 抛物线弧高占水平飞行距离的比例。 */
+export const PROJECTILE_ARC_RATIO = 0.22;
+/** 弧高下限：贴脸射击也要看得出弧度。 */
+export const PROJECTILE_ARC_MIN = 0.4;
+/** 弧高上限（乘上 scale 后生效），避免超远弹道飞出镜头。 */
+export const PROJECTILE_ARC_MAX = 2.6;
+/** 战车炸弹 / 小炸弹的高抛倍率。 */
+export const BOMB_ARC_SCALE = 1.5;
+/** 巨型炸弹倍率，保持比小炸弹明显更高的吊射手感。 */
+export const GIANT_BOMB_ARC_SCALE = 2;
+
+/**
+ * 按发射时水平距离换算抛物线顶点高度。
+ * 远射拉高、近射压平，scale 用来区分箭矢/法球与炸弹类的高抛手感。
+ */
+export function arcApexForDistance(distance: number, scale = 1): number {
+  const raw = distance * PROJECTILE_ARC_RATIO * scale;
+  return Math.min(PROJECTILE_ARC_MAX * scale, Math.max(PROJECTILE_ARC_MIN, raw));
+}
 
 /** A* 单次搜索的节点上限，防病态地形把一帧算爆 */
 export const ASTAR_NODE_BUDGET = 3000;
