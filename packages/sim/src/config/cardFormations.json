@@ -406,8 +406,8 @@
       "thumbScale": 1.7
     },
     {
-      "id": "straight3_custom_1",
-      "name": "冲锋战车",
+      "id": "straight3_JQK_special",
+      "name": "2档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -416,18 +416,15 @@
           "K"
         ]
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "straight3_custom_2",
-      "name": "冲锋战车",
+      "id": "straight3_QKA_special",
+      "name": "2档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -436,54 +433,11 @@
           "A"
         ]
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight3_custom_3",
-      "name": "连弩车",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q",
-          "K"
-        ]
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight3_custom_4",
-      "name": "连弩车",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     }
   ],
   "straight4": [
@@ -650,122 +604,20 @@
       "thumbScale": 1.8
     },
     {
-      "id": "straight4_custom_7",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_8",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "10",
-          "J",
-          "Q",
-          "K"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_9",
-      "name": "小石头人",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "10",
-          "J",
-          "Q",
-          "K"
-        ]
-      },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_10",
-      "name": "小石头人",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_11",
-      "name": "冲锋战车",
+      "id": "straight4_number_special",
+      "name": "2档",
       "match": {
         "kind": "numbers"
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "straight4_custom_12",
-      "name": "连弩车",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_13",
-      "name": "冲锋战车",
+      "id": "straight4_A234_special",
+      "name": "2档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -775,18 +627,15 @@
           "4"
         ]
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "straight4_custom_14",
-      "name": "冲锋战车",
+      "id": "straight4_8910J_special",
+      "name": "2档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -796,60 +645,15 @@
           "J"
         ]
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "straight4_custom_15",
-      "name": "连弩车",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "A",
-          "2",
-          "3",
-          "4"
-        ]
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_16",
-      "name": "连弩车",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "8",
-          "9",
-          "10",
-          "J"
-        ]
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight4_custom_17",
-      "name": "冲锋战车",
+      "id": "straight4_910JQ_special",
+      "name": "2档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -859,35 +663,47 @@
           "Q"
         ]
       },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "straight4_custom_18",
-      "name": "连弩车",
+      "id": "straight4_10JQK_special",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
-          "9",
           "10",
           "J",
-          "Q"
+          "Q",
+          "K"
         ]
       },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
+    },
+    {
+      "id": "straight4_JQKA_special",
+      "name": "3档",
+      "match": {
+        "kind": "ranks",
+        "ranks": [
+          "J",
+          "Q",
+          "K",
+          "A"
+        ]
+      },
+      "rows": [],
+      "colSpacing": 1.2,
+      "rowSpacing": 1.4,
+      "thumbScale": 2,
+      "specialTier": 3
     }
   ],
   "triple": [
@@ -1224,65 +1040,8 @@
       "thumbScale": 1.8
     },
     {
-      "id": "two_pair_custom_11",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "A",
-          "2"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_12",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_13",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "Q",
-          "K"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_14",
-      "name": "箭塔",
+      "id": "two_pair_custom_23",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -1290,37 +1049,15 @@
           "A"
         ]
       },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
     },
     {
-      "id": "two_pair_custom_15",
-      "name": "箭塔",
-      "match": {
-        "kind": "ranks",
-        "ranks": [
-          "10",
-          "J"
-        ]
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_16",
-      "name": "小石头人",
+      "id": "two_pair_custom_24",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -1328,18 +1065,15 @@
           "2"
         ]
       },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
     },
     {
-      "id": "two_pair_custom_17",
-      "name": "小石头人",
+      "id": "two_pair_custom_25",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -1347,37 +1081,27 @@
           "J"
         ]
       },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
     },
     {
-      "id": "two_pair_custom_18",
-      "name": "小石头人",
+      "id": "two_pair_custom_26",
+      "name": "2档",
       "match": {
-        "kind": "ranks",
-        "ranks": [
-          "J",
-          "Q"
-        ]
+        "kind": "numbers"
       },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 2
     },
     {
-      "id": "two_pair_custom_19",
-      "name": "小石头人",
+      "id": "two_pair_custom_27",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
@@ -1385,63 +1109,27 @@
           "K"
         ]
       },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
     },
     {
-      "id": "two_pair_custom_20",
-      "name": "小石头人",
+      "id": "two_pair_custom_28",
+      "name": "3档",
       "match": {
         "kind": "ranks",
         "ranks": [
-          "K",
-          "A"
+          "J",
+          "Q"
         ]
       },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_21",
-      "name": "冲锋战车",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "melee_charge_wagon"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "two_pair_custom_22",
-      "name": "连弩车",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "ranged_ballista"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 3
     }
   ],
   "straight5": [
@@ -1496,9 +1184,9 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 1.5,
       "rowSpacing": 2,
-      "thumbScale": 1.7
+      "thumbScale": 1.8
     },
     {
       "id": "straight5_78910J",
@@ -1527,9 +1215,9 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 1.5,
       "rowSpacing": 2,
-      "thumbScale": 2
+      "thumbScale": 1.8
     },
     {
       "id": "straight5_8910JQ",
@@ -1558,9 +1246,9 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 1.5,
       "rowSpacing": 2,
-      "thumbScale": 2
+      "thumbScale": 1.8
     },
     {
       "id": "straight5_910JQK",
@@ -1589,9 +1277,9 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 1.5,
       "rowSpacing": 2,
-      "thumbScale": 2
+      "thumbScale": 1.8
     },
     {
       "id": "straight5_10JQKA",
@@ -1620,24 +1308,9 @@
           "ranged_archer"
         ]
       ],
-      "colSpacing": 2,
+      "colSpacing": 1.5,
       "rowSpacing": 2,
-      "thumbScale": 1.7
-    },
-    {
-      "id": "straight5_custom_7",
-      "name": "箭塔",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "building_tower"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 1.8
     },
     {
       "id": "straight5_custom_8",
@@ -1677,21 +1350,6 @@
       "rows": [
         [
           "ranged_chariot"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "straight5_custom_10",
-      "name": "小石头人",
-      "match": {
-        "kind": "numbers"
-      },
-      "rows": [
-        [
-          "melee_golem_small"
         ]
       ],
       "colSpacing": 1.2,
@@ -1873,12 +1531,21 @@
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
       "thumbScale": 2
+    },
+    {
+      "id": "straight5_custom_19",
+      "name": "3档",
+      "match": {
+        "kind": "numbers"
+      },
+      "rows": [],
+      "specialTier": 3
     }
   ],
   "full_house": [
     {
-      "id": "full_house_tower_2_10",
-      "name": "双射手箭塔",
+      "id": "full_house_2_10",
+      "name": "4档",
       "match": {
         "kind": "tripleRanks",
         "ranks": [
@@ -1893,70 +1560,15 @@
           "10"
         ]
       },
-      "rows": [
-        [
-          "building_tower_advanced"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
+      "thumbScale": 2,
+      "specialTier": 4
     },
     {
-      "id": "full_house_dragon_2_10",
-      "name": "飞龙",
-      "match": {
-        "kind": "tripleRanks",
-        "ranks": [
-          "2",
-          "3",
-          "4",
-          "5",
-          "6",
-          "7",
-          "8",
-          "9",
-          "10"
-        ]
-      },
-      "rows": [
-        [
-          "dragon"
-        ]
-      ],
-      "colSpacing": 1,
-      "rowSpacing": 1,
-      "thumbScale": 1.3
-    },
-    {
-      "id": "full_house_custom_4_2_10",
-      "name": "投弹车",
-      "match": {
-        "kind": "tripleRanks",
-        "ranks": [
-          "2",
-          "3",
-          "4",
-          "5",
-          "6",
-          "7",
-          "8",
-          "9",
-          "10"
-        ]
-      },
-      "rows": [
-        [
-          "ranged_chariot"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 1.7
-    },
-    {
-      "id": "full_house_tower_JA",
-      "name": "三射手箭塔",
+      "id": "full_house_JA",
+      "name": "5档",
       "match": {
         "kind": "tripleRanks",
         "ranks": [
@@ -1966,103 +1578,22 @@
           "A"
         ]
       },
-      "rows": [
-        [
-          "building_tower_triple"
-        ]
-      ],
+      "rows": [],
       "colSpacing": 1.2,
       "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "full_house_dragon_JA",
-      "name": "喷火龙",
-      "match": {
-        "kind": "tripleRanks",
-        "ranks": [
-          "J",
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "fire_dragon"
-        ]
-      ],
-      "colSpacing": 1,
-      "rowSpacing": 1,
-      "thumbScale": 1.3
-    },
-    {
-      "id": "full_house_custom_4_JA",
-      "name": "大石头人",
-      "match": {
-        "kind": "tripleRanks",
-        "ranks": [
-          "J",
-          "Q",
-          "K",
-          "A"
-        ]
-      },
-      "rows": [
-        [
-          "melee_golem"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 1.7
+      "thumbScale": 2,
+      "specialTier": 5
     }
   ],
   "flush": [
     {
-      "id": "flush_tower_JA",
-      "name": "双射手箭塔",
+      "id": "flush_custom_4",
+      "name": "4档",
       "match": {
         "kind": "any"
       },
-      "rows": [
-        [
-          "building_tower_advanced"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "flush_custom_2",
-      "name": "飞龙",
-      "match": {
-        "kind": "any"
-      },
-      "rows": [
-        [
-          "dragon"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
-    },
-    {
-      "id": "flush_custom_3",
-      "name": "小石头人",
-      "match": {
-        "kind": "any"
-      },
-      "rows": [
-        [
-          "melee_golem_small"
-        ]
-      ],
-      "colSpacing": 1.2,
-      "rowSpacing": 1.4,
-      "thumbScale": 2
+      "rows": [],
+      "specialTier": 4
     }
   ],
   "rocket": [

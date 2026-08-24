@@ -4,27 +4,43 @@ import {
   Faction,
   HAND_CATEGORY_ORDER,
   HAND_CATEGORY_STRENGTH_ORDER,
+  SPECIAL_TIERS,
+  SPECIAL_TYPE_IDS,
+  SPECIAL_UNITS_BY_TIER,
   allocateCopiedFormationIdentity,
   allocateNewFormationIdentity,
   applyCardFormationDrafts,
+  applySpecialTierDrafts,
   applyUnitConfigDrafts,
   cloneFormationDraft,
+  createDefaultSpecialUnitFormation,
   dumpCardFormationDrafts,
+  dumpSpecialTierDrafts,
   dumpUnitConfigDrafts,
+  expandFormationDraft,
   formatMatchRuleLabel,
+  formatSpecialTierLabel,
+  getSpecialUnitFormation,
   groupFormationsByMatch,
   matchRuleKey,
   getExclusiveFormationUnitTag,
   getFormationBuildingTypeId,
+  getFormationSpecialTier,
   getFormationsFor,
   getPokerCardById,
+  getUnitSpecialTier,
+  isSpecialTierDraft,
   listHandExamplesForUnit,
+  listUnitsBySpecialTier,
   isBuildingOnlyFormation,
   layoutMappedUnits,
   resetCardFormationsToDefault,
+  resetSpecialTiersToDefault,
   resetUnitConfigsToDefault,
   resolveFormationSpawns,
+  specialTierExpandedId,
   validateCardFormationDrafts,
+  validateSpecialTierDrafts,
   type FormationDraft,
 } from '../src/index.js';
 
@@ -271,6 +287,10 @@ describe('牌型兵种阵型配置', () => {
       'straight3_10JQ',
       'straight3_JQK',
       'straight3_QKA',
+      'straight3_JQK_special__ranged_ballista',
+      'straight3_JQK_special__melee_charge_wagon',
+      'straight3_QKA_special__ranged_ballista',
+      'straight3_QKA_special__melee_charge_wagon',
     ]);
 
     expect(idsFor(['3-spades', '4-hearts', '5-clubs'])).toEqual(['straight3_number']);
@@ -295,12 +315,20 @@ describe('牌型兵种阵型配置', () => {
       ['melee_grunt', 'melee_guard'],
       ['ranged_archer', 'hero_queen'],
     ]);
-    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs'])).toEqual(['straight3_JQK']);
+    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs'])).toEqual([
+      'straight3_JQK',
+      'straight3_JQK_special__ranged_ballista',
+      'straight3_JQK_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['J-spades', 'Q-hearts', 'K-clubs'], 'straight3_JQK').rows).toEqual([
       ['melee_guard', 'hero_king'],
       ['hero_queen', 'ranged_archer'],
     ]);
-    expect(idsFor(['Q-spades', 'K-hearts', 'A-clubs'])).toEqual(['straight3_QKA']);
+    expect(idsFor(['Q-spades', 'K-hearts', 'A-clubs'])).toEqual([
+      'straight3_QKA',
+      'straight3_QKA_special__ranged_ballista',
+      'straight3_QKA_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['Q-spades', 'K-hearts', 'A-clubs'], 'straight3_QKA').rows).toEqual([
       ['hero_king', 'melee_cavalry'],
       ['hero_queen', 'ranged_archer'],
@@ -344,38 +372,74 @@ describe('牌型兵种阵型配置', () => {
       'straight4_910JQ',
       'straight4_10JQK',
       'straight4_JQKA',
+      'straight4_number_special__ranged_ballista',
+      'straight4_number_special__melee_charge_wagon',
+      'straight4_A234_special__ranged_ballista',
+      'straight4_A234_special__melee_charge_wagon',
+      'straight4_8910J_special__ranged_ballista',
+      'straight4_8910J_special__melee_charge_wagon',
+      'straight4_910JQ_special__ranged_ballista',
+      'straight4_910JQ_special__melee_charge_wagon',
+      'straight4_10JQK_special__building_tower',
+      'straight4_10JQK_special__melee_golem_small',
+      'straight4_JQKA_special__building_tower',
+      'straight4_JQKA_special__melee_golem_small',
     ]);
 
-    expect(idsFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'])).toEqual(['straight4_number']);
+    expect(idsFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'])).toEqual([
+      'straight4_number',
+      'straight4_number_special__ranged_ballista',
+      'straight4_number_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['3-spades', '4-hearts', '5-clubs', '6-diamonds'], 'straight4_number').units).toEqual([
       { typeId: 'melee_grunt', count: 3 },
       { typeId: 'ranged_archer', count: 3 },
     ]);
-    expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'])).toEqual(['straight4_A234']);
+    expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'])).toEqual([
+      'straight4_A234',
+      'straight4_A234_special__ranged_ballista',
+      'straight4_A234_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds'], 'straight4_A234').units).toEqual([
+      { typeId: 'melee_grunt', count: 2 },
       { typeId: 'melee_cavalry', count: 1 },
-      { typeId: 'melee_grunt', count: 1 },
-      { typeId: 'ranged_archer', count: 2 },
+      { typeId: 'ranged_archer', count: 3 },
     ]);
-    expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'])).toEqual(['straight4_8910J']);
+    expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'])).toEqual([
+      'straight4_8910J',
+      'straight4_8910J_special__ranged_ballista',
+      'straight4_8910J_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds'], 'straight4_8910J').rows).toEqual([
-      ['melee_grunt', 'melee_guard'],
-      ['ranged_archer', 'ranged_archer'],
+      ['melee_grunt', 'melee_guard', 'melee_grunt'],
+      ['ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
-    expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds'])).toEqual(['straight4_910JQ']);
+    expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds'])).toEqual([
+      'straight4_910JQ',
+      'straight4_910JQ_special__ranged_ballista',
+      'straight4_910JQ_special__melee_charge_wagon',
+    ]);
     expect(formationFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds'], 'straight4_910JQ').rows).toEqual([
-      ['melee_grunt', 'melee_guard'],
-      ['ranged_archer', 'hero_queen'],
+      ['melee_grunt', 'melee_guard', 'melee_grunt'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer'],
     ]);
-    expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds'])).toEqual(['straight4_10JQK']);
+    expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds'])).toEqual([
+      'straight4_10JQK',
+      'straight4_10JQK_special__building_tower',
+      'straight4_10JQK_special__melee_golem_small',
+    ]);
     expect(formationFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds'], 'straight4_10JQK').rows).toEqual([
-      ['melee_guard', 'hero_king'],
-      ['hero_queen', 'ranged_archer'],
+      ['melee_grunt', 'hero_king', 'melee_guard'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer'],
     ]);
-    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs', 'A-diamonds'])).toEqual(['straight4_JQKA']);
+    expect(idsFor(['J-spades', 'Q-hearts', 'K-clubs', 'A-diamonds'])).toEqual([
+      'straight4_JQKA',
+      'straight4_JQKA_special__building_tower',
+      'straight4_JQKA_special__melee_golem_small',
+    ]);
     expect(formationFor(['J-spades', 'Q-hearts', 'K-clubs', 'A-diamonds'], 'straight4_JQKA').rows).toEqual([
-      ['hero_king', 'melee_cavalry'],
-      ['hero_queen', 'ranged_archer'],
+      ['hero_king', 'melee_cavalry', 'melee_guard'],
+      ['ranged_archer', 'hero_queen', 'ranged_archer'],
     ]);
   });
 
@@ -418,11 +482,22 @@ describe('牌型兵种阵型配置', () => {
       'straight5_10JQKA',
       'straight5_custom_7',
       'straight5_custom_8',
+      'straight5_custom_9',
+      'straight5_custom_10',
+      'straight5_custom_11',
+      'straight5_custom_12',
+      'straight5_custom_13',
+      'straight5_custom_14',
+      'straight5_custom_15',
+      'straight5_custom_16',
+      'straight5_custom_17',
+      'straight5_custom_18',
     ]);
 
     expect(idsFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'])).toEqual([
       'straight5_number',
       'straight5_custom_7',
+      'straight5_custom_10',
     ]);
     expect(
       formationFor(['2-spades', '3-hearts', '4-clubs', '5-diamonds', '6-spades'], 'straight5_number').units,
@@ -434,6 +509,7 @@ describe('牌型兵种阵型配置', () => {
     expect(idsFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'])).toEqual([
       'straight5_A2345',
       'straight5_custom_8',
+      'straight5_custom_9',
     ]);
     expect(
       formationFor(['A-spades', '2-hearts', '3-clubs', '4-diamonds', '5-spades'], 'straight5_A2345').rows,
@@ -444,6 +520,8 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'])).toEqual([
       'straight5_78910J',
+      'straight5_custom_14',
+      'straight5_custom_15',
     ]);
     expect(
       formationFor(['7-spades', '8-hearts', '9-clubs', '10-diamonds', 'J-spades'], 'straight5_78910J').rows,
@@ -454,6 +532,8 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds', 'Q-spades'])).toEqual([
       'straight5_8910JQ',
+      'straight5_custom_16',
+      'straight5_custom_17',
     ]);
     expect(
       formationFor(['8-spades', '9-hearts', '10-clubs', 'J-diamonds', 'Q-spades'], 'straight5_8910JQ').rows,
@@ -464,16 +544,20 @@ describe('牌型兵种阵型配置', () => {
 
     expect(idsFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'])).toEqual([
       'straight5_910JQK',
+      'straight5_custom_12',
+      'straight5_custom_13',
     ]);
     expect(
       formationFor(['9-spades', '10-hearts', 'J-clubs', 'Q-diamonds', 'K-spades'], 'straight5_910JQK').rows,
     ).toEqual([
-      ['melee_grunt', 'melee_grunt', 'melee_guard', 'melee_grunt'],
+      ['melee_grunt', 'hero_king', 'melee_guard', 'melee_grunt'],
       ['ranged_archer', 'hero_queen', 'ranged_archer', 'ranged_archer'],
     ]);
 
     expect(idsFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'])).toEqual([
       'straight5_10JQKA',
+      'straight5_custom_11',
+      'straight5_custom_18',
     ]);
     expect(
       formationFor(['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', 'A-spades'], 'straight5_10JQKA').rows,
@@ -531,24 +615,34 @@ describe('牌型兵种阵型配置', () => {
       'two_pair_JQ',
       'two_pair_QK',
       'two_pair_KA',
-      'two_pair_chariot',
+      'two_pair_custom_23__building_tower',
+      'two_pair_custom_23__melee_golem_small',
+      'two_pair_custom_24__building_tower',
+      'two_pair_custom_24__melee_golem_small',
+      'two_pair_custom_25__building_tower',
+      'two_pair_custom_25__melee_golem_small',
+      'two_pair_custom_26__ranged_ballista',
+      'two_pair_custom_26__melee_charge_wagon',
+      'two_pair_custom_27__building_tower',
+      'two_pair_custom_27__melee_golem_small',
+      'two_pair_custom_28__building_tower',
+      'two_pair_custom_28__melee_golem_small',
     ]);
 
     expect(idsFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'])).toEqual([
       'two_pair_number',
-      'two_pair_chariot',
+      'two_pair_custom_26__ranged_ballista',
+      'two_pair_custom_26__melee_charge_wagon',
     ]);
     expect(formationFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'], 'two_pair_number').rows).toEqual([
       ['melee_grunt', 'melee_grunt', 'melee_grunt', 'melee_grunt'],
       ['ranged_archer', 'ranged_archer', 'ranged_archer', 'ranged_archer'],
     ]);
-    expect(formationFor(['4-spades', '4-hearts', '5-clubs', '5-diamonds'], 'two_pair_chariot').rows).toEqual([
-      ['ranged_chariot'],
-    ]);
 
     expect(idsFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'])).toEqual([
       'two_pair_A2',
-      'two_pair_chariot',
+      'two_pair_custom_24__building_tower',
+      'two_pair_custom_24__melee_golem_small',
     ]);
     expect(formationFor(['A-spades', 'A-hearts', '2-clubs', '2-diamonds'], 'two_pair_A2').rows).toEqual([
       ['melee_grunt', 'melee_cavalry', 'melee_cavalry', 'melee_grunt'],
@@ -556,7 +650,8 @@ describe('牌型兵种阵型配置', () => {
     ]);
     expect(idsFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'])).toEqual([
       'two_pair_10J',
-      'two_pair_chariot',
+      'two_pair_custom_25__building_tower',
+      'two_pair_custom_25__melee_golem_small',
     ]);
     expect(formationFor(['10-spades', '10-hearts', 'J-clubs', 'J-diamonds'], 'two_pair_10J').rows).toEqual([
       ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
@@ -564,7 +659,8 @@ describe('牌型兵种阵型配置', () => {
     ]);
     expect(idsFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'])).toEqual([
       'two_pair_JQ',
-      'two_pair_chariot',
+      'two_pair_custom_28__building_tower',
+      'two_pair_custom_28__melee_golem_small',
     ]);
     expect(formationFor(['J-spades', 'J-hearts', 'Q-clubs', 'Q-diamonds'], 'two_pair_JQ').rows).toEqual([
       ['melee_grunt', 'melee_guard', 'melee_guard', 'melee_grunt'],
@@ -572,7 +668,8 @@ describe('牌型兵种阵型配置', () => {
     ]);
     expect(idsFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'])).toEqual([
       'two_pair_QK',
-      'two_pair_chariot',
+      'two_pair_custom_27__building_tower',
+      'two_pair_custom_27__melee_golem_small',
     ]);
     expect(formationFor(['Q-spades', 'Q-hearts', 'K-clubs', 'K-diamonds'], 'two_pair_QK').rows).toEqual([
       ['melee_grunt', 'hero_king', 'hero_king', 'melee_grunt'],
@@ -580,7 +677,8 @@ describe('牌型兵种阵型配置', () => {
     ]);
     expect(idsFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'])).toEqual([
       'two_pair_KA',
-      'two_pair_chariot',
+      'two_pair_custom_23__building_tower',
+      'two_pair_custom_23__melee_golem_small',
     ]);
     expect(formationFor(['K-spades', 'K-hearts', 'A-clubs', 'A-diamonds'], 'two_pair_KA').rows).toEqual([
       ['hero_king', 'melee_cavalry', 'melee_cavalry', 'hero_king'],
@@ -711,8 +809,16 @@ describe('牌型兵种阵型配置', () => {
     const cards = (...ids: string[]) => ids.map((id) => getPokerCardById(id)!);
     const idsFor = (cardIds: string[]) =>
       getFormationsFor(['full_house'], cards(...cardIds)).map((formation) => formation.id);
-    const lowIds = ['full_house_tower_2_10', 'full_house_dragon_2_10', 'full_house_custom_4_2_10'];
-    const highIds = ['full_house_tower_JA', 'full_house_dragon_JA', 'full_house_custom_4_JA'];
+    const lowIds = [
+      'full_house_2_10__building_tower_advanced',
+      'full_house_2_10__dragon',
+      'full_house_2_10__ranged_chariot',
+    ];
+    const highIds = [
+      'full_house_JA__building_tower_triple',
+      'full_house_JA__fire_dragon',
+      'full_house_JA__melee_golem',
+    ];
 
     expect(CARD_FORMATIONS.full_house.map((entry) => entry.id)).toEqual([...lowIds, ...highIds]);
     expect(idsFor(['5-spades', '5-hearts', '5-clubs', '9-diamonds', '9-spades'])).toEqual(lowIds);
@@ -738,12 +844,12 @@ describe('牌型兵种阵型配置', () => {
   it('dump 保留炸弹点数伤害，非法表被拒绝', () => {
     const drafts = dumpCardFormationDrafts();
     const triple = drafts.triple.find((entry) => entry.id === 'triple_small_bomb');
-    expect(triple?.rankDamage?.['2-10']).toBe(600);
-    expect(triple?.rankDamage?.A).toBe(1000);
+    expect(triple?.rankDamage?.['2-10']).toBe(500);
+    expect(triple?.rankDamage?.A).toBe(900);
     const bomb = drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb');
-    expect(bomb?.rankDamage?.['2-10']).toBe(1200);
+    expect(bomb?.rankDamage?.['2-10']).toBe(600);
     const rocket = drafts.rocket.find((entry) => entry.id === 'rocket_bomb');
-    expect(rocket?.damage).toBe(1500);
+    expect(rocket?.damage).toBe(800);
 
     triple!.rankDamage = { ...triple!.rankDamage, J: 1234 };
     applyCardFormationDrafts(drafts);
@@ -775,20 +881,20 @@ describe('牌型兵种阵型配置', () => {
       (id) => getPokerCardById(id)!,
     );
     expect(getFormationsFor(['flush'], lowCards).map((entry) => entry.id)).toEqual([
-      'flush_tower',
-      'flush_dragon',
+      'flush_tower_JA',
+      'flush_custom_2',
       'flush_custom_3',
     ]);
     expect(getFormationsFor(['flush'], highCards).map((entry) => entry.id)).toEqual([
       'flush_tower_JA',
-      'flush_dragon_JA',
-      'flush_custom_3_JA',
+      'flush_custom_2',
+      'flush_custom_3',
     ]);
   });
 
   it('同花与炸弹出兵以配置 rows 为准', () => {
     const drafts = dumpCardFormationDrafts();
-    const flushDragon = drafts.flush.find((entry) => entry.id === 'flush_dragon');
+    const flushDragon = drafts.flush.find((entry) => entry.id === 'flush_custom_2');
     expect(flushDragon).toBeDefined();
     flushDragon!.rows = [['melee_grunt']];
     const bomb = drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb');
@@ -799,7 +905,7 @@ describe('牌型兵种阵型配置', () => {
       const flushCards = ['2-spades', '4-spades', '6-spades', '8-spades', 'J-spades'].map(
         (id) => getPokerCardById(id)!,
       );
-      const flush = getFormationsFor(['flush'], flushCards).find((entry) => entry.id === 'flush_dragon');
+      const flush = getFormationsFor(['flush'], flushCards).find((entry) => entry.id === 'flush_custom_2');
       expect(flush?.rows).toEqual([['melee_grunt']]);
 
       const bombCards = ['5-spades', '5-hearts', '5-clubs', '5-diamonds'].map(
@@ -823,7 +929,9 @@ describe('牌型兵种阵型配置', () => {
       colSpacing: 1.2,
       rankDamage: { J: 80 },
     };
-    const copy = cloneFormationDraft(source);
+    const copy = cloneFormationDraft({ ...source, specialTier: 4 });
+    expect(copy.specialTier).toBe(4);
+    copy.specialTier = 5;
     copy.rows[0]!.push('melee_grunt');
     copy.rows.push(['ranged_archer']);
     if (copy.match.kind === 'ranks') copy.match.ranks.push('Q');
@@ -832,6 +940,7 @@ describe('牌型兵种阵型配置', () => {
     expect(source.rows).toEqual([['melee_guard']]);
     expect(source.match).toEqual({ kind: 'ranks', ranks: ['J'] });
     expect(source.rankDamage).toEqual({ J: 80 });
+    expect(source.specialTier).toBeUndefined();
     expect(copy.rows).toEqual([['melee_guard', 'melee_grunt'], ['ranged_archer']]);
   });
 
@@ -851,7 +960,8 @@ describe('牌型兵种阵型配置', () => {
       HAND_CATEGORY_ORDER.flatMap((category) => drafts[category].map((entry) => entry.id)),
     );
     const identity = allocateNewFormationIdentity('two_pair', existingIds);
-    expect(identity.id).toBe('two_pair_custom_15');
+    expect(identity.id).toMatch(/^two_pair_custom_\d+$/);
+    expect(existingIds.has(identity.id)).toBe(false);
     drafts.two_pair.push({
       id: identity.id,
       name: `连对阵型 ${identity.number}`,
@@ -966,16 +1076,11 @@ describe('牌型兵种阵型配置', () => {
     ]);
 
     const flushGroups = groupFormationsByMatch(drafts.flush);
-    expect(flushGroups.map((group) => group.label)).toEqual(['含 0～1 张 J～A', '含 2+ 张 J～A']);
+    expect(flushGroups.map((group) => group.label)).toEqual(['任意']);
     expect(flushGroups[0]!.indices.map((index) => drafts.flush[index]!.name)).toEqual([
-      '箭塔',
-      '巨龙',
-      '石头人',
-    ]);
-    expect(flushGroups[1]!.indices.map((index) => drafts.flush[index]!.name)).toEqual([
-      '箭塔',
-      '巨龙',
-      '石头人',
+      '双射手箭塔',
+      '飞龙',
+      '小石头人',
     ]);
 
     const straightFlush = groupFormationsByMatch(drafts.straight_flush);
@@ -985,21 +1090,14 @@ describe('牌型兵种阵型配置', () => {
 
     const fullHouse = groupFormationsByMatch(drafts.full_house);
     expect(fullHouse.map((group) => group.label)).toEqual(['三条 2～10', '三条 J～A']);
-    expect(fullHouse[0]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual([
-      '双射手箭塔',
-      '飞龙',
-      '小石头人',
-    ]);
-    expect(fullHouse[1]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual([
-      '三射手箭塔',
-      '喷火龙',
-      '大石头人',
-    ]);
+    expect(fullHouse[0]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual(['4档']);
+    expect(fullHouse[1]!.indices.map((index) => drafts.full_house[index]!.name)).toEqual(['5档']);
+    expect(drafts.full_house.every((entry) => isSpecialTierDraft(entry))).toBe(true);
   });
 
   it('listHandExamplesForUnit 每种牌型只给一组样例', () => {
     const golem = listHandExamplesForUnit('melee_golem_small');
-    expect(golem.map((example) => example.name)).toEqual(['四顺', '连对', '五顺']);
+    expect(golem.map((example) => example.name)).toEqual(['四顺', '连对', '五顺', '同花']);
     expect(golem.every((example) => example.cards.length > 0)).toBe(true);
 
     const bomb = listHandExamplesForUnit('small_bomb');
@@ -1007,9 +1105,183 @@ describe('牌型兵种阵型配置', () => {
     expect(bomb[0]?.cards).toHaveLength(3);
 
     const tower = listHandExamplesForUnit('building_tower');
-    expect(tower.map((example) => example.name)).toEqual(['葫芦', '同花']);
+    expect(tower.map((example) => example.name)).toEqual(['四顺', '连对', '五顺']);
 
     expect(listHandExamplesForUnit('building_base')).toEqual([]);
     expect(listHandExamplesForUnit('summoned_skeleton')).toEqual([]);
+  });
+
+  it('特殊兵种档位表覆盖 10 个兵种且互不重叠', () => {
+    const all = SPECIAL_TIERS.flatMap((tier) => [...listUnitsBySpecialTier(tier)]);
+    expect(all).toHaveLength(10);
+    expect(new Set(all).size).toBe(10);
+    expect(SPECIAL_TYPE_IDS.size).toBe(10);
+    expect(SPECIAL_UNITS_BY_TIER[5]).toEqual(['building_tower_triple', 'fire_dragon', 'melee_golem']);
+    expect(getUnitSpecialTier('ranged_ballista')).toBe(2);
+    expect(getUnitSpecialTier('melee_grunt')).toBeUndefined();
+    expect(formatSpecialTierLabel(4)).toBe('4档：双射手箭塔 / 飞龙 / 投弹车');
+  });
+
+  it('葫芦整档哨兵展开为该档 3 兵，dump 往返仍是哨兵', () => {
+    expect(CARD_FORMATIONS.full_house.map((entry) => entry.id)).toEqual([
+      'full_house_2_10__building_tower_advanced',
+      'full_house_2_10__dragon',
+      'full_house_2_10__ranged_chariot',
+      'full_house_JA__building_tower_triple',
+      'full_house_JA__fire_dragon',
+      'full_house_JA__melee_golem',
+    ]);
+    expect(CARD_FORMATIONS.full_house.map((entry) => entry.rows)).toEqual([
+      [['building_tower_advanced']],
+      [['dragon']],
+      [['ranged_chariot']],
+      [['building_tower_triple']],
+      [['fire_dragon']],
+      [['melee_golem']],
+    ]);
+
+    const dumped = dumpCardFormationDrafts();
+    expect(dumped.full_house.map((entry) => ({ id: entry.id, specialTier: entry.specialTier, rows: entry.rows }))).toEqual([
+      { id: 'full_house_2_10', specialTier: 4, rows: [] },
+      { id: 'full_house_JA', specialTier: 5, rows: [] },
+    ]);
+    applyCardFormationDrafts(dumped);
+    expect(dumpCardFormationDrafts().full_house.every((entry) => isSpecialTierDraft(entry))).toBe(true);
+  });
+
+  it('同情况允许哨兵与混编并存', () => {
+    const drafts = dumpCardFormationDrafts();
+    drafts.straight3 = [
+      {
+        id: 'straight3_JQK',
+        name: 'J-Q-K',
+        match: { kind: 'ranks', ranks: ['J', 'Q', 'K'] },
+        rows: [['hero_king'], ['hero_queen']],
+      },
+      {
+        id: 'straight3_JQK_special',
+        name: '2档',
+        specialTier: 2,
+        match: { kind: 'ranks', ranks: ['J', 'Q', 'K'] },
+        rows: [],
+      },
+    ];
+    expect(validateCardFormationDrafts(drafts)).toBeNull();
+    applyCardFormationDrafts(drafts);
+    try {
+      expect(CARD_FORMATIONS.straight3.map((entry) => entry.id)).toEqual([
+        'straight3_JQK',
+        'straight3_JQK_special__ranged_ballista',
+        'straight3_JQK_special__melee_charge_wagon',
+      ]);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+  });
+
+  it('拒绝非法档位或同一情况重复哨兵', () => {
+    const badTier = dumpCardFormationDrafts();
+    badTier.full_house[0]!.specialTier = 6 as never;
+    expect(validateCardFormationDrafts(badTier)).toContain('档位映射必须是 2、3、4 或 5');
+
+    const duplicate = dumpCardFormationDrafts();
+    duplicate.full_house.push({
+      id: 'full_house_2_10_dup',
+      name: '重复哨兵',
+      specialTier: 4,
+      match: { kind: 'tripleRanks', ranks: ['2', '3', '4', '5', '6', '7', '8', '9', '10'] },
+      rows: [],
+    });
+    expect(validateCardFormationDrafts(duplicate)).toContain('同一情况只能有一条档位映射');
+  });
+
+  it('独占特殊兵种阵型按档位着色，混编没有档位', () => {
+    expect(getFormationSpecialTier({ rows: [['melee_golem', 'melee_golem']] })).toBe(5);
+    expect(getFormationSpecialTier({ rows: [['fire_dragon', 'fire_dragon']] })).toBe(5);
+    expect(getFormationSpecialTier({ rows: [['building_tower_advanced']] })).toBe(4);
+    expect(getFormationSpecialTier({ rows: [['melee_grunt']] })).toBeUndefined();
+    expect(getFormationSpecialTier({ rows: [['hero_king'], ['hero_queen']] })).toBeUndefined();
+    expect(specialTierExpandedId('full_house_2_10', 'dragon')).toBe('full_house_2_10__dragon');
+  });
+
+  it('档位草稿 unitCount=2 时非建筑展开双槽、建筑仍单槽', () => {
+    const tiers = dumpSpecialTierDrafts();
+    for (const typeId of tiers[5].units) {
+      tiers[5].formations[typeId] = { ...tiers[5].formations[typeId]!, unitCount: 2, colSpacing: 3 };
+    }
+    applySpecialTierDrafts(tiers);
+    try {
+      const sentinel = dumpCardFormationDrafts().full_house.find((entry) => entry.specialTier === 5)!;
+      const expanded = expandFormationDraft('full_house', sentinel);
+      expect(expanded.map((entry) => entry.rows)).toEqual([
+        [['building_tower_triple']],
+        [['fire_dragon', 'fire_dragon']],
+        [['melee_golem', 'melee_golem']],
+      ]);
+      expect(expanded.find((entry) => entry.id.includes('dragon'))?.colSpacing).toBe(3);
+      expect(getSpecialUnitFormation('fire_dragon')?.unitCount).toBe(2);
+    } finally {
+      resetSpecialTiersToDefault();
+    }
+  });
+
+  it('同一档两个兵种可用不同数量和间距展开', () => {
+    const tiers = dumpSpecialTierDrafts();
+    tiers[5].formations.fire_dragon = { ...tiers[5].formations.fire_dragon!, unitCount: 2, colSpacing: 3 };
+    tiers[5].formations.melee_golem = { ...tiers[5].formations.melee_golem!, unitCount: 1, colSpacing: 1.2 };
+    applySpecialTierDrafts(tiers);
+    try {
+      const sentinel = dumpCardFormationDrafts().full_house.find((entry) => entry.specialTier === 5)!;
+      const expanded = expandFormationDraft('full_house', sentinel);
+      expect(expanded.find((entry) => entry.id.includes('fire_dragon'))?.rows).toEqual([
+        ['fire_dragon', 'fire_dragon'],
+      ]);
+      expect(expanded.find((entry) => entry.id.includes('melee_golem'))?.rows).toEqual([['melee_golem']]);
+      expect(expanded.find((entry) => entry.id.includes('fire_dragon'))?.colSpacing).toBe(3);
+      expect(expanded.find((entry) => entry.id.includes('melee_golem'))?.colSpacing).toBe(1.2);
+    } finally {
+      resetSpecialTiersToDefault();
+    }
+  });
+
+  it('拒绝非法或跨档重复兵种', () => {
+    const overlap = dumpSpecialTierDrafts();
+    overlap[4] = { ...overlap[4], units: [...overlap[4].units, 'melee_golem'] };
+    expect(validateSpecialTierDrafts(overlap)).toContain('不能同时属于');
+
+    const unknown = dumpSpecialTierDrafts();
+    unknown[3] = { ...unknown[3], units: ['not_a_unit' as never] };
+    expect(validateSpecialTierDrafts(unknown)).toContain('未知兵种');
+
+    const badCount = dumpSpecialTierDrafts();
+    badCount[2].formations.ranged_ballista = { ...badCount[2].formations.ranged_ballista!, unitCount: 0 };
+    expect(validateSpecialTierDrafts(badCount)).toContain('每阵数量');
+
+    const missingFormation = dumpSpecialTierDrafts();
+    missingFormation[2].units = [...missingFormation[2].units, 'melee_grunt'];
+    expect(validateSpecialTierDrafts(missingFormation)).toContain('阵型配置');
+  });
+
+  it('apply 后名单与标签跟着变，dump 往返一致', () => {
+    const original = dumpSpecialTierDrafts();
+    applySpecialTierDrafts(original);
+    expect(dumpSpecialTierDrafts()).toEqual(original);
+
+    const next = dumpSpecialTierDrafts();
+    next[2] = {
+      units: ['melee_grunt'],
+      formations: { melee_grunt: createDefaultSpecialUnitFormation('melee_grunt') },
+    };
+    applySpecialTierDrafts(next);
+    try {
+      expect(SPECIAL_TYPE_IDS.has('melee_grunt')).toBe(true);
+      expect(SPECIAL_UNITS_BY_TIER[2]).toEqual(['melee_grunt']);
+      expect(formatSpecialTierLabel(2)).toBe('2档：民兵');
+      expect(getUnitSpecialTier('ranged_ballista')).toBeUndefined();
+    } finally {
+      resetSpecialTiersToDefault();
+      expect(SPECIAL_TYPE_IDS.has('melee_grunt')).toBe(false);
+      expect(getUnitSpecialTier('ranged_ballista')).toBe(2);
+    }
   });
 });

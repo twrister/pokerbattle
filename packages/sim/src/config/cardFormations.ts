@@ -3,6 +3,16 @@ import type { CardRank, PlayingCard } from '../cards/deck.js';
 import { Faction } from '../entity/unit.js';
 import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
 import {
+  SPECIAL_UNIT_THUMB_SCALE,
+  formatSpecialTierLabel,
+  getSpecialUnitFormation,
+  getUnitSpecialTier,
+  isSpecialTier,
+  listUnitsBySpecialTier,
+  specialTierExpandedId,
+  type SpecialTier,
+} from './specialTiers.js';
+import {
   FORMATION_MATCH_RANKS,
   FUSE_BOMB_DAMAGE_RANKS,
   getPreviewCardsForFormation,
@@ -149,6 +159,11 @@ export interface FormationDraft {
   rowSpacing?: number;
   /** 按钮缩略图放大；缺省 FORMATION_THUMB_SCALE。 */
   thumbScale?: number;
+  /**
+   * 情况级特殊兵种档位映射。
+   * 有值时本条是哨兵：rows 可空，加载时展开为该档全部单兵种阵型。
+   */
+  specialTier?: SpecialTier;
   /** 引信炸弹按点数覆盖伤害；缺档回落单位配置。 */
   rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
   /** 火箭等无点数炸弹的固定伤害；缺省回落单位配置。 */
@@ -346,41 +361,88 @@ function cloneBombDamageFields(
   return out;
 }
 
-/** 从 JSON 加载并回填 category / slots / units。 */
+/** 是否为情况级档位映射哨兵。 */
+export function isSpecialTierDraft(
+  draft: Pick<FormationDraft, 'specialTier'>,
+): draft is FormationDraft & { specialTier: SpecialTier } {
+  return isSpecialTier(draft.specialTier);
+}
+
+/** 卡组页阵型列表文案：哨兵显示整档兵种，手写阵型用配置名。 */
+export function formatFormationDraftListLabel(draft: FormationDraft): string {
+  if (isSpecialTierDraft(draft)) return formatSpecialTierLabel(draft.specialTier);
+  return draft.name || draft.id;
+}
+
+/** 阵型全部槽位为同一兵种时返回该 id。 */
+function exclusiveFormationTypeId(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): UnitTypeId | undefined {
+  const slots = formation.rows.flat();
+  const typeId = slots[0];
+  if (!typeId || slots.some((id) => id !== typeId)) return undefined;
+  return typeId;
+}
+
+/**
+ * 单兵种阵型的特殊档位；混编或非特殊兵种为 undefined。
+ * 颜色看展开后的独占兵种，因此同花顺双石头人也会是 5 档。
+ */
+export function getFormationSpecialTier(
+  formation: Pick<CardFormation, 'rows'> | Pick<FormationDraft, 'rows'>,
+): SpecialTier | undefined {
+  const typeId = exclusiveFormationTypeId(formation);
+  return typeId ? getUnitSpecialTier(typeId) : undefined;
+}
+
+/**
+ * 按兵种当前档位参数生成一条展开阵型；建筑始终单槽，避免撞上「建筑只能单独成阵」。
+ * 预览页与哨兵展开共用，避免两处各自拼 rows。
+ */
+export function createSpecialUnitCardFormation(
+  category: HandCategory,
+  draft: Pick<FormationDraft, 'id' | 'match'>,
+  typeId: UnitTypeId,
+): CardFormation {
+  const params = getSpecialUnitFormation(typeId);
+  const building = isBuildingConfig(UNIT_CONFIGS[typeId]);
+  const count = building ? 1 : (params?.unitCount ?? 1);
+  return createCardFormation(category, {
+    id: specialTierExpandedId(draft.id, typeId),
+    name: UNIT_CONFIGS[typeId]?.name ?? typeId,
+    match: draft.match,
+    rows: [Array.from({ length: count }, () => typeId)],
+    ...(params?.colSpacing === undefined ? {} : { colSpacing: params.colSpacing }),
+    ...(params?.rowSpacing === undefined ? {} : { rowSpacing: params.rowSpacing }),
+    thumbScale: params?.thumbScale ?? SPECIAL_UNIT_THUMB_SCALE[typeId],
+  });
+}
+
+/**
+ * 把一条 compact 草稿变成运行时阵型：档位哨兵按名单展开，其余保持手写 rows。
+ * 数量/间距/放大读该兵种独立配置。
+ */
+export function expandFormationDraft(category: HandCategory, draft: FormationDraft): CardFormation[] {
+  if (!isSpecialTierDraft(draft)) {
+    return [createCardFormation(category, draft)];
+  }
+  return listUnitsBySpecialTier(draft.specialTier).map((typeId) =>
+    createSpecialUnitCardFormation(category, draft, typeId),
+  );
+}
+
+/** 从 compact 草稿展开运行时阵型。 */
 function formationsFromDrafts(drafts: CardFormationDrafts): Record<HandCategory, CardFormation[]> {
   const out = {} as Record<HandCategory, CardFormation[]>;
   for (const category of HAND_CATEGORY_ORDER) {
-    const entries = drafts[category] ?? [];
-    out[category] = entries.map((entry) => {
-      const rows = entry.rows.map((row) => [...row]);
-      const slots = slotsFromRows(rows);
-      return {
-        id: entry.id,
-        name: entry.name,
-        category,
-        match: cloneMatchRule(entry.match),
-        rows,
-        slots,
-        units: unitsFromSlots(slots),
-        colSpacing:
-          Number.isFinite(entry.colSpacing) && (entry.colSpacing as number) > 0
-            ? (entry.colSpacing as number)
-            : FORMATION_COL_SPACING,
-        rowSpacing:
-          Number.isFinite(entry.rowSpacing) && (entry.rowSpacing as number) > 0
-            ? (entry.rowSpacing as number)
-            : FORMATION_ROW_SPACING,
-        thumbScale: resolveThumbScale(entry.thumbScale),
-        ...cloneBombDamageFields(entry),
-      };
-    });
+    out[category] = (drafts[category] ?? []).flatMap((entry) => expandFormationDraft(category, entry));
   }
   return out;
 }
 
 /** 将单条草稿派生成预览可用的阵型，不会写入运行时配置。 */
 export function createCardFormation(category: HandCategory, draft: FormationDraft): CardFormation {
-  const rows = draft.rows.map((row) => [...row]);
+  const rows = (draft.rows ?? []).map((row) => [...row]);
   const slots = slotsFromRows(rows);
   return {
     id: draft.id,
@@ -428,11 +490,12 @@ function formationFromMappedRows(
   return { ...source, rows, slots, units: unitsFromSlots(slots) };
 }
 
+/** compact 草稿真源：dump 必须回这条，否则哨兵会被拆成多条手写阵型。 */
+let sourceDrafts: CardFormationDrafts = cloneDrafts(rawCardFormations as CardFormationDrafts);
+
 /** 从 JSON 初始化的运行时阵型；顶层对象与各牌型数组在应用草稿时保持引用稳定。 */
-export const CARD_FORMATIONS: Record<HandCategory, CardFormation[]> = formationsFromDrafts(
-  rawCardFormations as CardFormationDrafts,
-);
-let defaultDrafts: CardFormationDrafts = dumpCardFormationDrafts();
+export const CARD_FORMATIONS: Record<HandCategory, CardFormation[]> = formationsFromDrafts(sourceDrafts);
+let defaultDrafts: CardFormationDrafts = cloneDrafts(sourceDrafts);
 
 /** 深拷贝单条草稿，避免复制/编辑时源与副本互相污染。 */
 export function cloneFormationDraft(source: FormationDraft): FormationDraft {
@@ -440,10 +503,11 @@ export function cloneFormationDraft(source: FormationDraft): FormationDraft {
     id: source.id,
     name: source.name,
     match: cloneMatchRule(source.match),
-    rows: source.rows.map((row) => [...row]),
+    rows: (source.rows ?? []).map((row) => [...row]),
     ...(source.colSpacing === undefined ? {} : { colSpacing: source.colSpacing }),
     ...(source.rowSpacing === undefined ? {} : { rowSpacing: source.rowSpacing }),
     ...(source.thumbScale === undefined ? {} : { thumbScale: source.thumbScale }),
+    ...(isSpecialTier(source.specialTier) ? { specialTier: source.specialTier } : {}),
     ...cloneBombDamageFields(source),
   };
 }
@@ -524,22 +588,9 @@ function cloneDrafts(source: CardFormationDrafts): CardFormationDrafts {
   return out;
 }
 
-/** 将运行时阵型导出为可安全编辑和写入 JSON 的草稿。 */
+/** 导出 compact 草稿（含哨兵），供卡组页编辑和写回 JSON。 */
 export function dumpCardFormationDrafts(): CardFormationDrafts {
-  const out = {} as CardFormationDrafts;
-  for (const category of HAND_CATEGORY_ORDER) {
-    out[category] = CARD_FORMATIONS[category].map((formation) => ({
-      id: formation.id,
-      name: formation.name,
-      match: cloneMatchRule(formation.match),
-      rows: formation.rows.map((row) => [...row]),
-      colSpacing: formation.colSpacing,
-      rowSpacing: formation.rowSpacing,
-      thumbScale: formation.thumbScale,
-      ...cloneBombDamageFields(formation),
-    }));
-  }
-  return out;
+  return cloneDrafts(sourceDrafts);
 }
 
 /** 导出最近一次文件快照，供页面撤销未保存的编辑。 */
@@ -628,6 +679,7 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
   if (!drafts || typeof drafts !== 'object' || Array.isArray(drafts)) return '配置必须是对象';
   const allowedTypes = new Set<string>(UNIT_TYPE_IDS);
   const ids = new Set<string>();
+  const sentinelMatchKeys = new Set<string>();
   for (const category of HAND_CATEGORY_ORDER) {
     const formations = drafts[category];
     if (!Array.isArray(formations)) return `牌型「${HAND_CATEGORY_NAMES[category]}」缺少阵型列表`;
@@ -640,21 +692,37 @@ export function validateCardFormationDrafts(drafts: CardFormationDrafts): string
       if (!formation.name?.trim()) return `阵型「${id}」名称不能为空`;
       const matchError = validateMatchRule(id, formation.match);
       if (matchError) return matchError;
-      if (!Array.isArray(formation.rows) || formation.rows.length === 0) {
-        return `阵型「${id}」至少需要一排兵种`;
+      if (formation.specialTier !== undefined && !isSpecialTier(formation.specialTier)) {
+        return `阵型「${id}」档位映射必须是 2、3、4 或 5`;
       }
-      for (const row of formation.rows) {
-        if (!Array.isArray(row) || row.length === 0) return `阵型「${id}」不能存在空排`;
-        for (const typeId of row) {
-          if (!allowedTypes.has(typeId)) return `阵型「${id}」包含未知兵种「${String(typeId)}」`;
+      if (isSpecialTierDraft(formation)) {
+        const sentinelKey = `${category}:${matchRuleKey(formation.match)}`;
+        if (sentinelMatchKeys.has(sentinelKey)) {
+          return `牌型「${HAND_CATEGORY_NAMES[category]}」同一情况只能有一条档位映射`;
         }
-      }
-      // 建筑只能单独成阵：恰好 1 个槽位且该槽是建筑，不可与兵种混编
-      const buildingError = validateBuildingOnlyRows(formation.rows, id);
-      if (buildingError) return buildingError;
-      const fuseBombs = formation.rows.flat().filter(isFuseBombTypeId);
-      if (fuseBombs.length > 0 && !isFuseBombFormation(formation)) {
-        return `阵型「${id}」引信炸弹只能单独配置`;
+        sentinelMatchKeys.add(sentinelKey);
+        for (const typeId of listUnitsBySpecialTier(formation.specialTier)) {
+          const expandedId = specialTierExpandedId(id, typeId);
+          if (ids.has(expandedId)) return `阵型 ID「${expandedId}」重复`;
+          ids.add(expandedId);
+        }
+      } else {
+        if (!Array.isArray(formation.rows) || formation.rows.length === 0) {
+          return `阵型「${id}」至少需要一排兵种`;
+        }
+        for (const row of formation.rows) {
+          if (!Array.isArray(row) || row.length === 0) return `阵型「${id}」不能存在空排`;
+          for (const typeId of row) {
+            if (!allowedTypes.has(typeId)) return `阵型「${id}」包含未知兵种「${String(typeId)}」`;
+          }
+        }
+        // 建筑只能单独成阵：恰好 1 个槽位且该槽是建筑，不可与兵种混编
+        const buildingError = validateBuildingOnlyRows(formation.rows, id);
+        if (buildingError) return buildingError;
+        const fuseBombs = formation.rows.flat().filter(isFuseBombTypeId);
+        if (fuseBombs.length > 0 && !isFuseBombFormation(formation)) {
+          return `阵型「${id}」引信炸弹只能单独配置`;
+        }
       }
       if (formation.colSpacing !== undefined && (!Number.isFinite(formation.colSpacing) || formation.colSpacing <= 0)) {
         return `阵型「${id}」横向间距必须大于 0`;
@@ -747,7 +815,8 @@ export function isGiantBombFormation(
 export function applyCardFormationDrafts(drafts: CardFormationDrafts): void {
   const error = validateCardFormationDrafts(drafts);
   if (error) throw new Error(error);
-  const next = formationsFromDrafts(cloneDrafts(drafts));
+  sourceDrafts = cloneDrafts(drafts);
+  const next = formationsFromDrafts(sourceDrafts);
   for (const category of HAND_CATEGORY_ORDER) {
     CARD_FORMATIONS[category].splice(0, CARD_FORMATIONS[category].length, ...next[category]);
   }

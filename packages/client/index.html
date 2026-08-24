@@ -71,7 +71,8 @@
       html:not(.is-dev) #panel-stats,
       html:not(.is-dev) #hud.is-solo #panel-controls,
       html:not(.is-dev) #btn-deck-add-formation,
-      html:not(.is-dev) #btn-deck-copy-formation,
+      html:not(.is-dev) #btn-deck-tier-table,
+      html:not(.is-dev) #special-tiers,
       html:not(.is-dev) #btn-deck-hand-odds,
       html:not(.is-dev) .deck-editor-panel,
       html:not(.is-dev) #btn-deck-reset,
@@ -2927,6 +2928,43 @@
         filter: brightness(1.08);
       }
 
+      /* 特殊兵种按独占档位变色：2 蓝 / 3 紫 / 4 黄 / 5 红，混编仍用上方绿色。 */
+      .formation-option.is-tier-2 {
+        border-color: rgba(99, 168, 214, 0.42);
+        background: linear-gradient(135deg, rgba(49, 78, 95, 0.92), rgba(29, 48, 64, 0.92));
+      }
+
+      .formation-option.is-tier-3 {
+        border-color: rgba(168, 99, 214, 0.42);
+        background: linear-gradient(135deg, rgba(78, 49, 95, 0.92), rgba(48, 29, 64, 0.92));
+      }
+
+      .formation-option.is-tier-4 {
+        border-color: rgba(214, 196, 99, 0.42);
+        background: linear-gradient(135deg, rgba(95, 88, 49, 0.92), rgba(64, 58, 29, 0.92));
+      }
+
+      .formation-option.is-tier-5 {
+        border-color: rgba(214, 99, 99, 0.42);
+        background: linear-gradient(135deg, rgba(95, 49, 49, 0.92), rgba(64, 29, 29, 0.92));
+      }
+
+      #hand-formations .formation-option.is-tier-2:hover {
+        border-color: rgba(148, 196, 236, 0.85);
+      }
+
+      #hand-formations .formation-option.is-tier-3:hover {
+        border-color: rgba(196, 148, 236, 0.85);
+      }
+
+      #hand-formations .formation-option.is-tier-4:hover {
+        border-color: rgba(236, 220, 148, 0.85);
+      }
+
+      #hand-formations .formation-option.is-tier-5:hover {
+        border-color: rgba(236, 148, 148, 0.85);
+      }
+
       #hand-formations .formation-option:disabled {
         border-color: var(--panel-border);
         background: rgba(255, 255, 255, 0.05);
@@ -3412,7 +3450,8 @@
         color: var(--text-dim);
       }
 
-      .deck-field input {
+      .deck-field input,
+      .deck-field select {
         min-width: 0;
         padding: 6px 7px;
         border: 1px solid var(--panel-border);
@@ -3420,6 +3459,203 @@
         background: rgba(255, 255, 255, 0.07);
         color: var(--text);
         font: inherit;
+      }
+
+      .deck-tier-field {
+        grid-template-columns: 1fr;
+        margin-top: 4px;
+        padding-top: 8px;
+        border-top: 1px solid var(--panel-border);
+      }
+
+      .deck-tier-table {
+        display: grid;
+        gap: 8px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .deck-tier-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .deck-tier-column {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+        align-content: start;
+        padding: 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(18, 27, 38, 0.82);
+      }
+
+      .deck-tier-column-title {
+        font-weight: 600;
+      }
+
+      .deck-tier-units {
+        display: grid;
+        gap: 4px;
+      }
+
+      .deck-tier-unit-row {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        padding: 2px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .deck-tier-unit-row.is-active {
+        border-color: rgba(99, 214, 138, 0.8);
+        background: rgba(51, 104, 87, 0.45);
+      }
+
+      .deck-tier-unit-row select {
+        flex: 1;
+        min-width: 0;
+        padding: 6px 7px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--text);
+        font: inherit;
+      }
+
+      /* 未选中时点击穿透到行，只切换预览；选中后再点下拉才换人。 */
+      .deck-tier-unit-row:not(.is-active) select {
+        pointer-events: none;
+      }
+
+      .deck-tier-hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+
+      #special-tiers {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 78% 12%, rgba(69, 115, 155, 0.28), transparent 35%),
+          #0a1018;
+      }
+
+      .special-tiers-shell {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        margin: 0;
+        padding: 16px 20px 12px;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .special-tiers-shell::before,
+      .special-tiers-shell::after {
+        display: none;
+      }
+
+      .special-tiers-header,
+      .special-tiers-toolbar,
+      .special-tiers-footer,
+      .special-tiers-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .special-tiers-header,
+      .special-tiers-toolbar,
+      .special-tiers-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      .special-tiers-header h1 {
+        margin: 0;
+        font-size: clamp(22px, 3.3vh, 34px);
+      }
+
+      .special-tiers-toolbar {
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+
+      .special-tiers-back,
+      .special-tiers-footer button,
+      #special-tiers .deck-mini-button,
+      #special-tiers .deck-icon-button {
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(39, 54, 71, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .special-tiers-back,
+      .special-tiers-footer button {
+        min-height: 34px;
+        padding: 7px 12px;
+      }
+
+      .special-tiers-content {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+        gap: 12px;
+      }
+
+      #special-tiers-table {
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .special-tiers-detail {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      #special-tiers-editor {
+        flex-shrink: 0;
+        display: grid;
+        gap: 6px;
+        padding: 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(18, 27, 38, 0.82);
+      }
+
+      .special-tiers-detail .deck-preview-panel {
+        flex: 1;
+        min-height: 180px;
+      }
+
+      #special-tiers-status {
+        flex: 1;
+        min-width: 160px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      #special-tiers-status.is-error {
+        color: #f0a0a0;
       }
 
       /* 站位下拉与单位参数页 select 对齐，保证展开选项可读 */
@@ -3435,13 +3671,16 @@
         font: inherit;
       }
 
-      #deck-config select option {
+      #deck-config select option,
+      #special-tiers select option {
         color: #1a2332;
         background-color: #ffffff;
       }
 
       #deck-config select option:checked,
-      #deck-config select option:hover {
+      #deck-config select option:hover,
+      #special-tiers select option:checked,
+      #special-tiers select option:hover {
         color: #ffffff;
         background-color: #3d4f66;
       }
@@ -3534,35 +3773,46 @@
       }
 
       #deck-preview,
-      #deck-preview-button {
+      #deck-preview-button,
+      #special-tiers-preview,
+      #special-tiers-preview-button {
         position: absolute;
         inset: 0;
         overflow: hidden;
       }
 
       #deck-preview.is-hidden,
-      #deck-preview-button.is-hidden {
+      #deck-preview-button.is-hidden,
+      #special-tiers-preview.is-hidden,
+      #special-tiers-preview-button.is-hidden {
         display: none;
       }
 
-      #deck-preview canvas {
+      #deck-preview canvas,
+      #special-tiers-preview canvas {
         display: block;
         width: 100%;
         height: 100%;
       }
 
-      #deck-preview-button {
+      #deck-preview-button,
+      #special-tiers-preview-button {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: center;
+        gap: 12px;
+        padding: 12px;
         pointer-events: none;
       }
 
-      #deck-preview-button.is-hidden {
+      #deck-preview-button.is-hidden,
+      #special-tiers-preview-button.is-hidden {
         display: none;
       }
 
-      #deck-preview-button .formation-option {
+      #deck-preview-button .formation-option,
+      #special-tiers-preview-button .formation-option {
         cursor: default;
       }
 
@@ -5382,7 +5632,7 @@
           <div class="deck-toolbar-actions">
             <button id="btn-deck-hand-odds" class="dev-only" type="button">牌型验证</button>
             <button id="btn-deck-add-formation" type="button">新增阵型</button>
-            <button id="btn-deck-copy-formation" type="button">复制阵型</button>
+            <button id="btn-deck-tier-table" type="button">档位表配置</button>
           </div>
         </section>
         <section class="deck-content">
@@ -5431,6 +5681,60 @@
           </div>
           <button id="btn-deck-reset" type="button">重置</button>
           <button id="btn-deck-save" type="button">保存配置</button>
+        </footer>
+      </div>
+    </main>
+
+    <main id="special-tiers" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell special-tiers-shell">
+        <header class="special-tiers-header">
+          <button id="btn-special-tiers-back" class="special-tiers-back" type="button">返回卡组阵型</button>
+          <h1>档位表配置</h1>
+        </header>
+        <section class="special-tiers-toolbar">
+          编辑各档特殊兵种名单与每兵种阵型参数；选中兵种可预览，改动会立刻应用到卡组阵型展开。
+        </section>
+        <section class="special-tiers-content">
+          <section id="special-tiers-table" class="deck-tier-table" aria-label="档位表"></section>
+          <aside class="special-tiers-detail">
+            <section id="special-tiers-editor" aria-label="兵种阵型"></section>
+            <section class="deck-preview-panel" aria-label="阵型预览">
+              <div class="deck-preview-header">
+                <div class="deck-section-title">阵型预览（蓝方视角）</div>
+                <div class="deck-preview-tabs" role="tablist" aria-label="预览方式">
+                  <button
+                    id="special-tiers-preview-tab-3d"
+                    class="deck-preview-tab is-active"
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    data-preview-mode="3d"
+                  >
+                    3D 预览
+                  </button>
+                  <button
+                    id="special-tiers-preview-tab-button"
+                    class="deck-preview-tab"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-preview-mode="button"
+                  >
+                    按钮显示
+                  </button>
+                </div>
+              </div>
+              <div class="deck-preview-stage">
+                <div id="special-tiers-preview" role="tabpanel"></div>
+                <div id="special-tiers-preview-button" class="is-hidden" role="tabpanel" aria-label="阵型按钮预览"></div>
+              </div>
+            </section>
+          </aside>
+        </section>
+        <footer class="special-tiers-footer">
+          <div id="special-tiers-status" role="status" aria-live="polite">改完点保存写回配置文件</div>
+          <button id="btn-special-tiers-reset" type="button">重置</button>
+          <button id="btn-special-tiers-save" type="button">保存配置</button>
         </footer>
       </div>
     </main>

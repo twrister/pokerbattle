@@ -192,7 +192,7 @@ describe('兵种图鉴页', () => {
     const golemHands = Array.from(document.querySelectorAll('.codex-hand-name')).map(
       (node) => node.textContent,
     );
-    expect(golemHands).toEqual(['四顺', '连对', '五顺']);
+    expect(golemHands).toEqual(['四顺', '连对', '五顺', '同花']);
     expect(document.querySelectorAll('.codex-hand-card').length).toBeGreaterThan(0);
 
     clickNamed('基地');

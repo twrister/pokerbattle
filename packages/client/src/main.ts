@@ -95,6 +95,7 @@ import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHan
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
 import { createHandOddsPage } from './ui/handOddsPage.js';
+import { createSpecialTierPage } from './ui/specialTierPage.js';
 import { createLeaderboardPage } from './ui/leaderboardPage.js';
 import { createMainMenu } from './ui/mainMenu.js';
 import { createReplayControls } from './ui/replayControls.js';
@@ -237,6 +238,10 @@ const mainMenu = createMainMenu({
 const deckConfigPage = createDeckConfigPage({
   onBack: () => screens.show('menu'),
   onOpenHandOdds: () => screens.show('hand-odds'),
+  onOpenSpecialTiers: () => screens.show('special-tiers'),
+});
+const specialTierPage = createSpecialTierPage({
+  onBack: () => screens.show('deck-config'),
 });
 const unitStatsPage = createUnitStatsPage({ onBack: () => screens.show('codex') });
 const handOddsPage = createHandOddsPage({
@@ -1964,6 +1969,11 @@ screens = createScreenController({
     deckConfigPage.show();
     return () => deckConfigPage.hide();
   },
+  'special-tiers': () => {
+    syncLobbyPresenceForScreen('special-tiers');
+    specialTierPage.show();
+    return () => specialTierPage.hide();
+  },
   'hand-odds': () => {
     syncLobbyPresenceForScreen('hand-odds');
     handOddsPage.show();
@@ -2035,6 +2045,7 @@ function disposeApp(): void {
   onlineRoomPage.dispose();
   mainMenu.dispose();
   deckConfigPage.dispose();
+  specialTierPage.dispose();
   handOddsPage.dispose();
   unitStatsPage.dispose();
   sceneConfigPage.dispose();

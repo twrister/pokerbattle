@@ -1,0 +1,96 @@
+{
+  "2": {
+    "units": [
+      "ranged_ballista",
+      "melee_charge_wagon"
+    ],
+    "formations": {
+      "ranged_ballista": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      },
+      "melee_charge_wagon": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      }
+    }
+  },
+  "3": {
+    "units": [
+      "building_tower",
+      "melee_golem_small"
+    ],
+    "formations": {
+      "building_tower": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      },
+      "melee_golem_small": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      }
+    }
+  },
+  "4": {
+    "units": [
+      "building_tower_advanced",
+      "dragon",
+      "ranged_chariot"
+    ],
+    "formations": {
+      "building_tower_advanced": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      },
+      "dragon": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 1.4
+      },
+      "ranged_chariot": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      }
+    }
+  },
+  "5": {
+    "units": [
+      "building_tower_triple",
+      "fire_dragon",
+      "melee_golem"
+    ],
+    "formations": {
+      "building_tower_triple": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 2
+      },
+      "fire_dragon": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 1.4
+      },
+      "melee_golem": {
+        "unitCount": 1,
+        "colSpacing": 1.2,
+        "rowSpacing": 1.4,
+        "thumbScale": 1.8
+      }
+    }
+  }
+}

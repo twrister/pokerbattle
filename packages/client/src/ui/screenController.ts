@@ -3,6 +3,7 @@ export type AppScreen =
   | 'online'
   | 'room'
   | 'deck-config'
+  | 'special-tiers'
   | 'hand-odds'
   | 'codex'
   | 'leaderboard'

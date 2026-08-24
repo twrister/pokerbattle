@@ -1,4 +1,5 @@
 import {
+  SPECIAL_TYPE_IDS,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
   isBuildingConfig,
@@ -12,20 +13,6 @@ export interface UnitCatalogEntry {
   typeId: UnitTypeId;
   name: string;
 }
-
-/** 高级兵种：石头人、战车、连弩车、冲锋战车、巨龙、喷火龙、防御塔。 */
-const SPECIAL_TYPE_IDS = new Set<UnitTypeId>([
-  'melee_golem',
-  'melee_golem_small',
-  'ranged_chariot',
-  'ranged_ballista',
-  'melee_charge_wagon',
-  'dragon',
-  'fire_dragon',
-  'building_tower',
-  'building_tower_advanced',
-  'building_tower_triple',
-]);
 
 /** 其他：巨型/小炸弹、基地，以及召唤物。 */
 const OTHER_TYPE_IDS = new Set<UnitTypeId>([
@@ -64,7 +51,7 @@ const DISPLAY_ORDER: readonly UnitTypeId[] = [
   'summoned_bomber',
 ];
 
-/** 按图鉴页签归类：炸弹/基地/召唤物归其他，石头人/战车/巨龙等归高级，其余可移动单位归单兵种。 */
+/** 按图鉴页签归类：炸弹/基地/召唤物归其他；高级兵种走档位表 SPECIAL_TYPE_IDS。 */
 export function getUnitCatalogCategory(typeId: UnitTypeId): UnitCatalogCategory {
   if (typeId.startsWith('summoned_') || OTHER_TYPE_IDS.has(typeId)) return 'other';
   if (SPECIAL_TYPE_IDS.has(typeId)) return 'special';

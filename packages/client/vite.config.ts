@@ -11,6 +11,8 @@ const clientDir = path.dirname(fileURLToPath(import.meta.url));
 const unitsJsonPath = path.resolve(clientDir, '../sim/src/config/units.json');
 /** monorepo 内牌型阵型配置的唯一落盘路径 */
 const cardFormationsJsonPath = path.resolve(clientDir, '../sim/src/config/cardFormations.json');
+/** monorepo 内特殊兵种档位表的唯一落盘路径 */
+const specialTiersJsonPath = path.resolve(clientDir, '../sim/src/config/specialTiers.json');
 /** monorepo 内场景配置的唯一落盘路径 */
 const arenaJsonPath = path.resolve(clientDir, '../sim/src/config/arena.json');
 const arena2v2JsonPath = path.resolve(clientDir, '../sim/src/config/arena2v2.json');
@@ -65,6 +67,41 @@ function unitConfigWritePlugin(): Plugin {
             }
             const text = `${JSON.stringify(parsed, null, 2)}\n`;
             fs.writeFileSync(unitsJsonPath, text, 'utf8');
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
+/** 开发服务器：接收卡组页保存请求，覆盖 specialTiers.json。 */
+function specialTierWritePlugin(): Plugin {
+  return {
+    name: 'pb-special-tier-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__pb/special-tiers' || req.method !== 'POST') {
+          next();
+          return;
+        }
+        readRequestBody(req)
+          .then((raw) => {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              sendJson(res, 400, { error: 'invalid JSON' });
+              return;
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              sendJson(res, 400, { error: 'body must be a JSON object' });
+              return;
+            }
+            fs.writeFileSync(specialTiersJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
             sendJson(res, 200, { ok: true });
           })
           .catch((err: unknown) => {
@@ -382,6 +419,7 @@ export default defineConfig({
   plugins: [
     unitConfigWritePlugin(),
     cardFormationWritePlugin(),
+    specialTierWritePlugin(),
     arenaConfigWritePlugin(),
     patchNotesWritePlugin(),
     matchRulesWritePlugin(),

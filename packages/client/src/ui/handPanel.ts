@@ -2,6 +2,7 @@ import {
   detectHandCategories,
   findStrongestHand,
   getExclusiveFormationUnitTag,
+  getFormationSpecialTier,
   getFormationsFor,
   isFuseBombFormation,
   isBuildingOnlyFormation,
@@ -760,6 +761,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
               formation.id,
               formation.slots.map((slot) => `${slot.typeId}:${slot.row}:${slot.col}`).join(','),
               getExclusiveFormationUnitTag(formation),
+              getFormationSpecialTier(formation) ?? '',
               fuseBombDisplayDamage(formation, selectedCards) ?? '',
             ].join('#'),
           )
@@ -780,7 +782,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     for (const formation of formations) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'formation-option';
+      button.className = formationOptionClassName(formation);
       button.dataset.formationId = formation.id;
       const damage = fuseBombDisplayDamage(formation, selectedCards);
       button.setAttribute(
@@ -1079,4 +1081,10 @@ function required<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`手牌 HUD 缺少元素：${selector}`);
   return element;
+}
+
+/** 独占特殊兵种按档位着色；混编保持默认绿色。 */
+function formationOptionClassName(formation: CardFormation): string {
+  const tier = getFormationSpecialTier(formation);
+  return tier ? `formation-option is-tier-${tier}` : 'formation-option';
 }

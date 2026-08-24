@@ -336,6 +336,63 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('葫芦选牌展开整档按钮并带对应档位 class', () => {
+    const low = createHandPanel({
+      deck: deckWithCards(['5-spades', '5-hearts', '5-clubs', '9-diamonds', '9-spades']),
+    });
+    selectAllCards();
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('.formation-option')].map((button) => [
+        button.dataset.formationId,
+        [...button.classList].filter((name) => name.startsWith('is-tier-')).join(' '),
+      ]),
+    ).toEqual([
+      ['full_house_2_10__building_tower_advanced', 'is-tier-4'],
+      ['full_house_2_10__dragon', 'is-tier-4'],
+      ['full_house_2_10__ranged_chariot', 'is-tier-4'],
+    ]);
+    low.dispose();
+
+    const high = createHandPanel({
+      deck: deckWithCards(['J-spades', 'J-hearts', 'J-clubs', '9-diamonds', '9-spades']),
+    });
+    selectAllCards();
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('.formation-option')].map((button) => [
+        button.dataset.formationId,
+        [...button.classList].filter((name) => name.startsWith('is-tier-')).join(' '),
+      ]),
+    ).toEqual([
+      ['full_house_JA__building_tower_triple', 'is-tier-5'],
+      ['full_house_JA__fire_dragon', 'is-tier-5'],
+      ['full_house_JA__melee_golem', 'is-tier-5'],
+    ]);
+    high.dispose();
+  });
+
+  it('同花顺双石头人 / 双喷火龙为 5 档红，单张民兵无档位 class', () => {
+    const flush = createHandPanel({
+      deck: deckWithCards(['10-spades', 'J-spades', 'Q-spades', 'K-spades', 'A-spades']),
+    });
+    selectAllCards();
+    const flushButtons = [...document.querySelectorAll<HTMLButtonElement>('.formation-option')];
+    expect(flushButtons.map((button) => button.dataset.formationId)).toEqual([
+      'straight_flush_chariot',
+      'straight_flush_dragon',
+    ]);
+    expect(flushButtons.every((button) => button.classList.contains('is-tier-5'))).toBe(true);
+    flush.dispose();
+
+    const single = createHandPanel({ deck: deckWithCards(['3-spades']) });
+    selectAllCards();
+    const grunt = document.querySelector<HTMLButtonElement>(
+      '.formation-option[data-formation-id="single_grunt"]',
+    );
+    expect(grunt).toBeTruthy();
+    expect([...grunt!.classList].some((name) => name.startsWith('is-tier-'))).toBe(false);
+    single.dispose();
+  });
+
   it('手牌未变时 syncFromDeck 不重建搭配按钮，避免悬停闪烁', () => {
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
@@ -727,7 +784,7 @@ describe('单机手牌交互', () => {
     selectAllCards();
 
     const option = document.querySelector<HTMLButtonElement>(
-      '.formation-option[data-formation-id="straight5_tower"]',
+      '.formation-option[data-formation-id="straight5_custom_7"]',
     )!;
     expect(option).toBeTruthy();
     option.getBoundingClientRect = () => buttonRect();

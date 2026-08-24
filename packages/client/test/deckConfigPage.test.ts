@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const preview = { render: vi.fn(), resize: vi.fn(), dispose: vi.fn() };
 vi.mock('../src/view/formationPreview.js', () => ({
@@ -10,7 +10,14 @@ vi.mock('../src/view/formationThumbnail.js', () => ({
   getFormationThumbnail: vi.fn(async () => 'data:image/png;base64,preview'),
 }));
 
-import { CARD_FORMATIONS, HAND_CATEGORY_ORDER } from '@pb/sim';
+import {
+  CARD_FORMATIONS,
+  HAND_CATEGORY_ORDER,
+  applySpecialTierDrafts,
+  dumpSpecialTierDrafts,
+  resetCardFormationsToDefault,
+  resetSpecialTiersToDefault,
+} from '@pb/sim';
 import { createDeckConfigPage } from '../src/ui/deckConfigPage.js';
 import { getFormationThumbnail } from '../src/view/formationThumbnail.js';
 
@@ -26,7 +33,7 @@ describe('卡组阵型配置页', () => {
           <button id="btn-deck-back"></button>
           <button id="btn-deck-hand-odds"></button>
           <button id="btn-deck-add-formation"></button>
-          <button id="btn-deck-copy-formation"></button>
+          <button id="btn-deck-tier-table"></button>
           <button id="btn-deck-save"></button>
           <button id="btn-deck-reset"></button>
           <div id="deck-category-list"></div>
@@ -41,6 +48,11 @@ describe('卡组阵型配置页', () => {
         </div>
       </main>
     `;
+  });
+
+  afterEach(() => {
+    resetSpecialTiersToDefault();
+    resetCardFormationsToDefault();
   });
 
   it('进入后显示牌型、创建阵型并在返回时通知页面控制器', () => {
@@ -88,6 +100,15 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
+  it('档位表配置入口会通知页面控制器', () => {
+    const onOpenSpecialTiers = vi.fn();
+    const page = createDeckConfigPage({ onBack: vi.fn(), onOpenSpecialTiers });
+    page.show();
+    document.querySelector<HTMLButtonElement>('#btn-deck-tier-table')!.click();
+    expect(onOpenSpecialTiers).toHaveBeenCalledOnce();
+    page.dispose();
+  });
+
   it('单张默认情况为数字牌，阵型只列出该组方案', () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
@@ -107,11 +128,8 @@ describe('卡组阵型配置页', () => {
     page.show();
 
     clickCategory('同花');
-    expect(situationNames()).toEqual(['含 0～1 张 J～A', '含 2+ 张 J～A']);
-    expect(formationNames()).toEqual(['箭塔', '巨龙', '石头人']);
-
-    clickSituation('含 2+ 张 J～A');
-    expect(formationNames()).toEqual(['箭塔', '巨龙', '石头人']);
+    expect(situationNames()).toEqual(['任意']);
+    expect(formationNames()).toEqual(['双射手箭塔', '飞龙', '小石头人']);
 
     page.dispose();
   });
@@ -122,7 +140,7 @@ describe('卡组阵型配置页', () => {
 
     clickCategory('同花顺');
     expect(situationNames()).toEqual(['任意']);
-    expect(formationNames()).toEqual(['石头人', '巨龙', '箭塔']);
+    expect(formationNames()).toEqual(['双石头人', '双喷火龙']);
 
     page.dispose();
   });
@@ -257,7 +275,7 @@ describe('卡组阵型配置页', () => {
     expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3', '9-10-J', '10-J-Q', 'J-Q-K', 'Q-K-A']);
 
     clickSituation('J-Q-K');
-    expect(formationNames()).toEqual(['J-Q-K']);
+    expect(formationNames()).toEqual(['J-Q-K', '2档：连弩车 / 冲锋战车']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -283,10 +301,10 @@ describe('卡组阵型配置页', () => {
     page.show();
 
     clickCategory('连对');
-    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A', '任意']);
+    expect(situationNames()).toEqual(['数字牌 2～10', 'A-2', '10-J', 'J-Q', 'Q-K', 'K-A']);
 
     clickSituation('Q-K');
-    expect(formationNames()).toEqual(['Q-K']);
+    expect(formationNames()[0]).toBe('Q-K');
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -315,7 +333,7 @@ describe('卡组阵型配置页', () => {
     expect(situationNames()).toEqual(['数字牌 2～10', 'A-2-3-4', '8-9-10-J', '9-10-J-Q', '10-J-Q-K', 'J-Q-K-A']);
 
     clickSituation('J-Q-K-A');
-    expect(formationNames()).toEqual(['J-Q-K-A']);
+    expect(formationNames()).toEqual(['J-Q-K-A', '3档：箭塔 / 小石头人']);
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -351,7 +369,7 @@ describe('卡组阵型配置页', () => {
     ]);
 
     clickSituation('10-J-Q-K-A');
-    expect(formationNames()).toEqual(['10-J-Q-K-A']);
+    expect(formationNames()[0]).toBe('10-J-Q-K-A');
     preview.render.mockClear();
 
     const titles = [...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent);
@@ -416,14 +434,14 @@ describe('卡组阵型配置页', () => {
       el.textContent?.startsWith('2～10 伤害'),
     );
     expect(numberRow).toBeDefined();
-    expect(numberRow!.querySelector('input')!.value).toBe('600');
+    expect(numberRow!.querySelector('input')!.value).toBe('500');
 
     const aRow = [...document.querySelectorAll('.deck-field')].find((el) =>
       el.textContent?.startsWith('A 伤害'),
     );
     expect(aRow).toBeDefined();
     const input = aRow!.querySelector('input')!;
-    expect(input.value).toBe('800');
+    expect(input.value).toBe('900');
     input.value = '1230';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(input.value).toBe('1230');
@@ -446,7 +464,7 @@ describe('卡组阵型配置页', () => {
     );
     expect(row).toBeDefined();
     const input = row!.querySelector('input')!;
-    expect(input.value).toBe('1200');
+    expect(input.value).toBe('800');
     input.value = '1600';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(input.value).toBe('1600');
@@ -454,40 +472,49 @@ describe('卡组阵型配置页', () => {
     page.dispose();
   });
 
-  it('可复制当前阵型并连续复制时递增 id', () => {
+  it('葫芦情况显示档位哨兵，按钮预览一次画出整档着色按钮', async () => {
     const page = createDeckConfigPage({ onBack: vi.fn() });
     page.show();
+    clickCategory('葫芦');
 
-    clickSituation('J');
-    const jButton = [...document.querySelectorAll<HTMLButtonElement>('.deck-formation')].find(
-      (button) => button.textContent === '单张 J',
+    expect(situationNames()).toEqual(['三条 2～10', '三条 J～A']);
+    expect(formationNames()).toEqual(['4档：双射手箭塔 / 飞龙 / 投弹车']);
+    expect(document.querySelector<HTMLSelectElement>('.deck-tier-field select')?.value).toBe('4');
+    expect([...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent)).toContain(
+      '档位展开',
     );
-    expect(jButton).toBeDefined();
-    jButton!.click();
+    expect([...document.querySelectorAll('.deck-section-title')].map((el) => el.textContent)).not.toContain(
+      '站位配置',
+    );
 
-    const initialCount = document.querySelectorAll('.deck-formation').length;
-    const sourceUnit = document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select')?.value;
-    const sourceKind = [...document.querySelectorAll<HTMLSelectElement>('#deck-editor select')].find(
-      (select) => [...select.options].some((option) => option.value === 'ranks'),
-    )?.value;
-    expect(sourceUnit).toBe('melee_guard');
-    expect(sourceKind).toBe('ranks');
+    document.querySelector<HTMLButtonElement>('#deck-preview-tab-button')!.click();
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('#deck-preview-button .formation-option.is-tier-4')).toHaveLength(3);
+    });
 
-    document.querySelector<HTMLButtonElement>('#btn-deck-copy-formation')!.click();
-    expect(document.querySelectorAll('.deck-formation')).toHaveLength(initialCount + 1);
-    expect(document.querySelector('.deck-formation.is-active')?.textContent).toBe('单张 J 副本');
-    expect(editorFieldValue('阵型 ID')).toBe('single_J_copy');
-    expect(document.querySelector<HTMLSelectElement>('#deck-editor .deck-row select')?.value).toBe(sourceUnit);
-    expect(
-      [...document.querySelectorAll<HTMLSelectElement>('#deck-editor select')].find((select) =>
-        [...select.options].some((option) => option.value === 'ranks'),
-      )?.value,
-    ).toBe('ranks');
+    const select = document.querySelector<HTMLSelectElement>('.deck-tier-field select')!;
+    select.value = '';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(situationNames()).toEqual(['三条 J～A']);
+    expect(formationNames()).toEqual(['5档：三射手箭塔 / 喷火龙 / 石头人']);
 
-    document.querySelector<HTMLButtonElement>('#btn-deck-copy-formation')!.click();
-    expect(document.querySelectorAll('.deck-formation')).toHaveLength(initialCount + 2);
-    expect(document.querySelector('.deck-formation.is-active')?.textContent).toBe('单张 J 副本2');
-    expect(editorFieldValue('阵型 ID')).toBe('single_J_copy2');
+    page.dispose();
+  });
+
+  it('从档位表返回后重绘哨兵标签', () => {
+    const page = createDeckConfigPage({ onBack: vi.fn() });
+    page.show();
+    clickCategory('葫芦');
+    expect(formationNames()[0]).toBe('4档：双射手箭塔 / 飞龙 / 投弹车');
+
+    const drafts = dumpSpecialTierDrafts();
+    const previous = drafts[4].units[0]!;
+    drafts[4].units[0] = 'melee_grunt';
+    drafts[4].formations.melee_grunt = drafts[4].formations[previous];
+    delete drafts[4].formations[previous];
+    applySpecialTierDrafts(drafts);
+    page.show();
+    expect(formationNames()[0]).toBe('4档：民兵 / 飞龙 / 投弹车');
 
     page.dispose();
   });

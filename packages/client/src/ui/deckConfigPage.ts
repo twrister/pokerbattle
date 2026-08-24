@@ -5,21 +5,25 @@ import {
   FUSE_BOMB_DAMAGE_RANK_LABELS,
   HAND_CATEGORY_NAMES,
   HAND_CATEGORY_ORDER,
+  SPECIAL_TIERS,
   UNIT_CONFIGS,
   UNIT_TYPE_IDS,
-  allocateCopiedFormationIdentity,
   allocateNewFormationIdentity,
   applyCardFormationDrafts,
   captureCardFormationsAsDefault,
-  cloneFormationDraft,
   createCardFormation,
   dumpCardFormationDrafts,
   dumpDefaultCardFormationDrafts,
+  expandFormationDraft,
+  formatFormationDraftListLabel,
+  formatSpecialTierLabel,
+  getFormationSpecialTier,
   getPreviewCardsForFormation,
   groupFormationsByMatch,
   isBuildingConfig,
   isBuildingOnlyFormation,
   isFuseBombFormation,
+  isSpecialTierDraft,
   resolveCardFormation,
   type CardFormation,
   type CardFormationDrafts,
@@ -28,6 +32,7 @@ import {
   type FormationMatchGroup,
   type FormationMatchRule,
   type HandCategory,
+  type SpecialTier,
   type UnitTypeId,
 } from '@pb/sim';
 import { IS_DEV_SERVER } from '../env.js';
@@ -50,6 +55,8 @@ export interface DeckConfigPageOptions {
   onBack: () => void;
   /** 开发服：打开牌型概率/强度验证页。 */
   onOpenHandOdds?: () => void;
+  /** 开发服：打开特殊兵种档位表配置页。 */
+  onOpenSpecialTiers?: () => void;
 }
 
 export interface DeckConfigPageHandle {
@@ -71,7 +78,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   const tabButton = required<HTMLButtonElement>('#deck-preview-tab-button', root);
   const backButton = required<HTMLButtonElement>('#btn-deck-back', root);
   const addFormationButton = required<HTMLButtonElement>('#btn-deck-add-formation', root);
-  const copyFormationButton = required<HTMLButtonElement>('#btn-deck-copy-formation', root);
+  const specialTiersButton = required<HTMLButtonElement>('#btn-deck-tier-table', root);
   const handOddsButton = required<HTMLButtonElement>('#btn-deck-hand-odds', root);
   const saveButton = required<HTMLButtonElement>('#btn-deck-save', root);
   const resetButton = required<HTMLButtonElement>('#btn-deck-reset', root);
@@ -88,10 +95,10 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
   const back = (): void => options.onBack();
   backButton.addEventListener('click', back);
-  // 新增/复制/编辑/重置/保存/验证工具仅开发服开放；正式服只保留浏览与预览
+  // 新增/编辑/重置/保存/验证/档位表仅开发服开放；正式服只保留浏览与预览
   if (IS_DEV_SERVER) {
     addFormationButton.addEventListener('click', addFormation);
-    copyFormationButton.addEventListener('click', copyFormation);
+    specialTiersButton.addEventListener('click', openSpecialTiers);
     handOddsButton.addEventListener('click', openHandOdds);
     saveButton.addEventListener('click', save);
     resetButton.addEventListener('click', reset);
@@ -169,48 +176,58 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     }
     buttonPreviewRoot.replaceChildren();
     const draft = selected();
-    if (!preview || !draft) {
+    if (!preview || !draft || isSpecialTierDraft(draft)) {
+      // 哨兵没有单一站位，3D 预览留空，改看按钮页签的整档展开。
       preview?.render(null);
       return;
     }
     preview.render(previewFormationFromDraft(draft));
   }
 
-  /** 复用兵种搭配按钮的缩略图逻辑，所见即所得。 */
+  /** 复用兵种搭配按钮的缩略图逻辑；哨兵一次画出该档全部着色按钮。 */
   async function refreshButtonPreview(): Promise<void> {
     const generation = ++buttonThumbGeneration;
     buttonPreviewRoot.replaceChildren();
     const draft = selected();
     if (!draft) return;
 
-    const formation = previewFormationFromDraft(draft);
-    if (!formation) return;
-
     const previewCards = getPreviewCardsForFormation(category, draft);
-    const damage = fuseBombDisplayDamage(formation, previewCards);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'formation-option';
-    button.setAttribute(
-      'aria-label',
-      withBombDamageAriaLabel(`${formation.name}：${formatFormationUnits(formation)}`, damage),
-    );
-    const image = document.createElement('img');
-    image.className = 'formation-thumb';
-    image.alt = '';
-    button.appendChild(image);
-    appendFormationTag(button, formation);
-    appendFormationBombDamage(button, formation, previewCards);
-    buttonPreviewRoot.appendChild(button);
+    const formations = isSpecialTierDraft(draft)
+      ? expandFormationDraft(category, draft).map(
+          (formation) => resolveCardFormation(formation, previewCards) ?? formation,
+        )
+      : [previewFormationFromDraft(draft)].filter((item): item is CardFormation => item !== null);
 
-    const url = await getFormationThumbnail(formation);
-    if (generation !== buttonThumbGeneration) return;
-    if (url) {
-      image.src = url;
-      return;
+    const pending: Array<{ button: HTMLButtonElement; formation: CardFormation }> = [];
+    for (const formation of formations) {
+      const damage = fuseBombDisplayDamage(formation, previewCards);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = formationOptionClassName(formation);
+      button.setAttribute(
+        'aria-label',
+        withBombDamageAriaLabel(`${formation.name}：${formatFormationUnits(formation)}`, damage),
+      );
+      const image = document.createElement('img');
+      image.className = 'formation-thumb';
+      image.alt = '';
+      button.appendChild(image);
+      appendFormationTag(button, formation);
+      appendFormationBombDamage(button, formation, previewCards);
+      buttonPreviewRoot.appendChild(button);
+      pending.push({ button, formation });
     }
-    // 无 WebGL 时退回文字，与手牌阵型按钮一致。
-    applyFormationNameFallback(button, formation.name);
+
+    for (const item of pending) {
+      const url = await getFormationThumbnail(item.formation);
+      if (generation !== buttonThumbGeneration) return;
+      if (url) {
+        item.button.querySelector('img.formation-thumb')?.setAttribute('src', url);
+        continue;
+      }
+      // 无 WebGL 时退回文字，与手牌阵型按钮一致。
+      applyFormationNameFallback(item.button, item.formation.name);
+    }
   }
 
   function renderCategories(): void {
@@ -233,24 +250,88 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
   }
 
   function renderSituationList(): void {
-    situationList.replaceChildren(
-      ...situationGroups().map((group) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'deck-situation';
-        button.classList.toggle('is-active', group.key === situationKey);
-        button.textContent = group.label;
-        button.addEventListener('click', () => {
-          situationKey = group.key;
-          formationIndex = group.indices[0] ?? 0;
-          renderSituationList();
-          renderFormationList();
-          if (IS_DEV_SERVER) renderEditor();
-          refreshPreview();
-        });
-        return button;
-      }),
-    );
+    const nodes: HTMLElement[] = situationGroups().map((group) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'deck-situation';
+      button.classList.toggle('is-active', group.key === situationKey);
+      button.textContent = group.label;
+      button.addEventListener('click', () => {
+        situationKey = group.key;
+        formationIndex = group.indices[0] ?? 0;
+        renderSituationList();
+        renderFormationList();
+        if (IS_DEV_SERVER) renderEditor();
+        refreshPreview();
+      });
+      return button;
+    });
+    if (IS_DEV_SERVER) {
+      const tierField = renderSituationTierField();
+      if (tierField) nodes.push(tierField);
+    }
+    situationList.replaceChildren(...nodes);
+  }
+
+  /** 开发服情况栏：给当前情况挂/改/清档位映射，不动混编。 */
+  function renderSituationTierField(): HTMLLabelElement | null {
+    const group = situationGroups().find((item) => item.key === situationKey);
+    if (!group) return null;
+    const sentinel = group.indices
+      .map((index) => drafts[category][index])
+      .find((draft): draft is FormationDraft => Boolean(draft && isSpecialTierDraft(draft)));
+    const row = document.createElement('label');
+    row.className = 'deck-field deck-tier-field';
+    row.textContent = '档位映射';
+    const select = document.createElement('select');
+    const options: Array<{ value: string; label: string }> = [
+      { value: '', label: '无' },
+      ...SPECIAL_TIERS.map((tier) => ({ value: String(tier), label: `${tier}档` })),
+    ];
+    for (const option of options) {
+      const el = document.createElement('option');
+      el.value = option.value;
+      el.textContent = option.label;
+      if (option.value === (sentinel ? String(sentinel.specialTier) : '')) el.selected = true;
+      select.appendChild(el);
+    }
+    select.addEventListener('change', () => {
+      const value = select.value;
+      applySituationSpecialTier(value === '' ? undefined : (Number(value) as SpecialTier));
+    });
+    row.appendChild(select);
+    return row;
+  }
+
+  /** 设档则写入/更新该情况哨兵；清空只删哨兵。 */
+  function applySituationSpecialTier(tier: SpecialTier | undefined): void {
+    const group = situationGroups().find((item) => item.key === situationKey);
+    if (!group) return;
+    const sentinelIndex = group.indices.find((index) => isSpecialTierDraft(drafts[category][index]!));
+    if (tier === undefined) {
+      if (sentinelIndex === undefined) return;
+      drafts[category].splice(sentinelIndex, 1);
+      if (formationIndex === sentinelIndex) {
+        formationIndex = group.indices.find((index) => index !== sentinelIndex) ?? 0;
+      } else if (formationIndex > sentinelIndex) {
+        formationIndex -= 1;
+      }
+    } else if (sentinelIndex !== undefined) {
+      const sentinel = drafts[category][sentinelIndex]!;
+      sentinel.specialTier = tier;
+      sentinel.rows = [];
+      sentinel.name = `${tier}档`;
+    } else {
+      const identity = allocateNewFormationIdentity(category, allFormationIds());
+      drafts[category].push({
+        id: identity.id,
+        name: `${tier}档`,
+        match: copyMatchRule(group.match),
+        rows: [],
+        specialTier: tier,
+      });
+    }
+    renderAll();
   }
 
   function renderFormationList(): void {
@@ -263,7 +344,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
         button.type = 'button';
         button.className = 'deck-formation';
         button.classList.toggle('is-active', index === formationIndex);
-        button.textContent = formation.name || formation.id || `未命名阵型 ${index + 1}`;
+        button.textContent =
+          formatFormationDraftListLabel(formation) || formation.id || `未命名阵型 ${index + 1}`;
         button.addEventListener('click', () => {
           formationIndex = index;
           renderFormationList();
@@ -287,7 +369,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       return;
     }
 
-    const buildingOnly = isBuildingOnlyFormation(draft);
+    const sentinel = isSpecialTierDraft(draft);
+    const buildingOnly = !sentinel && isBuildingOnlyFormation(draft);
     const rule = document.createElement('section');
     rule.className = 'deck-rows';
     rule.innerHTML = `
@@ -308,13 +391,17 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     );
 
     editor.appendChild(renderMatchEditor(draft));
-    editor.appendChild(renderRowsEditor(draft));
-    if (isFuseBombFormation(draft)) {
-      editor.appendChild(renderBombDamageEditor(draft));
+    if (sentinel) {
+      editor.appendChild(renderSpecialTierExplain(draft.specialTier));
+    } else {
+      editor.appendChild(renderRowsEditor(draft));
+      if (isFuseBombFormation(draft)) {
+        editor.appendChild(renderBombDamageEditor(draft));
+      }
     }
 
-    // 单建筑阵型不需要间距；普通阵型才显示
-    if (!buildingOnly) {
+    // 哨兵间距/放大改在档位表编；单建筑阵型不需要间距
+    if (!sentinel && !buildingOnly) {
       editor.append(
         numberInput('横向间距', draft.colSpacing ?? 1.2, 0.1, (value) => {
           draft.colSpacing = value;
@@ -328,12 +415,14 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     }
 
     // 仅影响按钮缩略图取景，与 3D 预览站位无关
-    editor.append(
-      numberInput('阵型放大', draft.thumbScale ?? FORMATION_THUMB_SCALE, 0.05, (value) => {
-        draft.thumbScale = value;
-        if (previewMode === 'button') refreshPreview();
-      }),
-    );
+    if (!sentinel) {
+      editor.append(
+        numberInput('阵型放大', draft.thumbScale ?? FORMATION_THUMB_SCALE, 0.05, (value) => {
+          draft.thumbScale = value;
+          if (previewMode === 'button') refreshPreview();
+        }),
+      );
+    }
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -519,6 +608,19 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
+  /** 哨兵不配 rows，只说明将展开的兵种，避免和手写混编抢编辑器。 */
+  function renderSpecialTierExplain(tier: SpecialTier): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'deck-rows';
+    const title = document.createElement('div');
+    title.className = 'deck-section-title';
+    title.textContent = '档位展开';
+    const hint = document.createElement('p');
+    hint.textContent = `使用 ${tier} 档各兵种独立阵型：${formatSpecialTierLabel(tier)}。数量/间距/放大在档位表按兵种配置，建筑仍为 1 个。`;
+    section.append(title, hint);
+    return section;
+  }
+
   /** 单张站位编辑：增删排/单位，下拉选择兵种。 */
   function renderRowsEditor(draft: FormationDraft): HTMLElement {
     const section = document.createElement('section');
@@ -608,7 +710,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
-  /** 收集全部牌型的阵型 id，新增/复制时按全局唯一分配。 */
+  /** 收集全部牌型的阵型 id，新增时按全局唯一分配。 */
   function allFormationIds(): Set<string> {
     return new Set(
       HAND_CATEGORY_ORDER.flatMap((handCategory) => drafts[handCategory].map((entry) => entry.id)),
@@ -629,24 +731,6 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       thumbScale: FORMATION_THUMB_SCALE,
     });
     formationIndex = drafts[category].length - 1;
-    renderAll();
-  }
-
-  /** 深拷贝当前阵型并插入到其后，用于快速改 match 或微调站位。 */
-  function copyFormation(): void {
-    const source = selected();
-    if (!source) return;
-    const existingIds = allFormationIds();
-    const copy = cloneFormationDraft(source);
-    const identity = allocateCopiedFormationIdentity(
-      source,
-      existingIds,
-      drafts[category].map((entry) => entry.name),
-    );
-    copy.id = identity.id;
-    copy.name = identity.name;
-    drafts[category].splice(formationIndex + 1, 0, copy);
-    formationIndex += 1;
     renderAll();
   }
 
@@ -673,7 +757,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       return;
     }
     const seq = ++saveSeq;
-    void persist(drafts).then((result) => {
+    void persistFormations(drafts).then((result) => {
       if (seq !== saveSeq) return;
       if (result.ok) {
         captureCardFormationsAsDefault();
@@ -704,6 +788,11 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     options.onOpenHandOdds?.();
   }
 
+  /** 打开独立档位表页；当前阵型草稿先留在本页，返回后按运行时刷新标签。 */
+  function openSpecialTiers(): void {
+    options.onOpenSpecialTiers?.();
+  }
+
   /** 改 match 后情况组可能变化，只刷新导航与预览，避免拆掉正在编辑的表单。 */
   function refreshNavAfterMatchChange(): void {
     ensureSelection();
@@ -730,7 +819,8 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       root.setAttribute('aria-hidden', 'false');
       preview ??= createFormationPreview(previewRoot);
       preview.resize();
-      refreshPreview();
+      // 从档位表页返回后重绘，哨兵标签跟当前运行时名单走。
+      renderAll();
     },
     hide() {
       root.classList.add('is-hidden');
@@ -741,6 +831,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
       backButton.removeEventListener('click', back);
       if (IS_DEV_SERVER) {
         handOddsButton.removeEventListener('click', openHandOdds);
+        specialTiersButton.removeEventListener('click', openSpecialTiers);
       }
       preview?.dispose();
       preview = null;
@@ -844,21 +935,30 @@ function setStatus(rootText: string, isError: boolean): void {
 }
 
 /** 开发服务器负责源码写盘，静态构建中该请求会失败并由调用方明确提示。 */
-async function persist(drafts: CardFormationDrafts): Promise<{ ok: true } | { ok: false; error: string }> {
+async function persistJson(url: string, body: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const response = await fetch('/__pb/card-formations', {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(drafts),
+      body: JSON.stringify(body),
     });
     if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, error: payload?.error ?? `HTTP ${response.status}` };
     }
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** 卡组页只写阵型；档位表由独立页写 specialTiers.json。 */
+async function persistFormations(
+  formations: CardFormationDrafts,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await persistJson('/__pb/card-formations', formations);
+  if (!result.ok) return { ok: false, error: `cardFormations.json：${result.error}` };
+  return { ok: true };
 }
 
 /** 新增阵型时拷贝当前情况的 match，避免和分组对象共享引用。 */
@@ -911,4 +1011,10 @@ function required<T extends Element>(selector: string, root: ParentNode = docume
   const element = root.querySelector<T>(selector);
   if (!element) throw new Error(`卡组配置页缺少元素：${selector}`);
   return element;
+}
+
+/** 独占特殊兵种按档位着色；混编保持默认绿色。 */
+function formationOptionClassName(formation: CardFormation): string {
+  const tier = getFormationSpecialTier(formation);
+  return tier ? `formation-option is-tier-${tier}` : 'formation-option';
 }
