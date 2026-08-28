@@ -58,34 +58,33 @@ describe('单机扑克牌堆', () => {
     expect(deck.draw()).toBeUndefined();
   });
 
-  it('出牌后插回牌顶 5 张之后，且随后 5 张都不是它', () => {
+  it('出牌后进入冷却，随后 5 张都不是它', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const [card] = deck.drawMany(1);
-    const pileBeforePlay = deck.availableCount;
 
     expect(card).toBeDefined();
-    expect(deck.getAvailableDepth(card!.id)).toBeUndefined();
+    expect(deck.getReturnCooldown(card!.id)).toBeUndefined();
 
     expect(deck.play([card!.id, card!.id])).toEqual([card]);
     expect(deck.hand).toHaveLength(0);
     expect(deck.availableCount).toBe(54);
-    expect(deck.getAvailableDepth(card!.id)).toBeGreaterThanOrEqual(
-      Math.min(RETURN_MIN_DEPTH, pileBeforePlay),
-    );
+    expect(deck.getReturnCooldown(card!.id)).toBe(RETURN_MIN_DEPTH);
+    expect(deck.getWaitDraws(card!.id)).toBe(0);
 
     const nextFive = deck.drawMany(RETURN_MIN_DEPTH);
     expect(nextFive).toHaveLength(RETURN_MIN_DEPTH);
     expect(nextFive.map((drawn) => drawn.id)).not.toContain(card!.id);
+    expect(deck.getReturnCooldown(card!.id)).toBe(0);
   });
 
-  it('堆里只剩 3 张时打出只能插到牌底，第 4 张才是它', () => {
+  it('堆里只剩 3 张时打出后先抽完其余牌，第 4 张才是它', () => {
     const allCards = createPokerCards().slice(0, 4);
     const deck = new PokerDeck(allCards, new Rng(1));
     const [card] = deck.drawMany(1);
 
     expect(deck.availableCount).toBe(3);
     deck.play([card!.id]);
-    expect(deck.getAvailableDepth(card!.id)).toBe(3);
+    expect(deck.getReturnCooldown(card!.id)).toBe(RETURN_MIN_DEPTH);
 
     const nextThree = deck.drawMany(3);
     expect(nextThree.map((drawn) => drawn.id)).not.toContain(card!.id);
@@ -99,7 +98,7 @@ describe('单机扑克牌堆', () => {
 
     expect(deck.availableCount).toBe(0);
     deck.play([card!.id]);
-    expect(deck.getAvailableDepth(card!.id)).toBe(0);
+    expect(deck.getReturnCooldown(card!.id)).toBe(RETURN_MIN_DEPTH);
     expect(deck.draw()?.id).toBe(card!.id);
   });
 
@@ -121,16 +120,40 @@ describe('单机扑克牌堆', () => {
     ]);
   });
 
-  it('reset 清空手牌并重新洗牌，回收深度不再保留', () => {
+  it('reset 清空手牌并重新洗牌，冷却与等待一并清零', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     const [card] = deck.drawMany(1);
     deck.play([card!.id]);
-    expect(deck.getAvailableDepth(card!.id)).toBeGreaterThanOrEqual(RETURN_MIN_DEPTH);
+    expect(deck.getReturnCooldown(card!.id)).toBe(RETURN_MIN_DEPTH);
 
     deck.reset();
 
     expect(deck.hand).toHaveLength(0);
     expect(deck.availableCount).toBe(54);
-    expect(deck.getAvailableDepth(card!.id)).toBeDefined();
+    expect(deck.getReturnCooldown(card!.id)).toBe(0);
+    expect(deck.getWaitDraws(card!.id)).toBe(0);
+  });
+
+  it('等待或冷却不同则牌堆指纹分叉', () => {
+    const cards = createPokerCards().slice(0, 2);
+    const left = new PokerDeck(cards, new Rng(1));
+    const right = new PokerDeck(cards, new Rng(1));
+    expect(left.hash()).toBe(right.hash());
+
+    left.setWaitDrawsForTest(cards[0]!.id, 7);
+    expect(left.hash()).not.toBe(right.hash());
+  });
+
+  it('等待更久的牌更容易被抽到', () => {
+    const [older, newer] = createPokerCards();
+    let olderHits = 0;
+    const trials = 40;
+    for (let seed = 1; seed <= trials; seed += 1) {
+      const deck = new PokerDeck([older!, newer!], new Rng(seed));
+      deck.setWaitDrawsForTest(older!.id, 99);
+      deck.setWaitDrawsForTest(newer!.id, 0);
+      if (deck.draw()?.id === older!.id) olderHits += 1;
+    }
+    expect(olderHits).toBeGreaterThan(trials * 0.8);
   });
 });
