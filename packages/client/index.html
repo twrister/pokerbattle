@@ -3958,6 +3958,43 @@
         text-align: left;
       }
 
+      /* 图鉴高级兵种按档位铺色底：2 蓝 / 3 紫 / 4 黄 / 5 红，与卡组按钮一致。 */
+      .codex-unit-card.is-tier-2 {
+        border-color: rgba(99, 168, 214, 0.42);
+        background: linear-gradient(135deg, rgba(49, 78, 95, 0.92), rgba(29, 48, 64, 0.92));
+      }
+
+      .codex-unit-card.is-tier-3 {
+        border-color: rgba(168, 99, 214, 0.42);
+        background: linear-gradient(135deg, rgba(78, 49, 95, 0.92), rgba(48, 29, 64, 0.92));
+      }
+
+      .codex-unit-card.is-tier-4 {
+        border-color: rgba(214, 196, 99, 0.42);
+        background: linear-gradient(135deg, rgba(95, 88, 49, 0.92), rgba(64, 58, 29, 0.92));
+      }
+
+      .codex-unit-card.is-tier-5 {
+        border-color: rgba(214, 99, 99, 0.42);
+        background: linear-gradient(135deg, rgba(95, 49, 49, 0.92), rgba(64, 29, 29, 0.92));
+      }
+
+      .codex-unit-card.is-tier-2.is-active {
+        border-color: rgba(148, 196, 236, 0.85);
+      }
+
+      .codex-unit-card.is-tier-3.is-active {
+        border-color: rgba(196, 148, 236, 0.85);
+      }
+
+      .codex-unit-card.is-tier-4.is-active {
+        border-color: rgba(236, 220, 148, 0.85);
+      }
+
+      .codex-unit-card.is-tier-5.is-active {
+        border-color: rgba(236, 148, 148, 0.85);
+      }
+
       .codex-unit-art,
       .codex-unit-card .codex-portrait {
         display: block;

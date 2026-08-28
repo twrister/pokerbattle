@@ -41,15 +41,36 @@ describe('兵种图鉴页', () => {
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
     ).toEqual(['民兵', '弓手', '卫士', '女王', '国王', '皇家骑士', '法师', '大法师']);
+    expect(
+      [...document.querySelectorAll('.codex-unit-card')].every((card) =>
+        [...card.classList].every((name) => !name.startsWith('is-tier-')),
+      ),
+    ).toBe(true);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
 
     categoryNamed('高级兵种')?.click();
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(10);
     expect(
       Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
-    ).toEqual(['石头人', '小石头人', '投弹车', '连弩车', '冲锋战车', '飞龙', '喷火龙', '箭塔', '双射手箭塔', '三射手箭塔']);
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('投弹车');
-    expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
+    ).toEqual(['连弩车', '冲锋战车', '箭塔', '小石头人', '双射手箭塔', '飞龙', '投弹车', '三射手箭塔', '喷火龙', '石头人']);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-card')).map((card) =>
+        [...card.classList].find((name) => name.startsWith('is-tier-')),
+      ),
+    ).toEqual([
+      'is-tier-2',
+      'is-tier-2',
+      'is-tier-3',
+      'is-tier-3',
+      'is-tier-4',
+      'is-tier-4',
+      'is-tier-4',
+      'is-tier-5',
+      'is-tier-5',
+      'is-tier-5',
+    ]);
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('连弩车');
+    expect(document.querySelector('#codex-detail')?.textContent).toContain('优先攻击空中单位');
 
     categoryNamed('其他')?.click();
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(5);
@@ -63,6 +84,45 @@ describe('兵种图鉴页', () => {
     );
     mage?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('召唤');
+  });
+
+  it('高级兵种按档位由低到高排列并铺色底', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const categoryNamed = (name: string): HTMLButtonElement | undefined =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-category')).find(
+        (button) => button.textContent === name,
+      );
+
+    categoryNamed('高级兵种')?.click();
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-name')).map((node) => node.textContent),
+    ).toEqual(['连弩车', '冲锋战车', '箭塔', '小石头人', '双射手箭塔', '飞龙', '投弹车', '三射手箭塔', '喷火龙', '石头人']);
+    expect(
+      Array.from(document.querySelectorAll('.codex-unit-card')).map((card) =>
+        [...card.classList].find((name) => name.startsWith('is-tier-')),
+      ),
+    ).toEqual([
+      'is-tier-2',
+      'is-tier-2',
+      'is-tier-3',
+      'is-tier-3',
+      'is-tier-4',
+      'is-tier-4',
+      'is-tier-4',
+      'is-tier-5',
+      'is-tier-5',
+      'is-tier-5',
+    ]);
+
+    categoryNamed('单兵种')?.click();
+    expect(
+      [...document.querySelectorAll('.codex-unit-card')].every((card) =>
+        [...card.classList].every((name) => !name.startsWith('is-tier-')),
+      ),
+    ).toBe(true);
+    page.dispose();
   });
 
   it('三种箭塔图鉴写明优先攻击空中单位', () => {

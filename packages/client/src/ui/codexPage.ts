@@ -3,6 +3,7 @@ import {
   TOWER_HP_DECAY_PER_SECOND,
   UNIT_CONFIGS,
   getUnitConfig,
+  getUnitSpecialTier,
   isArcherTowerId,
   listDeathSpawnEntries,
   listHandExamplesForUnit,
@@ -110,7 +111,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       ...visibleUnits.map((unit) => {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'codex-unit-card';
+        button.className = codexUnitCardClassName(unit.typeId);
         const selected = unit.typeId === selectedTypeId;
         button.classList.toggle('is-active', selected);
         button.setAttribute('aria-pressed', String(selected));
@@ -212,6 +213,12 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       sceneConfigButton?.removeEventListener('click', openSceneConfig);
     },
   };
+}
+
+/** 2～5 档兵种铺档位色底，与卡组/局内按钮一致。 */
+function codexUnitCardClassName(typeId: UnitTypeId): string {
+  const tier = getUnitSpecialTier(typeId);
+  return tier ? `codex-unit-card is-tier-${tier}` : 'codex-unit-card';
 }
 
 /** 左侧列表里体量偏大的兵种单独缩小，详情立绘保持原尺寸。 */
