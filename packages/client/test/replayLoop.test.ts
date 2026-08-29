@@ -51,6 +51,16 @@ describe('ReplayLoop', () => {
     expect(loop.isPaused).toBe(true);
   });
 
+  it('0.5 倍速两帧墙钟才推进一步', () => {
+    const { record } = recordForTicks(10);
+    const loop = new ReplayLoop(record);
+    loop.setSpeed(0.5);
+    loop.advance(STEP_MS);
+    expect(loop.tick).toBe(0);
+    loop.advance(STEP_MS);
+    expect(loop.tick).toBe(1);
+  });
+
   it('重播回到 tick 0 并能再次播完', () => {
     const { record } = recordForTicks(6);
     const loop = new ReplayLoop(record);

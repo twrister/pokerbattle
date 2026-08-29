@@ -1,5 +1,11 @@
 export { createArenaSignature } from './arenaSignature.js';
-export { ReplayLoop, type ReplayLoopOptions, type ReplaySpeed } from './replayLoop.js';
+export {
+  ReplayLoop,
+  isReplaySpeed,
+  REPLAY_SPEEDS,
+  type ReplayLoopOptions,
+  type ReplaySpeed,
+} from './replayLoop.js';
 export { ReplayRecorder, cloneCommand } from './recorder.js';
 export { createReplayStore, type CreateReplayStoreOptions, type ReplayStore } from './storage.js';
 export {

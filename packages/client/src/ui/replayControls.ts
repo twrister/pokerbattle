@@ -1,5 +1,5 @@
 import { TICK_RATE } from '@pb/sim';
-import type { ReplaySpeed } from '../replay/index.js';
+import { isReplaySpeed, type ReplaySpeed } from '../replay/index.js';
 
 export interface ReplayControlsOptions {
   onTogglePause: () => void;
@@ -29,7 +29,7 @@ export function createReplayControls(options: ReplayControlsOptions): ReplayCont
   const speedHandlers = speedButtons.map((button) => {
     const handler = (): void => {
       const speed = Number(button.dataset.replaySpeed);
-      if (speed === 1 || speed === 2 || speed === 4) options.onSetSpeed(speed);
+      if (isReplaySpeed(speed)) options.onSetSpeed(speed);
     };
     button.addEventListener('click', handler);
     return { button, handler };

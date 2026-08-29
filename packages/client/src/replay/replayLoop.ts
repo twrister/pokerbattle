@@ -11,7 +11,14 @@ const STEP_MS = 1000 / TICK_RATE;
 /** 4x 回放切回前台时一次最多补这么多 tick，避免卡主线程。 */
 const MAX_CATCHUP_STEPS = 40;
 
-export type ReplaySpeed = 1 | 2 | 4;
+/** 战绩回放可选倍速档位。 */
+export const REPLAY_SPEEDS = [0.5, 1, 2, 4] as const;
+export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
+
+/** 过滤控制条 data-replay-speed，避免非法数字写入循环。 */
+export function isReplaySpeed(value: number): value is ReplaySpeed {
+  return (REPLAY_SPEEDS as readonly number[]).includes(value);
+}
 
 export interface ReplayLoopOptions {
   /** 重跑结束时结算与录像不一致（通常是 sim / 场地已变）。 */
