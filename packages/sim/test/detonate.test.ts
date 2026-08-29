@@ -159,6 +159,6 @@ describe('炸弹兵自爆', () => {
     bomber.hp = 0;
     world.step();
 
-    expect(base!.hp).toBe(hpBefore - bomber.stats.damage);
+    expect(base!.hp).toBe(hpBefore - bomber.stats.damage / 2);
   });
 });

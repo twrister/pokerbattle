@@ -1,6 +1,6 @@
-import { type Fx, ONE } from '../math/fixed.js';
+import { type Fx, HALF, ONE, mul } from '../math/fixed.js';
 import { type Vec2, vec } from '../math/vec2.js';
-import { type UnitConfig, type UnitTypeId, getUnitConfig } from '../config/units.js';
+import { type UnitConfig, type UnitTypeId, getUnitConfig, isCastleId } from '../config/units.js';
 import { type Attributes, attributesFromConfig } from '../stats/attributes.js';
 import type { Buff } from '../stats/buff.js';
 
@@ -198,4 +198,12 @@ export function applyCombatDamage(unit: Unit, amount: Fx, aoe = false): void {
   unit.hp -= amount;
   unit.hitFxLeft = HIT_FX_TICKS;
   if (aoe) unit.aoeHitFxLeft = HIT_FX_TICKS;
+}
+
+/**
+ * 炸弹爆炸扣血：对基地减半，避免投放/自爆直接削穿主堡；单位与其它建筑仍吃全额。
+ */
+export function applyBombDamage(unit: Unit, amount: Fx): void {
+  const dealt = isCastleId(unit.typeId) ? mul(amount, HALF) : amount;
+  applyCombatDamage(unit, dealt, true);
 }

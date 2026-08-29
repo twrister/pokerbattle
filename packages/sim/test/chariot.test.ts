@@ -91,6 +91,24 @@ describe('战车', () => {
     expect(world.aoePulseEffects).toHaveLength(0);
   });
 
+  it('战车炸弹对基地伤害减半', () => {
+    const world = new World(1);
+    const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(5), fromFloat(10));
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(10), fromFloat(10))!;
+    const hpBefore = base.hp;
+    const projectile = world.spawnProjectile(
+      chariot,
+      base,
+      chariot.stats.damage,
+      fromFloat(9),
+      fromFloat(1.5),
+    );
+
+    flyUntilImpact(world, projectile.id);
+
+    expect(toFloat(hpBefore - base.hp)).toBeCloseTo(toFloat(chariot.stats.damage) / 2, 3);
+  });
+
   it('飞行中高度峰值高于起终点，形成抛物线', () => {
     const world = new World(1);
     const chariot = world.spawnUnit(Faction.Blue, 'ranged_chariot', fromFloat(5), fromFloat(10));

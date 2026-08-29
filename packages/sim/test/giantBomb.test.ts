@@ -56,6 +56,23 @@ describe('巨型炸弹', () => {
     expect(world.explosionEffects[0]?.kind).toBe('giant_bomb');
   });
 
+  it('对敌方基地只造成一半伤害，单位与其它建筑仍是全额', () => {
+    const world = new World(1);
+    world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+    const enemyBase = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(15))!;
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(10), fromFloat(15));
+    const tower = world.spawnBuilding(Faction.Red, 'building_tower', fromFloat(12), fromFloat(15))!;
+    const hp = new Map(world.units.map((unit) => [unit.id, unit.hp]));
+
+    const projectile = world.spawnGiantBomb(Faction.Blue, fromFloat(9), fromFloat(15));
+    const full = toFloat(projectile.damage);
+    for (let i = 0; i < 100 && !projectile.dead; i += 1) updateProjectiles(world);
+
+    expect(toFloat(hp.get(enemy.id)! - enemy.hp)).toBeCloseTo(full, 3);
+    expect(toFloat(hp.get(tower.id)! - tower.hp)).toBeCloseTo(full, 3);
+    expect(toFloat(hp.get(enemyBase.id)! - enemyBase.hp)).toBeCloseTo(full / 2, 3);
+  });
+
   it('Spawn 指令对巨型炸弹走主堡抛物线投放，不生成地面单位', () => {
     const world = new World(1);
     world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));

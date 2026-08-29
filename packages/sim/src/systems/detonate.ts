@@ -1,7 +1,7 @@
 import { type Fx, fromFloat, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
 import { isBuildingConfig } from '../config/units.js';
-import { type Unit, UnitState, applyCombatDamage, isAlive } from '../entity/unit.js';
+import { type Unit, UnitState, applyBombDamage, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
 
@@ -43,6 +43,7 @@ export function updateDetonate(world: World): void {
 
 /**
  * 结算爆炸：范围扣血、生成序列帧特效，并把自身标为已引爆待移除。
+ * 对基地走炸弹减半，避免自爆直接削穿主堡。
  */
 function resolveDetonate(world: World, unit: Unit): void {
   const detonate = unit.config.detonate;
@@ -67,7 +68,7 @@ function resolveDetonate(world: World, unit: Unit): void {
     // 爆炸只伤地面；飞行单位需被其它攻击锁定才吃伤害
     if (other.config.movementLayer === 'air') continue;
     if (!isInsideDetonateRadius(unit, other, radiusSq)) continue;
-    applyCombatDamage(other, damage, true);
+    applyBombDamage(other, damage);
   }
 
   world.spawnExplosionEffect(unit.pos.x, unit.pos.y, radius);

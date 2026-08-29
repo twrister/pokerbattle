@@ -3,7 +3,7 @@ import { distSq, lengthOf } from '../math/vec2.js';
 import { TICK_RATE_FX } from '../config/tuning.js';
 import { isBuildingConfig } from '../config/units.js';
 import type { ExplosionEffect } from '../entity/effect.js';
-import { applyCombatDamage, isAlive, type Faction, type Unit } from '../entity/unit.js';
+import { applyBombDamage, applyCombatDamage, isAlive, type Faction, type Unit } from '../entity/unit.js';
 import type { Projectile } from '../entity/projectile.js';
 import type { World } from '../world.js';
 import { distSqToBuildingFootprint } from './combatRange.js';
@@ -86,6 +86,7 @@ export function updateProjectiles(world: World): void {
           projectile.faction,
           projectile.impactFx,
           hitBuilding,
+          projectile.visual === 'bomb',
         );
         spawnImpactGroundBurn(world, projectile);
       } else {
@@ -131,7 +132,7 @@ function resolveSingleImpact(
   }
 }
 
-/** 引信炸弹落地当帧对半径内敌军单位和建筑造成伤害（不伤己方）。 */
+/** 引信炸弹落地当帧对半径内敌军单位和建筑造成伤害（不伤己方；对基地减半）。 */
 function resolveFuseBomb(world: World, projectile: Projectile): void {
   const radiusSq = mul(projectile.aoeRadius, projectile.aoeRadius);
   for (const unit of world.units) {
@@ -140,7 +141,7 @@ function resolveFuseBomb(world: World, projectile: Projectile): void {
       ? distSqToBuildingFootprint(projectile.impactPos.x, projectile.impactPos.y, unit) <= radiusSq
       : distSq(projectile.impactPos.x, projectile.impactPos.y, unit.pos.x, unit.pos.y) <= radiusSq;
     if (!inside) continue;
-    applyCombatDamage(unit, projectile.damage, true);
+    applyBombDamage(unit, projectile.damage);
   }
   // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列，不走弹道命中特效开关
   const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
@@ -172,6 +173,7 @@ function updateProjectileHeight(projectile: Projectile, remaining: Fx): void {
 /**
  * 在弹着点按单位中心结算敌方范围伤害，并按弹道配置播放地面反馈。
  * 不额外处理主目标，因此主目标只会作为范围内单位受伤一次。
+ * isBomb 走炸弹结算，对基地伤害减半。
  */
 function resolveProjectileAoe(
   world: World,
@@ -182,6 +184,7 @@ function resolveProjectileAoe(
   faction: Faction,
   impactFx: Projectile['impactFx'],
   hitBuilding: boolean,
+  isBomb: boolean,
 ): void {
   world.unitGrid.query(x, y, radius, neighbors);
 
@@ -192,7 +195,8 @@ function resolveProjectileAoe(
     // 落地爆炸只伤地面单位，空中单位需被直接锁定才吃单体弹
     if (unit.config.movementLayer === 'air') continue;
     if (distSq(x, y, unit.pos.x, unit.pos.y) > radiusSq) continue;
-    applyCombatDamage(unit, damage, true);
+    if (isBomb) applyBombDamage(unit, damage);
+    else applyCombatDamage(unit, damage, true);
   }
   // 仅 pulse 播地面环；爆炸类在关闭开关或无映射时不回退成脉冲
   if (impactFx === 'pulse') {
