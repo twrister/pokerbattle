@@ -1071,7 +1071,7 @@ function toIntervalMs(seconds: number): number {
   return Math.max(milliseconds, MIN_DRAW_INTERVAL_MS);
 }
 
-/** 剩余时间从接近 0 回升，视为刚走过一次发牌点（切阶段中途重设倒计时不会命中）。 */
+/** 剩余时间从接近 0 回升，视为刚走过一次发牌点。 */
 function didDrawCycleWrap(prevMs: number | undefined, nextMs: number, intervalMs: number): boolean {
   if (prevMs === undefined) return false;
   return prevMs <= intervalMs * DRAW_WRAP_NEAR_ZERO_RATIO && nextMs > prevMs;

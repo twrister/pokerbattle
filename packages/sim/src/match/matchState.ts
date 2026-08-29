@@ -523,16 +523,14 @@ export class MatchState {
     }
   }
 
-  /** 切阶段：同步手牌上限与单位加速；发牌阶段才重开读条。 */
+  /** 切阶段：同步手牌上限与单位加速；发牌读条继承剩余时间，仅当超过新间隔时夹住。 */
   private enterPhase(phase: 'double_speed' | 'final' | 'settlement'): void {
     this.phase = phase;
     this.syncHandLimits();
     this.syncUnitTimeScale();
     if (phase === 'settlement') return;
-    for (const slot of allSlots(this.mode)) {
-      if (this.pendingDraw[slot] || this.isSlotEliminated(slot)) continue;
-      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
-    }
+    // 必须在 phase 写完后再夹：updateMatchState 里更早那次 clamp 用的还是旧间隔。
+    this.clampDrawCountdown();
   }
 
   /** 记录不可逆结算结果并冻结后续逻辑帧。 */

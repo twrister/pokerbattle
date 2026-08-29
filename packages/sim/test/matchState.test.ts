@@ -54,7 +54,7 @@ describe('MatchState 对局规则', () => {
     expect(MATCH_END_TICKS).toBe(TICK_RATE * 540);
   });
 
-  it('按阶段重置下一张牌倒计时，且不在倍速结束时结算', () => {
+  it('切阶段继承下一张牌倒计时，且不在倍速结束时结算', () => {
     const match = createMatch();
     shortenPhases(match);
     expect(match.getDrawIntervalTicks()).toBe(NORMAL_DRAW_INTERVAL_TICKS);
@@ -64,6 +64,7 @@ describe('MatchState 对局规则', () => {
     stepTo(match, 30);
     expect(match.phase).toBe('double_speed');
     expect(match.result).toBeNull();
+    // 常规剩余 100-30=70，夹到倍速间隔 60。
     expect(match.getTicksUntilDraw()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
     expect(match.getDrawIntervalTicks()).toBe(DOUBLE_SPEED_DRAW_INTERVAL_TICKS);
     expect(match.getMaxHandSize()).toBe(HAND_LIMIT_DOUBLE_SPEED);
@@ -71,7 +72,8 @@ describe('MatchState 对局规则', () => {
     stepTo(match, 60);
     expect(match.phase).toBe('final');
     expect(match.result).toBeNull();
-    expect(match.getTicksUntilDraw()).toBe(FINAL_DRAW_INTERVAL_TICKS);
+    // 倍速段再走 30 tick，剩余 30，小于决胜间隔 40，原样继承。
+    expect(match.getTicksUntilDraw()).toBe(30);
     expect(match.getDrawIntervalTicks()).toBe(FINAL_DRAW_INTERVAL_TICKS);
     expect(match.getMaxHandSize()).toBe(HAND_LIMIT_FINAL);
   });
@@ -91,10 +93,12 @@ describe('MatchState 对局规则', () => {
 
     stepTo(match, 30);
     expect(match.getDrawIntervalTicks()).toBe(10);
+    // tick 20 已抽过，剩余 10，等于新间隔故看起来像满格，实际是继承后夹住。
     expect(match.getTicksUntilDraw()).toBe(10);
 
     stepTo(match, 60);
     expect(match.getDrawIntervalTicks()).toBe(8);
+    // 切决胜时剩余恰好到点，同帧补抽后按新间隔 8 重开。
     expect(match.getTicksUntilDraw()).toBe(8);
   });
 
