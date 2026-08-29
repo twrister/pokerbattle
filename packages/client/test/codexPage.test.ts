@@ -22,8 +22,10 @@ describe('兵种图鉴页', () => {
     expect(document.querySelectorAll('.codex-unit-card')).toHaveLength(23);
     expect(document.querySelector('#codex-detail')?.textContent).toContain('民兵');
     expect(document.querySelectorAll('.codex-stat-bar')).toHaveLength(5);
-    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: 6.25%/);
-    expect(document.querySelector('#codex-detail')?.textContent).not.toContain('400');
+    expect(document.querySelector('.codex-stat-bar span')?.getAttribute('style')).toMatch(/^width: /);
+    expect(
+      Array.from(document.querySelectorAll('.codex-stat-value')).map((node) => node.textContent),
+    ).toEqual(['450', '70', '1', '0.5', '1.8']);
 
     /** 页签每次渲染会重建，点击前需重新查询。 */
     const categoryNamed = (name: string): HTMLButtonElement | undefined =>
@@ -174,6 +176,25 @@ describe('兵种图鉴页', () => {
     );
     chariot?.click();
     expect(document.querySelector('#codex-detail')?.textContent).toContain('无法攻击空中单位');
+    page.dispose();
+  });
+
+  it('详情在进度条右侧展示属性绝对值', () => {
+    const page = createCodexPage({ onBack: vi.fn() });
+    page.show();
+
+    const firstRow = document.querySelector('.codex-stat');
+    expect(firstRow?.querySelector('dt')?.textContent).toBe('生命');
+    expect(firstRow?.querySelector('.codex-stat-value')?.textContent).toBe('450');
+    expect(firstRow?.querySelector('.codex-stat-bar')?.getAttribute('aria-valuetext')).toBe('450');
+
+    const chariot = Array.from(document.querySelectorAll<HTMLButtonElement>('.codex-unit-card')).find(
+      (button) => button.querySelector('.codex-unit-name')?.textContent === '投弹车',
+    );
+    chariot?.click();
+    expect(
+      Array.from(document.querySelectorAll('.codex-stat-value')).map((node) => node.textContent),
+    ).toEqual(['700', '120', '0.57', '11', '0.8']);
     page.dispose();
   });
 

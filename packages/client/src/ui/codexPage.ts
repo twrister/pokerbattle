@@ -166,9 +166,15 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
     const stats = document.createElement('dl');
     stats.className = 'codex-stats';
     for (const [key, value] of getStats(config)) {
+      const row = document.createElement('div');
+      row.className = 'codex-stat';
       const term = document.createElement('dt');
       term.textContent = STAT_NAMES[key];
       const definition = document.createElement('dd');
+      const valueText = formatStatValue(value);
+      const valueEl = document.createElement('span');
+      valueEl.className = 'codex-stat-value';
+      valueEl.textContent = valueText;
       const bar = document.createElement('div');
       bar.className = 'codex-stat-bar';
       bar.setAttribute('role', 'progressbar');
@@ -176,11 +182,13 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       bar.setAttribute('aria-valuemin', '0');
       bar.setAttribute('aria-valuemax', String(maxima[key]));
       bar.setAttribute('aria-valuenow', String(value));
+      bar.setAttribute('aria-valuetext', valueText);
       const fill = document.createElement('span');
       fill.style.width = `${(value / maxima[key]) * 100}%`;
       bar.appendChild(fill);
-      definition.appendChild(bar);
-      stats.append(term, definition);
+      definition.append(bar, valueEl);
+      row.append(term, definition);
+      stats.appendChild(row);
     }
 
     const skill = getSkill(config);
@@ -326,7 +334,7 @@ function getSummary(config: UnitConfig): string {
   return '地面作战单位，适合承担前线交战任务。';
 }
 
-/** 读取用于比较的五项属性；数值仅用于计算进度，不渲染到页面。 */
+/** 读取用于比较的五项属性，同时驱动进度条与右侧绝对值。 */
 function getStats(config: UnitConfig): Array<[StatKey, number]> {
   return [
     ['hp', toFloat(config.maxHp)],
@@ -335,6 +343,14 @@ function getStats(config: UnitConfig): Array<[StatKey, number]> {
     ['range', toFloat(config.range)],
     ['moveSpeed', toFloat(config.moveSpeed)],
   ];
+}
+
+/** 图鉴数值：整数不带小数，其余最多两位并去掉末尾 0。 */
+function formatStatValue(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  const rounded = Math.round(value);
+  if (Math.abs(value - rounded) < 1e-6) return String(rounded);
+  return String(Number(value.toFixed(2)));
 }
 
 /** 从所有可展示兵种取每项属性最大值，保证进度条横向可比较。 */

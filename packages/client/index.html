@@ -4112,8 +4112,8 @@
       }
 
       .codex-stats {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
+        flex-direction: column;
         gap: max(1px, calc(1 * var(--hu)));
         margin: 0;
         overflow: hidden;
@@ -4122,11 +4122,19 @@
         background: rgba(144, 166, 187, 0.16);
       }
 
+      .codex-stat {
+        display: grid;
+        grid-template-columns: calc(64 * var(--hu)) minmax(0, 1fr);
+        align-items: center;
+        gap: calc(10 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        background: rgba(16, 24, 34, 0.86);
+      }
+
       .codex-stats dt,
       .codex-stats dd {
         margin: 0;
-        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
-        background: rgba(16, 24, 34, 0.86);
+        padding: 0;
       }
 
       .codex-stats dt {
@@ -4135,7 +4143,20 @@
       }
 
       .codex-stats dd {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: calc(8 * var(--hu));
+      }
+
+      .codex-stat-value {
+        min-width: calc(36 * var(--hu));
+        color: #e8f1f8;
+        font-size: calc(13 * var(--hu));
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
         text-align: right;
+        line-height: 1;
       }
 
       .codex-stat-bar {
