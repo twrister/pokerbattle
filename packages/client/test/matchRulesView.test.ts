@@ -15,10 +15,10 @@ afterEach(() => {
 describe('对局节奏控件视图', () => {
   it('默认值与 sim 规则一致', () => {
     expect(defaultMatchRulesView()).toMatchObject({
-      initialHandSize: 4,
+      initialHandSize: 7,
       normalPhaseSeconds: 120,
-      doubleSpeedPhaseSeconds: 180,
-      finalPhaseSeconds: 180,
+      doubleSpeedPhaseSeconds: 120,
+      finalPhaseSeconds: 120,
       settlementPhaseSeconds: 60,
       finalUnitTimeScale: 1.5,
       normalDrawIntervalSeconds: 5,

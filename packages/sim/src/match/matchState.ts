@@ -463,7 +463,7 @@ export class MatchState {
   }
 
   /**
-   * 覆盖起手张数。开局尚未推进时重发，避免调试改数后仍拿着旧的 4 张。
+   * 覆盖起手张数。开局尚未推进时重发，避免调试改数后仍拿着旧的默认张数。
    */
   setInitialHandSize(size: number): void {
     this.initialHandSize = clampHandSize(size);

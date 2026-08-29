@@ -1,5 +1,5 @@
 {
-  "initialHandSize": 4,
+  "initialHandSize": 7,
   "normalPhaseSeconds": 120,
   "doubleSpeedPhaseSeconds": 120,
   "finalPhaseSeconds": 120,

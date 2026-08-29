@@ -37,12 +37,12 @@ describe('单机手牌交互', () => {
     vi.restoreAllMocks();
   });
 
-  it('开局发四张牌，并按调整后的间隔补牌', () => {
+  it('开局发七张牌，并按调整后的间隔补牌', () => {
     const panel = createHandPanel();
 
-    expect(panel.deck.hand).toHaveLength(4);
-    expect(document.querySelectorAll('.playing-card')).toHaveLength(4);
-    expect(document.querySelector('#hand-count')?.textContent).toBe('4 / 11');
+    expect(panel.deck.hand).toHaveLength(7);
+    expect(document.querySelectorAll('.playing-card')).toHaveLength(7);
+    expect(document.querySelector('#hand-count')?.textContent).toBe('7 / 11');
     expect(document.querySelector('#hand-count')?.classList.contains('is-full')).toBe(false);
     expect(document.querySelector<HTMLElement>('#hand-draw-pile')?.style.getPropertyValue('--draw-progress')).toBe(
       '100%',
@@ -50,9 +50,9 @@ describe('单机手牌交互', () => {
 
     panel.setDrawInterval(0.25);
     panel.update(249);
-    expect(panel.deck.hand).toHaveLength(4);
+    expect(panel.deck.hand).toHaveLength(7);
     panel.update(1);
-    expect(panel.deck.hand).toHaveLength(5);
+    expect(panel.deck.hand).toHaveLength(8);
 
     panel.dispose();
   });
@@ -76,7 +76,7 @@ describe('单机手牌交互', () => {
     const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
     const dealtCards = [...document.querySelectorAll<HTMLElement>('.playing-card.is-dealing')];
 
-    expect(dealtCards).toHaveLength(4);
+    expect(dealtCards).toHaveLength(7);
     for (const card of dealtCards) {
       expect(card.style.getPropertyValue('--deal-from-x')).toBe('0px');
       expect(card.style.getPropertyValue('--deal-from-y')).toBe('0px');
@@ -153,7 +153,7 @@ describe('单机手牌交互', () => {
     const nextPanel = createHandPanel();
     expect(pile.classList.contains('is-full')).toBe(false);
     expect(handCount.classList.contains('is-full')).toBe(false);
-    expect(handCount.textContent).toBe('4 / 11');
+    expect(handCount.textContent).toBe('7 / 11');
     nextPanel.dispose();
   });
 
@@ -186,8 +186,8 @@ describe('单机手牌交互', () => {
     expect(onPlay).toHaveBeenCalledOnce();
     expect(onPlay.mock.calls[0]?.[0]).toHaveLength(1);
     expect(onPlay.mock.calls[0]?.[1]?.id).toBeTruthy();
-    expect(panel.deck.hand).toHaveLength(3);
-    expect(panel.deck.availableCount).toBe(51);
+    expect(panel.deck.hand).toHaveLength(6);
+    expect(panel.deck.availableCount).toBe(48);
 
     panel.dispose();
     expect(document.querySelector('#solo-hand')?.classList.contains('is-active')).toBe(false);
@@ -857,7 +857,7 @@ describe('单机手牌交互', () => {
   it('补牌后留存牌会从旧坐标过渡到新坐标', () => {
     const panel = createHandPanel();
     const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
-    expect(cards).toHaveLength(4);
+    expect(cards).toHaveLength(7);
     // jsdom 默认矩形全是 0，需伪造屏幕坐标才能触发 FLIP。
     for (const [index, card] of cards.entries()) {
       card.getBoundingClientRect = () =>
@@ -878,7 +878,7 @@ describe('单机手牌交互', () => {
     panel.update(250);
 
     const nextCards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
-    expect(nextCards).toHaveLength(5);
+    expect(nextCards).toHaveLength(8);
     const reflowing = nextCards.filter((card) => card.classList.contains('is-reflowing'));
     expect(reflowing.length).toBeGreaterThan(0);
     for (const card of reflowing) {
@@ -891,7 +891,7 @@ describe('单机手牌交互', () => {
   it('滑选前进扩大临时选中区间，往回滑会取消越过的牌', () => {
     const panel = createHandPanel();
     const cards = [...document.querySelectorAll<HTMLElement>('.playing-card')];
-    expect(cards).toHaveLength(4);
+    expect(cards).toHaveLength(7);
     const [first, second, third] = cards as [HTMLElement, HTMLElement, HTMLElement];
     const hit = vi.fn(() => first);
     Object.defineProperty(document, 'elementFromPoint', {

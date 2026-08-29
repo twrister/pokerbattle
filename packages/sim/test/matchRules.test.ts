@@ -18,10 +18,10 @@ describe('对局节奏配置', () => {
 
   it('文件默认与原先硬编码节奏一致', () => {
     expect(dumpDefaultMatchRulesDraft()).toMatchObject({
-      initialHandSize: 4,
+      initialHandSize: 7,
       normalPhaseSeconds: 120,
-      doubleSpeedPhaseSeconds: 180,
-      finalPhaseSeconds: 180,
+      doubleSpeedPhaseSeconds: 120,
+      finalPhaseSeconds: 120,
       settlementPhaseSeconds: 60,
       finalUnitTimeScale: 1.5,
       normalDrawIntervalSeconds: 5,

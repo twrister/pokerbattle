@@ -1,6 +1,7 @@
 import { Rng } from '../math/rng.js';
 
-export const INITIAL_HAND_SIZE = 4;
+/** 开局默认起手张数；运行控制可改，合法区间 1～MAX_HAND_SIZE。 */
+export const INITIAL_HAND_SIZE = 7;
 /** 局内绝对手牌上限，等于决胜阶段默认上限。 */
 export const MAX_HAND_SIZE = 11;
 /** 常规阶段默认手牌上限。 */
