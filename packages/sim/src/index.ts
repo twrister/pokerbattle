@@ -198,7 +198,13 @@ export {
   type CardSuit,
   type PlayingCard,
 } from './cards/deck.js';
-export { detectHandCategories, findStrongestHand, listPresentCategories } from './cards/handCategory.js';
+export {
+  detectHandCategories,
+  findStrongestHand,
+  listPresentCategories,
+  listRecommendHands,
+  type RecommendHand,
+} from './cards/handCategory.js';
 export {
   FORMATION_MATCH_RANKS,
   FUSE_BOMB_DAMAGE_RANKS,

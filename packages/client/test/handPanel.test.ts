@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Rng } from '@pb/sim';
 import { createPokerCards, PokerDeck, type PlayingCard } from '../src/cards/deck.js';
+import { listRecommendHands } from '../src/cards/handCategory.js';
 import { createHandPanel, type FormationSpawnRequest } from '../src/ui/handPanel.js';
 
 // jsdom 没有 WebGL，缩略图渲染整体打桩，测试只关心按钮里挂的是图片而不是文字。
@@ -925,7 +926,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('最大牌型按钮清空旧选中并只选中最强合法组合', () => {
+  it('点推荐清空旧选中并选中当前第一档', () => {
     const deck = deckWithCards([
       '6-spades',
       '7-spades',
@@ -963,7 +964,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('选中推荐牌型后按钮变为取消，再点则清空选中', () => {
+  it('连点推荐切换牌型，按钮始终为推荐，末项后再点回到第一档', () => {
     const deck = deckWithCards([
       '6-spades',
       '7-spades',
@@ -975,26 +976,27 @@ describe('单机手牌交互', () => {
     ]);
     const panel = createHandPanel({ deck });
     const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
+    const expected = listRecommendHands(deck.hand).map((entry) => sortedCardIds(entry.cards));
+    expect(expected.length).toBeGreaterThan(1);
 
     expect(button.textContent).toBe('推荐');
     expect(button.classList.contains('is-cancel')).toBe(false);
 
-    button.click();
-    expect(button.textContent).toBe('取消');
-    expect(button.classList.contains('is-cancel')).toBe(true);
-    expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(5);
+    for (const ids of expected) {
+      button.click();
+      expect(button.textContent).toBe('推荐');
+      expect(button.classList.contains('is-cancel')).toBe(false);
+      expect(selectedCardIds()).toEqual(ids);
+    }
 
     button.click();
+    expect(selectedCardIds()).toEqual(expected[0]);
     expect(button.textContent).toBe('推荐');
-    expect(button.classList.contains('is-cancel')).toBe(false);
-    expect(button.getAttribute('aria-pressed')).toBe('false');
-    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(0);
 
     panel.dispose();
   });
 
-  it('手动选中与推荐相同的牌时按钮也变为取消', () => {
+  it('手动选中第一档后再点推荐切到下一档', () => {
     const deck = deckWithCards([
       '6-spades',
       '7-spades',
@@ -1005,8 +1007,9 @@ describe('单机手牌交互', () => {
       '3-clubs',
     ]);
     const panel = createHandPanel({ deck });
-    const recommendedIds = ['6-spades', '7-spades', '8-spades', '9-spades', '10-spades'];
-    for (const [index, cardId] of recommendedIds.entries()) {
+    const options = listRecommendHands(deck.hand);
+    const firstIds = options[0]!.cards.map((card) => card.id);
+    for (const [index, cardId] of firstIds.entries()) {
       const card = document.querySelector<HTMLElement>(`.playing-card[data-card-id="${cardId}"]`)!;
       Object.defineProperty(document, 'elementFromPoint', {
         configurable: true,
@@ -1017,12 +1020,67 @@ describe('单机手牌交互', () => {
     }
 
     const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
-    expect(button.textContent).toBe('取消');
-    expect(button.classList.contains('is-cancel')).toBe(true);
+    expect(button.textContent).toBe('推荐');
+    expect(button.classList.contains('is-cancel')).toBe(false);
 
     button.click();
-    expect(document.querySelectorAll('.playing-card.is-selected')).toHaveLength(0);
+    expect(selectedCardIds()).toEqual(sortedCardIds(options[1]!.cards));
     expect(button.textContent).toBe('推荐');
+
+    panel.dispose();
+  });
+
+  it('手牌改变后重置推荐缓存，再点优先最大牌型', () => {
+    const deck = deckWithCards([
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+      '10-spades',
+      '3-hearts',
+      '3-clubs',
+    ]);
+    const panel = createHandPanel({ deck });
+    const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
+    const before = listRecommendHands(deck.hand);
+    button.click();
+    button.click();
+    expect(selectedCardIds()).toEqual(sortedCardIds(before[1]!.cards));
+
+    deck.play(['3-hearts']);
+    panel.syncFromDeck();
+
+    const after = listRecommendHands(deck.hand);
+    button.click();
+    expect(selectedCardIds()).toEqual(sortedCardIds(after[0]!.cards));
+
+    panel.dispose();
+  });
+
+  it('手牌改变后若已选中最大牌型，再点则顺延', () => {
+    const deck = deckWithCards([
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+      '10-spades',
+      '3-hearts',
+      '3-clubs',
+    ]);
+    const panel = createHandPanel({ deck });
+    const button = document.querySelector<HTMLButtonElement>('#btn-select-best')!;
+    const before = listRecommendHands(deck.hand);
+    button.click();
+    expect(selectedCardIds()).toEqual(sortedCardIds(before[0]!.cards));
+
+    deck.play(['3-clubs']);
+    panel.syncFromDeck();
+
+    const after = listRecommendHands(deck.hand);
+    expect(after.length).toBeGreaterThan(1);
+    expect(sortedCardIds(after[0]!.cards)).toEqual(sortedCardIds(before[0]!.cards));
+    button.click();
+    expect(selectedCardIds()).toEqual(sortedCardIds(after[1]!.cards));
 
     panel.dispose();
   });
@@ -1128,6 +1186,18 @@ function dropOn(
 }
 
 /** 给 jsdom 的 MouseEvent 补 pointerId，覆盖手牌依赖的最小 PointerEvent 契约。 */
+/** 当前高亮手牌 id，排序后便于和推荐列表比对。 */
+function selectedCardIds(): string[] {
+  return [...document.querySelectorAll<HTMLElement>('.playing-card.is-selected')]
+    .map((element) => element.dataset.cardId)
+    .filter((id): id is string => Boolean(id))
+    .sort();
+}
+
+function sortedCardIds(cards: readonly PlayingCard[]): string[] {
+  return cards.map((card) => card.id).sort();
+}
+
 function pointerEvent(type: string, pointerId: number, clientX = 10, clientY = 10): Event {
   const event = new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY });
   Object.defineProperty(event, 'pointerId', { value: pointerId });

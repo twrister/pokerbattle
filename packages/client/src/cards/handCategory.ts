@@ -1,2 +1,3 @@
 /** 兼容旧导入路径：牌型识别已下沉到 @pb/sim。 */
-export { detectHandCategories, findStrongestHand } from '@pb/sim';
+export { detectHandCategories, findStrongestHand, listRecommendHands } from '@pb/sim';
+export type { RecommendHand } from '@pb/sim';

@@ -1,5 +1,19 @@
-import { HAND_CATEGORY_STRENGTH_ORDER, type HandCategory } from '../config/cardFormations.js';
+import {
+  CARD_FORMATIONS,
+  HAND_CATEGORY_STRENGTH_ORDER,
+  matchRuleKey,
+  type FormationMatchRule,
+  type HandCategory,
+} from '../config/cardFormations.js';
+import { cardsMatchRule } from '../config/cardMapping.js';
 import { compareCardsByStrength, type CardRank, type PlayingCard } from './deck.js';
+
+/** 推荐列表中的一档：主牌型 + 映射情况 + 该档最小牌面。 */
+export interface RecommendHand {
+  category: HandCategory;
+  matchKey: string;
+  cards: PlayingCard[];
+}
 
 /**
  * 顺子专用点数表：A 同时可作 1 与 14，由 isStraight 分别尝试。
@@ -80,6 +94,54 @@ export function findStrongestHand(cards: readonly PlayingCard[]): PlayingCard[] 
     });
   }
   return bestCards;
+}
+
+/**
+ * 枚举当前手牌可凑出的全部推荐档：主牌型 × 映射情况各一条，每档取最小牌面。
+ * 同花顺只记主牌型，避免同一组牌再占同花/五顺；空手牌返回空数组。
+ */
+export function listRecommendHands(cards: readonly PlayingCard[]): RecommendHand[] {
+  if (cards.length === 0) return [];
+
+  const bestBySlot = new Map<string, RecommendHand>();
+  const maxSize = Math.min(5, cards.length);
+  for (let size = 1; size <= maxSize; size += 1) {
+    forEachCombination(cards, size, (combo) => {
+      const top = detectHandCategories(combo)[0];
+      if (!top) return;
+      for (const match of listUniqueMatchRules(top)) {
+        if (!cardsMatchRule(combo, match)) continue;
+        const matchKey = matchRuleKey(match);
+        const slotKey = `${top}:${matchKey}`;
+        const previous = bestBySlot.get(slotKey);
+        // 同档保留更弱一组，把大牌留给后续出牌。
+        if (previous && compareCombosByStrength(combo, previous.cards) <= 0) continue;
+        bestBySlot.set(slotKey, { category: top, matchKey, cards: combo.slice() });
+      }
+    });
+  }
+
+  const result: RecommendHand[] = [];
+  for (const category of HAND_CATEGORY_STRENGTH_ORDER) {
+    for (const match of listUniqueMatchRules(category)) {
+      const entry = bestBySlot.get(`${category}:${matchRuleKey(match)}`);
+      if (entry) result.push(entry);
+    }
+  }
+  return result;
+}
+
+/** 该牌型阵型配置里按首次出现顺序去重后的映射情况。 */
+function listUniqueMatchRules(category: HandCategory): FormationMatchRule[] {
+  const seen = new Set<string>();
+  const rules: FormationMatchRule[] = [];
+  for (const formation of CARD_FORMATIONS[category]) {
+    const key = matchRuleKey(formation.match);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rules.push(formation.match);
+  }
+  return rules;
 }
 
 /**

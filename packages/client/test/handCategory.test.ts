@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPokerCards, type PlayingCard } from '../src/cards/deck.js';
-import { detectHandCategories, findStrongestHand } from '../src/cards/handCategory.js';
+import { detectHandCategories, findStrongestHand, listRecommendHands } from '../src/cards/handCategory.js';
 
 const ALL = createPokerCards();
 
@@ -258,3 +258,110 @@ describe('findStrongestHand', () => {
     expect(findStrongestHand([])).toEqual([]);
   });
 });
+
+describe('listRecommendHands', () => {
+  it('空手牌返回空', () => {
+    expect(listRecommendHands([])).toEqual([]);
+  });
+
+  it('同花顺优先，对子档取最小牌面而不是更大对子', () => {
+    const hands = listRecommendHands([
+      card('6-spades'),
+      card('7-spades'),
+      card('8-spades'),
+      card('9-spades'),
+      card('10-spades'),
+      card('3-hearts'),
+      card('3-clubs'),
+      card('5-hearts'),
+      card('5-clubs'),
+    ]);
+    expect(hands[0]?.category).toBe('straight_flush');
+    expect(sortedIds(hands[0]!.cards)).toEqual([
+      '10-spades',
+      '6-spades',
+      '7-spades',
+      '8-spades',
+      '9-spades',
+    ]);
+    const pair = hands.find((entry) => entry.category === 'pair');
+    expect(sortedIds(pair?.cards ?? [])).toEqual(['3-clubs', '3-hearts']);
+  });
+
+  it('两副炸弹只推更小的一档', () => {
+    const hands = listRecommendHands([
+      card('8-spades'),
+      card('8-hearts'),
+      card('8-clubs'),
+      card('8-diamonds'),
+      card('3-spades'),
+      card('3-hearts'),
+      card('3-clubs'),
+      card('3-diamonds'),
+    ]);
+    const bomb = hands.find((entry) => entry.category === 'bomb');
+    expect(sortedIds(bomb?.cards ?? [])).toEqual([
+      '3-clubs',
+      '3-diamonds',
+      '3-hearts',
+      '3-spades',
+    ]);
+  });
+
+  it('葫芦 2～10 与 J～A 分成两档，各取该档最小牌面', () => {
+    const hands = listRecommendHands([
+      card('3-spades'),
+      card('3-hearts'),
+      card('3-clubs'),
+      card('2-diamonds'),
+      card('2-spades'),
+      card('5-spades'),
+      card('5-hearts'),
+      card('5-clubs'),
+      card('4-diamonds'),
+      card('4-spades'),
+      card('J-spades'),
+      card('J-hearts'),
+      card('J-clubs'),
+      card('K-diamonds'),
+      card('K-spades'),
+    ]);
+    const houses = hands.filter((entry) => entry.category === 'full_house');
+    expect(houses).toHaveLength(2);
+    expect(sortedIds(houses[0]!.cards)).toEqual([
+      '2-diamonds',
+      '2-spades',
+      '3-clubs',
+      '3-hearts',
+      '3-spades',
+    ]);
+    // 5 档只看三条点数，对子取最小：JJJ 配 2 而不是 K。
+    expect(sortedIds(houses[1]!.cards)).toEqual([
+      '2-diamonds',
+      '2-spades',
+      'J-clubs',
+      'J-hearts',
+      'J-spades',
+    ]);
+  });
+
+  it('对子 3 与对子 J 分成两档', () => {
+    const hands = listRecommendHands([
+      card('3-hearts'),
+      card('3-clubs'),
+      card('5-hearts'),
+      card('5-clubs'),
+      card('J-spades'),
+      card('J-hearts'),
+    ]);
+    const pairs = hands.filter((entry) => entry.category === 'pair');
+    expect(pairs).toHaveLength(2);
+    expect(sortedIds(pairs[0]!.cards)).toEqual(['3-clubs', '3-hearts']);
+    expect(sortedIds(pairs[1]!.cards)).toEqual(['J-hearts', 'J-spades']);
+  });
+});
+
+/** 排序牌 id，避免组合枚举顺序影响断言。 */
+function sortedIds(cards: readonly PlayingCard[]): string[] {
+  return cards.map((entry) => entry.id).sort();
+}
