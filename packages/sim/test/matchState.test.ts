@@ -248,6 +248,63 @@ describe('MatchState 对局规则', () => {
     expect(match.getTicksUntilDraw()).toBe(0);
     expect(match.hasPendingDraw(Faction.Blue)).toBe(false);
   });
+
+  it('决胜期全员空手且无可移动单位时提前进入结算', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    stepTo(match, 60);
+    expect(match.phase).toBe('final');
+
+    emptyHands(match);
+    match.step();
+
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+    expect(match.getHudDeadlineTick()).toBe(match.world.tick + 30);
+  });
+
+  it('决胜期仍有手牌时不提前进入结算', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    stepTo(match, 60);
+    expect(match.phase).toBe('final');
+    expect(match.decks[Faction.Blue].hand.length).toBeGreaterThan(0);
+
+    match.step();
+    expect(match.phase).toBe('final');
+  });
+
+  it('决胜期场上有可移动单位时不提前进入结算', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    stepTo(match, 60);
+    emptyHands(match);
+    match.world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(9), fromFloat(8));
+
+    match.step();
+    expect(match.phase).toBe('final');
+  });
+
+  it('提前进入结算后停止补牌，到点仍按主堡血量结算', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    castle(match, Faction.Red).hp -= 1;
+    stepTo(match, 60);
+    emptyHands(match);
+    match.step();
+    expect(match.phase).toBe('settlement');
+
+    const enterTick = match.world.tick;
+    const before = match.decks[Faction.Blue].hand.length;
+    // 结算窗只有 30 tick，短于默认补牌间隔；走几帧确认停抽即可。
+    stepTo(match, enterTick + 10);
+    expect(match.phase).toBe('settlement');
+    expect(match.decks[Faction.Blue].hand.length).toBe(before);
+    expect(match.getTicksUntilDraw()).toBe(0);
+
+    stepTo(match, enterTick + 30);
+    expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
+  });
 });
 
 describe('MatchState 城堡保护卡包', () => {
@@ -354,6 +411,13 @@ function shortenPhases(match: MatchState): void {
 
 function stepTo(match: MatchState, targetTick: number): void {
   while (match.world.tick < targetTick && !match.result) match.step();
+}
+
+/** 直接回堆清空手牌，不走 out 牌指令，避免场上刷出可移动单位。 */
+function emptyHands(match: MatchState): void {
+  for (const deck of match.decks) {
+    deck.play(deck.hand.map((card) => card.id));
+  }
 }
 
 function castle(match: MatchState, faction: Faction) {

@@ -24,7 +24,7 @@ import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePos
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import { isBuildingInsideHalfCourt, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
-import { UNIT_CONFIGS } from '../config/units.js';
+import { isBuildingConfig, UNIT_CONFIGS } from '../config/units.js';
 import {
   DEFAULT_DOUBLE_SPEED_DURATION_SECONDS,
   DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
@@ -50,7 +50,7 @@ import {
   type MatchPhaseDurations,
   type MatchRules,
 } from '../config/matchRules.js';
-import { Faction, type Unit } from '../entity/unit.js';
+import { Faction, isAlive, type Unit } from '../entity/unit.js';
 import { type Fx, fromFloat, ONE, toFloat } from '../math/fixed.js';
 import { World } from '../world.js';
 import {
@@ -512,12 +512,35 @@ export class MatchState {
     if (this.phase === 'double_speed' && this.world.tick >= this.finalStartTick()) {
       this.enterPhase('final');
     }
+    // 须在按时长切结算之前：空手截断会改 finalPhaseTicks，从而移动 settlementStartTick。
+    this.maybeEarlyEnterSettlement();
     if (this.phase === 'final' && this.world.tick >= this.settlementStartTick()) {
       this.enterPhase('settlement');
     }
     if (this.phase === 'settlement' && this.world.tick >= this.matchEndTick()) {
       this.finish(compareHp(this.getCastleHp(Faction.Blue), this.getCastleHp(Faction.Red)), 'time_limit');
     }
+  }
+
+  /**
+   * 决胜期内全员空手且场上只剩建筑时截断决胜剩余。
+   * 只改 phase 会让结算吃掉决胜剩余，HUD「结算剩余」也会偏长。
+   */
+  private maybeEarlyEnterSettlement(): void {
+    if (this.phase !== 'final') return;
+    if (!this.allHandsEmpty() || this.hasLivingMobileUnit()) return;
+    this.finalPhaseTicks = Math.max(0, this.world.tick - this.finalStartTick());
+    this.enterPhase('settlement');
+  }
+
+  /** 含已淘汰席：规则要求所有人空手，淘汰席仍可打完手牌。 */
+  private allHandsEmpty(): boolean {
+    return allSlots(this.mode).every((slot) => this.decks[slot]!.hand.length === 0);
+  }
+
+  /** 存活的非建筑即视为可移动单位；正在攻击的步兵也算。 */
+  private hasLivingMobileUnit(): boolean {
+    return this.world.units.some((unit) => isAlive(unit) && !isBuildingConfig(unit.config));
   }
 
   /** 切阶段：同步手牌上限与单位加速；发牌读条继承剩余时间，仅当超过新间隔时夹住。 */
