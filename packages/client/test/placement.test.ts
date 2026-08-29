@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   Faction,
   World,
+  applyArenaPreset,
   createCardFormation,
   fromFloat,
+  halfCourtSlotAnchorX,
   halfCourtYRange,
   resolveFormationSpawns,
 } from '@pb/sim';
@@ -62,6 +64,21 @@ describe('蓝方阵型落点校验', () => {
     expect(anchor.y).toBeGreaterThanOrEqual(0);
     expect(anchor.y).toBeLessThan(BLUE_HALF_MAX_Y);
     expect(isDeployAnchorInsideBlueHalf(anchor.x, anchor.y)).toBe(true);
+  });
+
+  it('2v2 自动落点与己方主堡同 X，不落在战场中线', () => {
+    applyArenaPreset('2v2');
+    try {
+      const formation = squadFormation();
+      const left = blueHalfSafeAnchor(formation, halfCourtSlotAnchorX('2v2', 0))!;
+      const right = blueHalfSafeAnchor(formation, halfCourtSlotAnchorX('2v2', 1))!;
+      expect(left.x).toBe(6);
+      expect(right.x).toBe(18);
+      expect(isDeployAnchorInsideBlueHalf(left.x, left.y)).toBe(true);
+      expect(isDeployAnchorInsideBlueHalf(right.x, right.y)).toBe(true);
+    } finally {
+      applyArenaPreset('1v1');
+    }
   });
 
   it('超宽阵型仍可自动落到半场中央', () => {

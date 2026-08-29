@@ -173,6 +173,7 @@ export {
   HALF_COURT_MID_Y,
   halfCourtSafeAnchor,
   halfCourtSafeBuildingAnchor,
+  halfCourtSlotAnchorX,
   halfCourtYRange,
   isBuildingInsideHalfCourt,
   isDeployAnchorInsideHalfCourt,

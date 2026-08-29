@@ -120,19 +120,23 @@ export function isBuildingInsideFactionHalf(
   return isBuildingInsideHalfCourt(centerX, centerY, footprint, faction);
 }
 
-/** 蓝方半场自动出兵安全锚点。 */
-export function blueHalfSafeAnchor(formation: CardFormation): SimPoint | null {
-  return halfCourtSafeAnchor(formation, Faction.Blue);
+/** 蓝方半场自动出兵安全锚点；preferredX 用于 2v2 对齐己方主堡。 */
+export function blueHalfSafeAnchor(formation: CardFormation, preferredX?: number): SimPoint | null {
+  return halfCourtSafeAnchor(formation, Faction.Blue, preferredX);
 }
 
-/** 指定阵营半场自动出兵安全锚点。 */
-export function factionHalfSafeAnchor(formation: CardFormation, faction: Faction): SimPoint | null {
-  return halfCourtSafeAnchor(formation, faction);
+/** 指定阵营半场自动出兵安全锚点；preferredX 用于 2v2 对齐己方主堡。 */
+export function factionHalfSafeAnchor(
+  formation: CardFormation,
+  faction: Faction,
+  preferredX?: number,
+): SimPoint | null {
+  return halfCourtSafeAnchor(formation, faction, preferredX);
 }
 
 /** 蓝方半场内可容纳指定占地的吸附中心。 */
-export function blueHalfSafeBuildingAnchor(footprint: number): SimPoint | null {
-  return halfCourtSafeBuildingAnchor(footprint, Faction.Blue);
+export function blueHalfSafeBuildingAnchor(footprint: number, preferredX?: number): SimPoint | null {
+  return halfCourtSafeBuildingAnchor(footprint, Faction.Blue, preferredX);
 }
 
 /**

@@ -1,11 +1,13 @@
 import { Faction } from '../entity/unit.js';
 import { toFloat } from '../math/fixed.js';
+import { slotFaction, teamSlots, type MatchMode } from '../match/matchMode.js';
 import {
   buildingCellRange,
   isBuildingRectInsideArena,
   snapBuildingCenter,
 } from '../nav/buildingGrid.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './arena.js';
+import { dumpArenaConfigDraft, resolveSideBasePositions } from './arenaConfig.js';
 import { ARENA_RIVER_MAX_Y, ARENA_RIVER_MIN_Y } from './arenaTerrain.js';
 import {
   getFormationBuildingTypeId,
@@ -87,23 +89,50 @@ export function isBuildingInsideHalfCourt(
 }
 
 /**
- * 自动出兵落点：优先半场中央。
+ * 该席默认出兵的 X：与己方主堡垂直对齐。
+ * 1v1 只有一座，结果就是半场中央；2v2 左右分路，不再挤到战场中线。
+ */
+export function halfCourtSlotAnchorX(mode: MatchMode, slot: number): number {
+  const draft = dumpArenaConfigDraft(mode);
+  const slots = teamSlots(slotFaction(slot, mode), mode);
+  const index = slots.indexOf(slot);
+  if (index < 0) return draft.width / 2;
+  return resolveSideBasePositions(draft, slots.length)[index]?.x ?? draft.width / 2;
+}
+
+/** 无指定 X 时回退半场中央；越界则夹到场地内。 */
+function resolveAnchorX(preferredX?: number): number {
+  const maxX = arenaW();
+  if (preferredX === undefined || !Number.isFinite(preferredX)) return maxX / 2;
+  return Math.min(maxX, Math.max(0, preferredX));
+}
+
+/**
+ * 自动出兵落点：Y 取半场中央，X 优先与指定主堡对齐。
  * 兵种阵型只要锚点在白色部署区即可；建筑仍按占地能否完整放下决定。
  */
-export function halfCourtSafeAnchor(formation: CardFormation, faction: Faction): SimPoint | null {
+export function halfCourtSafeAnchor(
+  formation: CardFormation,
+  faction: Faction,
+  preferredX?: number,
+): SimPoint | null {
   if (isBuildingOnlyFormation(formation)) {
     const typeId = getFormationBuildingTypeId(formation)!;
-    return halfCourtSafeBuildingAnchor(UNIT_CONFIGS[typeId].footprint, faction);
+    return halfCourtSafeBuildingAnchor(UNIT_CONFIGS[typeId].footprint, faction, preferredX);
   }
   const { minY, maxY } = halfCourtYRange(faction);
-  const centerX = arenaW() / 2;
+  const centerX = resolveAnchorX(preferredX);
   const centerY = (minY + maxY) / 2;
   if (!isDeployAnchorInsideHalfCourt(centerX, centerY, faction)) return null;
   return { x: centerX, y: centerY };
 }
 
 /** 己方半场内可容纳指定占地的吸附中心；装不下则返回 null。 */
-export function halfCourtSafeBuildingAnchor(footprint: number, faction: Faction): SimPoint | null {
+export function halfCourtSafeBuildingAnchor(
+  footprint: number,
+  faction: Faction,
+  preferredX?: number,
+): SimPoint | null {
   const size = Math.max(1, Math.floor(footprint));
   const { minY, maxY } = halfCourtYRange(faction);
   const halfHeight = maxY - minY;
@@ -113,7 +142,7 @@ export function halfCourtSafeBuildingAnchor(footprint: number, faction: Faction)
   const maxCenterX = arenaW() - half;
   const maxCenterY = maxY - half;
   if (half > maxCenterX || minCenter > maxCenterY) return null;
-  const cx = snapBuildingCenter((half + maxCenterX) / 2, size);
+  const cx = snapBuildingCenter(Math.min(maxCenterX, Math.max(half, resolveAnchorX(preferredX))), size);
   const cy = snapBuildingCenter((minCenter + maxCenterY) / 2, size);
   if (!isBuildingInsideHalfCourt(cx, cy, size, faction)) return null;
   return { x: cx, y: cy };

@@ -18,6 +18,7 @@ import {
   getUnitConfig,
   halfCourtSafeAnchor,
   halfCourtSafeBuildingAnchor,
+  halfCourtSlotAnchorX,
   halfCourtYRange,
   isArcherTowerId,
   isBuildingConfig,
@@ -729,7 +730,7 @@ function enterBattleSession(mode: BattleMode): () => void {
           point.clientX,
           point.clientY,
         )
-      : halfCourtSafeAnchor(formation, Faction.Blue);
+      : halfCourtSafeAnchor(formation, Faction.Blue, halfCourtSlotAnchorX(loop.match?.mode ?? '1v1', 0));
     if (!anchor) return false;
     return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
   };
@@ -765,7 +766,7 @@ function enterBattleSession(mode: BattleMode): () => void {
             request.point.clientX,
             request.point.clientY,
           )
-        : halfCourtSafeAnchor(request.formation, Faction.Blue);
+        : halfCourtSafeAnchor(request.formation, Faction.Blue, halfCourtSlotAnchorX(loop.match?.mode ?? '1v1', 0));
       if (!anchor) return false;
       anchorX = anchor.x;
       anchorY = anchor.y;
@@ -1421,7 +1422,7 @@ function runVersusSession(
           point.clientX,
           point.clientY,
         )
-      : halfCourtSafeAnchor(formation, faction);
+      : halfCourtSafeAnchor(formation, faction, halfCourtSlotAnchorX(matchMode, localSlot));
     if (!anchor) return false;
     return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, faction);
   };
@@ -1454,7 +1455,7 @@ function runVersusSession(
             request.point.clientX,
             request.point.clientY,
           )
-        : halfCourtSafeAnchor(request.formation, faction);
+        : halfCourtSafeAnchor(request.formation, faction, halfCourtSlotAnchorX(matchMode, localSlot));
       if (!anchor) return false;
       anchorX = anchor.x;
       anchorY = anchor.y;
