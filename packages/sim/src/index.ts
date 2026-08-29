@@ -264,7 +264,6 @@ export {
   MatchState,
   NORMAL_DRAW_INTERVAL_TICKS,
   SETTLEMENT_START_TICKS,
-  TEAMMATE_LOST_DRAW_SPEEDUP,
   defaultMatchRules,
   type CastlePackState,
   type MatchDrawIntervals,

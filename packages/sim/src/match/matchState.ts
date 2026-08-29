@@ -57,7 +57,6 @@ import {
   allSlots,
   slotCount,
   teamSlots,
-  teammateSlot,
   type MatchMode,
 } from './matchMode.js';
 
@@ -96,8 +95,6 @@ export interface MatchResult {
   reason: MatchEndReason;
   endTick: number;
 }
-/** 队友主堡陷落后的发牌加速倍率。 */
-export const TEAMMATE_LOST_DRAW_SPEEDUP = 1.5;
 /** 主堡生命低于最大生命的该比例时触发保护卡包。 */
 export const CASTLE_PROTECT_HP_RATIO = 0.5;
 /** 默认主堡配置下的保护线（显示血量），供测试与静态刻度对齐。 */
@@ -379,7 +376,7 @@ export class MatchState {
    * 有待发牌时视为 0（读条收起）；未传时默认蓝方席 0，兼容旧调用。
    */
   getTicksUntilDraw(slot: number = Faction.Blue): number {
-    if (this.result || this.phase === 'settlement' || this.pendingDraw[slot] || this.isSlotEliminated(slot)) {
+    if (this.result || this.phase === 'settlement' || this.pendingDraw[slot]) {
       return 0;
     }
     return Math.max(0, this.nextDrawTicks[slot]! - this.world.tick);
@@ -390,19 +387,19 @@ export class MatchState {
     return (
       !this.result
       && this.phase !== 'settlement'
-      && !this.isSlotEliminated(slot)
       && this.pendingDraw[slot] === true
     );
   }
 
-  /** 当前阶段一次补牌周期的逻辑帧数（不含队友阵亡加速）。 */
+  /** 当前阶段一次补牌周期的逻辑帧数。 */
   getDrawIntervalTicks(): number {
     return this.drawIntervalTicks();
   }
 
-  /** 指定席位当前补牌周期，含队友阵亡 1.5 倍加速。 */
+  /** 指定席位当前补牌周期；2v2 单座陷落也不再加速，始终等于阶段间隔。 */
   getDrawIntervalTicksForSlot(slot: number): number {
-    return this.drawIntervalTicksForSlot(slot);
+    void slot;
+    return this.drawIntervalTicks();
   }
 
   /** 当前阶段手牌上限，供 HUD / 手牌面板展示。 */
@@ -553,14 +550,6 @@ export class MatchState {
     return this.finalDrawIntervalTicks;
   }
 
-  /** 该席位当前补牌间隔；队友主堡已陷落时加速 1.5 倍，取整保证两端一致。 */
-  private drawIntervalTicksForSlot(slot: number): number {
-    const base = this.drawIntervalTicks();
-    const mate = teammateSlot(slot, this.mode);
-    if (mate === null || !this.isSlotEliminated(mate)) return base;
-    return Math.max(1, Math.round(base / TEAMMATE_LOST_DRAW_SPEEDUP));
-  }
-
   private currentHandLimit(): number {
     if (this.phase === 'double_speed') return this.doubleSpeedHandLimit;
     if (this.phase === 'final' || this.phase === 'settlement' || this.phase === 'ended') {
@@ -586,28 +575,30 @@ export class MatchState {
   /**
    * 先冲待发，再到点抽牌。
    * 满手拒抽只冻结该席计时；牌堆抽空仍推进周期，避免空堆把读条卡死。
+   * 2v2 单座陷落不停抽：本队还有主堡时全队按阶段间隔正常补牌。
    */
   private tryDrawForSlot(slot: number): void {
-    if (this.phase === 'settlement' || this.isSlotEliminated(slot)) return;
+    if (this.phase === 'settlement') return;
     const deck = this.decks[slot]!;
+    const interval = this.drawIntervalTicks();
     if (this.pendingDraw[slot]) {
       if (deck.hand.length >= deck.maxHandSize) return;
       deck.draw();
       this.pendingDraw[slot] = false;
-      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
+      this.nextDrawTicks[slot] = this.world.tick + interval;
       return;
     }
     if (this.world.tick < this.nextDrawTicks[slot]!) return;
     const drawn = deck.draw();
     if (drawn) {
-      this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
+      this.nextDrawTicks[slot] = this.world.tick + interval;
       return;
     }
     if (deck.hand.length >= deck.maxHandSize) {
       this.pendingDraw[slot] = true;
       return;
     }
-    this.nextDrawTicks[slot] = this.world.tick + this.drawIntervalTicksForSlot(slot);
+    this.nextDrawTicks[slot] = this.world.tick + interval;
   }
 
   /** 各席读条与待发一起重置。 */
@@ -620,9 +611,9 @@ export class MatchState {
 
   private clampDrawCountdown(): void {
     if (this.result) return;
+    const interval = this.drawIntervalTicks();
     for (const slot of allSlots(this.mode)) {
-      if (this.pendingDraw[slot] || this.isSlotEliminated(slot)) continue;
-      const interval = this.drawIntervalTicksForSlot(slot);
+      if (this.pendingDraw[slot]) continue;
       const remaining = this.nextDrawTicks[slot]! - this.world.tick;
       if (remaining > interval) {
         this.nextDrawTicks[slot] = this.world.tick + interval;

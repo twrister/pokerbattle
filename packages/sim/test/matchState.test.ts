@@ -409,7 +409,7 @@ describe('MatchState 2v2', () => {
     expect(match.getSlotCastlePosition(3)).toEqual({ x: 18, y: fullH - 3 });
   });
 
-  it('单座阵亡后该席停抽但仍可打完手牌，对局继续', () => {
+  it('单座阵亡后该席仍正常补牌且可打完手牌，对局继续', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     expect(match.world.units.filter((unit) => unit.typeId === 'building_base')).toHaveLength(4);
@@ -442,16 +442,16 @@ describe('MatchState 2v2', () => {
     expect(match.decks[0]!.hand).toHaveLength(before - 1);
 
     stepTo(match, NORMAL_DRAW_INTERVAL_TICKS);
-    expect(match.decks[0]!.hand).toHaveLength(before - 1);
+    expect(match.decks[0]!.hand.length).toBeGreaterThan(before - 1);
     expect(match.decks[1]!.hand.length).toBeGreaterThan(before);
   });
 
-  it('队友阵亡后发牌间隔变为 1.5 倍', () => {
+  it('队友阵亡后发牌间隔不变，全队仍按阶段正常补牌', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     castleOfSlot(match, 1).hp = 0;
     match.step();
-    expect(match.getDrawIntervalTicksForSlot(0)).toBe(Math.round(NORMAL_DRAW_INTERVAL_TICKS / 1.5));
+    expect(match.getDrawIntervalTicksForSlot(0)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
     expect(match.getDrawIntervalTicksForSlot(2)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
   });
 
