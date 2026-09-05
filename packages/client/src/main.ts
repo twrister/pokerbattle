@@ -26,6 +26,7 @@ import {
   isBuildingOnlyFormation,
   isDeployAnchorInsideHalfCourt,
   isFuseBombFormation,
+  normalizeDeployAnchor,
   isFuseBombTypeId,
   toFloat,
   claimCastlePackCommand,
@@ -732,7 +733,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         )
       : halfCourtSafeAnchor(formation, Faction.Blue, halfCourtSlotAnchorX(loop.match?.mode ?? '1v1', 0));
     if (!anchor) return false;
-    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
+    return normalizeDeployAnchor(anchor.x, anchor.y, Faction.Blue) !== null;
   };
 
   /** 单机出兵：上报 PlayFormation，由 MatchState 扣牌并展开。 */
@@ -768,8 +769,15 @@ function enterBattleSession(mode: BattleMode): () => void {
           )
         : halfCourtSafeAnchor(request.formation, Faction.Blue, halfCourtSlotAnchorX(loop.match?.mode ?? '1v1', 0));
       if (!anchor) return false;
-      anchorX = anchor.x;
-      anchorY = anchor.y;
+      if (isFuseBombFormation(request.formation)) {
+        anchorX = anchor.x;
+        anchorY = anchor.y;
+      } else {
+        const normalized = normalizeDeployAnchor(anchor.x, anchor.y, Faction.Blue);
+        if (!normalized) return false;
+        anchorX = normalized.x;
+        anchorY = normalized.y;
+      }
     }
 
     const cmd = playFormationCommand(
@@ -856,7 +864,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         )
       : debugSafeAnchor();
     if (!anchor) return false;
-    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, Faction.Blue);
+    return normalizeDeployAnchor(anchor.x, anchor.y, Faction.Blue) !== null;
   };
 
   /** 调试模式出兵：普通兵 Spawn 到半场；炸弹走抛物线；箭塔走 PlaceBuilding。 */
@@ -883,7 +891,11 @@ function enterBattleSession(mode: BattleMode): () => void {
         )
       : debugSafeAnchor();
     if (!anchor) return false;
-    loop.enqueue(spawnCommand(Faction.Blue, typeId, fromFloat(anchor.x), fromFloat(anchor.y)));
+    const normalized = isFuseBombTypeId(typeId)
+      ? anchor
+      : normalizeDeployAnchor(anchor.x, anchor.y, Faction.Blue);
+    if (!normalized) return false;
+    loop.enqueue(spawnCommand(Faction.Blue, typeId, fromFloat(normalized.x), fromFloat(normalized.y)));
     return true;
   };
 
@@ -1424,7 +1436,7 @@ function runVersusSession(
         )
       : halfCourtSafeAnchor(formation, faction, halfCourtSlotAnchorX(matchMode, localSlot));
     if (!anchor) return false;
-    return isDeployAnchorInsideHalfCourt(anchor.x, anchor.y, faction);
+    return normalizeDeployAnchor(anchor.x, anchor.y, faction) !== null;
   };
 
   const requestSpawn = (request: FormationSpawnRequest): boolean => {
@@ -1457,8 +1469,15 @@ function runVersusSession(
           )
         : halfCourtSafeAnchor(request.formation, faction, halfCourtSlotAnchorX(matchMode, localSlot));
       if (!anchor) return false;
-      anchorX = anchor.x;
-      anchorY = anchor.y;
+      if (isFuseBombFormation(request.formation)) {
+        anchorX = anchor.x;
+        anchorY = anchor.y;
+      } else {
+        const normalized = normalizeDeployAnchor(anchor.x, anchor.y, faction);
+        if (!normalized) return false;
+        anchorX = normalized.x;
+        anchorY = normalized.y;
+      }
     }
 
     const cmd = playFormationCommand(

@@ -5,6 +5,8 @@ import {
   createCardFormation,
   halfCourtSafeAnchor,
   halfCourtSlotAnchorX,
+  halfCourtYRange,
+  normalizeDeployAnchor,
 } from '../src/index.js';
 
 /** 单兵阵型，只用来读自动出兵锚点。 */
@@ -42,5 +44,34 @@ describe('半场默认出兵锚点', () => {
     expect(right?.x).toBe(18);
     expect(left?.x).not.toBe(12);
     expect(right?.x).not.toBe(12);
+  });
+});
+
+describe('靠河出兵锚点容错', () => {
+  afterEach(() => {
+    applyArenaPreset('1v1');
+  });
+
+  it('半场内坐标原样返回', () => {
+    expect(normalizeDeployAnchor(9, 8, Faction.Blue)).toEqual({ x: 9, y: 8 });
+    const { minY, maxY } = halfCourtYRange(Faction.Red);
+    const insideY = (minY + maxY) / 2;
+    expect(normalizeDeployAnchor(9, insideY, Faction.Red)).toEqual({ x: 9, y: insideY });
+  });
+
+  it('蓝方贴河越界 2 格内夹回岸边，超出仍拒', () => {
+    const { maxY } = halfCourtYRange(Faction.Blue);
+    const snapped = normalizeDeployAnchor(9, maxY + 0.8, Faction.Blue);
+    expect(snapped).not.toBeNull();
+    expect(snapped!.x).toBe(9);
+    expect(snapped!.y).toBeLessThan(maxY);
+    expect(normalizeDeployAnchor(9, maxY + 2, Faction.Blue)).toBeNull();
+  });
+
+  it('红方贴河越界 2 格内夹回岸边，超出仍拒', () => {
+    const { minY } = halfCourtYRange(Faction.Red);
+    const snapped = normalizeDeployAnchor(9, minY - 0.8, Faction.Red);
+    expect(snapped).toEqual({ x: 9, y: minY });
+    expect(normalizeDeployAnchor(9, minY - 2, Faction.Red)).toBeNull();
   });
 });

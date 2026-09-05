@@ -23,7 +23,7 @@ import {
 } from '../config/cardFormations.js';
 import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePositions } from '../config/arenaConfig.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
-import { isBuildingInsideHalfCourt, isDeployAnchorInsideHalfCourt } from '../config/halfCourt.js';
+import { isBuildingInsideHalfCourt, normalizeDeployAnchor } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { isBuildingConfig, UNIT_CONFIGS } from '../config/units.js';
 import {
@@ -187,7 +187,7 @@ export class MatchState {
       if (command.kind === CommandKind.PlayFormation) {
         if (!this.validate(command)) continue;
         this.decks[commandSlot(command)].play(command.cardIds);
-        accepted.push(command);
+        accepted.push(this.clampTroopPlayFormation(command));
         continue;
       }
       if (command.kind === CommandKind.ClaimCastlePack) {
@@ -805,8 +805,19 @@ export class MatchState {
       return this.world.canPlaceBuilding(typeId, cmd.x, cmd.y);
     }
 
-    // 与白色部署区高亮一致：只校验锚点，阵型贴边溢出仍可放置
-    return isDeployAnchorInsideHalfCourt(anchorX, anchorY, cmd.faction);
+    // 白色区内或靠河 2 格容错带均可；真正落点在 step 里夹回岸边
+    return normalizeDeployAnchor(anchorX, anchorY, cmd.faction) !== null;
+  }
+
+  /**
+   * 兵种阵型若点进河里，把指令坐标夹回岸边再交给 world，避免旧客户端把河内 Y 直接生成进去。
+   */
+  private clampTroopPlayFormation(cmd: PlayFormationCommand): PlayFormationCommand {
+    const template = findFormationById(cmd.formationId);
+    if (!template || isFuseBombFormation(template) || isBuildingOnlyFormation(template)) return cmd;
+    const normalized = normalizeDeployAnchor(toFloat(cmd.x), toFloat(cmd.y), cmd.faction);
+    if (!normalized) return cmd;
+    return { ...cmd, x: fromFloat(normalized.x), y: fromFloat(normalized.y) };
   }
 }
 

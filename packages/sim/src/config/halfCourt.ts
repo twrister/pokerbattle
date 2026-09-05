@@ -1,5 +1,5 @@
 import { Faction } from '../entity/unit.js';
-import { toFloat } from '../math/fixed.js';
+import { EPSILON, toFloat } from '../math/fixed.js';
 import { slotFaction, teamSlots, type MatchMode } from '../match/matchMode.js';
 import {
   buildingCellRange,
@@ -57,6 +57,31 @@ export function isDeployAnchorInsideHalfCourt(
     && y >= minY
     && (faction === Faction.Blue ? y < maxY : y <= maxY)
   );
+}
+
+/** 靠河一侧：点击超出部署边界最多 N 格仍接受，并吸附回岸边。 */
+export const DEPLOY_RIVER_EDGE_TOLERANCE = 2;
+
+/** 夹到蓝方岸边内侧时必须能扛住 Q16.16 取整，不能用 Number.EPSILON。 */
+const DEPLOY_RIVER_EDGE_INSET = toFloat(EPSILON);
+
+/**
+ * 把出兵锚点归一化到己方半场：区内原样返回，靠河越界 2 格内夹回岸边。
+ * 建筑 / 炸弹不要走这条；超出容错带或 X 出界则返回 null。
+ */
+export function normalizeDeployAnchor(
+  x: number,
+  y: number,
+  faction: Faction,
+): SimPoint | null {
+  if (x < 0 || x > arenaW()) return null;
+  const { minY, maxY } = halfCourtYRange(faction);
+  if (faction === Faction.Blue) {
+    if (y < minY || y >= maxY + DEPLOY_RIVER_EDGE_TOLERANCE) return null;
+    return { x, y: y < maxY ? y : maxY - DEPLOY_RIVER_EDGE_INSET };
+  }
+  if (y > maxY || y <= minY - DEPLOY_RIVER_EDGE_TOLERANCE) return null;
+  return { x, y: y >= minY ? y : minY };
 }
 
 /**

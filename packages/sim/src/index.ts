@@ -170,6 +170,7 @@ export {
   validateBuildingOnlyRows,
 } from './config/cardFormations.js';
 export {
+  DEPLOY_RIVER_EDGE_TOLERANCE,
   HALF_COURT_MID_Y,
   halfCourtSafeAnchor,
   halfCourtSafeBuildingAnchor,
@@ -178,6 +179,7 @@ export {
   isBuildingInsideHalfCourt,
   isDeployAnchorInsideHalfCourt,
   isFormationInsideHalfCourt,
+  normalizeDeployAnchor,
   type SimPoint as HalfCourtPoint,
 } from './config/halfCourt.js';
 
