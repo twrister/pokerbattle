@@ -250,7 +250,7 @@ describe('MatchState 对局规则', () => {
     expect(match.hasPendingDraw(Faction.Blue)).toBe(false);
   });
 
-  it('决胜期全员空手且无可移动单位时提前进入结算', () => {
+  it('决胜期全员空手且无法改写胜负时提前结束', () => {
     const match = createMatch();
     shortenPhases(match);
     stepTo(match, 60);
@@ -259,9 +259,8 @@ describe('MatchState 对局规则', () => {
     emptyHands(match);
     match.step();
 
-    expect(match.phase).toBe('settlement');
-    expect(match.result).toBeNull();
-    expect(match.getHudDeadlineTick()).toBe(match.world.tick + 30);
+    expect(match.phase).toBe('ended');
+    expect(match.result).toMatchObject({ winner: null, reason: 'time_limit' });
   });
 
   it('决胜期仍有手牌时不提前进入结算', () => {
@@ -286,25 +285,71 @@ describe('MatchState 对局规则', () => {
     expect(match.phase).toBe('final');
   });
 
-  it('提前进入结算后停止补牌，到点仍按主堡血量结算', () => {
+  it('结算期落后方空手且场上伤害不够追平时提前按血量结束', () => {
     const match = createMatch();
     shortenPhases(match);
     castle(match, Faction.Red).hp -= 1;
     stepTo(match, 60);
     emptyHands(match);
     match.step();
-    expect(match.phase).toBe('settlement');
 
-    const enterTick = match.world.tick;
-    const before = match.decks[Faction.Blue].hand.length;
-    // 结算窗只有 30 tick，短于默认补牌间隔；走几帧确认停抽即可。
-    stepTo(match, enterTick + 10);
-    expect(match.phase).toBe('settlement');
-    expect(match.decks[Faction.Blue].hand.length).toBe(before);
-    expect(match.getTicksUntilDraw()).toBe(0);
-
-    stepTo(match, enterTick + 30);
     expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
+    expect(match.getTicksUntilDraw()).toBe(0);
+  });
+
+  it('结算期仍有手牌时即使血量落后也不提前结束', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    castle(match, Faction.Red).hp -= 1;
+    stepTo(match, 90);
+
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+    expect(match.decks[Faction.Red].hand.length).toBeGreaterThan(0);
+
+    stepTo(match, 100);
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+  });
+
+  it('结算期落后方场上伤害上限仍够追平时不提前结束', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    stepTo(match, 90);
+    expect(match.phase).toBe('settlement');
+
+    emptyHands(match);
+    castle(match, Faction.Red).hp -= fromFloat(50);
+    match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    match.step();
+
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+  });
+
+  it('结算期落后方场上伤害上限不够追平时提前结束', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    stepTo(match, 90);
+    emptyHands(match);
+    castle(match, Faction.Red).hp -= fromFloat(2000);
+    match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    match.step();
+
+    expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
+  });
+
+  it('结算期有待领保护包时不提前结束', () => {
+    const match = createMatch();
+    shortenPhases(match);
+    castle(match, Faction.Red).hp -= fromFloat(2000);
+    stepTo(match, 90);
+    emptyHands(match);
+    expect(match.debugDropCastlePack(Faction.Red)).toBe(true);
+    match.step();
+
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
   });
 });
 

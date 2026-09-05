@@ -60,6 +60,7 @@ import {
   teamSlots,
   type MatchMode,
 } from './matchMode.js';
+import { estimateCastleThreat } from './settlementThreat.js';
 
 export {
   DEFAULT_DOUBLE_SPEED_DURATION_SECONDS,
@@ -528,6 +529,7 @@ export class MatchState {
     if (this.phase === 'settlement' && this.world.tick >= this.matchEndTick()) {
       this.finish(compareHp(this.getCastleHp(Faction.Blue), this.getCastleHp(Faction.Red)), 'time_limit');
     }
+    this.maybeEarlyFinishSettlement();
   }
 
   /**
@@ -549,6 +551,48 @@ export class MatchState {
   /** 存活的非建筑即视为可移动单位；正在攻击的步兵也算。 */
   private hasLivingMobileUnit(): boolean {
     return this.world.units.some((unit) => isAlive(unit) && !isBuildingConfig(unit.config));
+  }
+
+  /**
+   * 结算期内若落后方已不可能追平（或双方都无法改血），立刻按当前主堡血量收局。
+   * 仍有手牌/待领保护包时不判：出牌还能刷新威胁。
+   */
+  private maybeEarlyFinishSettlement(): void {
+    if (this.result || this.phase !== 'settlement') return;
+    const remainingTicks = this.matchEndTick() - this.world.tick;
+    if (remainingTicks <= 0) return;
+
+    const blueHp = this.getCastleHp(Faction.Blue);
+    const redHp = this.getCastleHp(Faction.Red);
+    const blueCanDeploy = this.factionCanStillDeploy(Faction.Blue);
+    const redCanDeploy = this.factionCanStillDeploy(Faction.Red);
+
+    if (blueHp === redHp) {
+      if (blueCanDeploy || redCanDeploy) return;
+      if (
+        estimateCastleThreat(this.world, Faction.Blue, remainingTicks) > 0
+        || estimateCastleThreat(this.world, Faction.Red, remainingTicks) > 0
+      ) {
+        return;
+      }
+      this.finish(null, 'time_limit');
+      return;
+    }
+
+    const trailing = blueHp > redHp ? Faction.Red : Faction.Blue;
+    if (this.factionCanStillDeploy(trailing)) return;
+    const gap = blueHp > redHp ? blueHp - redHp : redHp - blueHp;
+    if (estimateCastleThreat(this.world, trailing, remainingTicks) >= gap) return;
+    this.finish(blueHp > redHp ? Faction.Blue : Faction.Red, 'time_limit');
+  }
+
+  /** 该队任一席仍有手牌或待领保护包，结算期还能出兵改写主堡血量。 */
+  private factionCanStillDeploy(faction: Faction): boolean {
+    for (const slot of teamSlots(faction, this.mode)) {
+      if ((this.decks[slot]?.hand.length ?? 0) > 0) return true;
+      if (this.packStates[slot] === 'pending') return true;
+    }
+    return false;
   }
 
   /** 切阶段：同步手牌上限与单位加速；发牌读条继承剩余时间，仅当超过新间隔时夹住。 */
