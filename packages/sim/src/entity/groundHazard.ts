@@ -12,6 +12,8 @@ export interface GroundHazard {
   readonly radius: Fx;
   readonly damage: Fx;
   readonly faction: Faction;
+  /** 铺火席位；2v2 灼烧伤害记到发射者而不是只认阵营。 */
+  readonly ownerSlot: number;
   readonly intervalTicks: number;
   ticksUntilNextDamage: number;
   remainingTicks: number;

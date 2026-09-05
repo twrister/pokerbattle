@@ -87,6 +87,7 @@ export function updateProjectiles(world: World): void {
           projectile.impactFx,
           hitBuilding,
           projectile.visual === 'bomb',
+          projectile.ownerSlot,
         );
         spawnImpactGroundBurn(world, projectile);
       } else {
@@ -118,7 +119,7 @@ function resolveSingleImpact(
     distSq(projectile.impactPos.x, projectile.impactPos.y, target.pos.x, target.pos.y)
       <= mul(projectile.targetRadius, projectile.targetRadius);
   const hits = projectile.homing ? !!target : inLockRadius;
-  if (hits && target) applyCombatDamage(target, projectile.damage);
+  if (hits && target) applyCombatDamage(target, projectile.damage, false, world, projectile.ownerSlot);
   // 追踪弹仅在打到目标时播特效；非追踪弹无论命中都在锁定点落地
   if (!hits && projectile.homing) return;
   const kind = explosionKindFromImpact(projectile.impactFx, hitBuilding);
@@ -141,7 +142,7 @@ function resolveFuseBomb(world: World, projectile: Projectile): void {
       ? distSqToBuildingFootprint(projectile.impactPos.x, projectile.impactPos.y, unit) <= radiusSq
       : distSq(projectile.impactPos.x, projectile.impactPos.y, unit.pos.x, unit.pos.y) <= radiusSq;
     if (!inside) continue;
-    applyBombDamage(unit, projectile.damage);
+    applyBombDamage(unit, projectile.damage, world, projectile.ownerSlot);
   }
   // 巨型炸弹用专用大爆炸帧；小炸弹复用普通爆炸序列，不走弹道命中特效开关
   const kind = projectile.fuseBombKind === 'giant_bomb' ? 'giant_bomb' : 'normal';
@@ -185,6 +186,7 @@ function resolveProjectileAoe(
   impactFx: Projectile['impactFx'],
   hitBuilding: boolean,
   isBomb: boolean,
+  ownerSlot: number,
 ): void {
   world.unitGrid.query(x, y, radius, neighbors);
 
@@ -195,8 +197,8 @@ function resolveProjectileAoe(
     // 落地爆炸只伤地面单位，空中单位需被直接锁定才吃单体弹
     if (unit.config.movementLayer === 'air') continue;
     if (distSq(x, y, unit.pos.x, unit.pos.y) > radiusSq) continue;
-    if (isBomb) applyBombDamage(unit, damage);
-    else applyCombatDamage(unit, damage, true);
+    if (isBomb) applyBombDamage(unit, damage, world, ownerSlot);
+    else applyCombatDamage(unit, damage, true, world, ownerSlot);
   }
   // 仅 pulse 播地面环；爆炸类在关闭开关或无映射时不回退成脉冲
   if (impactFx === 'pulse') {
@@ -221,5 +223,6 @@ function spawnImpactGroundBurn(world: World, projectile: Projectile): void {
     projectile.faction,
     burn.durationTicks,
     burn.intervalTicks,
+    projectile.ownerSlot,
   );
 }

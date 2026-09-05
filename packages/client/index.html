@@ -1804,6 +1804,124 @@
         text-align: center;
       }
 
+      /* 挂在 #battle-hud 文档流里，始终在血条下方，避免绝对定位叠上去 */
+      #battle-damage-panel {
+        position: relative;
+        top: auto;
+        left: auto;
+        z-index: 3;
+        align-self: flex-start;
+        width: calc(280 * var(--hu));
+        min-width: calc(240 * var(--hu));
+        margin-top: calc(8 * var(--hu));
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: calc(8 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        pointer-events: auto;
+      }
+
+      /* 左侧：竖排折叠钮，展开后页签紧贴其右侧 */
+      #battle-damage-panel .battle-damage-header {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        flex-shrink: 0;
+        gap: calc(4 * var(--hu));
+      }
+
+      .battle-damage-tabs {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: calc(4 * var(--hu));
+      }
+
+      .battle-damage-tabs [role="tab"] {
+        padding: calc(3 * var(--hu)) calc(8 * var(--hu));
+        border: 1px solid var(--panel-border);
+        border-radius: calc(6 * var(--hu));
+        background: transparent;
+        color: var(--text-dim);
+        font-size: calc(11 * var(--hu));
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .battle-damage-tabs [role="tab"][aria-selected="true"] {
+        border-color: rgba(79, 141, 253, 0.55);
+        background: rgba(79, 141, 253, 0.22);
+        color: #d5e2ec;
+      }
+
+      #btn-battle-damage-toggle {
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+        letter-spacing: 0.12em;
+        flex-shrink: 0;
+        min-width: 0;
+        padding: calc(8 * var(--hu)) calc(4 * var(--hu));
+        border: 1px solid var(--btn-secondary-border);
+        border-radius: calc(6 * var(--hu));
+        background: var(--btn-secondary-bg);
+        color: #d5e2ec;
+        font-size: calc(11 * var(--hu));
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      #battle-damage-panel.is-collapsed {
+        width: auto;
+        min-width: 0;
+        gap: 0;
+      }
+
+      #battle-damage-panel.is-collapsed #battle-damage-body,
+      #battle-damage-panel.is-collapsed .battle-damage-tabs {
+        display: none;
+      }
+
+      #battle-damage-body {
+        display: grid;
+        flex: 1;
+        min-width: 0;
+        gap: calc(8 * var(--hu));
+      }
+
+      .battle-damage-row {
+        display: grid;
+        gap: calc(3 * var(--hu));
+        font-size: calc(11 * var(--hu));
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-damage-row-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: calc(8 * var(--hu));
+      }
+
+      .battle-damage-name {
+        overflow: hidden;
+        color: #9cbcff;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .battle-damage-row.is-mate .battle-damage-name {
+        color: #7ee8e8;
+      }
+
+      .battle-damage-value {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .battle-damage-bar-self { background: var(--blue); }
+      .battle-damage-bar-mate { background: #35d6d6; }
+
       #battle-hud {
         position: absolute;
         /* 去掉顶部手牌行后整体上提；安全区扣掉舞台 letterbox，避免双计 */
@@ -1811,6 +1929,9 @@
         left: 50%;
         width: min(calc(480 * var(--hu)), calc(100vw - 16px));
         transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
         pointer-events: none;
       }
 
@@ -6196,6 +6317,35 @@
             <div id="battle-opp-hand" aria-label="对手手牌 0 / 9">0 / 9</div>
           </div>
         </div>
+        <section id="battle-damage-panel" class="panel is-hidden is-collapsed" aria-label="实时伤害">
+          <div class="battle-damage-header">
+            <button id="btn-battle-damage-toggle" type="button" aria-expanded="false">伤害面板</button>
+            <div class="battle-damage-tabs" role="tablist" aria-label="伤害类型">
+              <button type="button" role="tab" id="btn-battle-damage-tab-castle" data-tab="castle" aria-selected="true">基地</button>
+              <button type="button" role="tab" id="btn-battle-damage-tab-units" data-tab="units" aria-selected="false">兵种</button>
+            </div>
+          </div>
+          <div id="battle-damage-body">
+            <div class="battle-damage-row">
+              <div class="battle-damage-row-head">
+                <span id="battle-damage-self-name" class="battle-damage-name">我</span>
+                <strong id="battle-damage-self-value" class="battle-damage-value">0</strong>
+              </div>
+              <div class="battle-hp-track">
+                <div id="battle-damage-self-bar" class="battle-hp-bar battle-damage-bar-self"></div>
+              </div>
+            </div>
+            <div class="battle-damage-row is-mate">
+              <div class="battle-damage-row-head">
+                <span id="battle-damage-mate-name" class="battle-damage-name">队友</span>
+                <strong id="battle-damage-mate-value" class="battle-damage-value">0</strong>
+              </div>
+              <div class="battle-hp-track">
+                <div id="battle-damage-mate-bar" class="battle-hp-bar battle-damage-bar-mate"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
       <div id="battle-announce" class="is-hidden" role="status" aria-live="polite">
         <span id="battle-announce-text"></span>

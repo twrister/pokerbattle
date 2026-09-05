@@ -26,6 +26,7 @@ import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import { isBuildingInsideHalfCourt, normalizeDeployAnchor } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { isBuildingConfig, UNIT_CONFIGS } from '../config/units.js';
+import type { SlotDamageStats } from '../entity/damageStats.js';
 import {
   DEFAULT_DOUBLE_SPEED_DURATION_SECONDS,
   DEFAULT_DOUBLE_SPEED_DURATION_TICKS,
@@ -300,6 +301,11 @@ export class MatchState {
   /** 指定席位主堡当前生命；未播种或已清理视为零。 */
   getSlotCastleHp(slot: number): number {
     return this.findSlotCastle(slot)?.hp ?? 0;
+  }
+
+  /** 指定席位本局对基地 / 对兵种累计伤害。 */
+  getSlotDamageStats(slot: number): Readonly<SlotDamageStats> {
+    return this.world.getSlotDamageStats(slot);
   }
 
   /** 指定席位主堡最大生命。 */

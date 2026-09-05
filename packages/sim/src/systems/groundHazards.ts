@@ -35,6 +35,6 @@ function resolveGroundBurn(world: World, hazard: GroundHazard): void {
     if (!isAlive(unit) || unit.faction === hazard.faction) continue;
     if (unit.config.movementLayer === 'air') continue;
     if (distSq(hazard.x, hazard.y, unit.pos.x, unit.pos.y) > radiusSq) continue;
-    applyCombatDamage(unit, hazard.damage, true);
+    applyCombatDamage(unit, hazard.damage, true, world, hazard.ownerSlot);
   }
 }

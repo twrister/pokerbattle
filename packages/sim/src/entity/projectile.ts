@@ -72,6 +72,8 @@ export interface Projectile {
   homing: boolean;
   /** 落地后在 impactPos 生成燃烧区；打空中目标时为 null。 */
   groundBurn: ProjectileGroundBurn | null;
+  /** 发射席位；2v2 用来把延迟命中记到出兵者，而不是只认阵营。 */
+  readonly ownerSlot: number;
   dead: boolean;
 }
 
@@ -96,6 +98,7 @@ export function createProjectile(
   fuseBombKind: 'giant_bomb' | 'small_bomb' | null = null,
   homing = true,
   groundBurn: ProjectileGroundBurn | null = null,
+  ownerSlot: number = faction,
 ): Projectile {
   return {
     id,
@@ -119,6 +122,7 @@ export function createProjectile(
     fuseBombKind,
     homing,
     groundBurn,
+    ownerSlot,
     dead: false,
   };
 }

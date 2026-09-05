@@ -190,11 +190,25 @@ export function isAlive(unit: Unit | undefined): unit is Unit {
 /** 受击表现持续逻辑帧，与 aoeHitFxLeft 对齐，保证当帧快照能读到。 */
 const HIT_FX_TICKS = 2;
 
+/** 扣血时可把实际伤害记到席位账本；测试与表现层可不传。 */
+export interface CombatDamageLedger {
+  recordCombatDamage(attackerSlot: number, target: Unit, amount: Fx): void;
+}
+
 /**
  * 战斗扣血并标记受击表现。
  * 箭塔自然掉血必须直接改 hp，不能走这里，否则客户端会误闪红。
  */
-export function applyCombatDamage(unit: Unit, amount: Fx, aoe = false): void {
+export function applyCombatDamage(
+  unit: Unit,
+  amount: Fx,
+  aoe = false,
+  ledger?: CombatDamageLedger,
+  attackerSlot?: number,
+): void {
+  if (ledger && attackerSlot != null) {
+    ledger.recordCombatDamage(attackerSlot, unit, amount);
+  }
   unit.hp -= amount;
   unit.hitFxLeft = HIT_FX_TICKS;
   if (aoe) unit.aoeHitFxLeft = HIT_FX_TICKS;
@@ -203,7 +217,12 @@ export function applyCombatDamage(unit: Unit, amount: Fx, aoe = false): void {
 /**
  * 炸弹爆炸扣血：对基地减半，避免投放/自爆直接削穿主堡；单位与其它建筑仍吃全额。
  */
-export function applyBombDamage(unit: Unit, amount: Fx): void {
+export function applyBombDamage(
+  unit: Unit,
+  amount: Fx,
+  ledger?: CombatDamageLedger,
+  attackerSlot?: number,
+): void {
   const dealt = isCastleId(unit.typeId) ? mul(amount, HALF) : amount;
-  applyCombatDamage(unit, dealt, true);
+  applyCombatDamage(unit, dealt, true, ledger, attackerSlot);
 }

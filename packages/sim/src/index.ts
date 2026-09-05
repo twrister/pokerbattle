@@ -298,6 +298,7 @@ export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';
 
 export { Faction, NO_TARGET, type Unit, UnitState, applyBombDamage, applyCombatDamage, isAlive, opposingFaction } from './entity/unit.js';
+export { type SlotDamageStats } from './entity/damageStats.js';
 export {
   type Projectile,
   type ProjectileImpactFx,

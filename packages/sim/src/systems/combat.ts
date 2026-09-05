@@ -84,7 +84,7 @@ function resolveAttack(world: World, unit: Unit): void {
   if (!isInAttackRangeBand(unit, target, ATTACK_RANGE_TOLERANCE)) return;
 
   if (attack.kind === 'melee') {
-    applyCombatDamage(target, unit.stats.damage);
+    applyCombatDamage(target, unit.stats.damage, false, world, unit.ownerSlot);
     return;
   }
   // 对空只打单体：范围弹道打到空中目标时关掉落地爆炸
@@ -121,7 +121,7 @@ function resolveMeleeAoe(world: World, unit: Unit): void {
 
     if (!isWithinAttackReach(unit, other, ATTACK_RANGE_TOLERANCE)) continue;
 
-    applyCombatDamage(other, unit.stats.damage, true);
+    applyCombatDamage(other, unit.stats.damage, true, world, unit.ownerSlot);
     hitAny = true;
   }
 

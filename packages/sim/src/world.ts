@@ -1,4 +1,4 @@
-import { type Fx, fromFloat, ONE, toFloat } from './math/fixed.js';
+import { type Fx, fromFloat, min, ONE, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
@@ -8,6 +8,7 @@ import {
   getUnitConfig,
   isArcherTowerId,
   isBuildingConfig,
+  isCastleId,
   usesArrowVisual,
   usesDragonProjectile,
 } from './config/units.js';
@@ -33,6 +34,12 @@ import {
   type HealEffect,
 } from './entity/effect.js';
 import type { GroundHazard } from './entity/groundHazard.js';
+import {
+  createSlotDamageLedger,
+  emptySlotDamageStats,
+  resetSlotDamageLedger,
+  type SlotDamageStats,
+} from './entity/damageStats.js';
 import { Faction, type Unit, createUnit } from './entity/unit.js';
 import { evictionDeltaOutOfAabb } from './nav/buildingEvict.js';
 import { evictUnitFromRiver } from './nav/riverEvict.js';
@@ -85,6 +92,8 @@ export class World {
   readonly aoePulseEffects: AoePulseEffect[] = [];
   readonly explosionEffects: ExplosionEffect[] = [];
   readonly groundHazards: GroundHazard[] = [];
+  /** 各席对基地 / 对兵种累计伤害；派生数据，不进 hash。 */
+  private readonly slotDamage = createSlotDamageLedger();
   /** 1 格分辨率的建筑占格表，用于放置重叠校验（与 NAV 半格网格独立） */
   private readonly buildingCells: Uint8Array;
   readonly buildingCols: number;
@@ -111,6 +120,26 @@ export class World {
 
   getUnit(id: number): Unit | undefined {
     return this.unitsById.get(id);
+  }
+
+  /** 指定席位本局累计输出；越界席位返回全零。 */
+  getSlotDamageStats(slot: number): Readonly<SlotDamageStats> {
+    return this.slotDamage[slot] ?? emptySlotDamageStats();
+  }
+
+  /**
+   * 把一次战斗扣血记到攻击席位。只计实际削掉的血（不超过当前剩余 HP），
+   * 基地走 toCastle，其余敌军走 toUnits。
+   */
+  recordCombatDamage(attackerSlot: number, target: Unit, amount: Fx): void {
+    if (amount <= 0) return;
+    const stats = this.slotDamage[attackerSlot];
+    if (!stats) return;
+    const remaining = target.hp > 0 ? target.hp : 0;
+    const dealt = min(amount, remaining);
+    if (dealt <= 0) return;
+    if (isCastleId(target.typeId)) stats.toCastle += dealt;
+    else stats.toUnits += dealt;
   }
 
   /**
@@ -341,6 +370,7 @@ export class World {
       null,
       homing,
       groundBurn,
+      from.ownerSlot,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -355,6 +385,7 @@ export class World {
     targetX: Fx,
     targetY: Fx,
     damageOverride?: Fx,
+    ownerSlot: number = faction,
   ): Projectile {
     return this.spawnFuseBomb(
       faction,
@@ -363,6 +394,7 @@ export class World {
       targetY,
       GIANT_BOMB_ARC_SCALE,
       damageOverride,
+      ownerSlot,
     );
   }
 
@@ -375,6 +407,7 @@ export class World {
     targetX: Fx,
     targetY: Fx,
     damageOverride?: Fx,
+    ownerSlot: number = faction,
   ): Projectile {
     return this.spawnFuseBomb(
       faction,
@@ -383,6 +416,7 @@ export class World {
       targetY,
       BOMB_ARC_SCALE,
       damageOverride,
+      ownerSlot,
     );
   }
 
@@ -394,9 +428,13 @@ export class World {
     targetY: Fx,
     arcScale: number,
     damageOverride?: Fx,
+    ownerSlot: number = faction,
   ): Projectile {
     const config = getUnitConfig(typeId);
+    // 2v2 必须从出牌席自己的主堡起飞，不能 find 到同队另一座
     const base = this.units.find(
+      (unit) => unit.ownerSlot === ownerSlot && unit.typeId === 'building_base' && !unit.dead,
+    ) ?? this.units.find(
       (unit) => unit.faction === faction && unit.typeId === 'building_base' && !unit.dead,
     );
     const startX = base?.pos.x ?? ARENA_WIDTH / 2;
@@ -425,6 +463,9 @@ export class World {
       'explosion',
       'bomb',
       typeId,
+      true,
+      null,
+      ownerSlot,
     );
     this.projectiles.push(projectile);
     return projectile;
@@ -500,6 +541,7 @@ export class World {
     faction: Faction,
     durationTicks: number,
     intervalTicks: number,
+    ownerSlot: number = faction,
   ): void {
     const totalTicks = Math.max(1, durationTicks);
     const interval = Math.max(1, intervalTicks);
@@ -510,6 +552,7 @@ export class World {
       radius,
       damage,
       faction,
+      ownerSlot,
       intervalTicks: interval,
       ticksUntilNextDamage: interval,
       remainingTicks: totalTicks,
@@ -585,6 +628,7 @@ export class World {
     this.nextEntityId = 1;
     this.nextEffectId = 1;
     this.rng.setState(this.seed);
+    resetSlotDamageLedger(this.slotDamage);
     // 配置面板可能改过半径，格子尺寸要跟着 MAX_UNIT_RADIUS 走
     this.unitGrid = new SpatialHash(ARENA_WIDTH, ARENA_HEIGHT, MAX_UNIT_RADIUS * 2);
     this.unitGridDirty = true;

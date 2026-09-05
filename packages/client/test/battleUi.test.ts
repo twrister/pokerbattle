@@ -7,10 +7,13 @@ import {
   MatchState,
   TICK_RATE,
   applyArenaPreset,
+  applyCombatDamage,
   fromFloat,
+  fromInt,
   opposingFaction,
 } from '@pb/sim';
 import { createBattleHud } from '../src/ui/battleHud.js';
+import { createBattleDamagePanel } from '../src/ui/battleDamagePanel.js';
 import { createBattleResult } from '../src/ui/battleResult.js';
 
 describe('对局 HUD 与结算弹窗', () => {
@@ -59,6 +62,27 @@ describe('对局 HUD 与结算弹窗', () => {
           <div id="battle-team-opp-bar"></div>
         </div>
       </section>
+      <section id="battle-damage-panel" class="panel is-hidden is-collapsed">
+        <div class="battle-damage-header">
+          <button id="btn-battle-damage-toggle" type="button" aria-expanded="false">伤害面板</button>
+          <div class="battle-damage-tabs" role="tablist">
+            <button type="button" role="tab" id="btn-battle-damage-tab-castle" data-tab="castle" aria-selected="true">基地</button>
+            <button type="button" role="tab" id="btn-battle-damage-tab-units" data-tab="units" aria-selected="false">兵种</button>
+          </div>
+        </div>
+        <div id="battle-damage-body">
+          <div class="battle-damage-row">
+            <span id="battle-damage-self-name">我</span>
+            <strong id="battle-damage-self-value">0</strong>
+            <div id="battle-damage-self-bar"></div>
+          </div>
+          <div class="battle-damage-row">
+            <span id="battle-damage-mate-name">队友</span>
+            <strong id="battle-damage-mate-value">0</strong>
+            <div id="battle-damage-mate-bar"></div>
+          </div>
+        </div>
+      </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true">
         <h2 id="battle-result-title"></h2><p id="battle-result-detail"></p>
         <article id="battle-result-self" class="battle-result-side is-self">
@@ -85,6 +109,8 @@ describe('对局 HUD 与结算弹窗', () => {
 
   afterEach(() => {
     applyArenaPreset('1v1');
+    localStorage.removeItem('pb.battleDamagePanel.collapsed');
+    localStorage.removeItem('pb.battleDamagePanel.tab');
   });
 
   it('从 MatchState 渲染基地血量、阶段与常规倒计时', () => {
@@ -351,5 +377,61 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-team-self-hp')?.textContent).toBe('10000 / 10000');
     expect(document.querySelector('#battle-team-opp-hp')?.textContent).toBe('10000 / 10000');
     expect(document.querySelector('#battle-team-self-bar')?.getAttribute('style')).toContain('100%');
+  });
+
+  it('1v1 不显示实时伤害面板', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const panel = createBattleDamagePanel();
+    panel.setContext({ localName: 'Alice', localSlot: 0 });
+    panel.show();
+    panel.update(match);
+
+    expect(document.querySelector('#battle-damage-panel')?.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('2v2 显示实时伤害面板且默认折叠，数值随 MatchState 更新', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    const castle = match.world.units.find(
+      (unit) => unit.ownerSlot === 2 && unit.typeId === 'building_base',
+    );
+    if (!castle) throw new Error('敌方主堡未生成');
+    const grunt = match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(16));
+    applyCombatDamage(castle, fromInt(120), false, match.world, 0);
+    applyCombatDamage(grunt, fromInt(40), false, match.world, 1);
+
+    const panel = createBattleDamagePanel();
+    panel.setContext({
+      localName: '我',
+      localSlot: 0,
+      teammateName: '队友',
+      teammateSlot: 1,
+    });
+    panel.show();
+    panel.update(match);
+
+    const root = document.querySelector('#battle-damage-panel');
+    expect(root?.classList.contains('is-hidden')).toBe(false);
+    expect(root?.classList.contains('is-collapsed')).toBe(true);
+    expect(document.querySelector('#btn-battle-damage-toggle')?.textContent).toBe('伤害面板');
+    expect(document.querySelector('#battle-damage-self-name')?.textContent).toBe('我');
+    expect(document.querySelector('#battle-damage-mate-name')?.textContent).toBe('队友');
+    expect(document.querySelector('#btn-battle-damage-tab-castle')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('#battle-damage-self-value')?.textContent).toBe('120');
+    expect(document.querySelector('#battle-damage-mate-value')?.textContent).toBe('0');
+    expect(document.querySelector('#battle-damage-self-bar')?.getAttribute('style')).toContain('100%');
+    expect(document.querySelector('#battle-damage-mate-bar')?.getAttribute('style')).toContain('0%');
+
+    document.querySelector<HTMLButtonElement>('#btn-battle-damage-tab-units')?.click();
+    expect(document.querySelector('#btn-battle-damage-tab-units')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('#battle-damage-self-value')?.textContent).toBe('0');
+    expect(document.querySelector('#battle-damage-mate-value')?.textContent).toBe('40');
+    expect(document.querySelector('#battle-damage-self-bar')?.getAttribute('style')).toContain('0%');
+    expect(document.querySelector('#battle-damage-mate-bar')?.getAttribute('style')).toContain('100%');
+
+    document.querySelector<HTMLButtonElement>('#btn-battle-damage-toggle')?.click();
+    expect(root?.classList.contains('is-collapsed')).toBe(false);
+    expect(document.querySelector('#btn-battle-damage-toggle')?.textContent).toBe('收起');
   });
 });

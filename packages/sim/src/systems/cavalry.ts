@@ -107,7 +107,7 @@ function resolveChargeHits(world: World, unit: Unit): void {
     const forward = mul(dx, unit.chargeDir.x) + mul(dy, unit.chargeDir.y);
     if (forward < 0) continue;
 
-    applyCombatDamage(other, charge.hitDamage, true);
+    applyCombatDamage(other, charge.hitDamage, true, world, unit.ownerSlot);
     applyLateralKnockback(world, unit, other, charge.knockback);
     unit.chargeHits.push(other.id);
     hitAny = true;

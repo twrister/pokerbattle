@@ -25,10 +25,11 @@ export function applyCommands(world: World, commands: readonly Command[]): void 
         if (isBuildingConfig(getUnitConfig(command.typeId))) break;
         // 引信炸弹与出牌一致：主堡抛物线投放，不生成地面单位
         if (isFuseBombTypeId(command.typeId)) {
+          const bombSlot = command.slot ?? command.faction;
           if (command.typeId === 'small_bomb') {
-            world.spawnSmallBomb(command.faction, command.x, command.y);
+            world.spawnSmallBomb(command.faction, command.x, command.y, undefined, bombSlot);
           } else {
-            world.spawnGiantBomb(command.faction, command.x, command.y);
+            world.spawnGiantBomb(command.faction, command.x, command.y, undefined, bombSlot);
           }
           break;
         }
@@ -81,10 +82,11 @@ function applyPlayFormation(
   if (isFuseBombFormation(formation)) {
     const bombType = getFuseBombTypeId(formation)!;
     const damageOverride = resolveFuseBombDamage(formation, cards as PlayingCard[]);
+    const bombSlot = command.slot ?? command.faction;
     if (bombType === 'small_bomb') {
-      world.spawnSmallBomb(command.faction, command.x, command.y, damageOverride);
+      world.spawnSmallBomb(command.faction, command.x, command.y, damageOverride, bombSlot);
     } else {
-      world.spawnGiantBomb(command.faction, command.x, command.y, damageOverride);
+      world.spawnGiantBomb(command.faction, command.x, command.y, damageOverride, bombSlot);
     }
     return;
   }

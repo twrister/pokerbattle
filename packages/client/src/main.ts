@@ -91,6 +91,7 @@ import {
   TEAMMATE_DOWN_ANNOUNCE,
 } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
+import { createBattleDamagePanel } from './ui/battleDamagePanel.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
 import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHands.js';
@@ -257,6 +258,7 @@ const codexPage = createCodexPage({
   onOpenSceneConfig: () => screens.show('scene-config'),
 });
 const battleHud = createBattleHud();
+const battleDamagePanel = createBattleDamagePanel();
 const battleAnnounce = createBattleAnnounce();
 const spectatorHands = createSpectatorHands();
 const versusExitConfirm = createVersusExitConfirm();
@@ -559,11 +561,15 @@ function enterBattleSession(mode: BattleMode): () => void {
       localName: playerProfile.getProfile().displayName,
       opponentName: '电脑',
     });
+    battleDamagePanel.setContext({
+      localName: playerProfile.getProfile().displayName,
+    });
     battleResult.setContext({
       localName: playerProfile.getProfile().displayName,
       opponentName: '电脑',
     });
     battleHud.show();
+    battleDamagePanel.show();
   }
 
   const sceneContext = ensureBattleScene(mode, Faction.Blue);
@@ -1148,6 +1154,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     handPanel?.update(deltaMs);
     if (isSolo) {
       battleHud.update(loop.match!);
+      battleDamagePanel.update(loop.match!);
       battleAnnounce.tick(loop.match!);
       if (loop.match!.result && !resultShown) {
         resultShown = true;
@@ -1172,6 +1179,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     cancelAnimationFrame(animationFrameId);
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleDamagePanel.hide();
     battleAnnounce.reset();
     battleResult.hide();
     container.classList.add('is-hidden');
@@ -1312,8 +1320,10 @@ function runVersusSession(
     extraOpponentName: oppSlots[1] == null ? undefined : memberName(oppSlots[1], '对手'),
   };
   battleHud.setContext(hudContext);
+  battleDamagePanel.setContext(hudContext);
   battleResult.setContext(hudContext);
   battleHud.show();
+  battleDamagePanel.show();
 
   const recorder = new ReplayRecorder();
   netLoop.setOnFrameApplied((tick, commands) => recorder.record(tick, commands));
@@ -1633,6 +1643,7 @@ function runVersusSession(
     }
     handPanel.update(deltaMs);
     battleHud.update(netLoop.match);
+    battleDamagePanel.update(netLoop.match);
     battleAnnounce.tick(netLoop.match);
     if (netLoop.match.result && !resultShown) {
       resultShown = true;
@@ -1658,6 +1669,7 @@ function runVersusSession(
     netLoop.setOnFrameApplied(undefined);
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleDamagePanel.hide();
     battleAnnounce.reset();
     battleResult.hide();
     versusExitConfirm.hide();
@@ -1703,10 +1715,12 @@ function runReplaySession(record: ReplayRecord): () => void {
   battleHud.setSpectatorCount(0);
   battleHud.setCatchingUp(false);
   battleHud.setContext(record.context);
+  battleDamagePanel.setContext(record.context);
   battleResult.setContext(record.context);
   spectatorHands.setNames(replayHandNames(record.context));
   spectatorHands.show();
   battleHud.show();
+  battleDamagePanel.show();
 
   applyArenaPreset(record.matchMode);
   const replayLoop = new ReplayLoop(record, {
@@ -1772,6 +1786,7 @@ function runReplaySession(record: ReplayRecord): () => void {
       replayControls.setProgress(replayLoop.tick, record.endTick);
     }
     battleHud.update(replayLoop.match);
+    battleDamagePanel.update(replayLoop.match);
     battleAnnounce.tick(replayLoop.match);
     if (replayLoop.match.result && !resultShown) {
       resultShown = true;
@@ -1788,6 +1803,7 @@ function runReplaySession(record: ReplayRecord): () => void {
     replaySessionActive = false;
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleDamagePanel.hide();
     battleHud.setCatchingUp(false);
     spectatorHands.hide();
     battleAnnounce.reset();
@@ -1860,6 +1876,7 @@ function runSpectateSession(
     extraOpponentName: redSlots[1] == null ? undefined : memberName(redSlots[1], '红方2'),
   };
   battleHud.setContext(spectateContext);
+  battleDamagePanel.setContext(spectateContext);
   battleResult.setContext(spectateContext);
   spectatorHands.setNames({
     blue: spectateContext.localName,
@@ -1870,6 +1887,7 @@ function runSpectateSession(
   spectatorHands.show();
   battleHud.setCatchingUp(netLoop.pendingTicks > 0);
   battleHud.show();
+  battleDamagePanel.show();
 
   applyArenaPreset(netLoop.match.mode);
   const sceneContext = ensureBattleScene('solo', Faction.Blue);
@@ -1907,6 +1925,7 @@ function runSpectateSession(
       spectatorHands.update(netLoop.match);
     }
     battleHud.update(netLoop.match);
+    battleDamagePanel.update(netLoop.match);
     battleAnnounce.tick(netLoop.match);
     if (netLoop.match.result && !resultShown) {
       resultShown = true;
@@ -1923,6 +1942,7 @@ function runSpectateSession(
     cancelAnimationFrame(animationFrameId);
     hud.classList.add('is-hidden');
     battleHud.hide();
+    battleDamagePanel.hide();
     battleHud.setCatchingUp(false);
     spectatorHands.hide();
     battleAnnounce.reset();

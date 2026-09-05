@@ -68,7 +68,7 @@ function resolveDetonate(world: World, unit: Unit): void {
     // 爆炸只伤地面；飞行单位需被其它攻击锁定才吃伤害
     if (other.config.movementLayer === 'air') continue;
     if (!isInsideDetonateRadius(unit, other, radiusSq)) continue;
-    applyBombDamage(other, damage);
+    applyBombDamage(other, damage, world, unit.ownerSlot);
   }
 
   world.spawnExplosionEffect(unit.pos.x, unit.pos.y, radius);
