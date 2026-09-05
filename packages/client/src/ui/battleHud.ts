@@ -192,7 +192,10 @@ export function createBattleHud(): BattleHudHandle {
       }, lastTimerText);
 
       const oppHandSlot = context.opponentSlot ?? opp;
-      const nextOppHand = formatHandCount(match.decks[oppHandSlot]?.hand.length ?? 0, match.getMaxHandSize());
+      const nextOppHand = formatHandCount(
+        match.decks[oppHandSlot]?.hand.length ?? 0,
+        match.getMaxHandSizeForSlot(oppHandSlot),
+      );
       writeText(oppHand, nextOppHand, (value) => {
         lastOppHandText = value;
         oppHand.setAttribute('aria-label', `对手手牌 ${value}`);

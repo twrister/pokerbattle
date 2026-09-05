@@ -2,6 +2,7 @@ import {
   clampHandSize,
   createPokerCards,
   HAND_LIMIT_DOUBLE_SPEED,
+  HAND_LIMIT_ELIMINATED,
   HAND_LIMIT_FINAL,
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
@@ -407,6 +408,11 @@ export class MatchState {
     return this.currentHandLimit();
   }
 
+  /** 指定席位当前抽牌上限；2v2 陷落席压到 HAND_LIMIT_ELIMINATED。 */
+  getMaxHandSizeForSlot(slot: number): number {
+    return this.handLimitForSlot(slot);
+  }
+
   /** 当前阶段结束 tick，供阶段播报倒数；已结束则停在收局帧。 */
   getPhaseDeadlineTick(): number {
     if (this.phase === 'ended' || this.result) return this.result?.endTick ?? this.matchEndTick();
@@ -497,6 +503,8 @@ export class MatchState {
     for (const slot of allSlots(this.mode)) {
       this.maybeTriggerCastlePack(slot, this.getSlotCastleHp(slot));
     }
+    // 本帧陷落后立刻压上限，同帧 tryDrawForSlot 才不会按旧的 9/10/11 再抽。
+    this.syncHandLimits();
     this.clampDrawCountdown();
     this.advancePhases();
   }
@@ -581,10 +589,15 @@ export class MatchState {
     return this.normalHandLimit;
   }
 
+  /** 2v2 主堡已灭的席位不再跟阶段涨上限，始终按淘汰上限发牌。 */
+  private handLimitForSlot(slot: number): number {
+    if (this.mode === '2v2' && this.isSlotEliminated(slot)) return HAND_LIMIT_ELIMINATED;
+    return this.currentHandLimit();
+  }
+
   private syncHandLimits(): void {
-    const max = this.currentHandLimit();
     for (const slot of allSlots(this.mode)) {
-      this.decks[slot]!.setMaxHandSize(max);
+      this.decks[slot]!.setMaxHandSize(this.handLimitForSlot(slot));
     }
   }
 

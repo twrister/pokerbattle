@@ -894,7 +894,7 @@ function enterBattleSession(mode: BattleMode): () => void {
         externalCardConsume: true,
         getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw(Faction.Blue) * 1000) / TICK_RATE,
         getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
-        getMaxHandSize: () => loop.match!.getMaxHandSize(),
+        getMaxHandSize: () => loop.match!.getMaxHandSizeForSlot(Faction.Blue),
         getHasPendingDraw: () => loop.match!.hasPendingDraw(Faction.Blue),
         getDealOrigin: () => {
           if (!dealFromCastle) return null;
@@ -1480,7 +1480,7 @@ function runVersusSession(
     externalCardConsume: true,
     getDrawRemainingMs: () => (netLoop.match.getTicksUntilDraw(localSlot) * 1000) / TICK_RATE,
     getDrawIntervalMs: () => (netLoop.match.getDrawIntervalTicksForSlot(localSlot) * 1000) / TICK_RATE,
-    getMaxHandSize: () => netLoop.match.getMaxHandSize(),
+    getMaxHandSize: () => netLoop.match.getMaxHandSizeForSlot(localSlot),
     getHasPendingDraw: () => netLoop.match.hasPendingDraw(localSlot),
     getDealOrigin: () => {
       if (!dealFromCastle) return null;

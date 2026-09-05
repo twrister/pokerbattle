@@ -8,6 +8,7 @@ import {
   FINAL_DRAW_INTERVAL_TICKS,
   FINAL_START_TICKS,
   HAND_LIMIT_DOUBLE_SPEED,
+  HAND_LIMIT_ELIMINATED,
   HAND_LIMIT_FINAL,
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
@@ -473,16 +474,20 @@ describe('MatchState 2v2', () => {
     expect(match.getSlotCastlePosition(3)).toEqual({ x: 18, y: fullH - 3 });
   });
 
-  it('单座阵亡后该席仍正常补牌且可打完手牌，对局继续', () => {
+  it('单座阵亡后该席仍可出牌，上限改为 5，打到低于 5 后再补回 5', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     expect(match.world.units.filter((unit) => unit.typeId === 'building_base')).toHaveLength(4);
     const before = match.decks[0]!.hand.length;
+    expect(before).toBeGreaterThan(HAND_LIMIT_ELIMINATED);
     castleOfSlot(match, 0).hp = 0;
     match.step();
     expect(match.isSlotEliminated(0)).toBe(true);
     expect(match.isSlotEliminated(1)).toBe(false);
     expect(match.result).toBeNull();
+    expect(match.getMaxHandSizeForSlot(0)).toBe(HAND_LIMIT_ELIMINATED);
+    expect(match.decks[0]!.maxHandSize).toBe(HAND_LIMIT_ELIMINATED);
+    expect(match.getMaxHandSizeForSlot(1)).toBe(HAND_LIMIT_NORMAL);
     const tick = match.world.tick;
     match.step();
     match.step();
@@ -505,9 +510,35 @@ describe('MatchState 2v2', () => {
     match.step([play]);
     expect(match.decks[0]!.hand).toHaveLength(before - 1);
 
-    stepTo(match, NORMAL_DRAW_INTERVAL_TICKS);
-    expect(match.decks[0]!.hand.length).toBeGreaterThan(before - 1);
+    // 手里仍超过淘汰上限时只出不抽；直接回堆打到 4 张后再按 5 补。
+    stepTo(match, match.world.tick + NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.decks[0]!.hand.length).toBe(before - 1);
     expect(match.decks[1]!.hand.length).toBeGreaterThan(before);
+    const leftover = match.decks[0]!.hand.slice(0, match.decks[0]!.hand.length - 4);
+    match.decks[0]!.play(leftover.map((card) => card.id));
+    expect(match.decks[0]!.hand).toHaveLength(4);
+    stepTo(match, match.world.tick + NORMAL_DRAW_INTERVAL_TICKS);
+    expect(match.decks[0]!.hand).toHaveLength(HAND_LIMIT_ELIMINATED);
+  });
+
+  it('切到倍速/决胜后陷落席上限仍是 5', () => {
+    const match = new MatchState(1, '2v2');
+    match.seedStartingCastles();
+    castleOfSlot(match, 0).hp = 0;
+    match.step();
+    expect(match.getMaxHandSizeForSlot(0)).toBe(HAND_LIMIT_ELIMINATED);
+    expect(match.getMaxHandSizeForSlot(1)).toBe(HAND_LIMIT_NORMAL);
+
+    shortenPhases(match);
+    stepTo(match, 30);
+    expect(match.phase).toBe('double_speed');
+    expect(match.getMaxHandSizeForSlot(0)).toBe(HAND_LIMIT_ELIMINATED);
+    expect(match.getMaxHandSizeForSlot(1)).toBe(HAND_LIMIT_DOUBLE_SPEED);
+
+    stepTo(match, 60);
+    expect(match.phase).toBe('final');
+    expect(match.getMaxHandSizeForSlot(0)).toBe(HAND_LIMIT_ELIMINATED);
+    expect(match.getMaxHandSizeForSlot(1)).toBe(HAND_LIMIT_FINAL);
   });
 
   it('队友阵亡后发牌间隔不变，全队仍按阶段正常补牌', () => {

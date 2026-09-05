@@ -110,7 +110,7 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
     expect(document.querySelector('#battle-timer')?.textContent).toBe('8:00');
     expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
-      `${match.decks[Faction.Red].hand.length} / ${match.getMaxHandSize()}`,
+      `${match.decks[Faction.Red].hand.length} / ${match.getMaxHandSizeForSlot(Faction.Red)}`,
     );
     expect(document.querySelector('#battle-self-protect-mark')?.getAttribute('style')).toContain('50%');
     expect(document.querySelector('#battle-self-track')?.classList.contains('is-protect')).toBe(false);
@@ -155,7 +155,7 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-opp-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
-      `${match.decks[opposingFaction(Faction.Red)].hand.length} / ${match.getMaxHandSize()}`,
+      `${match.decks[opposingFaction(Faction.Red)].hand.length} / ${match.getMaxHandSizeForSlot(opposingFaction(Faction.Red))}`,
     );
   });
 

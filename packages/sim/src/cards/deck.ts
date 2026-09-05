@@ -10,6 +10,8 @@ export const HAND_LIMIT_NORMAL = 9;
 export const HAND_LIMIT_DOUBLE_SPEED = 10;
 /** 决胜阶段默认手牌上限。 */
 export const HAND_LIMIT_FINAL = 11;
+/** 2v2 单座主堡陷落后该席继续发牌，但手牌上限压到此值。 */
+export const HAND_LIMIT_ELIMINATED = 5;
 
 /** 把张数夹到局内合法区间，供 MatchState 与运行控制共用。 */
 export function clampHandSize(size: number): number {

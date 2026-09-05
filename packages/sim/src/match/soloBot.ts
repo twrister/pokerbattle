@@ -213,7 +213,7 @@ export class SoloBotController {
       }
     }
 
-    const handLimit = match.getMaxHandSize();
+    const handLimit = match.getMaxHandSizeForSlot(this.faction);
     return {
       castle,
       castleId,
@@ -459,7 +459,7 @@ export class SoloBotController {
       this.waveBurstLeft -= 1;
       base = Math.floor(base / 2);
     }
-    const pressure = match.decks[this.faction].hand.length >= match.getMaxHandSize() - 1
+    const pressure = match.decks[this.faction].hand.length >= match.getMaxHandSizeForSlot(this.faction) - 1
       ? Math.floor(base / 3)
       : 0;
     const jitter = this.rng.nextInt(Math.max(2, Math.floor(base / 3)));
