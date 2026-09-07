@@ -5,6 +5,7 @@ import {
   toFloat,
   type MatchResult,
   type MatchState,
+  type SlotDamageStats,
 } from '@pb/sim';
 
 export interface BattleResultContext {
@@ -33,6 +34,14 @@ interface ResultMember {
   slot: number;
 }
 
+/** 一侧卡片上的基地/兵种数值与占比条。 */
+interface DamageBlock {
+  castleValue: HTMLElement;
+  unitsValue: HTMLElement;
+  castleBar: HTMLElement;
+  unitsBar: HTMLElement;
+}
+
 /** 展示本局权威结算，并将阵营结果转换为本地玩家视角。 */
 export function createBattleResult(onReturnToMenu: () => void): BattleResultHandle {
   const root = requiredElement<HTMLElement>('#battle-result-dialog');
@@ -46,8 +55,26 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
   const oppHp = requiredElement<HTMLElement>('#battle-result-opp-hp');
   const selfBar = requiredElement<HTMLElement>('#battle-result-self-bar');
   const oppBar = requiredElement<HTMLElement>('#battle-result-opp-bar');
+  const selfDamageCard = requiredElement<HTMLElement>('#battle-result-self-damage-card');
+  const oppDamageCard = requiredElement<HTMLElement>('#battle-result-opp-damage-card');
+  const selfDamageName = requiredElement<HTMLElement>('#battle-result-self-damage-name');
+  const oppDamageName = requiredElement<HTMLElement>('#battle-result-opp-damage-name');
+  const selfDamage: DamageBlock = {
+    castleValue: requiredElement('#battle-result-self-castle-value'),
+    unitsValue: requiredElement('#battle-result-self-units-value'),
+    castleBar: requiredElement('#battle-result-self-castle-bar'),
+    unitsBar: requiredElement('#battle-result-self-units-bar'),
+  };
+  const oppDamage: DamageBlock = {
+    castleValue: requiredElement('#battle-result-opp-castle-value'),
+    unitsValue: requiredElement('#battle-result-opp-units-value'),
+    castleBar: requiredElement('#battle-result-opp-castle-bar'),
+    unitsBar: requiredElement('#battle-result-opp-units-bar'),
+  };
   const selfMembers = requiredElement<HTMLElement>('#battle-result-self-members');
   const oppMembers = requiredElement<HTMLElement>('#battle-result-opp-members');
+  const selfDamageMembers = requiredElement<HTMLElement>('#battle-result-self-damage-members');
+  const oppDamageMembers = requiredElement<HTMLElement>('#battle-result-opp-damage-members');
   const compareRoot = requiredElement<HTMLElement>('#battle-result-compare');
   const compareSelf = requiredElement<HTMLElement>('#battle-result-compare-self');
   const compareOpp = requiredElement<HTMLElement>('#battle-result-compare-opp');
@@ -86,28 +113,26 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
       root.dataset.outcome = outcome;
       root.classList.toggle('is-2v2', Boolean(is2v2));
       detail.textContent = resultDetail(result);
-      fillSide(
-        selfCard,
-        selfName,
-        selfHp,
-        selfBar,
-        is2v2 ? '合计' : context.localName,
-        playerFaction,
-        result,
-        match,
-      );
-      fillSide(
-        oppCard,
-        oppName,
-        oppHp,
-        oppBar,
-        is2v2 ? '合计' : context.opponentName,
-        opposingFaction(playerFaction),
-        result,
-        match,
-      );
-      fillMembers(selfMembers, sideMembers(context, playerFaction, true, match), match);
-      fillMembers(oppMembers, sideMembers(context, opposingFaction(playerFaction), false, match), match);
+      const selfLabel = is2v2 ? '合计' : context.localName;
+      const oppLabel = is2v2 ? '合计' : context.opponentName;
+      fillSide(selfCard, selfName, selfHp, selfBar, selfLabel, playerFaction, result, match);
+      fillSide(oppCard, oppName, oppHp, oppBar, oppLabel, opposingFaction(playerFaction), result, match);
+      fillDamageSide(selfDamageCard, selfDamageName, selfLabel, playerFaction, result);
+      fillDamageSide(oppDamageCard, oppDamageName, oppLabel, opposingFaction(playerFaction), result);
+      const selfStats = match
+        ? sumSlotDamage(match, damageSlots(context, playerFaction, true, match))
+        : null;
+      const oppStats = match
+        ? sumSlotDamage(match, damageSlots(context, opposingFaction(playerFaction), false, match))
+        : null;
+      fillDamageBlock(selfDamage, selfStats, oppStats);
+      fillDamageBlock(oppDamage, oppStats, selfStats);
+      const selfTeam = sideMembers(context, playerFaction, true, match);
+      const oppTeam = sideMembers(context, opposingFaction(playerFaction), false, match);
+      fillHpMembers(selfMembers, selfTeam, match);
+      fillHpMembers(oppMembers, oppTeam, match);
+      fillDamageMembers(selfDamageMembers, selfTeam, match);
+      fillDamageMembers(oppDamageMembers, oppTeam, match);
       fillCompare(compareRoot, compareSelf, compareOpp, compareBar, playerFaction, Boolean(is2v2), match);
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
@@ -152,8 +177,23 @@ function fillSide(
   barEl.style.width = `${maxHp > 0 ? Math.max(0, (hp / maxHp) * 100) : 0}%`;
 }
 
-/** 2v2 下列出该侧每座主堡残血；1v1 只有一座，不重复占行。 */
-function fillMembers(list: HTMLElement, members: readonly ResultMember[], match?: MatchState): void {
+/** 伤害板块只写名字和胜负高亮，残血走上面那一块。 */
+function fillDamageSide(
+  card: HTMLElement,
+  nameEl: HTMLElement,
+  name: string,
+  faction: Faction,
+  result: MatchResult,
+): void {
+  nameEl.textContent = name;
+  const draw = result.winner === null;
+  const won = result.winner === faction;
+  card.classList.toggle('is-winner', won);
+  card.classList.toggle('is-loser', !draw && !won);
+}
+
+/** 2v2 残血板块只列每座主堡血量；1v1 只有一座，不重复占行。 */
+function fillHpMembers(list: HTMLElement, members: readonly ResultMember[], match?: MatchState): void {
   const show = Boolean(match && members.length > 1);
   list.classList.toggle('is-hidden', !show);
   list.replaceChildren();
@@ -163,15 +203,120 @@ function fillMembers(list: HTMLElement, members: readonly ResultMember[], match?
     const maxHp = Math.ceil(toFloat(match.getSlotCastleMaxHp(member.slot)));
     const row = document.createElement('li');
     if (hp <= 0) row.classList.add('is-down');
+    const head = document.createElement('div');
+    head.className = 'battle-result-member-head';
     const nameEl = document.createElement('span');
     nameEl.className = 'battle-result-member-name';
     nameEl.textContent = member.name;
     const hpEl = document.createElement('span');
     hpEl.className = 'battle-result-member-hp';
     hpEl.textContent = `${hp} / ${maxHp}`;
-    row.append(nameEl, hpEl);
+    head.append(nameEl, hpEl);
+    row.append(head);
     list.append(row);
   }
+}
+
+/** 2v2 伤害板块按人拆输出条；1v1 已有卡面合计，不再占行。 */
+function fillDamageMembers(list: HTMLElement, members: readonly ResultMember[], match?: MatchState): void {
+  const show = Boolean(match && members.length > 1);
+  list.classList.toggle('is-hidden', !show);
+  list.replaceChildren();
+  if (!show || !match) return;
+  const teamStats = sumSlotDamage(match, members.map((member) => member.slot));
+  for (const member of members) {
+    const row = document.createElement('li');
+    const nameEl = document.createElement('span');
+    nameEl.className = 'battle-result-member-name';
+    nameEl.textContent = member.name;
+    row.append(nameEl, createMemberDamage(match.getSlotDamageStats(member.slot), teamStats));
+    list.append(row);
+  }
+}
+
+/** 成员行两行输出条：数值 + 队内占比，和局内伤害面板同一套算法。 */
+function createMemberDamage(stats: SlotDamageStats, teamStats: SlotDamageStats): HTMLElement {
+  const block = document.createElement('div');
+  block.className = 'battle-result-member-damage';
+  block.append(
+    createDamageRow('基地', 'castle', stats.toCastle, teamStats.toCastle),
+    createDamageRow('兵种', 'units', stats.toUnits, teamStats.toUnits),
+  );
+  return block;
+}
+
+/** 拼一行「标签 + 数字 + 占比条」，供成员列表复用。 */
+function createDamageRow(label: string, kind: 'castle' | 'units', amount: number, total: number): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'battle-result-member-damage-row';
+  const head = document.createElement('div');
+  head.className = 'battle-result-damage-row-head';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = label;
+  const valueEl = document.createElement('strong');
+  valueEl.className = `battle-result-damage-value battle-result-member-${kind}`;
+  valueEl.textContent = formatDamageAmount(amount);
+  head.append(labelEl, valueEl);
+  const track = document.createElement('div');
+  track.className = 'battle-hp-track';
+  const bar = document.createElement('div');
+  bar.className = `battle-hp-bar battle-result-member-${kind}-bar`;
+  bar.style.width = barWidth(amount, total);
+  track.append(bar);
+  row.append(head, track);
+  return row;
+}
+
+/** 卡面写本侧数字，条宽按双方合计占比；无 match 时占位。 */
+function fillDamageBlock(block: DamageBlock, stats: SlotDamageStats | null, other: SlotDamageStats | null): void {
+  if (!stats || !other) {
+    block.castleValue.textContent = '—';
+    block.unitsValue.textContent = '—';
+    block.castleBar.style.width = '0%';
+    block.unitsBar.style.width = '0%';
+    return;
+  }
+  block.castleValue.textContent = formatDamageAmount(stats.toCastle);
+  block.unitsValue.textContent = formatDamageAmount(stats.toUnits);
+  block.castleBar.style.width = barWidth(stats.toCastle, stats.toCastle + other.toCastle);
+  block.unitsBar.style.width = barWidth(stats.toUnits, stats.toUnits + other.toUnits);
+}
+
+/** 卡片伤害行对应的席位：1v1 一人一席，2v2 同队两人。 */
+function damageSlots(
+  context: BattleResultContext,
+  faction: Faction,
+  isSelf: boolean,
+  match: MatchState,
+): number[] {
+  if (match.mode === '2v2') {
+    return sideMembers(context, faction, isSelf, match).map((member) => member.slot);
+  }
+  if (isSelf) return [context.localSlot ?? faction];
+  return [context.opponentSlot ?? faction];
+}
+
+/** 把若干席的输出加总，给 2v2 卡面合计用。 */
+function sumSlotDamage(match: MatchState, slots: readonly number[]): SlotDamageStats {
+  let toCastle = 0;
+  let toUnits = 0;
+  for (const slot of slots) {
+    const stats = match.getSlotDamageStats(slot);
+    toCastle += stats.toCastle;
+    toUnits += stats.toUnits;
+  }
+  return { toCastle, toUnits };
+}
+
+/** 定点伤害转整数，与局内面板同一套取整。 */
+function formatDamageAmount(amount: number): string {
+  return String(Math.round(toFloat(amount)));
+}
+
+/** 占比条；双方都是 0 时条宽为 0，避免空数据看起来像打满。 */
+function barWidth(amount: number, total: number): string {
+  if (total <= 0) return '0%';
+  return `${Math.max(0, Math.min(100, (amount / total) * 100))}%`;
 }
 
 /** 2v2 在两队卡片下再画一条总血量对比条，一眼看出哪边更多。 */

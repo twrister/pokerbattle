@@ -2444,6 +2444,20 @@
         box-shadow: 0 calc(24 * var(--hu)) calc(60 * var(--hu)) rgba(0, 0, 0, 0.42);
       }
 
+      .battle-result-block {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      .battle-result-block-title {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: calc(12 * var(--hu));
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-align: left;
+      }
+
       .battle-result-sides {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -2507,12 +2521,38 @@
         font-variant-numeric: tabular-nums;
       }
 
+      .battle-result-damage {
+        display: grid;
+        gap: calc(6 * var(--hu));
+      }
+
+      .battle-result-damage-row,
+      .battle-result-member-damage-row {
+        display: grid;
+        gap: calc(3 * var(--hu));
+        font-size: calc(11 * var(--hu));
+        font-variant-numeric: tabular-nums;
+      }
+
+      .battle-result-damage-row-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: calc(8 * var(--hu));
+        color: var(--text-dim);
+      }
+
+      .battle-result-damage-value {
+        color: var(--text);
+        font-weight: 700;
+      }
+
       .battle-result-side.is-self .battle-hp-bar { background: var(--blue); }
       .battle-result-side.is-opp .battle-hp-bar { background: var(--red); }
 
       .battle-result-members {
         display: grid;
-        gap: calc(4 * var(--hu));
+        gap: calc(8 * var(--hu));
         margin: calc(4 * var(--hu)) 0 0;
         padding: 0;
         list-style: none;
@@ -2523,9 +2563,8 @@
       }
 
       .battle-result-members li {
-        display: flex;
-        justify-content: space-between;
-        gap: calc(8 * var(--hu));
+        display: grid;
+        gap: calc(2 * var(--hu));
         min-width: 0;
         color: #d7e1eb;
         font-size: calc(12 * var(--hu));
@@ -2533,6 +2572,13 @@
 
       .battle-result-members li.is-down {
         opacity: 0.55;
+      }
+
+      .battle-result-member-head {
+        display: flex;
+        justify-content: space-between;
+        gap: calc(8 * var(--hu));
+        min-width: 0;
       }
 
       .battle-result-member-name {
@@ -2544,6 +2590,11 @@
       .battle-result-member-hp {
         flex-shrink: 0;
         font-variant-numeric: tabular-nums;
+      }
+
+      .battle-result-member-damage {
+        display: grid;
+        gap: calc(6 * var(--hu));
       }
 
       .battle-result-compare {
@@ -6354,29 +6405,87 @@
         <div class="battle-result-panel">
           <h2 id="battle-result-title">胜利</h2>
           <p id="battle-result-detail"></p>
-          <div class="battle-result-sides">
-            <article id="battle-result-self" class="battle-result-side is-self">
-              <span class="battle-result-side-tag">己方</span>
-              <strong id="battle-result-self-name" class="battle-result-name">玩家</strong>
-              <span id="battle-result-self-hp" class="battle-result-hp">0 / 0</span>
-              <div class="battle-hp-track"><div id="battle-result-self-bar" class="battle-hp-bar"></div></div>
-              <ul id="battle-result-self-members" class="battle-result-members is-hidden"></ul>
-            </article>
-            <article id="battle-result-opp" class="battle-result-side is-opp">
-              <span class="battle-result-side-tag">对方</span>
-              <strong id="battle-result-opp-name" class="battle-result-name">对手</strong>
-              <span id="battle-result-opp-hp" class="battle-result-hp">0 / 0</span>
-              <div class="battle-hp-track"><div id="battle-result-opp-bar" class="battle-hp-bar"></div></div>
-              <ul id="battle-result-opp-members" class="battle-result-members is-hidden"></ul>
-            </article>
-          </div>
-          <div id="battle-result-compare" class="battle-result-compare is-hidden" aria-label="队伍总血量对比">
-            <span id="battle-result-compare-self" class="battle-result-compare-self">己方 0</span>
-            <div class="battle-result-compare-track">
-              <div id="battle-result-compare-bar" class="battle-result-compare-bar"></div>
+          <section class="battle-result-block" aria-label="基地残血">
+            <h3 class="battle-result-block-title">基地残血</h3>
+            <div class="battle-result-sides">
+              <article id="battle-result-self" class="battle-result-side is-self">
+                <span class="battle-result-side-tag">己方</span>
+                <strong id="battle-result-self-name" class="battle-result-name">玩家</strong>
+                <span id="battle-result-self-hp" class="battle-result-hp">0 / 0</span>
+                <div class="battle-hp-track"><div id="battle-result-self-bar" class="battle-hp-bar"></div></div>
+                <ul id="battle-result-self-members" class="battle-result-members is-hidden"></ul>
+              </article>
+              <article id="battle-result-opp" class="battle-result-side is-opp">
+                <span class="battle-result-side-tag">对方</span>
+                <strong id="battle-result-opp-name" class="battle-result-name">对手</strong>
+                <span id="battle-result-opp-hp" class="battle-result-hp">0 / 0</span>
+                <div class="battle-hp-track"><div id="battle-result-opp-bar" class="battle-hp-bar"></div></div>
+                <ul id="battle-result-opp-members" class="battle-result-members is-hidden"></ul>
+              </article>
             </div>
-            <span id="battle-result-compare-opp" class="battle-result-compare-opp">对方 0</span>
-          </div>
+            <div id="battle-result-compare" class="battle-result-compare is-hidden" aria-label="队伍总血量对比">
+              <span id="battle-result-compare-self" class="battle-result-compare-self">己方 0</span>
+              <div class="battle-result-compare-track">
+                <div id="battle-result-compare-bar" class="battle-result-compare-bar"></div>
+              </div>
+              <span id="battle-result-compare-opp" class="battle-result-compare-opp">对方 0</span>
+            </div>
+          </section>
+          <section class="battle-result-block" aria-label="伤害">
+            <h3 class="battle-result-block-title">伤害</h3>
+            <div class="battle-result-sides">
+              <article id="battle-result-self-damage-card" class="battle-result-side is-self">
+                <span class="battle-result-side-tag">己方</span>
+                <strong id="battle-result-self-damage-name" class="battle-result-name">玩家</strong>
+                <div id="battle-result-self-damage" class="battle-result-damage">
+                  <div class="battle-result-damage-row">
+                    <div class="battle-result-damage-row-head">
+                      <span>基地</span>
+                      <strong id="battle-result-self-castle-value" class="battle-result-damage-value">0</strong>
+                    </div>
+                    <div class="battle-hp-track">
+                      <div id="battle-result-self-castle-bar" class="battle-hp-bar"></div>
+                    </div>
+                  </div>
+                  <div class="battle-result-damage-row">
+                    <div class="battle-result-damage-row-head">
+                      <span>兵种</span>
+                      <strong id="battle-result-self-units-value" class="battle-result-damage-value">0</strong>
+                    </div>
+                    <div class="battle-hp-track">
+                      <div id="battle-result-self-units-bar" class="battle-hp-bar"></div>
+                    </div>
+                  </div>
+                </div>
+                <ul id="battle-result-self-damage-members" class="battle-result-members is-hidden"></ul>
+              </article>
+              <article id="battle-result-opp-damage-card" class="battle-result-side is-opp">
+                <span class="battle-result-side-tag">对方</span>
+                <strong id="battle-result-opp-damage-name" class="battle-result-name">对手</strong>
+                <div id="battle-result-opp-damage" class="battle-result-damage">
+                  <div class="battle-result-damage-row">
+                    <div class="battle-result-damage-row-head">
+                      <span>基地</span>
+                      <strong id="battle-result-opp-castle-value" class="battle-result-damage-value">0</strong>
+                    </div>
+                    <div class="battle-hp-track">
+                      <div id="battle-result-opp-castle-bar" class="battle-hp-bar"></div>
+                    </div>
+                  </div>
+                  <div class="battle-result-damage-row">
+                    <div class="battle-result-damage-row-head">
+                      <span>兵种</span>
+                      <strong id="battle-result-opp-units-value" class="battle-result-damage-value">0</strong>
+                    </div>
+                    <div class="battle-hp-track">
+                      <div id="battle-result-opp-units-bar" class="battle-hp-bar"></div>
+                    </div>
+                  </div>
+                </div>
+                <ul id="battle-result-opp-damage-members" class="battle-result-members is-hidden"></ul>
+              </article>
+            </div>
+          </section>
           <button id="btn-battle-result-return" type="button">返回</button>
         </div>
       </section>
