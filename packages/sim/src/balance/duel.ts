@@ -1,5 +1,5 @@
 import { getFuseBombTypeId, resolveFormationSpawnsFx } from '../config/cardFormations.js';
-import { resolveFuseBombDamage } from '../config/cardMapping.js';
+import { resolveFuseBombDamage, resolveFuseBombRadius } from '../config/cardMapping.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { Faction } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
@@ -108,10 +108,11 @@ function deployEntry(
   const bombType = getFuseBombTypeId(entry.formation);
   if (bombType) {
     const damage = resolveFuseBombDamage(entry.formation, entry.cards);
+    const radius = resolveFuseBombRadius(entry.formation);
     const tx = fromFloat(enemyX);
     const ty = fromFloat(enemyY);
-    if (bombType === 'giant_bomb') world.spawnGiantBomb(faction, tx, ty, damage);
-    else world.spawnSmallBomb(faction, tx, ty, damage);
+    if (bombType === 'giant_bomb') world.spawnGiantBomb(faction, tx, ty, damage, faction, radius);
+    else world.spawnSmallBomb(faction, tx, ty, damage, faction, radius);
     return 0;
   }
   const points = resolveFormationSpawnsFx(

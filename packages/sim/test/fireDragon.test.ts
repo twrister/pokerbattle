@@ -29,6 +29,8 @@ describe('喷火龙', () => {
 
     expect(dragon.config.name).toBe('喷火龙');
     expect(dragon.config.movementLayer).toBe('air');
+    expect(dragon.config.preferThreats).toBe(true);
+    expect(dragon.config.noBacktrack).toBe(true);
     expect(dragon.config.attack.kind).toBe('projectile_aoe');
     expect(toFloat(dragon.stats.damage)).toBeCloseTo(120, 3);
     expect(burn).toBeDefined();

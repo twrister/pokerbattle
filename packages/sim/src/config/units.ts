@@ -159,6 +159,16 @@ export interface UnitConfig {
    */
   preferAir: boolean;
   /**
+   * 索敌时是否优先「能打到自己」的敌人。
+   * 对飞行单位即对空兵种；射程内威胁 > 射程内无威胁，远距同理。缺省 false。
+   */
+  preferThreats: boolean;
+  /**
+   * 远距索敌是否尽量不往后走。
+   * 按阵营推进方向（蓝 +Y / 红 -Y）比选，前方压过后身；射程内不参与。缺省 false。
+   */
+  noBacktrack: boolean;
+  /**
    * 索敌时是否优先建筑。
    * 候选里有建筑则锁最近建筑（可跨桶压过已进射程的单位）；无建筑再锁最近敌人。
    */
@@ -277,6 +287,10 @@ export interface UnitConfigDraft {
   canAttackAir?: boolean;
   /** 缺省 false；仅对空优先兵种写出 true */
   preferAir?: boolean;
+  /** 缺省 false；仅优先打能威胁自己的兵种写出 true */
+  preferThreats?: boolean;
+  /** 缺省 false；仅远距不回头的兵种写出 true */
+  noBacktrack?: boolean;
   /** 缺省 false；仅优先打建筑的兵种写出 true */
   preferBuildings?: boolean;
   /** 缺省 false；仅硬攻城单位写出 true */
@@ -356,6 +370,8 @@ function copyConfigInto(target: UnitConfig, source: UnitConfig): void {
   target.movementLayer = source.movementLayer;
   target.canAttackAir = source.canAttackAir;
   target.preferAir = source.preferAir;
+  target.preferThreats = source.preferThreats;
+  target.noBacktrack = source.noBacktrack;
   target.preferBuildings = source.preferBuildings;
   target.targetsBuildingsOnly = source.targetsBuildingsOnly;
   target.footprint = source.footprint;
@@ -475,6 +491,8 @@ function configFromDraft(draft: UnitConfigDraft): UnitConfig {
     movementLayer: draft.movementLayer === 'air' ? 'air' : 'ground',
     canAttackAir: resolveCanAttackAir(draft.attackKind, draft.canAttackAir),
     preferAir: draft.preferAir === true,
+    preferThreats: draft.preferThreats === true,
+    noBacktrack: draft.noBacktrack === true,
     preferBuildings: draft.preferBuildings === true,
     targetsBuildingsOnly: draft.targetsBuildingsOnly === true,
     footprint: normalizeFootprint(draft.footprint),
@@ -676,6 +694,8 @@ export function toUnitConfigDraft(config: UnitConfig): UnitConfigDraft {
     draft.canAttackAir = config.canAttackAir;
   }
   if (config.preferAir) draft.preferAir = true;
+  if (config.preferThreats) draft.preferThreats = true;
+  if (config.noBacktrack) draft.noBacktrack = true;
   if (config.preferBuildings) draft.preferBuildings = true;
   if (config.targetsBuildingsOnly) draft.targetsBuildingsOnly = true;
   if (config.tag) draft.tag = config.tag;

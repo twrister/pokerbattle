@@ -6,6 +6,7 @@ import {
   isGiantBombFormation,
   resetCardFormationsToDefault,
 } from '../src/config/cardFormations.js';
+import { FUSE_BOMB_MIN_FLIGHT_SECONDS, TICK_RATE, fuseBombFlightSpeed } from '../src/config/tuning.js';
 import { playFormationCommand, spawnCommand } from '../src/commands.js';
 import { Faction } from '../src/entity/unit.js';
 import { fromFloat, toFloat } from '../src/math/fixed.js';
@@ -40,7 +41,7 @@ describe('巨型炸弹', () => {
     const flying = takeSnapshot(world).projectiles[0]!;
     expect(flying.impactX).toBeCloseTo(9, 3);
     expect(flying.impactY).toBeCloseTo(15, 3);
-    expect(flying.aoeRadius).toBeCloseTo(7, 3);
+    expect(flying.aoeRadius).toBeCloseTo(6, 3);
 
     for (let i = 0; i < 100 && !projectile.dead; i += 1) updateProjectiles(world);
     expect(projectile.dead).toBe(true);
@@ -49,11 +50,27 @@ describe('巨型炸弹', () => {
     expect(ally.hp).toBe(hp.get(ally.id));
     expect(allyBuilding.hp).toBe(hp.get(allyBuilding.id));
     for (const unit of [enemy, air, building]) {
-      expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(1200, 3);
+      expect(toFloat(hp.get(unit.id)! - unit.hp)).toBeCloseTo(600, 3);
     }
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(world.explosionEffects).toHaveLength(1);
     expect(world.explosionEffects[0]?.kind).toBe('giant_bomb');
+  });
+
+  it('近处投放按最短 0.8s 压低速度，落地不少于 16 tick', () => {
+    const world = new World(1);
+    world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+    const projectile = world.spawnGiantBomb(Faction.Blue, fromFloat(9), fromFloat(8));
+    const expectedSpeed = fuseBombFlightSpeed(projectile.startDist, fromFloat(20));
+    expect(toFloat(projectile.speed)).toBeCloseTo(toFloat(expectedSpeed), 3);
+    expect(toFloat(projectile.speed)).toBeCloseTo(toFloat(projectile.startDist) / FUSE_BOMB_MIN_FLIGHT_SECONDS, 3);
+    expect(toFloat(projectile.speed)).toBeLessThan(20);
+
+    const minTicks = Math.round(FUSE_BOMB_MIN_FLIGHT_SECONDS * TICK_RATE);
+    let ticks = 0;
+    for (; ticks < 100 && !projectile.dead; ticks += 1) updateProjectiles(world);
+    expect(projectile.dead).toBe(true);
+    expect(ticks).toBeGreaterThanOrEqual(minTicks);
   });
 
   it('对敌方基地只造成一半伤害，单位与其它建筑仍是全额', () => {
@@ -98,7 +115,7 @@ describe('巨型炸弹', () => {
         return toFloat(world.projectiles[0]!.damage);
       };
       expect(play(['5-spades', '5-hearts', '5-clubs', '5-diamonds'])).toBeCloseTo(800, 3);
-      expect(play(['A-spades', 'A-hearts', 'A-clubs', 'A-diamonds'])).toBeCloseTo(1500, 3);
+      expect(play(['A-spades', 'A-hearts', 'A-clubs', 'A-diamonds'])).toBeCloseTo(1000, 3);
     } finally {
       resetCardFormationsToDefault();
     }
@@ -122,6 +139,42 @@ describe('巨型炸弹', () => {
         ),
       ]);
       expect(toFloat(world.projectiles[0]!.damage)).toBeCloseTo(1500, 3);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+  });
+
+  it('四条与火箭出牌半径跟阵型走；缺字段回落单位配置', () => {
+    expect(findFormationById('bomb_giant_bomb')?.aoeRadius).toBe(6);
+    expect(findFormationById('rocket_bomb')?.aoeRadius).toBe(6);
+
+    const playRadius = (formationId: string, cardIds: string[]) => {
+      const world = new World(1);
+      world.spawnBuilding(Faction.Blue, 'building_base', fromFloat(9), fromFloat(2));
+      applyCommands(world, [
+        playFormationCommand(Faction.Blue, formationId, cardIds, fromFloat(9), fromFloat(15)),
+      ]);
+      return toFloat(world.projectiles[0]!.aoeRadius);
+    };
+    expect(playRadius('bomb_giant_bomb', ['5-spades', '5-hearts', '5-clubs', '5-diamonds'])).toBeCloseTo(6, 3);
+    expect(playRadius('rocket_bomb', ['joker-black', 'joker-red'])).toBeCloseTo(6, 3);
+
+    const drafts = dumpCardFormationDrafts();
+    drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb')!.aoeRadius = 3;
+    drafts.rocket.find((entry) => entry.id === 'rocket_bomb')!.aoeRadius = 8;
+    applyCardFormationDrafts(drafts);
+    try {
+      expect(playRadius('bomb_giant_bomb', ['5-spades', '5-hearts', '5-clubs', '5-diamonds'])).toBeCloseTo(3, 3);
+      expect(playRadius('rocket_bomb', ['joker-black', 'joker-red'])).toBeCloseTo(8, 3);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+
+    const fallback = dumpCardFormationDrafts();
+    delete fallback.bomb.find((entry) => entry.id === 'bomb_giant_bomb')!.aoeRadius;
+    applyCardFormationDrafts(fallback);
+    try {
+      expect(playRadius('bomb_giant_bomb', ['5-spades', '5-hearts', '5-clubs', '5-diamonds'])).toBeCloseTo(6, 3);
     } finally {
       resetCardFormationsToDefault();
     }

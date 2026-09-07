@@ -1,7 +1,13 @@
 import { mul } from '../math/fixed.js';
 import { copy, distSq, normalize, turnToward, vec } from '../math/vec2.js';
 import { canBuildingAttack, isBuildingConfig } from '../config/units.js';
-import { ATTACK_EXIT_HYSTERESIS, TURN_RATE } from '../config/tuning.js';
+import {
+  ATTACK_EXIT_HYSTERESIS,
+  HEAL_FOLLOW_STOP_DIST,
+  HEAL_STOP_HYSTERESIS,
+  HEAL_STOP_INSET,
+  TURN_RATE,
+} from '../config/tuning.js';
 import { NO_TARGET, type Unit, UnitState, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import {
@@ -24,8 +30,8 @@ const desiredFacing = vec();
  * Attack 使用进入/退出双阈值：进来用正常射程，退出多留一段迟滞，
  * 避免被软碰撞轻微挤开后立刻改回 Seek 再挤回来。
  *
- * 治疗单位锁友军时只 Seek 到治疗半径内再 Idle，绝不 Attack/Charge；
- * 锁敌军时只在射程内 Attack，绝不 Seek 追击。
+ * 治疗单位锁伤员时 Seek 到治疗半径内再 Idle，锁满血友军时跟到贴身距离；
+ * 停/走用双阈值迟滞，绝不 Attack/Charge 友军。锁敌军时只在射程内 Attack，绝不 Seek 追击。
  */
 export function updateAi(world: World): void {
   for (const unit of world.units) {
@@ -165,8 +171,9 @@ function updateHealCombat(unit: Unit, target: Unit): void {
 }
 
 /**
- * 治疗寻路：进入 heal.targetRange 后站定，让 heroSkills 出手；
- * 够不着则 Seek。距离判定与选疗圆心一致（中心距，不含碰撞半径）。
+ * 治疗寻路：伤员贴到治疗半径内再内收一点，满血友军只需跟到贴身距离。
+ * Seek 中按停步距判到位，Idle 中要超出停步距 + 迟滞才重新起步，避免逐帧翻转清路径。
+ * 距离判定与选疗圆心一致（中心距，不含碰撞半径）。
  */
 function updateHealSeek(unit: Unit, ally: Unit): void {
   const heal = unit.config.heal;
@@ -178,11 +185,16 @@ function updateHealSeek(unit: Unit, ally: Unit): void {
     return;
   }
 
-  const reachSq = mul(heal.targetRange, heal.targetRange);
+  // 伤员多走一点保证治疗圈内出手；满血友军只跟到贴身，避免掉在治疗半径外沿发呆
+  const stop = ally.hp < ally.stats.maxHp
+    ? heal.targetRange - HEAL_STOP_INSET
+    : HEAL_FOLLOW_STOP_DIST;
+  const threshold = unit.state === UnitState.Seek ? stop : stop + HEAL_STOP_HYSTERESIS;
   const gapSq = distSq(unit.pos.x, unit.pos.y, ally.pos.x, ally.pos.y);
+  const thresholdSq = mul(threshold, threshold);
   normalize(desiredFacing, ally.pos.x - unit.pos.x, ally.pos.y - unit.pos.y);
 
-  if (gapSq <= reachSq) {
+  if (gapSq <= thresholdSq) {
     unit.state = UnitState.Idle;
     clearPath(unit);
   } else {

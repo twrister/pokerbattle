@@ -1,4 +1,4 @@
-import { type Fx, div, fromFloat } from '../math/fixed.js';
+import { type Fx, div, fromFloat, toFloat } from '../math/fixed.js';
 
 /** 逻辑帧率。所有「每秒」的配置都按这个换算成每 tick 增量。 */
 export const TICK_RATE = 20;
@@ -7,6 +7,17 @@ export const TICK_RATE_FX: Fx = fromFloat(TICK_RATE);
 
 /** 首次索敌错峰间隔（tick）。spawn 时用 id % 间隔打散，避免同批出场挤在同一帧全场扫描。 */
 export const RETARGET_INTERVAL = 5;
+
+/** 治疗单位主动接伤员的最大中心距。战场纵深约 31，超出此距离不跨半场救人。 */
+export const HEAL_SEEK_RANGE: Fx = fromFloat(8);
+/** 无伤员时跟随前线友军的停步距离。明显小于治疗半径，保证跟着队伍推进而不掉队。 */
+export const HEAL_FOLLOW_STOP_DIST: Fx = fromFloat(2.5);
+/** 治疗目标停步距离相对 heal.targetRange 的内收量，留出被挤开的余量，避免治疗落空。 */
+export const HEAL_STOP_INSET: Fx = fromFloat(0.8);
+/** 停/走双阈值迟滞：Idle 后要超出停步距离这么多才重新 Seek。 */
+export const HEAL_STOP_HYSTERESIS: Fx = fromFloat(0.8);
+/** 换寻路目标的最短间隔（tick）。目标仍有效时不重选，避免奶满一个就掉头。 */
+export const HEAL_RETARGET_INTERVAL = 10;
 
 /** 路径重算间隔（tick）。目标一直在动，但没必要每帧都跑 A*。 */
 export const REPATH_INTERVAL = 15;
@@ -86,6 +97,22 @@ export const PROJECTILE_ARC_MAX = 2.6;
 export const BOMB_ARC_SCALE = 1.5;
 /** 巨型炸弹倍率，保持比小炸弹明显更高的吊射手感。 */
 export const GIANT_BOMB_ARC_SCALE = 2;
+/**
+ * 主堡投放炸弹的最短飞行时间（秒）。
+ * 近处投放若按配置速度会几乎瞬达，压低速度才看得出抛物线。
+ */
+export const FUSE_BOMB_MIN_FLIGHT_SECONDS = 0.8;
+
+/**
+ * 按最短飞行时间压低投放速度；远距仍用配置速度。
+ * 落点就在主堡上时距离为 0，保持原速度，首帧会立刻落地。
+ */
+export function fuseBombFlightSpeed(distance: Fx, configSpeed: Fx): Fx {
+  const dist = toFloat(distance);
+  if (dist <= 0) return configSpeed;
+  const minSpeed = dist / FUSE_BOMB_MIN_FLIGHT_SECONDS;
+  return fromFloat(Math.min(toFloat(configSpeed), minSpeed));
+}
 
 /**
  * 按发射时水平距离换算抛物线顶点高度。

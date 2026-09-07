@@ -25,14 +25,16 @@ describe('飞行巨龙', () => {
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
 
     expect(toFloat(dragon.config.radius)).toBeCloseTo(0.6, 3);
-    expect(toFloat(dragon.config.bodyScale)).toBeCloseTo(1.3, 3);
+    expect(toFloat(dragon.config.bodyScale)).toBeCloseTo(1.1, 3);
     expect(toFloat(dragon.config.mass)).toBeCloseTo(2, 3);
-    expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(2000, 3);
-    expect(toFloat(dragon.stats.damage)).toBeCloseTo(80, 3);
-    expect(toFloat(dragon.stats.attackInterval)).toBeCloseTo(30, 3);
+    expect(toFloat(dragon.stats.maxHp)).toBeCloseTo(3500, 3);
+    expect(toFloat(dragon.stats.damage)).toBeCloseTo(100, 3);
+    expect(toFloat(dragon.stats.attackInterval)).toBeCloseTo(22, 3);
     expect(toFloat(dragon.stats.attackWindup)).toBeCloseTo(10, 3);
-    expect(toFloat(dragon.stats.range)).toBeCloseTo(1.5, 3);
+    expect(toFloat(dragon.stats.range)).toBeCloseTo(2, 3);
     expect(dragon.config.movementLayer).toBe('air');
+    expect(dragon.config.preferThreats).toBe(true);
+    expect(dragon.config.noBacktrack).toBe(true);
     expect(dragon.config.attack.kind).toBe('projectile_aoe');
     if (dragon.config.attack.kind === 'projectile_aoe') {
       expect(toFloat(dragon.config.attack.speed)).toBeCloseTo(9, 3);
@@ -81,8 +83,8 @@ describe('飞行巨龙', () => {
 
     flyUntilImpact(world, projectile.id);
 
-    expect(toFloat(hp.get(target.id)! - target.hp)).toBeCloseTo(80, 3);
-    expect(toFloat(hp.get(splash.id)! - splash.hp)).toBeCloseTo(80, 3);
+    expect(toFloat(hp.get(target.id)! - target.hp)).toBeCloseTo(100, 3);
+    expect(toFloat(hp.get(splash.id)! - splash.hp)).toBeCloseTo(100, 3);
     expect(outside.hp).toBe(hp.get(outside.id));
     expect(ally.hp).toBe(hp.get(ally.id));
     expect(target.aoeHitFxLeft).toBeGreaterThan(0);
@@ -207,6 +209,74 @@ describe('飞行巨龙', () => {
     expect(dragon.targetId).toBe(archer.id);
   });
 
+  it('前方近战与更远的前方弓手并存时锁弓手', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(6));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const archer = world.spawnUnit(Faction.Red, 'ranged_archer', fromFloat(9), fromFloat(12));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+    archer.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(archer.id);
+  });
+
+  it('身后近战更近时仍锁前方基地，不回头', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    const base = world.spawnBuilding(Faction.Red, 'building_base', fromFloat(9), fromFloat(24))!;
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(base.id);
+  });
+
+  it('身后弓手已进射程时仍锁弓手，不因方向放弃', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const archer = world.spawnUnit(Faction.Red, 'ranged_archer', fromFloat(9), fromFloat(9));
+    dragon.retargetIn = 0;
+    archer.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(archer.id);
+  });
+
+  it('打近战粘性中射程内出现弓手应换火', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(10));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(11));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 5; i++) world.step();
+    expect(dragon.targetId).toBe(melee.id);
+
+    const archer = world.spawnUnit(Faction.Red, 'ranged_archer', fromFloat(10), fromFloat(10));
+    archer.stats.damage = 0;
+    for (let i = 0; i < 3; i++) world.step();
+
+    expect(dragon.targetId).toBe(archer.id);
+  });
+
+  it('全场只有身后目标时仍会锁上，不原地卡死', () => {
+    const world = new World(1);
+    const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(9), fromFloat(16));
+    const melee = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
+    dragon.retargetIn = 0;
+    melee.stats.damage = 0;
+
+    for (let i = 0; i < 10; i++) world.step();
+
+    expect(dragon.targetId).toBe(melee.id);
+  });
+
   it('巨龙弹道从 2.5 高度发射，打地面时落点高度为 0', () => {
     const world = new World(1);
     const dragon = world.spawnUnit(Faction.Blue, 'dragon', fromFloat(5), fromFloat(10));
@@ -251,7 +321,7 @@ describe('飞行巨龙', () => {
 
     flyUntilImpact(world, projectile.id);
 
-    expect(toFloat(airHp - airTarget.hp)).toBeCloseTo(80, 3);
+    expect(toFloat(airHp - airTarget.hp)).toBeCloseTo(100, 3);
     expect(splash.hp).toBe(splashHp);
     expect(world.aoePulseEffects).toHaveLength(0);
   });

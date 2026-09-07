@@ -138,6 +138,8 @@ export interface CardFormation {
   rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
   /** 火箭等无点数炸弹的固定伤害；缺省回落单位配置。 */
   damage?: number;
+  /** 引信炸弹爆炸半径（格）；缺省回落单位配置。 */
+  aoeRadius?: number;
 }
 
 /** 解析后的世界坐标出生点（浮点格坐标，出兵前再 fromFloat）。 */
@@ -168,6 +170,8 @@ export interface FormationDraft {
   rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
   /** 火箭等无点数炸弹的固定伤害；缺省回落单位配置。 */
   damage?: number;
+  /** 引信炸弹爆炸半径（格）；缺省回落单位配置。 */
+  aoeRadius?: number;
 }
 
 /** 所有牌型下的阵型草稿集合。 */
@@ -351,13 +355,14 @@ export function groupFormationsByMatch(drafts: readonly FormationDraft[]): Forma
   return groups;
 }
 
-/** 拷贝引信炸弹伤害字段；缺省不写入，避免普通阵型带上空对象。 */
+/** 拷贝引信炸弹伤害与半径字段；缺省不写入，避免普通阵型带上空对象。 */
 function cloneBombDamageFields(
-  source: Pick<FormationDraft, 'rankDamage' | 'damage'>,
-): Pick<FormationDraft, 'rankDamage' | 'damage'> {
-  const out: Pick<FormationDraft, 'rankDamage' | 'damage'> = {};
+  source: Pick<FormationDraft, 'rankDamage' | 'damage' | 'aoeRadius'>,
+): Pick<FormationDraft, 'rankDamage' | 'damage' | 'aoeRadius'> {
+  const out: Pick<FormationDraft, 'rankDamage' | 'damage' | 'aoeRadius'> = {};
   if (source.rankDamage !== undefined) out.rankDamage = { ...source.rankDamage };
   if (source.damage !== undefined) out.damage = source.damage;
+  if (source.aoeRadius !== undefined) out.aoeRadius = source.aoeRadius;
   return out;
 }
 
@@ -650,14 +655,19 @@ function validateRankCountBounds(id: string, min: number | undefined, max: numbe
   return null;
 }
 
-/** 校验引信炸弹伤害表；未配置时跳过，非法键或负数拒绝。 */
+/** 校验引信炸弹伤害表与爆炸半径；未配置时跳过，非法键或负数拒绝。 */
 function validateBombDamageFields(
   id: string,
-  formation: Pick<FormationDraft, 'rankDamage' | 'damage'>,
+  formation: Pick<FormationDraft, 'rankDamage' | 'damage' | 'aoeRadius'>,
 ): string | null {
   if (formation.damage !== undefined) {
     if (!Number.isFinite(formation.damage) || formation.damage < 0) {
       return `阵型「${id}」炸弹伤害必须是不小于 0 的数字`;
+    }
+  }
+  if (formation.aoeRadius !== undefined) {
+    if (!Number.isFinite(formation.aoeRadius) || formation.aoeRadius < 0) {
+      return `阵型「${id}」爆炸半径必须是不小于 0 的数字`;
     }
   }
   if (formation.rankDamage === undefined) return null;

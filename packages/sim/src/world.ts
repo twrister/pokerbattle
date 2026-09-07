@@ -20,6 +20,7 @@ import {
   RETARGET_INTERVAL,
   TOWER_PROJECTILE_HEIGHT,
   arcApexForDistance,
+  fuseBombFlightSpeed,
 } from './config/tuning.js';
 import {
   type Projectile,
@@ -378,7 +379,7 @@ export class World {
 
   /**
    * 从己方主堡向指定落点投放巨型炸弹。
-   * damageOverride 用于四条/火箭等按阵型点数表覆盖伤害，缺省走单位配置。
+   * damageOverride / radiusOverride 用于四条/火箭等按阵型覆盖，缺省走单位配置。
    */
   spawnGiantBomb(
     faction: Faction,
@@ -386,6 +387,7 @@ export class World {
     targetY: Fx,
     damageOverride?: Fx,
     ownerSlot: number = faction,
+    radiusOverride?: Fx,
   ): Projectile {
     return this.spawnFuseBomb(
       faction,
@@ -395,12 +397,13 @@ export class World {
       GIANT_BOMB_ARC_SCALE,
       damageOverride,
       ownerSlot,
+      radiusOverride,
     );
   }
 
   /**
    * 从己方主堡投放小炸弹：伤害与爆炸半径更小，抛物线也更矮。
-   * damageOverride 用于三条兑换等按点数表覆盖伤害，缺省走单位配置。
+   * damageOverride / radiusOverride 用于三条兑换等按阵型覆盖，缺省走单位配置。
    */
   spawnSmallBomb(
     faction: Faction,
@@ -408,6 +411,7 @@ export class World {
     targetY: Fx,
     damageOverride?: Fx,
     ownerSlot: number = faction,
+    radiusOverride?: Fx,
   ): Projectile {
     return this.spawnFuseBomb(
       faction,
@@ -417,6 +421,7 @@ export class World {
       BOMB_ARC_SCALE,
       damageOverride,
       ownerSlot,
+      radiusOverride,
     );
   }
 
@@ -429,6 +434,7 @@ export class World {
     arcScale: number,
     damageOverride?: Fx,
     ownerSlot: number = faction,
+    radiusOverride?: Fx,
   ): Projectile {
     const config = getUnitConfig(typeId);
     // 2v2 必须从出牌席自己的主堡起飞，不能 find 到同队另一座
@@ -442,8 +448,12 @@ export class World {
     const dx = targetX - startX;
     const dy = targetY - startY;
     const startDist = lengthOf(dx, dy);
-    const speed = config.attack.kind === 'projectile_aoe' ? config.attack.speed : fromFloat(12);
-    const radius = config.attack.kind === 'projectile_aoe' ? config.attack.aoeRadius : fromFloat(8);
+    const configSpeed = config.attack.kind === 'projectile_aoe' ? config.attack.speed : fromFloat(12);
+    // 近处投放按最短 0.8s 压速，避免几乎瞬达
+    const speed = fuseBombFlightSpeed(startDist, configSpeed);
+    const radius =
+      radiusOverride ??
+      (config.attack.kind === 'projectile_aoe' ? config.attack.aoeRadius : fromFloat(8));
     const projectile = createProjectile(
       this.nextEntityId++,
       faction,

@@ -1,6 +1,7 @@
 import { type Fx, mul } from '../math/fixed.js';
 import { distSq } from '../math/vec2.js';
 import { canBuildingAttack, isBuildingConfig, isCastleId, isMechanicalUnit } from '../config/units.js';
+import { HEAL_RETARGET_INTERVAL, HEAL_SEEK_RANGE } from '../config/tuning.js';
 import { Faction, NO_TARGET, type Unit, isAlive } from '../entity/unit.js';
 import type { World } from '../world.js';
 import { NO_ENGAGE_SLOT, assignEngageSlot } from './engagement.js';
@@ -23,15 +24,18 @@ let hasCastleRed = false;
  * - 飞行：非建筑目标一出攻击射程立刻放弃；追建筑时若射程内出现己方可打敌军（含近战地面）则打断改火。
  *   重索时优先锁已进攻击射程的可打敌军，否则再按推家过滤找远敌。
  * - preferAir：射程内空中优先于射程内地面，视野内同理；打地面时射程内出现空中则打断粘性。
+ * - preferThreats：优先「能打到自己」的敌人；打无威胁目标时射程内出现威胁则打断粘性。
+ * - noBacktrack：远距只尽量锁推进方向前方（蓝 +Y / 红 -Y）；射程内不看方向，前方全空才回头。
  * - preferBuildings：候选里有建筑则锁最近建筑（远距建筑可压过已进射程的单位）；
  *   打非建筑时出现建筑候选则打断；追/打建筑不被附近单位拉开。
  * - 城堡无视索敌距离：圈内无敌军时仍可直接锁上并推家；有城堡时箭塔/单位仍要在圈内。
  *   无敌方城堡（牌型验证混编 / 阵型对拆）则圈外敌军也纳入，否则双方会原地 Idle。
  *
- * 有治疗技能的单位友军优先：全场残血友军先锁并寻路治疗；
- * 无伤员时才锁已进入攻击射程的敌军，否则跟随最近友军，不追圈外远敌、不跨图推城堡。
+ * 有治疗技能的单位友军优先：搜索半径内残血友军先锁并寻路治疗；
+ * 无伤员时才锁已进入攻击射程的敌军，否则跟随最靠前线的非治疗友军，不追圈外远敌、不跨图推城堡。
  *
  * spawnUnit 时按 id 打散了首次索敌倒计时（retargetIn），避免同批出场挤在同一帧全场扫描。
+ * 治疗单位复用 retargetIn 做换锁节流，目标仍有效时不重选；失效则立刻重索。
  * 新锁定敌军时立刻分配攻击环槽位；治疗友军不占槽位。
  */
 export function updateTargeting(world: World): void {
@@ -42,15 +46,15 @@ export function updateTargeting(world: World): void {
     // 无攻击能力的建筑不索敌；仍可作为敌军目标被其它单位选中
     if (isBuildingConfig(unit.config) && !canBuildingAttack(unit.config)) continue;
 
-    // 仅用于出生错峰；锁定后不再周期重置
-    if (unit.retargetIn > 0) {
-      unit.retargetIn--;
+    // 治疗单位自行管理 retargetIn，避免节流期间目标死亡后被出生错峰逻辑卡住
+    if (unit.config.heal) {
+      updateHealUnitTargeting(world, unit);
       continue;
     }
 
-    // 治疗单位不走敌军粘性/追远敌，避免地面粘性在够不着时把人拖去 Seek
-    if (unit.config.heal) {
-      updateHealUnitTargeting(world, unit);
+    // 仅用于出生错峰；锁定后不再周期重置
+    if (unit.retargetIn > 0) {
+      unit.retargetIn--;
       continue;
     }
 
@@ -66,8 +70,14 @@ export function updateTargeting(world: World): void {
       if (unit.config.preferBuildings && hasBuildingCandidate(unit)) {
         // fall through
       } else if (isWithinAttackReach(unit, current)) {
-        // 对空优先：打地面时射程内出现空中则打断粘性换火
-        if (!(unit.config.preferAir && current.config.movementLayer !== 'air' && hasInReachAir(unit))) {
+        // 对空优先 / 威胁优先：射程内出现更高优先级目标则打断粘性换火
+        const swapForAir =
+          unit.config.preferAir && current.config.movementLayer !== 'air' && hasInReachAir(unit);
+        const swapForThreat =
+          unit.config.preferThreats
+          && !canThreatenTarget(current, unit)
+          && hasInReachThreat(unit);
+        if (!swapForAir && !swapForThreat) {
           continue;
         }
       } else if (unit.config.movementLayer === 'air') {
@@ -97,14 +107,24 @@ export function updateTargeting(world: World): void {
 }
 
 /**
- * 治疗单位索敌：全场残血友军优先；无伤员才打射程内敌军；再否则跟随最近友军。
+ * 治疗单位索敌：搜索半径内残血友军优先；无伤员才打射程内敌军；
+ * 再否则跟随最靠前线的非治疗友军。
  * 从敌军切到友军时清普攻前摇——结算读 targetId 且不验阵营，否则会误伤友军。
  */
 function updateHealUnitTargeting(world: World, unit: Unit): void {
   const current = world.getUnit(unit.targetId);
+  // 节流期内目标仍有效则沿用；死亡/离场则立刻重选，不等冷却走完
+  const cooling = unit.retargetIn > 0;
+  if (cooling) unit.retargetIn--;
 
   // 当前受伤友军仍有效则继续跟着走，避免每帧换最近目标导致抖路径；建筑不可作为治疗寻路目标
   if (isValidInjuredAlly(unit, current)) {
+    unit.engageSlot = NO_ENGAGE_SLOT;
+    return;
+  }
+
+  // 刚奶满或跟随中：冷却未到且友军仍在，先跟住，避免立刻掉头去另一侧伤员
+  if (cooling && isValidFollowAlly(unit, current)) {
     unit.engageSlot = NO_ENGAGE_SLOT;
     return;
   }
@@ -131,16 +151,17 @@ function updateHealUnitTargeting(world: World, unit: Unit): void {
     unit.targetId = enemyId;
     const target = world.getUnit(enemyId);
     unit.engageSlot = target ? assignEngageSlot(unit, target) : NO_ENGAGE_SLOT;
+    unit.retargetIn = HEAL_RETARGET_INTERVAL;
     return;
   }
 
-  // 无近敌则跟上当前友军；没有粘性目标再锁全场最近友军，避免孤立停走
+  // 无近敌则跟上当前友军；没有粘性目标再锁前线友军，避免孤立停走或双治疗互锁
   if (isValidFollowAlly(unit, current)) {
     unit.engageSlot = NO_ENGAGE_SLOT;
     return;
   }
 
-  const followId = findNearestAlly(unit);
+  const followId = findFrontlineAlly(unit);
   if (followId !== NO_TARGET) {
     lockHealAllyTarget(unit, current, followId);
     return;
@@ -155,6 +176,7 @@ function lockHealAllyTarget(unit: Unit, current: Unit | undefined, allyId: numbe
   if (isAlive(current) && current.faction !== unit.faction) {
     unit.windupLeft = 0;
   }
+  if (allyId !== unit.targetId) unit.retargetIn = HEAL_RETARGET_INTERVAL;
   unit.targetId = allyId;
   unit.engageSlot = NO_ENGAGE_SLOT;
 }
@@ -261,6 +283,18 @@ function hasInReachAir(unit: Unit): boolean {
 }
 
 /**
+ * 射程内是否存在能打到自己的敌军。供 preferThreats 打断无威胁粘性。
+ */
+function hasInReachThreat(unit: Unit): boolean {
+  for (const other of enemiesOf(unit)) {
+    if (!canAttackTarget(unit, other)) continue;
+    if (!canThreatenTarget(other, unit)) continue;
+    if (isWithinAttackReach(unit, other)) return true;
+  }
+  return false;
+}
+
+/**
  * 是否存在可作为索敌候选的敌方建筑（含圈外城堡）。
  * 供 preferBuildings 打断非建筑粘性，口径与 findNearestEnemy 远敌纳入规则一致。
  */
@@ -275,11 +309,48 @@ function hasBuildingCandidate(unit: Unit): boolean {
   return false;
 }
 
+/** 索敌候选比选状态；模块级复用两份，避免每 tick 分配。 */
+interface TargetPick {
+  id: number;
+  distSq: Fx;
+  building: boolean;
+  forward: boolean;
+  threat: boolean;
+  air: boolean;
+}
+
+const inReachPick: TargetPick = emptyPick();
+const farPick: TargetPick = emptyPick();
+
+function emptyPick(): TargetPick {
+  return { id: NO_TARGET, distSq: 0, building: false, forward: false, threat: false, air: false };
+}
+
+/** 每帧重索前清桶，避免上一单位的候选残留。 */
+function resetPick(pick: TargetPick): void {
+  pick.id = NO_TARGET;
+  pick.distSq = 0;
+  pick.building = false;
+  pick.forward = false;
+  pick.threat = false;
+  pick.air = false;
+}
+
+/**
+ * 推进方向上是否不在身后：蓝方 +Y、红方 -Y，同 Y 算前方。
+ * 只给 noBacktrack 远距比选用；射程内不看方向。
+ */
+function isForwardOfUnit(unit: Unit, other: Unit): boolean {
+  return unit.faction === Faction.Blue
+    ? other.pos.y >= unit.pos.y
+    : other.pos.y <= unit.pos.y;
+}
+
 /**
  * 单次扫敌军：同时维护「最近已进射程」与「最近远敌」。
  * 有近距可打目标时仍优先返回近距，规则与原先三次全扫相同。
- * preferAir 时同一桶内空中优先于地面，同层仍取最近、等距取 id 小。
- * preferBuildings 时同一桶内建筑优先于单位；返回时远距建筑可压过已进射程的单位。
+ * 同桶比选：建筑 > 前方 > 威胁 > 空中 > 距离，等距取 id 小；各维仅在对应开关打开时生效。
+ * preferBuildings 返回时远距建筑可压过已进射程的单位。
  * 城堡（building_base）无视索敌距离，圈外仍可纳入远敌候选。
  * 无敌方城堡时圈外单位/箭塔同样纳入，保证混编对局能对冲。
  *
@@ -289,67 +360,79 @@ function hasBuildingCandidate(unit: Unit): boolean {
 function findNearestEnemy(unit: Unit): number {
   const sightSq = mul(unit.config.sightRange, unit.config.sightRange);
   const buildingInSight = hasEnemyBuildingInSight(unit, sightSq);
-  let inReachId = NO_TARGET;
-  let inReachDistSq: Fx = 0;
-  let inReachAir = false;
-  let inReachBuilding = false;
-  let farId = NO_TARGET;
-  let farDistSq: Fx = 0;
-  let farAir = false;
-  let farBuilding = false;
+  resetPick(inReachPick);
+  resetPick(farPick);
 
   for (const other of enemiesOf(unit)) {
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (canAttackTarget(unit, other) && isWithinAttackReach(unit, other)) {
-      if (isBetterTarget(unit, other, d, inReachId, inReachDistSq, inReachAir, inReachBuilding)) {
-        inReachId = other.id;
-        inReachDistSq = d;
-        inReachAir = other.config.movementLayer === 'air';
-        inReachBuilding = isBuildingConfig(other.config);
-      }
+      // 射程内不需要移动，强制视为前方，避免 noBacktrack 丢掉贴身目标
+      considerTarget(unit, other, d, inReachPick, true);
     }
     if (!isEnemyTargetCandidate(unit, other, buildingInSight)) continue;
     // 城堡无视索敌圈；有城堡可推时箭塔/单位仍要在圈内
     if (d > sightSq && !isCastleId(other.typeId) && enemyHasCastle(unit)) continue;
-    if (isBetterTarget(unit, other, d, farId, farDistSq, farAir, farBuilding)) {
-      farId = other.id;
-      farDistSq = d;
-      farAir = other.config.movementLayer === 'air';
-      farBuilding = isBuildingConfig(other.config);
-    }
+    considerTarget(unit, other, d, farPick, isForwardOfUnit(unit, other));
   }
 
   // 建筑优先跨桶：远距建筑压过已进射程的单位，避免贴脸小兵挡住推塔
   if (unit.config.preferBuildings) {
-    if (inReachId !== NO_TARGET && inReachBuilding) return inReachId;
-    if (farId !== NO_TARGET && farBuilding) return farId;
+    if (inReachPick.id !== NO_TARGET && inReachPick.building) return inReachPick.id;
+    if (farPick.id !== NO_TARGET && farPick.building) return farPick.id;
   }
-  return inReachId !== NO_TARGET ? inReachId : farId;
+  return inReachPick.id !== NO_TARGET ? inReachPick.id : farPick.id;
 }
 
-/**
- * 同桶比选：preferBuildings 时建筑压过单位，preferAir 时空中压过地面，再比距离，等距取 id 小。
- */
-function isBetterTarget(
+/** 把候选写入桶：更好则覆盖，否则保持原最优。 */
+function considerTarget(
   unit: Unit,
   candidate: Unit,
   candidateDistSq: Fx,
-  bestId: number,
-  bestDistSq: Fx,
-  bestIsAir: boolean,
-  bestIsBuilding: boolean,
+  pick: TargetPick,
+  forward: boolean,
+): void {
+  const building = isBuildingConfig(candidate.config);
+  const threat = canThreatenTarget(candidate, unit);
+  const air = candidate.config.movementLayer === 'air';
+  if (!isBetterTarget(unit, candidate.id, candidateDistSq, pick, building, forward, threat, air)) {
+    return;
+  }
+  pick.id = candidate.id;
+  pick.distSq = candidateDistSq;
+  pick.building = building;
+  pick.forward = forward;
+  pick.threat = threat;
+  pick.air = air;
+}
+
+/**
+ * 同桶比选：开关打开时建筑压过单位、前方压过后身、威胁压过无威胁、空中压过地面，再比距离，等距取 id 小。
+ */
+function isBetterTarget(
+  unit: Unit,
+  candidateId: number,
+  candidateDistSq: Fx,
+  pick: TargetPick,
+  candidateBuilding: boolean,
+  candidateForward: boolean,
+  candidateThreat: boolean,
+  candidateAir: boolean,
 ): boolean {
-  if (bestId === NO_TARGET) return true;
-  if (unit.config.preferBuildings) {
-    const candidateBuilding = isBuildingConfig(candidate.config);
-    if (candidateBuilding !== bestIsBuilding) return candidateBuilding;
+  if (pick.id === NO_TARGET) return true;
+  if (unit.config.preferBuildings && candidateBuilding !== pick.building) {
+    return candidateBuilding;
   }
-  if (unit.config.preferAir) {
-    const candidateAir = candidate.config.movementLayer === 'air';
-    if (candidateAir !== bestIsAir) return candidateAir;
+  if (unit.config.noBacktrack && candidateForward !== pick.forward) {
+    return candidateForward;
   }
-  if (candidateDistSq !== bestDistSq) return candidateDistSq < bestDistSq;
-  return candidate.id < bestId;
+  if (unit.config.preferThreats && candidateThreat !== pick.threat) {
+    return candidateThreat;
+  }
+  if (unit.config.preferAir && candidateAir !== pick.air) {
+    return candidateAir;
+  }
+  if (candidateDistSq !== pick.distSq) return candidateDistSq < pick.distSq;
+  return candidateId < pick.id;
 }
 
 /**
@@ -389,24 +472,81 @@ function findNearestInReachEnemy(unit: Unit): number {
   return bestId;
 }
 
-/** 全场最近的受伤友军（排除自身、建筑与机械），不受 sightRange 限制。 */
+/** 搜索半径内最近的受伤友军（排除自身、建筑与机械）。 */
 function findNearestInjuredAlly(unit: Unit): number {
-  return findNearestAlly(unit, true);
+  const rangeSq = mul(HEAL_SEEK_RANGE, HEAL_SEEK_RANGE);
+  let bestId = NO_TARGET;
+  let bestDistSq: Fx = 0;
+
+  for (const other of alliesOf(unit)) {
+    if (other.id === unit.id) continue;
+    if (isBuildingConfig(other.config) || isMechanicalUnit(other.config)) continue;
+    if (other.hp >= other.stats.maxHp) continue;
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (d > rangeSq) continue;
+    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
+      bestId = other.id;
+      bestDistSq = d;
+    }
+  }
+  return bestId;
 }
 
 /**
- * 全场最近友军（排除自身与建筑）。injuredOnly 时只收可治疗残血（再排除机械）；
- * 否则满血/机械也算，供无伤员时跟随，避免女王孤立停走。
+ * 无伤员时的跟随目标：以最近敌军为前线参考，选离该点最近的非治疗友军。
+ * 排除自身与建筑；没有普通友军时才允许跟其它治疗单位，避免双女王互锁原地 Idle。
+ * 场上无敌军时退化为最近友军，保证沙盒对局仍能聚拢。
  */
-function findNearestAlly(unit: Unit, injuredOnly = false): number {
+function findFrontlineAlly(unit: Unit): number {
+  const refEnemy = findNearestEnemyForFollow(unit);
+  if (!refEnemy) return findNearestAlly(unit);
+
+  let bestId = NO_TARGET;
+  let bestDistSq: Fx = 0;
+  let fallbackId = NO_TARGET;
+  let fallbackDistSq: Fx = 0;
+
+  for (const other of alliesOf(unit)) {
+    if (other.id === unit.id) continue;
+    if (isBuildingConfig(other.config)) continue;
+    const d = distSq(refEnemy.pos.x, refEnemy.pos.y, other.pos.x, other.pos.y);
+    if (fallbackId === NO_TARGET || d < fallbackDistSq || (d === fallbackDistSq && other.id < fallbackId)) {
+      fallbackId = other.id;
+      fallbackDistSq = d;
+    }
+    if (other.config.heal) continue;
+    if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
+      bestId = other.id;
+      bestDistSq = d;
+    }
+  }
+  return bestId !== NO_TARGET ? bestId : fallbackId;
+}
+
+/** 全场最近敌军，仅作前线参考，不受视野/射程限制。 */
+function findNearestEnemyForFollow(unit: Unit): Unit | undefined {
+  let best: Unit | undefined;
+  let bestDistSq: Fx = 0;
+  for (const other of enemiesOf(unit)) {
+    const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
+    if (!best || d < bestDistSq || (d === bestDistSq && other.id < best.id)) {
+      best = other;
+      bestDistSq = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * 全场最近友军（排除自身与建筑）。满血/机械也算，供无敌时跟随，避免女王孤立停走。
+ */
+function findNearestAlly(unit: Unit): number {
   let bestId = NO_TARGET;
   let bestDistSq: Fx = 0;
 
   for (const other of alliesOf(unit)) {
     if (other.id === unit.id) continue;
     if (isBuildingConfig(other.config)) continue;
-    if (injuredOnly && isMechanicalUnit(other.config)) continue;
-    if (injuredOnly && other.hp >= other.stats.maxHp) continue;
     const d = distSq(unit.pos.x, unit.pos.y, other.pos.x, other.pos.y);
     if (bestId === NO_TARGET || d < bestDistSq || (d === bestDistSq && other.id < bestId)) {
       bestId = other.id;

@@ -871,7 +871,8 @@
         "A": 900,
         "J": 600,
         "K": 800
-      }
+      },
+      "aoeRadius": 2.5
     }
   ],
   "two_pair": [
@@ -1611,7 +1612,8 @@
       "colSpacing": 2,
       "rowSpacing": 1.4,
       "thumbScale": 1.7,
-      "damage": 800
+      "damage": 800,
+      "aoeRadius": 4.5
     }
   ],
   "bomb": [
@@ -1635,7 +1637,8 @@
         "Q": 800,
         "K": 900,
         "A": 1000
-      }
+      },
+      "aoeRadius": 4.5
     }
   ],
   "straight_flush": [

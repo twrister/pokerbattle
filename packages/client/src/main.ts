@@ -2136,7 +2136,9 @@ function fuseBombTypePreviewRadius(typeId: 'giant_bomb' | 'small_bomb'): number 
   return attack.kind === 'projectile_aoe' ? toFloat(attack.aoeRadius) : 8;
 }
 
+/** 出牌拖拽预览半径：阵型 aoeRadius 优先，缺省回落兵种配置。 */
 function fuseBombPreviewRadius(formation: CardFormation): number {
+  if (formation.aoeRadius !== undefined) return formation.aoeRadius;
   const typeId = getFuseBombTypeId(formation);
   if (!typeId) return 8;
   return fuseBombTypePreviewRadius(typeId);

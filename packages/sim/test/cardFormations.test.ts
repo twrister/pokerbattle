@@ -873,6 +873,27 @@ describe('牌型兵种阵型配置', () => {
     expect(validateCardFormationDrafts(negativeFlat)).toContain('炸弹伤害必须是不小于 0 的数字');
   });
 
+  it('dump 保留炸弹爆炸半径，非法值被拒绝', () => {
+    const drafts = dumpCardFormationDrafts();
+    expect(drafts.triple.find((entry) => entry.id === 'triple_small_bomb')?.aoeRadius).toBe(2.5);
+    expect(drafts.bomb.find((entry) => entry.id === 'bomb_giant_bomb')?.aoeRadius).toBe(6);
+    expect(drafts.rocket.find((entry) => entry.id === 'rocket_bomb')?.aoeRadius).toBe(6);
+
+    const triple = drafts.triple.find((entry) => entry.id === 'triple_small_bomb')!;
+    triple.aoeRadius = 4.5;
+    applyCardFormationDrafts(drafts);
+    try {
+      const dumped = dumpCardFormationDrafts();
+      expect(dumped.triple.find((entry) => entry.id === 'triple_small_bomb')?.aoeRadius).toBe(4.5);
+    } finally {
+      resetCardFormationsToDefault();
+    }
+
+    const negativeRadius = dumpCardFormationDrafts();
+    negativeRadius.bomb.find((entry) => entry.id === 'bomb_giant_bomb')!.aoeRadius = -1;
+    expect(validateCardFormationDrafts(negativeRadius)).toContain('爆炸半径必须是不小于 0 的数字');
+  });
+
   it('同花按 J～A 张数分档，两档互斥', () => {
     const lowCards = ['2-spades', '4-spades', '6-spades', '8-spades', 'J-spades'].map(
       (id) => getPokerCardById(id)!,
@@ -928,6 +949,7 @@ describe('牌型兵种阵型配置', () => {
       rows: [['melee_guard']],
       colSpacing: 1.2,
       rankDamage: { J: 80 },
+      aoeRadius: 3,
     };
     const copy = cloneFormationDraft({ ...source, specialTier: 4 });
     expect(copy.specialTier).toBe(4);
@@ -936,10 +958,12 @@ describe('牌型兵种阵型配置', () => {
     copy.rows.push(['ranged_archer']);
     if (copy.match.kind === 'ranks') copy.match.ranks.push('Q');
     copy.rankDamage!.J = 120;
+    copy.aoeRadius = 5;
 
     expect(source.rows).toEqual([['melee_guard']]);
     expect(source.match).toEqual({ kind: 'ranks', ranks: ['J'] });
     expect(source.rankDamage).toEqual({ J: 80 });
+    expect(source.aoeRadius).toBe(3);
     expect(source.specialTier).toBeUndefined();
     expect(copy.rows).toEqual([['melee_guard', 'melee_grunt'], ['ranged_archer']]);
   });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HEAL_FOLLOW_STOP_DIST, HEAL_SEEK_RANGE, HEAL_STOP_HYSTERESIS } from '../src/config/tuning.js';
 import { Faction, type Unit, UnitState } from '../src/entity/unit.js';
 import { mul, ONE, fromFloat, toFloat } from '../src/math/fixed.js';
 import { takeSnapshot } from '../src/snapshot.js';
@@ -63,7 +64,8 @@ describe('国王与女王', () => {
     const lowHp = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(10), fromFloat(8));
     const nearby = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(11.2), fromFloat(8));
     const outOfRange = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(12), fromFloat(8));
-    lowHp.hp -= fromFloat(200);
+    // 民兵 450、弓手 220：民兵必须掉到比例明显更低，才能锁低血而不是锁残血弓手
+    lowHp.hp -= fromFloat(280);
     nearby.hp -= fromFloat(100);
     outOfRange.hp -= fromFloat(100);
 
@@ -248,11 +250,11 @@ describe('国王与女王', () => {
     expect(nearer.hp).toBeGreaterThan(nearer.stats.maxHp - fromFloat(100));
   });
 
-  it('视野外的残血友军也会被锁定并寻路接近', () => {
+  it('搜索半径内的残血友军会被锁定并寻路接近', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
-    // 旧 sightRange 5.5：8 格外原先看不见，现应全场锁定
-    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
+    // 旧 sightRange 5.5：8 格外原先看不见，现落在 HEAL_SEEK_RANGE 边界内仍应锁定
+    const ally = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(8 + toFloat(HEAL_SEEK_RANGE)));
     ally.hp -= fromFloat(150);
     queen.retargetIn = 0;
 
@@ -312,7 +314,7 @@ describe('国王与女王', () => {
     expect(toFloat(queen.pos.y)).toBeLessThan(toFloat(enemy.pos.y) - 5);
   });
 
-  it('无残血友军时跟随场上最近满血友军，进入治疗半径后站定', () => {
+  it('无残血友军时跟随场上最近满血友军，进入贴身距离后站定', () => {
     const world = new World(1);
     const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
     const nearer = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
@@ -327,7 +329,7 @@ describe('国王与女王', () => {
     expect(queen.state).toBe(UnitState.Seek);
     expect(toFloat(queen.pos.y)).toBeGreaterThan(toFloat(startY));
 
-    // 走到治疗半径内后站定等待，不进入治疗冷却（友军满血）
+    // 走到跟随停步距离内后站定等待，不进入治疗冷却（友军满血）
     let arrived = false;
     for (let i = 0; i < 400; i++) {
       expect(queen.state).not.toBe(UnitState.Attack);
@@ -374,6 +376,75 @@ describe('国王与女王', () => {
     expect(queen.state).not.toBe(UnitState.Attack);
     expect(queen.healCastTargetId).toBe(ally.id);
     expect(queen.healWindupLeft).toBeGreaterThan(0);
+  });
+
+  it('超出治疗搜索距离的残血友军不跨场接人，改为跟随前线友军', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const frontAlly = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(12));
+    const farInjured = world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(22));
+    // 女王远程够边距 = range+对方半径≈6，敌军必须在圈外才走跟随而不是普攻
+    const enemy = world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(16));
+    farInjured.hp -= fromFloat(150);
+    queen.retargetIn = 0;
+
+    world.step();
+
+    expect(toFloat(farInjured.pos.y) - toFloat(queen.pos.y)).toBeGreaterThan(toFloat(HEAL_SEEK_RANGE));
+    expect(queen.targetId).not.toBe(farInjured.id);
+    expect(queen.targetId).toBe(frontAlly.id);
+    expect(queen.targetId).not.toBe(enemy.id);
+    expect(queen.state).toBe(UnitState.Seek);
+  });
+
+  it('两名女王互为最近友军时仍跟随前线普通单位推进', () => {
+    const world = new World(1);
+    const queenA = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const queenB = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(9));
+    const grunt = world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(16));
+    world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(22));
+    queenA.retargetIn = 0;
+    queenB.retargetIn = 0;
+
+    const startAY = queenA.pos.y;
+    const startBY = queenB.pos.y;
+    world.step();
+
+    expect(queenA.targetId).toBe(grunt.id);
+    expect(queenB.targetId).toBe(grunt.id);
+    expect(queenA.state).toBe(UnitState.Seek);
+    expect(queenB.state).toBe(UnitState.Seek);
+    expect(toFloat(queenA.pos.y)).toBeGreaterThan(toFloat(startAY));
+    expect(toFloat(queenB.pos.y)).toBeGreaterThan(toFloat(startBY));
+  });
+
+  it('跟随满血友军时停走有迟滞，轻微拉开不立刻重新 Seek', () => {
+    const world = new World(1);
+    const queen = world.spawnUnit(Faction.Blue, 'hero_queen', fromFloat(8), fromFloat(8));
+    const ally = world.spawnUnit(
+      Faction.Blue,
+      'melee_grunt',
+      fromFloat(8),
+      fromFloat(8 + toFloat(HEAL_FOLLOW_STOP_DIST)),
+    );
+    queen.retargetIn = 0;
+    world.step();
+
+    expect(queen.targetId).toBe(ally.id);
+    expect(queen.state).toBe(UnitState.Idle);
+
+    // 拉开量小于迟滞，应继续站定，避免贴阈值碎步
+    ally.pos.y = fromFloat(8 + toFloat(HEAL_FOLLOW_STOP_DIST) + toFloat(HEAL_STOP_HYSTERESIS) * 0.5);
+    for (let i = 0; i < 8; i++) {
+      world.step();
+      expect(queen.state).toBe(UnitState.Idle);
+      expect(queen.state).not.toBe(UnitState.Seek);
+    }
+
+    ally.pos.y = fromFloat(8 + toFloat(HEAL_FOLLOW_STOP_DIST) + toFloat(HEAL_STOP_HYSTERESIS) + 1);
+    queen.retargetIn = 0;
+    world.step();
+    expect(queen.state).toBe(UnitState.Seek);
   });
 });
 

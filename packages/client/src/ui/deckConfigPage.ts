@@ -572,7 +572,7 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
     return section;
   }
 
-  /** 引信炸弹伤害：三条/四条按 2～10 / J / Q / K / A 五档，火箭用固定伤害。 */
+  /** 引信炸弹伤害与爆炸半径：三条/四条按点数分档伤害，火箭用固定伤害；半径全阵型共用。 */
   function renderBombDamageEditor(draft: FormationDraft): HTMLElement {
     const section = document.createElement('section');
     section.className = 'deck-rows';
@@ -583,28 +583,34 @@ export function createDeckConfigPage(options: DeckConfigPageOptions): DeckConfig
 
     if (category === 'rocket') {
       section.appendChild(
-        optionalDamageInput('炸弹伤害', draft.damage, (value) => {
+        optionalNumberInput('炸弹伤害', draft.damage, '10', (value) => {
           if (value === undefined) delete draft.damage;
           else draft.damage = value;
         }),
       );
-      return section;
+    } else {
+      for (const rank of FUSE_BOMB_DAMAGE_RANKS) {
+        const label = FUSE_BOMB_DAMAGE_RANK_LABELS[rank];
+        section.appendChild(
+          optionalNumberInput(`${label} 伤害`, draft.rankDamage?.[rank], '10', (value) => {
+            if (value === undefined) {
+              if (!draft.rankDamage) return;
+              delete draft.rankDamage[rank];
+              if (Object.keys(draft.rankDamage).length === 0) delete draft.rankDamage;
+              return;
+            }
+            draft.rankDamage = { ...draft.rankDamage, [rank]: value };
+          }),
+        );
+      }
     }
 
-    for (const rank of FUSE_BOMB_DAMAGE_RANKS) {
-      const label = FUSE_BOMB_DAMAGE_RANK_LABELS[rank];
-      section.appendChild(
-        optionalDamageInput(`${label} 伤害`, draft.rankDamage?.[rank], (value) => {
-          if (value === undefined) {
-            if (!draft.rankDamage) return;
-            delete draft.rankDamage[rank];
-            if (Object.keys(draft.rankDamage).length === 0) delete draft.rankDamage;
-            return;
-          }
-          draft.rankDamage = { ...draft.rankDamage, [rank]: value };
-        }),
-      );
-    }
+    section.appendChild(
+      optionalNumberInput('爆炸半径', draft.aoeRadius, '0.1', (value) => {
+        if (value === undefined) delete draft.aoeRadius;
+        else draft.aoeRadius = value;
+      }),
+    );
     return section;
   }
 
@@ -871,10 +877,11 @@ function numberInput(
   return row;
 }
 
-/** 炸弹伤害可留空，空值表示回落单位配置。 */
-function optionalDamageInput(
+/** 炸弹数值可留空，空值表示回落单位配置。 */
+function optionalNumberInput(
   label: string,
   value: number | undefined,
+  step: string,
   onChange: (value: number | undefined) => void,
 ): HTMLLabelElement {
   const row = document.createElement('label');
@@ -883,7 +890,7 @@ function optionalDamageInput(
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0';
-  input.step = '10';
+  input.step = step;
   input.placeholder = '单位默认';
   input.value = value === undefined ? '' : String(value);
   input.addEventListener('input', () => {

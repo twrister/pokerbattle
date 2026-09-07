@@ -11,7 +11,7 @@ import {
 } from '../config/cardFormations.js';
 import { getPokerCardById } from '../cards/deck.js';
 import type { PlayingCard } from '../cards/deck.js';
-import { resolveFuseBombDamage } from '../config/cardMapping.js';
+import { resolveFuseBombDamage, resolveFuseBombRadius } from '../config/cardMapping.js';
 import { isBuildingConfig, getUnitConfig } from '../config/units.js';
 import type { World } from '../world.js';
 
@@ -82,11 +82,12 @@ function applyPlayFormation(
   if (isFuseBombFormation(formation)) {
     const bombType = getFuseBombTypeId(formation)!;
     const damageOverride = resolveFuseBombDamage(formation, cards as PlayingCard[]);
+    const radiusOverride = resolveFuseBombRadius(formation);
     const bombSlot = command.slot ?? command.faction;
     if (bombType === 'small_bomb') {
-      world.spawnSmallBomb(command.faction, command.x, command.y, damageOverride, bombSlot);
+      world.spawnSmallBomb(command.faction, command.x, command.y, damageOverride, bombSlot, radiusOverride);
     } else {
-      world.spawnGiantBomb(command.faction, command.x, command.y, damageOverride, bombSlot);
+      world.spawnGiantBomb(command.faction, command.x, command.y, damageOverride, bombSlot, radiusOverride);
     }
     return;
   }

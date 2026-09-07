@@ -170,11 +170,17 @@ export function resolveFuseBombDamage(
   return value !== undefined ? fromFloat(value) : undefined;
 }
 
-/** 引信炸弹伤害配置来源；与阵型上的可选字段对齐。 */
+/** 引信炸弹伤害与半径配置来源；与阵型上的可选字段对齐。 */
 export interface FuseBombDamageSource {
   category: HandCategory;
   rankDamage?: Partial<Record<FuseBombDamageRank, number>>;
   damage?: number;
+  aoeRadius?: number;
+}
+
+/** 按阵型配置查引信炸弹爆炸半径；缺字段时返回 undefined，调用方回落单位配置。 */
+export function resolveFuseBombRadius(formation: Pick<FuseBombDamageSource, 'aoeRadius'>): Fx | undefined {
+  return formation.aoeRadius !== undefined ? fromFloat(formation.aoeRadius) : undefined;
 }
 
 /** 预览用：按牌型决定每个点数生成几张牌。 */
