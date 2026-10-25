@@ -9,7 +9,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { toSceneX, toSceneZ } from '../view/coords.js';
-import { AoeGroundMark } from '../view/aoeGroundMark.js';
+import { createAttackRangeMark } from '../view/aoeGroundMark.js';
 import { screenToSim } from './placement.js';
 
 export interface AttackRangePlacementHandle {
@@ -63,7 +63,7 @@ export function formationAttackRangePreviewRadius(
 export function enableAttackRangePlacement(
   options: AttackRangePlacementOptions,
 ): AttackRangePlacementHandle {
-  const mark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  const mark = createAttackRangeMark();
   mark.group.name = 'attack-range-placement';
   mark.group.visible = false;
   options.scene.add(mark.group);

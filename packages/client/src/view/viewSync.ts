@@ -16,14 +16,18 @@ import { HealEffectView } from './healEffectView.js';
 import { AoePulseEffectView } from './aoePulseEffectView.js';
 import { ExplosionEffectView } from './explosionEffectView.js';
 import { GroundHazardView } from './groundHazardView.js';
-import { AoeGroundMark } from './aoeGroundMark.js';
+import { AoeGroundMark, createAttackRangeMark } from './aoeGroundMark.js';
 import { CastlePackView } from './castlePackView.js';
 import { PROJECTILE_TRAIL_COLORS, ProjectileTrailView } from './projectileTrailView.js';
 
 const PROJECTILE_GEOMETRY = new THREE.SphereGeometry(0.13, 10, 8);
+/**
+ * 弹体材质：亮色本体 + 饱和阵营色自发光。
+ * 场景是浅沙地面，纯浅色弹体在远景里会被吃掉，靠更强的自发光把弹道拉出来。
+ */
 const PROJECTILE_MATERIALS: Record<number, THREE.MeshStandardMaterial> = {
-  [Faction.Blue]: new THREE.MeshStandardMaterial({ color: 0xa8d8ff, emissive: 0x4f8dfd, emissiveIntensity: 0.9 }),
-  [Faction.Red]: new THREE.MeshStandardMaterial({ color: 0xffd0b0, emissive: 0xf2604f, emissiveIntensity: 0.9 }),
+  [Faction.Blue]: new THREE.MeshStandardMaterial({ color: 0xdff0ff, emissive: 0x1f6bff, emissiveIntensity: 1.4 }),
+  [Faction.Red]: new THREE.MeshStandardMaterial({ color: 0xffe4d6, emissive: 0xe02424, emissiveIntensity: 1.4 }),
 };
 
 /** 炸弹弹体贴图面片：底边不锚地，中心对齐弹道高度点 */
@@ -206,8 +210,8 @@ export class BattleView {
   private readonly groundHazardPool: GroundHazardView[] = [];
   private readonly activeAoeWarnings = new Map<number, AoeGroundMark>();
   private readonly aoeWarningPool: AoeGroundMark[] = [];
-  /** 选中单位的攻击范围圈：预警圈同款描边、无填充、白色。 */
-  private readonly attackRangeMark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  /** 选中单位的攻击范围圈：白色细线、无填充无描边。 */
+  private readonly attackRangeMark = createAttackRangeMark();
   /** 战斗音效：在每帧渲染时比对快照，本地/联机/回放共用这一条链路。 */
   private readonly battleSfx = new BattleSfx();
   private selectedUnitId: number | null = null;
@@ -449,7 +453,7 @@ export class BattleView {
     }
   }
 
-  /** 将落地燃烧区同步为橙红地面圈。 */
+  /** 将落地燃烧区同步为地面火焰（无边界环）。 */
   private renderGroundHazards(curr: Snapshot): void {
     this.seen.clear();
     for (const hazard of curr.groundHazards ?? []) {

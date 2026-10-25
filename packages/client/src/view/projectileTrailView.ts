@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Faction } from '@pb/sim';
+import { GROUND_FX } from './groundFxStyle.js';
 
 /** 拖尾采样上限：约半秒以上轨迹，拉长后抛物线弧更完整。 */
 const TRAIL_MAX_POINTS = 36;
@@ -7,19 +8,25 @@ const TRAIL_MAX_POINTS = 36;
 const TRAIL_MIN_SPACING_SQ = 0.06 * 0.06;
 const TRAIL_HEAD_HALF_WIDTH = 0.05;
 const TRAIL_TAIL_HALF_WIDTH = 0.005;
-/** 尾端全透明，头部半透明，避免叠加混合后过亮。 */
+/** 尾端全透明，头部半透明；Normal 混合下略提高，避免轨迹在亮底上太淡。 */
 const TRAIL_TAIL_ALPHA = 0;
-const TRAIL_HEAD_ALPHA = 0.5;
+const TRAIL_HEAD_ALPHA = 0.72;
 
-/** 与弹体 PROJECTILE_MATERIALS 同色相，叠加混合下当光带。 */
+/**
+ * 与弹体 PROJECTILE_MATERIALS 同色相的拖尾色，改用饱和蓝/红：
+ * 原来的浅蓝、浅橙在浅沙地面和天空上几乎被吃掉，加深后才拉得开明度差。
+ */
 export const PROJECTILE_TRAIL_COLORS: Record<number, THREE.Color> = {
-  [Faction.Blue]: new THREE.Color(0xa8d8ff),
-  [Faction.Red]: new THREE.Color(0xffd0b0),
+  [Faction.Blue]: new THREE.Color(GROUND_FX.factionBlue),
+  [Faction.Red]: new THREE.Color(GROUND_FX.factionRed),
 };
 
 let sharedMaterial: THREE.MeshBasicMaterial | null = null;
 
-/** 蓝红双方共用一个材质，颜色走顶点色。被 dispose 后下次取用重建。 */
+/**
+ * 蓝红双方共用一个材质，颜色走顶点色。被 dispose 后下次取用重建。
+ * 用 Normal 混合而不是 Additive：Additive 叠在明亮场景上会整体泛白，轨迹反而看不清。
+ */
 function getTrailMaterial(): THREE.MeshBasicMaterial {
   if (sharedMaterial && !sharedMaterial.userData.disposed) return sharedMaterial;
   const created = new THREE.MeshBasicMaterial({
@@ -27,7 +34,7 @@ function getTrailMaterial(): THREE.MeshBasicMaterial {
     transparent: true,
     depthWrite: false,
     depthTest: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     side: THREE.DoubleSide,
   });
   created.addEventListener('dispose', () => {

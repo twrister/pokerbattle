@@ -20,6 +20,16 @@ const LOOK_SIM_Y = 9;
 const GROUND_HALF_W = 9;
 const GROUND_HALF_H = 8;
 const ORTHO_HALF_HEIGHT = 8;
+/**
+ * 与阵型预览同一套明亮沙地配色：深灰地板在奶油面板里像一块黑洞，
+ * 浅沙底 + 偏暗格线既能看清站位，也不抢单位立绘。
+ * 地面同样用平涂材质，保证颜色与战场沙地一致、不被光照冲淡。
+ */
+const FRAME_GROUND_COLOR = 0xecca98;
+const FRAME_GRID_COLOR = 0xc09763;
+const FRAME_LIGHT_INTENSITY = 1.8;
+const FRAME_SKY_COLOR = 0xc7dcff;
+const FRAME_GROUND_LIGHT_COLOR = 0xb08a5c;
 
 export interface MixFrameHandle {
   /** 重建 World 快进到目标 tick 后画一帧，返回该帧统计。 */
@@ -54,11 +64,13 @@ export function createMixFrameView(container: HTMLElement): MixFrameHandle {
   const camera = new THREE.OrthographicCamera(-7, 7, 5, -5, 0.1, 100);
   camera.position.set(lookX, 18, lookZ + 12);
   camera.lookAt(lookX, 0, lookZ);
-  scene.add(new THREE.HemisphereLight(0xc7dcff, 0x1d2430, 1.8));
+  scene.add(
+    new THREE.HemisphereLight(FRAME_SKY_COLOR, FRAME_GROUND_LIGHT_COLOR, FRAME_LIGHT_INTENSITY),
+  );
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(GROUND_HALF_W * 2, GROUND_HALF_H * 2),
-    new THREE.MeshStandardMaterial({ color: 0x243143, roughness: 0.95 }),
+    new THREE.MeshBasicMaterial({ color: FRAME_GROUND_COLOR }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(lookX, 0, lookZ);
@@ -160,7 +172,7 @@ function createReplayGrid(
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
   return new THREE.LineSegments(
     geometry,
-    new THREE.LineBasicMaterial({ color: 0x4a5a70, transparent: true, opacity: 0.75 }),
+    new THREE.LineBasicMaterial({ color: FRAME_GRID_COLOR, transparent: true, opacity: 0.85 }),
   );
 }
 

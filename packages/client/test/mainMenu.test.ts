@@ -71,8 +71,7 @@ function mountMainMenuDom(): void {
       </button>
       <div class="lobby-topbar-actions">
         <button id="btn-settings" type="button">设置</button>
-        <button id="btn-patch-notes" type="button">更新公告</button>
-        <button id="btn-feedback-open" type="button" aria-expanded="false">提意见</button>
+        <button id="btn-patch-notes" type="button">公告</button>
       </div>
       <button id="btn-solo"></button>
       <button id="btn-match"></button>
@@ -105,6 +104,7 @@ function mountMainMenuDom(): void {
       <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
         <button data-patch-notes-close></button>
         <div id="patch-notes-list"></div>
+        <button id="btn-feedback-open" type="button" aria-expanded="false">意见</button>
         <p id="patch-notes-status"></p>
         <button id="btn-patch-notes-add" type="button">新增版本</button>
         <button id="btn-patch-notes-save" type="button">保存</button>
@@ -480,11 +480,15 @@ describe('大厅玩家档案展示', () => {
     expect(dialog.classList.contains('is-hidden')).toBe(true);
   });
 
-  it('顶栏依次是设置、更新公告、提意见，点击打开独立弹层', () => {
+  it('顶栏依次是设置、公告；意见入口收在公告弹层里', () => {
     createMainMenu(menuOptions());
     const actions = document.querySelector('.lobby-topbar-actions')!;
     const buttons = Array.from(actions.querySelectorAll('button')).map((button) => button.id);
-    expect(buttons).toEqual(['btn-settings', 'btn-patch-notes', 'btn-feedback-open']);
+    expect(buttons).toEqual(['btn-settings', 'btn-patch-notes']);
+
+    // 意见按钮在公告弹层内，点它时公告自动收起，避免两层遮罩叠着
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes')!.click();
+    expect(document.querySelector('#patch-notes-dialog')?.classList.contains('is-hidden')).toBe(false);
 
     document.querySelector<HTMLButtonElement>('#btn-feedback-open')!.click();
     expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(false);

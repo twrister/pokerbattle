@@ -1,6 +1,6 @@
 import { sfx } from '../audio/sfx.js';
 
-/** 静音图标：用音符而不是 emoji，避免不同平台渲染差异。 */
+/** 无独立图标节点时的回退字符：用音符而不是 emoji，避免不同平台渲染差异。 */
 const ICON = '♪';
 
 export interface SfxToggleOptions {
@@ -26,8 +26,7 @@ export function createSfxToggle(options: SfxToggleOptions): SfxToggleHandle {
   const sync = (): void => {
     const muted = sfx.isMuted();
     for (const button of buttons) {
-      setButtonIcon(button, ICON);
-      // 斜杠由 CSS 画，比换字符更稳
+      setButtonIcon(button, muted);
       button.classList.toggle('is-muted', muted);
       button.setAttribute('aria-pressed', String(muted));
       button.setAttribute('aria-label', muted ? '音效已关闭，点击开启' : '音效已开启，点击关闭');
@@ -60,9 +59,16 @@ export function createSfxToggle(options: SfxToggleOptions): SfxToggleHandle {
   };
 }
 
-/** 有独立图标节点时只改图标，避免把按钮里的其它文案一起冲掉。 */
-function setButtonIcon(button: HTMLButtonElement, text: string): void {
+/**
+ * 有独立图标节点时切换开/关两张图标，避免把按钮里的其它文案一起冲掉；
+ * 没有图标节点的按钮回退为纯字符。
+ */
+function setButtonIcon(button: HTMLButtonElement, muted: boolean): void {
   const icon = button.querySelector<HTMLElement>('.sfx-toggle-icon');
-  if (icon) icon.textContent = text;
-  else button.textContent = text;
+  if (!icon) {
+    button.textContent = ICON;
+    return;
+  }
+  icon.classList.toggle('icon-music-on', !muted);
+  icon.classList.toggle('icon-music-off', muted);
 }

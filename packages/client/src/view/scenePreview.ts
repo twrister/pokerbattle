@@ -4,6 +4,7 @@ import {
   applySoloCameraPose,
   arenaVisualFromDraft,
   calculateSoloOrthoBounds,
+  calculateSoloViewFov,
   clampSoloCameraFov,
   createArenaVisualGroup,
   applySunShadowSpan,
@@ -77,7 +78,8 @@ export function createScenePreview(container: HTMLElement): ScenePreviewHandle {
         camera instanceof THREE.PerspectiveCamera
           ? camera
           : new THREE.PerspectiveCamera(45, aspect, 0.1, 500);
-      perspective.fov = clampSoloCameraFov(draft.camera.fov);
+      // 与局内一致按宽高比补偿 FOV，预览与实机取景才对齐
+      perspective.fov = calculateSoloViewFov(clampSoloCameraFov(draft.camera.fov), aspect);
       perspective.aspect = aspect;
       applySoloCameraPose(
         perspective,

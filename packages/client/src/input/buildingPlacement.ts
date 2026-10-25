@@ -13,7 +13,7 @@ import {
   type World,
 } from '@pb/sim';
 import { ARENA_H, ARENA_W, toSceneX, toSceneZ } from '../view/coords.js';
-import { AoeGroundMark } from '../view/aoeGroundMark.js';
+import { createAttackRangeMark } from '../view/aoeGroundMark.js';
 import { attackReachPreviewRadius, showsAttackRangeOnPlace } from './attackRangePreview.js';
 import { screenToSim } from './placement.js';
 
@@ -183,7 +183,7 @@ export function enableBuildingPlacement(options: BuildingPlacementOptions): Buil
   preview.add(fill, edges);
 
   // 箭塔等远程建筑：白圈挂在占地预览下，跟着吸附中心走
-  const rangeMark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  const rangeMark = createAttackRangeMark();
   rangeMark.group.name = 'attack-range-placement';
   rangeMark.group.visible = false;
   preview.add(rangeMark.group);

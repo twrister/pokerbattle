@@ -14,6 +14,33 @@ const PREVIEW_HALF_W = 8;
 const PREVIEW_HALF_H = 6;
 /** 正交相机半高；略大于旧值以露出更多格子，同时单位仍够大便于辨认。 */
 const PREVIEW_ORTHO_HALF_HEIGHT = 6.5;
+/**
+ * 预览配色与战场保持一致：浅沙色地面 + 稍深的格线。
+ * 页面整体换成明亮卡通皮肤后，原来的深灰棋盘格会像一块黑洞，
+ * 这里只保留能看清间距的对比度，不再压暗画面。
+ *
+ * 地面用 MeshBasicMaterial 平涂而不是受光材质：卡通皮肤要的是「所见即所得」的
+ * 固定底色，受光材质在半球光下会被打到接近纯白，颜色无法精确控制。
+ */
+const PREVIEW_GROUND_COLOR = 0xecca98;
+/** 格线要比地面深一档，浅沙底上才看得出 1 格一格；再深就会盖过单位落点 */
+const PREVIEW_GRID_COLOR = 0xc09763;
+/**
+ * 地面单独放大到盖满视野：地面与外层舞台渐变之间不留硬边，
+ * 整块都是沙色，与战场「场地即画面」的观感一致。
+ */
+const PREVIEW_GROUND_HALF_W = 14;
+const PREVIEW_GROUND_HALF_H = 9;
+/** 原点十字：横向偏暖（对应横向间距）、纵深偏冷（对应排间距），亮底上仍可分辨方向 */
+const PREVIEW_AXIS_X_COLOR = 0xd98a62;
+const PREVIEW_AXIS_Z_COLOR = 0x5cc3c4;
+/**
+ * 半球光只服务于单位身上的立体部件；单位立绘走 MeshBasicMaterial，
+ * 地面改成平涂后同样不吃光照，所以这里保留原本的亮度，让立体件颜色不发灰。
+ */
+const PREVIEW_LIGHT_INTENSITY = 1.8;
+const PREVIEW_SKY_COLOR = 0xc7dcff;
+const PREVIEW_GROUND_LIGHT_COLOR = 0xb08a5c;
 
 /** 预览单位：保留站位与兵种，便于贴图就绪后再次 update 同步可见性。 */
 interface PreviewUnit {
@@ -41,11 +68,13 @@ export function createFormationPreview(container: HTMLElement): FormationPreview
   // 略抬高并拉远，保证地面格子在斜视下仍清晰可读
   camera.position.set(0, 16, 14);
   camera.lookAt(0, 0, 0);
-  scene.add(new THREE.HemisphereLight(0xc7dcff, 0x1d2430, 1.8));
+  scene.add(
+    new THREE.HemisphereLight(PREVIEW_SKY_COLOR, PREVIEW_GROUND_LIGHT_COLOR, PREVIEW_LIGHT_INTENSITY),
+  );
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(PREVIEW_HALF_W * 2, PREVIEW_HALF_H * 2),
-    new THREE.MeshStandardMaterial({ color: 0x243143, roughness: 0.95 }),
+    new THREE.PlaneGeometry(PREVIEW_GROUND_HALF_W * 2, PREVIEW_GROUND_HALF_H * 2),
+    new THREE.MeshBasicMaterial({ color: PREVIEW_GROUND_COLOR }),
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
@@ -181,12 +210,15 @@ function createPreviewGrid(halfW: number, halfH: number): THREE.LineSegments {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
   return new THREE.LineSegments(
     geometry,
-    new THREE.LineBasicMaterial({ color: 0x4a5a70, transparent: true, opacity: 0.75 }),
+    new THREE.LineBasicMaterial({ color: PREVIEW_GRID_COLOR, transparent: true, opacity: 0.85 }),
   );
 }
 
 /** 原点十字轴：横向偏暖、纵深偏冷，帮助分辨左右间距与排间距方向。 */
 function createPreviewAxes(halfW: number, halfH: number): THREE.LineSegments {
+  // 复用 THREE.Color 做 sRGB→线性转换，保证亮底上的色相与页面渐变一致
+  const warm = new THREE.Color(PREVIEW_AXIS_X_COLOR);
+  const cool = new THREE.Color(PREVIEW_AXIS_Z_COLOR);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
     'position',
@@ -202,15 +234,15 @@ function createPreviewAxes(halfW: number, halfH: number): THREE.LineSegments {
     'color',
     new THREE.Float32BufferAttribute(
       [
-        0.55, 0.42, 0.28, 0.55, 0.42, 0.28,
-        0.32, 0.48, 0.62, 0.32, 0.48, 0.62,
+        warm.r, warm.g, warm.b, warm.r, warm.g, warm.b,
+        cool.r, cool.g, cool.b, cool.r, cool.g, cool.b,
       ],
       3,
     ),
   );
   return new THREE.LineSegments(
     geometry,
-    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 }),
+    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 }),
   );
 }
 

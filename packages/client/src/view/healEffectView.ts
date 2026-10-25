@@ -1,26 +1,26 @@
 import * as THREE from 'three';
 import type { HealEffectSnapshot } from '@pb/sim';
 import { toSceneX, toSceneZ } from './coords.js';
-
-const HEAL_COLOR = 0x7dffb8;
+import { GROUND_FX, GroundRingMark } from './groundFxStyle.js';
 
 /**
  * 单体受疗反馈：脚底柔光 + 向上飘起的光环与十字高光。
  * 刻意不做范围扩环，避免被读成群体治疗。可由 BattleView 对象池复用。
+ * 脚底光改成饱和绿并加深绿描边，在浅沙地面上也能一眼分辨。
  */
 export class HealEffectView {
   readonly group = new THREE.Group();
 
   private readonly glow: THREE.Mesh;
   private readonly glowMat: THREE.MeshBasicMaterial;
-  private readonly riseRing: THREE.Mesh;
-  private readonly riseMat: THREE.MeshBasicMaterial;
+  private readonly glowEdge: GroundRingMark;
+  private readonly riseRing: GroundRingMark;
   private readonly cross: THREE.LineSegments;
   private readonly crossMat: THREE.LineBasicMaterial;
 
   constructor() {
     this.glowMat = new THREE.MeshBasicMaterial({
-      color: HEAL_COLOR,
+      color: GROUND_FX.heal,
       transparent: true,
       opacity: 0.55,
       depthWrite: false,
@@ -30,18 +30,24 @@ export class HealEffectView {
     this.glow.rotation.x = -Math.PI / 2;
     this.glow.position.y = 0.04;
 
-    this.riseMat = new THREE.MeshBasicMaterial({
-      color: HEAL_COLOR,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+    // 光斑外缘勾一圈深绿，避免饱和绿在沙地上只剩一团发光
+    this.glowEdge = new GroundRingMark({
+      color: GROUND_FX.heal,
+      thickness: 0.08,
+      opacity: 0.8,
+      segments: 24,
     });
-    this.riseRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 28), this.riseMat);
-    this.riseRing.rotation.x = -Math.PI / 2;
+    this.glowEdge.group.position.y = 0.042;
+
+    this.riseRing = new GroundRingMark({
+      color: GROUND_FX.heal,
+      thickness: 0.12,
+      opacity: 0.9,
+      segments: 28,
+    });
 
     this.crossMat = new THREE.LineBasicMaterial({
-      color: 0xd8ffe8,
+      color: GROUND_FX.healCross,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
@@ -54,7 +60,7 @@ export class HealEffectView {
     crossGeo.setAttribute('position', new THREE.BufferAttribute(crossPos, 3));
     this.cross = new THREE.LineSegments(crossGeo, this.crossMat);
 
-    this.group.add(this.glow, this.riseRing, this.cross);
+    this.group.add(this.glow, this.glowEdge.group, this.riseRing.group, this.cross);
   }
 
   /** 根据快照进度把光柱抬起并淡出，不持有任何模拟状态。 */
@@ -65,15 +71,18 @@ export class HealEffectView {
 
     // 脚底柔光先胀一下再收回，强调「点在这个单位上」
     const glowPulse = 1 + Math.sin(progress * Math.PI) * 0.25;
-    this.glow.scale.setScalar(size * 0.55 * glowPulse);
+    const glowSize = size * 0.55 * glowPulse;
+    this.glow.scale.setScalar(glowSize);
     this.glowMat.opacity = (1 - progress) * 0.5;
+    this.glowEdge.setRadius(glowSize);
+    this.glowEdge.setOpacity((1 - progress) * 0.8);
 
     // 水平光环沿 Y 抬升，看起来像治疗光从身上散出
     const lift = progress * 1.35;
     const ringScale = size * (0.55 + progress * 0.35);
-    this.riseRing.position.y = 0.12 + lift;
-    this.riseRing.scale.setScalar(ringScale);
-    this.riseMat.opacity = (1 - progress) * 0.85;
+    this.riseRing.group.position.y = 0.12 + lift;
+    this.riseRing.setRadius(ringScale);
+    this.riseRing.setOpacity((1 - progress) * 0.85);
 
     // 十字高光略滞后升起，峰值更亮
     const crossU = Math.min(1, progress * 1.35);

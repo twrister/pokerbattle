@@ -26,11 +26,16 @@ import { HP_COLOR_ALLY, HP_COLOR_ENEMY, HP_COLOR_SELF, UnitView, visualFaction, 
 import { SPRITE_DEFS, SPRITE_GEOMETRY } from '../src/view/unitSprites.js';
 
 /** 从单位视图里取出前景血条颜色，忽略底条与等级徽章。 */
+/**
+ * 从单位视图里找血条前景色：血条是贴在血条锚点上的平面片，
+ * 其余地面环（阵营圈、振奋光环、施法底盘）也是 Group 里的网格，按几何体区分才不会被误取。
+ */
 function findHpFillHex(group: THREE.Group): number | undefined {
   for (const child of group.children) {
     if (!(child instanceof THREE.Group)) continue;
     for (const nested of child.children) {
       if (!(nested instanceof THREE.Mesh)) continue;
+      if (!(nested.geometry instanceof THREE.PlaneGeometry)) continue;
       const material = nested.material;
       if (!(material instanceof THREE.MeshBasicMaterial)) continue;
       const hex = material.color.getHex();
@@ -402,7 +407,7 @@ describe('渲染同步', () => {
     }
   });
 
-  it('喷火龙落地后显示燃烧地面圈', () => {
+  it('喷火龙落地后显示燃烧区', () => {
     const scene = new THREE.Scene();
     const view = new BattleView(scene);
     const world = new World(1);
@@ -495,10 +500,13 @@ describe('渲染同步', () => {
     expect(mark.position.z).toBeCloseTo(toSceneZ(10), 5);
     // 只要描边、不要预警圈那种半透明填充
     expect(mark.children.some((child) => child instanceof THREE.Mesh)).toBe(false);
-    const line = mark.children.find((child) => child instanceof THREE.LineLoop) as THREE.LineLoop;
-    expect(line).toBeDefined();
-    expect((line.material as THREE.LineBasicMaterial).color.getHex()).toBe(0xffffff);
-    expect(line.scale.x).toBeCloseTo(archerSnap.range, 5);
+    // 描边改成有宽度的环面（LineLoop 在浅沙地面上只有 1px，看不见）
+    const ringGroup = mark.children.find((child) => child instanceof THREE.Group) as THREE.Group;
+    expect(ringGroup).toBeDefined();
+    const ring = ringGroup.children.find((child) => child.name === 'ground-ring') as THREE.Mesh;
+    expect(ring).toBeInstanceOf(THREE.Mesh);
+    expect((ring.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xffffff);
+    expect(ringGroup.scale.x).toBeCloseTo(archerSnap.range, 5);
 
     view.selectUnit(grunt.id);
     view.render(snap, snap, 1, camera);

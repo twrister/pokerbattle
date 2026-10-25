@@ -13,6 +13,7 @@ import {
 } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
 import { SPRITE_DEFS } from '../view/unitSprites.js';
+import { enableDragScroll } from './dragScroll.js';
 import {
   displayUnitName,
   getUnitCatalogEntries,
@@ -73,6 +74,10 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   backButton.addEventListener('click', back);
   unitStatsButton?.addEventListener('click', openUnitStats);
   sceneConfigButton?.addEventListener('click', openSceneConfig);
+
+  // 两个列表都隐藏了原生滚动条，指针拖拽承担滚动；拖拽后的 click 由模块吞掉，不会误切兵种
+  const stopListDragScroll = enableDragScroll(unitList);
+  const stopDetailDragScroll = enableDragScroll(detail);
 
   /** 根据当前分类与选中兵种重新渲染整页内容。 */
   function render(): void {
@@ -216,6 +221,8 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       root.setAttribute('aria-hidden', 'true');
     },
     dispose() {
+      stopListDragScroll();
+      stopDetailDragScroll();
       backButton.removeEventListener('click', back);
       unitStatsButton?.removeEventListener('click', openUnitStats);
       sceneConfigButton?.removeEventListener('click', openSceneConfig);

@@ -26,6 +26,8 @@ import {
   getCastSheetGeometry,
 } from './castEffectSprites.js';
 import { viewNearSign } from './coords.js';
+import { GROUND_FX, GroundGlowMark, GroundRingMark } from './groundFxStyle.js';
+import { InspireBurst, InspireSparks, KingInspireAura, isSharedSparkMesh } from './inspireFx.js';
 
 /**
  * 单位视图。各兵种用参考立绘做成公告板精灵（始终面向相机的面片），
@@ -66,8 +68,20 @@ export class UnitView {
    * 实际 Z 符号随镜头近端翻转：蓝方视角 +Z，红方视角 -Z。
    */
   private readonly buildingBaseOffsetMag: number = 0;
-  /** 振奋状态的脚下光环，默认隐藏并在快照标记时脉冲显示。 */
-  private readonly inspireAura: THREE.Mesh;
+  /** 振奋状态的脚下光环容器，默认隐藏并在快照标记时脉冲显示 */
+  private readonly inspireAura: THREE.Group;
+  /** 振奋光环的细金线；脉冲只轻微缩放这一圈，避免光晕跟着一起抖动 */
+  private readonly inspireRing: GroundRingMark;
+  /** 振奋光环内侧柔光晕，靠透明度呼吸表达「持续生效」 */
+  private readonly inspireGlow: GroundGlowMark;
+  /** 振奋光环基准外径，脉冲在它上面叠乘，避免逐帧覆盖缩放 */
+  private readonly inspireAuraRadius: number = 0;
+  /** 国王专属：真实振奋半径的旋转虚线范围环，非国王为 null */
+  private readonly kingAura: KingInspireAura | null = null;
+  /** 受益单位身上的上升金光点；建筑不挂 */
+  private readonly inspireSparks: InspireSparks | null = null;
+  /** 进入振奋时的一次性金光扩散环 */
+  private readonly inspireBurst: InspireBurst;
 
   // —— 精灵模式 ——
   /** 公告板挂点：每帧对齐相机朝向，子节点上的动画位移都发生在屏幕平面内 */
@@ -126,6 +140,14 @@ export class UnitView {
    * 子节点是三层 Additive 序列帧，始终面向相机。
    */
   private readonly castFx: THREE.Group | null = null;
+  /** 施法时的地面法阵：青蓝柔光底 + 向外扩散的细亮环，两者同进同退。 */
+  private readonly castGroundFx: THREE.Group | null = null;
+  /** 法阵柔光底：中心淡、外缘亮，替代原来的实心圆盘 */
+  private readonly castGlow: GroundGlowMark | null = null;
+  /** 法阵扩散环：按施法时长循环向外推并淡出 */
+  private readonly castWave: GroundRingMark | null = null;
+  /** 法阵基准半径，扩散动画在它上面叠乘 */
+  private readonly castRadius: number = 0;
   private readonly castLayers: Array<{
     mesh: THREE.Mesh;
     material: THREE.MeshBasicMaterial;
@@ -140,6 +162,8 @@ export class UnitView {
   private static readonly HIT_FLASH_AOE_SEC = 0.24;
   /** 范围受击轻抖时长（秒） */
   private static readonly HIT_SHAKE_SEC = 0.12;
+  /** 法阵扩散环一轮的时长（秒），与序列帧节奏错开，避免两套动画同步得像机械循环 */
+  private static readonly CAST_WAVE_SEC = 0.8;
 
   constructor(faction: Faction, typeId: UnitTypeId) {
     this.key = viewKey(faction, typeId);
@@ -284,41 +308,94 @@ export class UnitView {
 
     // 普通单位画碰撞圈；建筑放置后不画占地格，只靠贴图表达位置
     if (!this.isBuilding) {
-      const groundMark = new THREE.Mesh(
-        new THREE.RingGeometry(radius * 0.86, radius, 32),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.85,
-          side: THREE.DoubleSide,
-        }),
-      );
-      groundMark.rotation.x = -Math.PI / 2;
+      // 阵营圈统一走饱和阵营色，不跟兵种肤色走：浅沙地面上原来的浅橙/浅蓝几乎看不见。
+      // 环下面垫深棕描边，沙地、河面、桥面都能勾出边界。
+      const groundMark = new GroundRingMark({
+        color: faction === Faction.Blue ? GROUND_FX.factionBlue : GROUND_FX.factionRed,
+        thickness: 0.16,
+        opacity: 0.85,
+        segments: 32,
+      });
+      // 环按单位碰撞半径建模，缩放到实际半径
+      groundMark.setRadius(radius);
       // 叠在软阴影之上，并高于桥面。
-      groundMark.position.y = 0.033;
-      this.group.add(groundMark);
+      groundMark.group.position.y = 0.033;
+      this.group.add(groundMark.group);
     }
 
-    this.inspireAura = new THREE.Mesh(
-      new THREE.RingGeometry(
-        this.isBuilding ? footprint * 0.52 : radius * 1.08,
-        this.isBuilding ? footprint * 0.58 : radius * 1.22,
-        32,
-      ),
-      new THREE.MeshBasicMaterial({
-        color: 0xffdc6b,
-        transparent: true,
-        opacity: 0.7,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
-    );
-    this.inspireAura.rotation.x = -Math.PI / 2;
-    this.inspireAura.position.y = 0.036;
+    // 振奋光环：原来用暖黄，与浅沙地面同色系；现在改金色细线 + 内侧柔光晕，
+    // 靠亮度和一点点扩散感表达强化，而不是一圈压脚的粗环。
+    const auraInner = this.isBuilding ? footprint * 0.5 : radius * 1.02;
+    const auraOuter = this.isBuilding ? footprint * 0.62 : radius * 1.28;
+    this.inspireAuraRadius = auraOuter;
+    this.inspireRing = new GroundRingMark({
+      color: GROUND_FX.inspire,
+      thickness: 0.12,
+      opacity: 0.95,
+      segments: 40,
+      outline: false,
+    });
+    this.inspireRing.setRadius(auraOuter);
+    this.inspireRing.group.position.y = 0.038;
+    this.inspireGlow = new GroundGlowMark({
+      color: GROUND_FX.inspireGlow,
+      // 只保留外侧一段光带，弱化到不像底盘的柔光
+      innerRatio: auraInner / auraOuter,
+      opacity: 0.45,
+      falloff: 2.4,
+      segments: 40,
+    });
+    this.inspireGlow.setRadius(auraOuter);
+    this.inspireGlow.group.position.y = 0.036;
+    this.inspireAura = new THREE.Group();
+    this.inspireAura.name = 'inspire-aura';
+    this.inspireAura.add(this.inspireGlow.group, this.inspireRing.group);
     this.inspireAura.visible = false;
+
+    this.inspireBurst = new InspireBurst(auraOuter);
+    this.group.add(this.inspireBurst.group);
+    if (!this.isBuilding) {
+      const sparkWidth = this.sprite ? this.spriteWidth : bodyRadius * 2;
+      this.inspireSparks = new InspireSparks(sparkWidth, topY);
+      this.group.add(this.inspireSparks.group);
+    }
+    if (config.inspire) {
+      // 国王范围环常驻：让玩家一眼看出振奋覆盖到哪里
+      this.kingAura = new KingInspireAura(toFloat(config.inspire.radius));
+      this.group.add(this.kingAura.group);
+    }
 
     // 仅主动技能挂施法特效；国王光环是持续效果，不需要瞬间施法动画
     if (config.charge || config.heal || config.summon) {
+      // 地面法阵：原来的实心紫盘会整片压暗沙地，看着像贴了张纸；
+      // 改成青蓝渐隐柔光 + 一圈向外扩散的细亮环，只勾范围、不挡脚下的贴图。
+      this.castGroundFx = new THREE.Group();
+      const castRadius = Math.max(radius * 1.5, bodyRadius * 1.4);
+      this.castRadius = castRadius;
+
+      this.castGlow = new GroundGlowMark({
+        color: GROUND_FX.castGround,
+        innerRatio: 0.08,
+        opacity: 0.3,
+        falloff: 2.0,
+        segments: 40,
+      });
+      this.castGlow.setRadius(castRadius);
+      this.castGlow.group.position.y = 0.043;
+      this.castGroundFx.add(this.castGlow.group);
+
+      this.castWave = new GroundRingMark({
+        color: GROUND_FX.castGround,
+        thickness: 0.06,
+        opacity: 0.9,
+        segments: 40,
+        outline: false,
+      });
+      this.castWave.group.position.y = 0.046;
+      this.castGroundFx.add(this.castWave.group);
+      this.castGroundFx.visible = false;
+      this.group.add(this.castGroundFx);
+
       this.castFx = new THREE.Group();
       this.castFx.visible = false;
       for (const sheet of CAST_SHEETS) {
@@ -453,10 +530,19 @@ export class UnitView {
     if (inspired !== this.displayedInspired) {
       this.displayedInspired = inspired;
       this.inspireAura.visible = inspired;
+      if (this.inspireSparks) this.inspireSparks.group.visible = inspired;
+      // 只在刚进入振奋时爆闪一次
+      if (inspired) this.inspireBurst.start(timeSec);
+      else this.inspireBurst.reset();
     }
+    this.inspireBurst.update(timeSec);
+    this.kingAura?.update(timeSec);
     if (inspired) {
-      const pulse = 1 + Math.sin(timeSec * 7 + this.phase) * 0.08;
-      this.inspireAura.scale.setScalar(pulse);
+      this.inspireSparks?.update(timeSec, camera);
+      // 细线只做很轻的呼吸缩放；光晕改用透明度呼吸，一圈实环抖动太抢眼
+      const pulse = 1 + Math.sin(timeSec * 5 + this.phase) * 0.03;
+      this.inspireRing.setRadius(this.inspireAuraRadius * pulse);
+      this.inspireGlow.setOpacity(0.75 + Math.sin(timeSec * 5 + this.phase) * 0.25);
     }
 
     this.updateCastFx(casting, timeSec, camera);
@@ -491,6 +577,8 @@ export class UnitView {
 
     if (casting && !this.wasCasting) this.castAnimStartedAt = timeSec;
     this.wasCasting = casting;
+    // 地面法阵与序列帧同进同退，否则会留下无主体的光圈
+    if (this.castGroundFx) this.castGroundFx.visible = casting;
     if (!casting) {
       this.castFx.visible = false;
       return;
@@ -506,6 +594,21 @@ export class UnitView {
       const map = layer.material.map;
       if (map) applyCastFrame(map, sheet, frame);
     }
+
+    this.updateCastGroundFx(elapsed);
+  }
+
+  /**
+   * 地面法阵动画：柔光底轻微呼吸，细环从内向外循环扩散并淡出。
+   * 扩散用「半径长大 + 透明度衰减」表达法阵正在充能，比一圈静止的环有过程感。
+   */
+  private updateCastGroundFx(elapsed: number): void {
+    if (!this.castGlow || !this.castWave) return;
+    this.castGlow.setOpacity(0.8 + Math.sin(elapsed * 8) * 0.2);
+    // 0.8s 一轮；phase 取小数部分，保证扩散连续而不是跳回起点后又亮起来
+    const phase = (elapsed % UnitView.CAST_WAVE_SEC) / UnitView.CAST_WAVE_SEC;
+    this.castWave.setRadius(this.castRadius * (0.55 + phase * 0.45));
+    this.castWave.setOpacity(1 - phase);
   }
 
   /** 血量下降时由视图层调用，开启短时材质变红；aoe 时加长并触发轻抖 */
@@ -731,7 +834,11 @@ export class UnitView {
     this.displayedInspired = false;
     this.displayedProtectAlert = null;
     this.inspireAura.visible = false;
+    if (this.inspireSparks) this.inspireSparks.group.visible = false;
+    this.inspireBurst.reset();
+    this.inspireGlow.setOpacity(1);
     if (this.castFx) this.castFx.visible = false;
+    if (this.castGroundFx) this.castGroundFx.visible = false;
     this.applyHitTint(0);
   }
 
@@ -753,6 +860,7 @@ export class UnitView {
         object === this.sprite
         || this.garrisonSprites.includes(object)
         || object.geometry === BLOB_SHADOW_GEOMETRY
+        || isSharedSparkMesh(object)
       ) {
         return;
       }

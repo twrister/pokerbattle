@@ -5,6 +5,7 @@ import { Faction } from '@pb/sim';
 import {
   applySoloCameraPose,
   calculateSoloOrthoBounds,
+  calculateSoloViewFov,
   clampSoloCameraAngle,
   clampSoloCameraDistance,
   clampSoloCameraFov,
@@ -15,6 +16,7 @@ import {
   DEFAULT_SOLO_CAMERA_FOV,
   DEFAULT_SOLO_CAMERA_OFFSET_Y,
   DEFAULT_SOLO_VIEW_BOTTOM_EXTRA,
+  SOLO_VIEW_REFERENCE_ASPECT,
 } from '../src/view/scene.js';
 
 describe('单机正交镜头', () => {
@@ -167,5 +169,31 @@ describe('单机正交镜头', () => {
       expect(corner.y).toBeGreaterThanOrEqual(bounds.bottom);
       expect(corner.y).toBeLessThanOrEqual(bounds.top);
     }
+  });
+});
+
+describe('透视镜头窄屏 FOV 补偿', () => {
+  it('参考 9:16 与更宽比例都保持原始 FOV', () => {
+    expect(calculateSoloViewFov(30, SOLO_VIEW_REFERENCE_ASPECT)).toBeCloseTo(30, 6);
+    expect(calculateSoloViewFov(30, 16 / 9)).toBe(30);
+    expect(calculateSoloViewFov(45, 1)).toBe(45);
+  });
+
+  it('更瘦高的容器放大竖直 FOV，水平取景范围不变', () => {
+    const tune = 30;
+    const narrow = 390 / 844;
+    const compensated = calculateSoloViewFov(tune, narrow);
+    expect(compensated).toBeGreaterThan(tune);
+    // 水平半角 = atan(tan(vFov/2) * aspect)，补偿后应与参考比例一致
+    const halfTan = (fov: number): number => Math.tan((fov * Math.PI) / 360);
+    expect(halfTan(compensated) * narrow).toBeCloseTo(
+      halfTan(tune) * SOLO_VIEW_REFERENCE_ASPECT,
+      6,
+    );
+  });
+
+  it('非法宽高比（0 或 NaN）退回原 FOV，避免除零得到 Infinity', () => {
+    expect(calculateSoloViewFov(30, 0)).toBe(30);
+    expect(calculateSoloViewFov(30, Number.NaN)).toBe(30);
   });
 });

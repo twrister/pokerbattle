@@ -1,41 +1,35 @@
 import * as THREE from 'three';
 import type { AoePulseEffectSnapshot } from '@pb/sim';
 import { toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
-
-const RING_COLOR = 0xffb040;
-const FAN_COLOR = 0xff6a2b;
+import { GROUND_FX, GroundRingMark } from './groundFxStyle.js';
 
 /**
  * 伤害范围脉冲视图：普攻整圆扩环 / 冲刺前方半扇冲击波。
  * 由 BattleView 对象池复用，不持有任何模拟状态。
+ * 颜色用品红系而不是暖橙，避免和浅沙色地面糊在一起。
  */
 export class AoePulseEffectView {
   readonly group = new THREE.Group();
 
-  private readonly ring: THREE.Mesh;
-  private readonly ringMat: THREE.MeshBasicMaterial;
+  private readonly ring: GroundRingMark;
   private readonly fanFill: THREE.Mesh;
-  private readonly fanEdge: THREE.Mesh;
   private readonly fanFillMat: THREE.MeshBasicMaterial;
-  private readonly fanEdgeMat: THREE.MeshBasicMaterial;
+  private readonly fanEdge: GroundRingMark;
   private readonly spokes: THREE.LineSegments;
   private readonly spokeMat: THREE.LineBasicMaterial;
 
   constructor() {
-    this.ringMat = new THREE.MeshBasicMaterial({
-      color: RING_COLOR,
-      transparent: true,
+    this.ring = new GroundRingMark({
+      color: GROUND_FX.pulseRing,
+      thickness: 0.12,
       opacity: 0.9,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+      segments: 40,
     });
-    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 40), this.ringMat);
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.05;
+    this.ring.group.position.y = 0.05;
 
     // 半圆填充：几何默认弧心朝 +X，落地后用 group.rotation.y 对齐冲刺方向
     this.fanFillMat = new THREE.MeshBasicMaterial({
-      color: FAN_COLOR,
+      color: GROUND_FX.pulseFan,
       transparent: true,
       opacity: 0.35,
       depthWrite: false,
@@ -48,23 +42,19 @@ export class AoePulseEffectView {
     this.fanFill.rotation.x = -Math.PI / 2;
     this.fanFill.position.y = 0.045;
 
-    this.fanEdgeMat = new THREE.MeshBasicMaterial({
-      color: FAN_COLOR,
-      transparent: true,
+    this.fanEdge = new GroundRingMark({
+      color: GROUND_FX.pulseFan,
+      thickness: 0.1,
       opacity: 0.95,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+      segments: 28,
+      thetaStart: -Math.PI / 2,
+      thetaLength: Math.PI,
     });
-    this.fanEdge = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1, 28, 1, -Math.PI / 2, Math.PI),
-      this.fanEdgeMat,
-    );
-    this.fanEdge.rotation.x = -Math.PI / 2;
-    this.fanEdge.position.y = 0.055;
+      this.fanEdge.group.position.y = 0.055;
 
-    // 普攻环内侧短辐条，强化「波及整圈」而非单体挥砍
+    // 环内侧短辐条，强化「波及整圈」而非单体挥砍；深色才不会被亮地面吃掉
     this.spokeMat = new THREE.LineBasicMaterial({
-      color: RING_COLOR,
+      color: GROUND_FX.outline,
       transparent: true,
       opacity: 0.55,
       depthWrite: false,
@@ -87,7 +77,7 @@ export class AoePulseEffectView {
     this.spokes = new THREE.LineSegments(spokeGeo, this.spokeMat);
     this.spokes.position.y = 0.052;
 
-    this.group.add(this.ring, this.fanFill, this.fanEdge, this.spokes);
+    this.group.add(this.ring.group, this.fanFill, this.fanEdge.group, this.spokes);
   }
 
   /** 按快照进度扩张并淡出；扇形朝向冲刺方向。 */
@@ -99,26 +89,28 @@ export class AoePulseEffectView {
     this.group.position.set(toSceneX(effect.x), 0, toSceneZ(effect.y));
 
     const isFan = effect.kind === 'charge_fan';
-    this.ring.visible = !isFan;
+    this.ring.group.visible = !isFan;
     this.spokes.visible = !isFan;
     this.fanFill.visible = isFan;
-    this.fanEdge.visible = isFan;
+    this.fanEdge.group.visible = isFan;
 
     if (isFan) {
       // Circle/Ring 半弧心在局部 +X；减 π/2 把 +X 转到冲刺朝向 (dirX, dirY→sceneZ)
       this.group.rotation.y =
         Math.atan2(effect.dirX, toSceneFacingZ(effect.dirY)) - Math.PI / 2;
-      this.fanFill.scale.setScalar(effect.radius * grow);
-      this.fanEdge.scale.setScalar(effect.radius * grow);
-      this.fanFillMat.opacity = fade * 0.4;
-      this.fanEdgeMat.opacity = fade * 0.95;
+      const fanSize = effect.radius * grow;
+      this.fanFill.scale.setScalar(fanSize);
+      this.fanEdge.setRadius(fanSize);
+      this.fanFillMat.opacity = fade * 0.42;
+      this.fanEdge.setOpacity(fade * 0.95);
       return;
     }
 
     this.group.rotation.y = 0;
-    this.ring.scale.setScalar(effect.radius * grow);
-    this.spokes.scale.setScalar(effect.radius * grow);
-    this.ringMat.opacity = fade * 0.9;
+    const ringSize = effect.radius * grow;
+    this.ring.setRadius(ringSize);
+    this.spokes.scale.setScalar(ringSize);
+    this.ring.setOpacity(fade * 0.9);
     this.spokeMat.opacity = fade * 0.55;
   }
 }

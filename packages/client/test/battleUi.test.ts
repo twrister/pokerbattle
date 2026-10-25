@@ -85,43 +85,38 @@ describe('对局 HUD 与结算弹窗', () => {
       </section>
       <section id="battle-result-dialog" class="is-hidden" aria-hidden="true">
         <h2 id="battle-result-title"></h2><p id="battle-result-detail"></p>
-        <article id="battle-result-self" class="battle-result-side is-self">
-          <strong id="battle-result-self-name"></strong>
-          <span id="battle-result-self-hp"></span>
-          <div id="battle-result-self-bar"></div>
-          <ul id="battle-result-self-members" class="battle-result-members is-hidden"></ul>
-        </article>
-        <article id="battle-result-opp" class="battle-result-side is-opp">
-          <strong id="battle-result-opp-name"></strong>
-          <span id="battle-result-opp-hp"></span>
-          <div id="battle-result-opp-bar"></div>
-          <ul id="battle-result-opp-members" class="battle-result-members is-hidden"></ul>
-        </article>
-        <article id="battle-result-self-damage-card" class="battle-result-side is-self">
-          <strong id="battle-result-self-damage-name"></strong>
-          <div id="battle-result-self-damage">
-            <strong id="battle-result-self-castle-value"></strong>
-            <div id="battle-result-self-castle-bar"></div>
-            <strong id="battle-result-self-units-value"></strong>
-            <div id="battle-result-self-units-bar"></div>
-          </div>
-          <ul id="battle-result-self-damage-members" class="battle-result-members is-hidden"></ul>
-        </article>
-        <article id="battle-result-opp-damage-card" class="battle-result-side is-opp">
-          <strong id="battle-result-opp-damage-name"></strong>
-          <div id="battle-result-opp-damage">
-            <strong id="battle-result-opp-castle-value"></strong>
-            <div id="battle-result-opp-castle-bar"></div>
-            <strong id="battle-result-opp-units-value"></strong>
-            <div id="battle-result-opp-units-bar"></div>
-          </div>
-          <ul id="battle-result-opp-damage-members" class="battle-result-members is-hidden"></ul>
-        </article>
-        <div id="battle-result-compare" class="battle-result-compare is-hidden">
-          <span id="battle-result-compare-self"></span>
-          <div id="battle-result-compare-bar"></div>
-          <span id="battle-result-compare-opp"></span>
+        <div class="battle-result-head">
+          <article id="battle-result-self" class="battle-result-side is-self">
+            <strong id="battle-result-self-name"></strong>
+          </article>
+          <article id="battle-result-opp" class="battle-result-side is-opp">
+            <strong id="battle-result-opp-name"></strong>
+          </article>
         </div>
+        <div class="battle-result-rows">
+          <div class="battle-result-row">
+            <span id="battle-result-self-hp"></span>
+            <div id="battle-result-hp-split" class="battle-result-split">
+              <div id="battle-result-hp-bar" class="battle-result-split-bar"></div>
+            </div>
+            <span id="battle-result-opp-hp"></span>
+          </div>
+          <div class="battle-result-row">
+            <span id="battle-result-self-castle-value"></span>
+            <div id="battle-result-castle-split" class="battle-result-split">
+              <div id="battle-result-self-castle-bar" class="battle-result-split-bar"></div>
+            </div>
+            <span id="battle-result-opp-castle-value"></span>
+          </div>
+          <div class="battle-result-row">
+            <span id="battle-result-self-units-value"></span>
+            <div id="battle-result-units-split" class="battle-result-split">
+              <div id="battle-result-self-units-bar" class="battle-result-split-bar"></div>
+            </div>
+            <span id="battle-result-opp-units-value"></span>
+          </div>
+        </div>
+        <div id="battle-result-members" class="battle-result-table is-hidden"></div>
         <button id="btn-battle-result-return"></button>
       </section>
     `;
@@ -310,6 +305,12 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-self-units-value')?.textContent).toBe('—');
     expect(document.querySelector('#battle-result-opp-castle-value')?.textContent).toBe('—');
     expect(document.querySelector('#battle-result-opp-units-value')?.textContent).toBe('—');
+    expect(document.querySelector('#battle-result-self-hp')?.textContent).toBe('—');
+    expect(document.querySelector('#battle-result-opp-hp')?.textContent).toBe('—');
+    // 无对局数据时分割条走中灰，不能整条显示成己方或对方色
+    expect(document.querySelector('#battle-result-hp-split')?.classList.contains('is-neutral')).toBe(true);
+    expect(document.querySelector('#battle-result-castle-split')?.classList.contains('is-neutral')).toBe(true);
+    expect(document.querySelector('#battle-result-members')?.classList.contains('is-hidden')).toBe(true);
   });
 
   it('结算弹窗展示双方名字与城堡残血', () => {
@@ -323,17 +324,19 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-opp-name')?.textContent).toBe('电脑');
     expect(document.querySelector('#battle-result-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-result-opp-hp')?.textContent).toBe('5000 / 5000');
+    expect(document.querySelector('#battle-result-hp-bar')?.getAttribute('style')).toContain('50%');
     expect(document.querySelector('#battle-result-self')?.classList.contains('is-winner')).toBe(true);
     expect(document.querySelector('#battle-result-opp')?.classList.contains('is-loser')).toBe(true);
-    expect(document.querySelector('#battle-result-self-members')?.classList.contains('is-hidden')).toBe(true);
-    expect(document.querySelector('#battle-result-compare')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#battle-result-members')?.classList.contains('is-hidden')).toBe(true);
     expect(document.querySelector('#battle-result-self-castle-value')?.textContent).toBe('0');
     expect(document.querySelector('#battle-result-self-units-value')?.textContent).toBe('0');
     expect(document.querySelector('#battle-result-self-castle-bar')?.getAttribute('style')).toContain('0%');
     expect(document.querySelector('#battle-result-self-units-bar')?.getAttribute('style')).toContain('0%');
+    // 双方伤害都是 0：分割条转中性态
+    expect(document.querySelector('#battle-result-castle-split')?.classList.contains('is-neutral')).toBe(true);
   });
 
-  it('2v2 结算展示四人残血与队伍总血量对比', () => {
+  it('2v2 结算展示队伍名牌与队员明细表', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     const units = match.world.units.filter((unit) => unit.typeId === 'building_base');
@@ -360,24 +363,31 @@ describe('对局 HUD 与结算弹窗', () => {
     result.show({ winner: Faction.Red, reason: 'time_limit', endTick: 10 }, Faction.Blue, match);
 
     expect(document.querySelector('#battle-result-dialog')?.classList.contains('is-2v2')).toBe(true);
-    expect(document.querySelector('#battle-result-self-name')?.textContent).toBe('合计');
+    expect(document.querySelector('#battle-result-self-name')?.textContent).toBe('己方队伍');
+    expect(document.querySelector('#battle-result-opp-name')?.textContent).toBe('对方队伍');
     expect(document.querySelector('#battle-result-self-hp')?.textContent).toBe('3000 / 10000');
     expect(document.querySelector('#battle-result-opp-hp')?.textContent).toBe('3000 / 10000');
-    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('我');
-    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('1000 / 5000');
-    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('队友');
-    expect(document.querySelector('#battle-result-self-members')?.textContent).toContain('2000 / 5000');
-    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('敌1');
-    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('3000 / 5000');
-    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('敌2');
-    expect(document.querySelector('#battle-result-opp-members')?.textContent).toContain('0 / 5000');
-    expect(document.querySelector('#battle-result-compare')?.classList.contains('is-hidden')).toBe(false);
-    expect(document.querySelector('#battle-result-compare-self')?.textContent).toBe('己方 3000');
-    expect(document.querySelector('#battle-result-compare-opp')?.textContent).toBe('对方 3000');
-    expect(document.querySelector('#battle-result-compare-bar')?.getAttribute('style')).toContain('50%');
+    expect(document.querySelector('#battle-result-hp-bar')?.getAttribute('style')).toContain('50%');
+
+    const table = document.querySelector('#battle-result-members');
+    expect(table?.classList.contains('is-hidden')).toBe(false);
+    expect(table?.textContent).toContain('我');
+    expect(table?.textContent).toContain('1000 / 5000');
+    expect(table?.textContent).toContain('队友');
+    expect(table?.textContent).toContain('2000 / 5000');
+    expect(table?.textContent).toContain('敌1');
+    expect(table?.textContent).toContain('3000 / 5000');
+    expect(table?.textContent).toContain('敌2');
+    expect(table?.textContent).toContain('0 / 5000');
+    // 表头 + 四名队员
+    expect(table?.querySelectorAll('.battle-result-table-row').length).toBe(5);
+    expect(table?.querySelectorAll('.battle-result-table-row.is-self').length).toBe(2);
+    expect(table?.querySelectorAll('.battle-result-table-row.is-opp').length).toBe(2);
+    // 血量归零的席位降透明度
+    expect(table?.querySelectorAll('.battle-result-table-row.is-down').length).toBe(1);
   });
 
-  it('1v1 结算卡片展示双方对基地与对兵种输出', () => {
+  it('1v1 结算对比行展示双方对基地与对兵种输出', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
     const redCastle = match.world.units.find(
@@ -402,16 +412,15 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-self-units-value')?.textContent).toBe('40');
     expect(document.querySelector('#battle-result-opp-castle-value')?.textContent).toBe('80');
     expect(document.querySelector('#battle-result-opp-units-value')?.textContent).toBe('20');
+    // 分割条只有己方一根，宽度即己方占比
     expect(document.querySelector('#battle-result-self-castle-bar')?.getAttribute('style')).toContain('60%');
-    expect(document.querySelector('#battle-result-opp-castle-bar')?.getAttribute('style')).toContain('40%');
     expect(document.querySelector('#battle-result-self-units-bar')?.getAttribute('style')).toContain(`${(40 / 60) * 100}%`);
-    expect(document.querySelector('#battle-result-opp-units-bar')?.getAttribute('style')).toContain(`${(20 / 60) * 100}%`);
-    expect(document.querySelector('#battle-result-self-members')?.classList.contains('is-hidden')).toBe(true);
-    expect(document.querySelector('#battle-result-self-damage-members')?.classList.contains('is-hidden')).toBe(true);
-    expect(document.querySelector('#battle-result-self-damage-name')?.textContent).toBe('Alice');
+    expect(document.querySelector('#battle-result-castle-split')?.classList.contains('is-neutral')).toBe(false);
+    expect(document.querySelector('#battle-result-members')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#battle-result-self-name')?.textContent).toBe('Alice');
   });
 
-  it('2v2 结算卡片写队合计，成员行再拆个人输出', () => {
+  it('2v2 结算对比行写队合计，明细表再拆个人输出', () => {
     const match = new MatchState(1, '2v2');
     match.seedStartingCastles();
     const redCastle = match.world.units.find(
@@ -446,36 +455,24 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-opp-castle-value')?.textContent).toBe('80');
     expect(document.querySelector('#battle-result-opp-units-value')?.textContent).toBe('20');
     expect(document.querySelector('#battle-result-self-castle-bar')?.getAttribute('style')).toContain('60%');
-    expect(document.querySelector('#battle-result-opp-castle-bar')?.getAttribute('style')).toContain('40%');
-    expect(document.querySelector('#battle-result-self-damage-name')?.textContent).toBe('合计');
-    const hpMembers = document.querySelector('#battle-result-self-members');
-    expect(hpMembers?.textContent).toContain('我');
-    expect(hpMembers?.textContent).toContain('队友');
-    expect(hpMembers?.querySelectorAll('.battle-result-member-castle').length).toBe(0);
-    const selfMembers = document.querySelector('#battle-result-self-damage-members');
-    const selfCastle = selfMembers?.querySelectorAll('.battle-result-member-castle');
-    const selfUnits = selfMembers?.querySelectorAll('.battle-result-member-units');
-    const selfCastleBars = selfMembers?.querySelectorAll('.battle-result-member-castle-bar');
-    const selfUnitsBars = selfMembers?.querySelectorAll('.battle-result-member-units-bar');
-    expect(selfMembers?.textContent).toContain('我');
-    expect(selfMembers?.textContent).toContain('队友');
-    expect(selfCastle?.[0]?.textContent).toBe('120');
-    expect(selfCastle?.[1]?.textContent).toBe('0');
-    expect(selfUnits?.[0]?.textContent).toBe('0');
-    expect(selfUnits?.[1]?.textContent).toBe('40');
-    expect(selfCastleBars?.[0]?.getAttribute('style')).toContain('100%');
-    expect(selfCastleBars?.[1]?.getAttribute('style')).toContain('0%');
-    expect(selfUnitsBars?.[0]?.getAttribute('style')).toContain('0%');
-    expect(selfUnitsBars?.[1]?.getAttribute('style')).toContain('100%');
-    const oppMembers = document.querySelector('#battle-result-opp-damage-members');
-    const oppCastle = oppMembers?.querySelectorAll('.battle-result-member-castle');
-    const oppUnits = oppMembers?.querySelectorAll('.battle-result-member-units');
-    expect(oppMembers?.textContent).toContain('敌1');
-    expect(oppMembers?.textContent).toContain('敌2');
-    expect(oppCastle?.[0]?.textContent).toBe('80');
-    expect(oppCastle?.[1]?.textContent).toBe('0');
-    expect(oppUnits?.[0]?.textContent).toBe('0');
-    expect(oppUnits?.[1]?.textContent).toBe('20');
+    expect(document.querySelector('#battle-result-self-name')?.textContent).toBe('己方队伍');
+
+    const table = document.querySelector('#battle-result-members');
+    expect(table?.textContent).toContain('我');
+    expect(table?.textContent).toContain('队友');
+    expect(table?.textContent).toContain('敌1');
+    expect(table?.textContent).toContain('敌2');
+    // 己方两行在前：我打基地 120、队友打兵种 40
+    const castle = table?.querySelectorAll('.battle-result-member-castle');
+    const units = table?.querySelectorAll('.battle-result-member-units');
+    expect(castle?.[0]?.textContent).toBe('120');
+    expect(castle?.[1]?.textContent).toBe('0');
+    expect(castle?.[2]?.textContent).toBe('80');
+    expect(castle?.[3]?.textContent).toBe('0');
+    expect(units?.[0]?.textContent).toBe('0');
+    expect(units?.[1]?.textContent).toBe('40');
+    expect(units?.[2]?.textContent).toBe('0');
+    expect(units?.[3]?.textContent).toBe('20');
   });
 
   it('2v2 渲染我/队友与两名敌人的主堡血条', () => {

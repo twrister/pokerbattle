@@ -214,6 +214,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
       camera,
       width / Math.max(height, 1),
       soloCameraAngleDeg,
+      soloCameraFov,
       viewFaction,
       soloViewBottomExtra,
       { width: ARENA_W, height: ARENA_H },
@@ -315,7 +316,8 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
     setSoloCameraFov(fov) {
       soloCameraFov = clampSoloCameraFov(fov);
       if (camera instanceof THREE.PerspectiveCamera) {
-        camera.fov = soloCameraFov;
+        // 与 resize 走同一补偿，避免窄屏下调参后水平取景突然变宽
+        camera.fov = calculateSoloViewFov(soloCameraFov, camera.aspect);
         camera.updateProjectionMatrix();
       }
     },
@@ -450,6 +452,23 @@ export function clampSoloCameraFov(fov: number): number {
   return Math.min(SOLO_CAMERA_FOV_MAX, Math.max(SOLO_CAMERA_FOV_MIN, fov));
 }
 
+/** 局内舞台参考宽高比（9:16）：画布铺满视口高度后，用它锁定水平取景范围。 */
+export const SOLO_VIEW_REFERENCE_ASPECT = 9 / 16;
+
+/**
+ * 按容器宽高比补偿竖直 FOV。
+ * 比参考比例更瘦高时放大竖直 FOV，水平方向看到的范围不变，多出的高度用来显示更多场外场地，
+ * 不会把战场两侧裁掉；比参考比例更宽时保持原值（宽屏由左右 letterbox 兜住）。
+ */
+export function calculateSoloViewFov(fovDeg: number, aspect: number): number {
+  if (!Number.isFinite(aspect) || aspect <= 0) return fovDeg;
+  if (aspect >= SOLO_VIEW_REFERENCE_ASPECT) return fovDeg;
+  // 由「水平半角 = atan(tan(vFov/2) * aspect)」反推 vFov，保证水平半角不随高度变化
+  const halfRad = (fovDeg * Math.PI) / 360;
+  const half = Math.atan((Math.tan(halfRad) * SOLO_VIEW_REFERENCE_ASPECT) / aspect);
+  return (half * 360) / Math.PI;
+}
+
 /** 把透视镜头距离限制在可调范围内。 */
 export function clampSoloCameraDistance(distance: number): number {
   return Math.min(SOLO_CAMERA_DISTANCE_MAX, Math.max(SOLO_CAMERA_DISTANCE_MIN, distance));
@@ -562,17 +581,19 @@ export function calculateSoloOrthoBounds(
   };
 }
 
-/** 容器变化时更新投影；正交镜头始终按宽高比例完整包住战场。 */
+/** 容器变化时更新投影；正交镜头始终按宽高比例完整包住战场，透视按比例补偿竖直 FOV。 */
 function resizeCamera(
   camera: THREE.Camera,
   aspect: number,
   soloCameraAngleDeg: number,
+  soloCameraFov: number,
   viewFaction: Faction,
   bottomExtra: number,
   size: { width: number; height: number },
 ): void {
   if (camera instanceof THREE.PerspectiveCamera) {
     camera.aspect = aspect;
+    camera.fov = calculateSoloViewFov(soloCameraFov, aspect);
     camera.updateProjectionMatrix();
     return;
   }

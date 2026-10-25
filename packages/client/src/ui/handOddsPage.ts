@@ -46,19 +46,24 @@ const TEAM_SIZE_MAX = 8;
 const SEED_MIN = 1;
 const SEED_MAX = 1_000_000_000;
 /** 折线图 12 条线的固定色板，与强度序一一对应。 */
+/**
+ * 柱状/折线图配色。
+ * 页面改成奶油浅底后，原来偏白偏浅的几档（三条/对子/单张/三顺）会和底色糊在一起，
+ * 这里统一压深一档、提高饱和度，保证每条在图例和图形上都能单独辨认。
+ */
 const CATEGORY_COLORS: Readonly<Record<HandCategory, string>> = {
-  straight_flush: '#f0c14b',
-  bomb: '#ff6b6b',
-  rocket: '#ff8fab',
-  full_house: '#c77dff',
-  flush: '#4cc9f0',
-  straight5: '#80ed99',
-  straight4: '#99d98c',
-  two_pair: '#90e0ef',
-  triple: '#adb5bd',
-  straight3: '#b8f2e6',
-  pair: '#dee2e6',
-  single: '#6c757d',
+  straight_flush: '#c8901a',
+  bomb: '#e03b3b',
+  rocket: '#e84a7f',
+  full_house: '#9a4fd6',
+  flush: '#2b8fc4',
+  straight5: '#3f9c4f',
+  straight4: '#5aa63a',
+  two_pair: '#2f8fa8',
+  triple: '#6b7a8f',
+  straight3: '#2f9a8a',
+  pair: '#8a6a3c',
+  single: '#4a5a72',
 };
 
 /**
