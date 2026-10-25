@@ -9,6 +9,7 @@ import {
   type UnitSnapshot,
 } from '@pb/sim';
 import { attackReachPreviewRadius } from '../input/attackRangePreview.js';
+import { BattleSfx } from '../audio/battleSfx.js';
 import { projectWorldToClient, toSceneFacingZ, toSceneX, toSceneZ } from './coords.js';
 import { UnitView, viewKey, visualFaction, visualSide } from './unitView.js';
 import { HealEffectView } from './healEffectView.js';
@@ -207,6 +208,8 @@ export class BattleView {
   private readonly aoeWarningPool: AoeGroundMark[] = [];
   /** 选中单位的攻击范围圈：预警圈同款描边、无填充、白色。 */
   private readonly attackRangeMark = new AoeGroundMark({ filled: false, lineColor: 0xffffff });
+  /** 战斗音效：在每帧渲染时比对快照，本地/联机/回放共用这一条链路。 */
+  private readonly battleSfx = new BattleSfx();
   private selectedUnitId: number | null = null;
   /** 最近一帧插值后的单位位置，供点击拾取。 */
   private pickUnits: { id: number; x: number; y: number; radius: number; footprint: number }[] = [];
@@ -326,6 +329,7 @@ export class BattleView {
   }
 
   render(prev: Snapshot, curr: Snapshot, alpha: number, camera: THREE.Camera): void {
+    this.battleSfx.onSnapshot(curr);
     this.syncPrevIndex(prev);
     this.renderUnits(curr, alpha, camera);
     this.syncAttackRangeMark(curr, alpha);
@@ -729,6 +733,8 @@ export class BattleView {
 
   /** 清空战场时调用，把场景对象全部收回池子 */
   reset(): void {
+    // 换局后第一帧只建索引，避免进局瞬间连着响一串
+    this.battleSfx.reset();
     for (const [id, view] of this.activeUnits) {
       this.scene.remove(view.group);
       this.activeUnits.delete(id);
@@ -781,6 +787,7 @@ export class BattleView {
    * 池里缓存的圆柱是按旧半径建的，必须整批丢掉，否则新兵会穿旧壳。
    */
   invalidateUnitViews(): void {
+    this.battleSfx.reset();
     for (const [, view] of this.activeUnits) {
       this.scene.remove(view.group);
     }

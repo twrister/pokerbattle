@@ -68,6 +68,7 @@
       html:not(.is-dev) #btn-open-scene-config,
       html:not(.is-dev) #unit-stats,
       html:not(.is-dev) #scene-config,
+      html:not(.is-dev) #sfx-config,
       html:not(.is-dev) #panel-stats,
       html:not(.is-dev) #hud.is-solo #panel-controls,
       html:not(.is-dev) #btn-deck-add-formation,
@@ -793,6 +794,274 @@
         border-radius: calc(10 * var(--hu));
         font-size: calc(15 * var(--hu));
         font-weight: 650;
+      }
+
+      /* 设置弹层：每行一个可点开关，行样式与联机成员卡片同质感 */
+      .settings-list {
+        display: grid;
+        gap: calc(10 * var(--hu));
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(12 * var(--hu));
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: 1px solid rgba(153, 207, 237, 0.2);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        text-align: left;
+      }
+
+      .settings-row:hover,
+      .settings-row:active {
+        background: var(--surface-strong);
+        border-color: rgba(169, 198, 220, 0.4);
+        transform: none;
+      }
+
+      .settings-row-copy {
+        display: grid;
+        gap: calc(4 * var(--hu));
+        min-width: 0;
+      }
+
+      .settings-row-label {
+        color: #f2f5f7;
+        font-size: calc(16 * var(--hu));
+        font-weight: 650;
+        letter-spacing: 0.04em;
+      }
+
+      .settings-row-hint {
+        color: #8b98ab;
+        font-size: calc(12 * var(--hu));
+      }
+
+      /* 开关轨道：滑块位置完全由 aria-checked 决定，JS 只改属性 */
+      .settings-switch {
+        position: relative;
+        flex: 0 0 auto;
+        width: calc(44 * var(--hu));
+        height: calc(24 * var(--hu));
+        border-radius: calc(999 * var(--hu));
+        background: rgba(255, 255, 255, 0.12);
+        box-shadow: inset 0 0 0 1px rgba(139, 165, 184, 0.28);
+        transition: background 0.16s ease;
+      }
+
+      .settings-switch-thumb {
+        position: absolute;
+        top: calc(3 * var(--hu));
+        left: calc(3 * var(--hu));
+        width: calc(18 * var(--hu));
+        height: calc(18 * var(--hu));
+        border-radius: 50%;
+        background: #c5d4e0;
+        transition: transform 0.16s ease, background 0.16s ease;
+      }
+
+      .settings-row[aria-checked='true'] .settings-switch {
+        background: rgba(79, 141, 253, 0.55);
+        box-shadow: inset 0 0 0 1px rgba(153, 207, 237, 0.55);
+      }
+
+      .settings-row[aria-checked='true'] .settings-switch-thumb {
+        transform: translateX(calc(20 * var(--hu)));
+        background: #f2f7fb;
+      }
+
+      .settings-row.is-muted .settings-row-label {
+        color: #c5d4e0;
+      }
+
+      /* 跳转类设置行的尾部箭头，与右侧开关同宽位置，保持两行右边缘对齐 */
+      .settings-row-arrow {
+        flex: 0 0 auto;
+        color: #8b98ab;
+        font-size: calc(20 * var(--hu));
+        line-height: 1;
+      }
+
+      /* 开发服音效调整页：整页滚动列表，一行一个音效 */
+      #sfx-config {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 20% 16%, rgba(48, 96, 120, 0.22), transparent 34%),
+          #0a1018;
+      }
+
+      .sfx-config-shell {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 16px 20px 12px;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .sfx-config-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .sfx-config-header h1 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .sfx-config-header button {
+        min-height: 34px;
+        padding: 7px 12px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .sfx-config-hint {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      #sfx-config-list {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: grid;
+        gap: 14px;
+        align-content: start;
+        padding-right: 4px;
+      }
+
+      .sfx-config-group h2 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-dim);
+      }
+
+      .sfx-config-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        background: rgba(16, 24, 34, 0.72);
+      }
+
+      /* 单音效开关：关闭态整行压暗，一眼看出局内不会响 */
+      .sfx-config-row .sfx-config-toggle {
+        flex: 0 0 auto;
+        min-width: 40px;
+        min-height: 26px;
+        padding: 3px 8px;
+        border: 1px solid rgba(139, 165, 184, 0.28);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #8b98ab;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+      }
+
+      /* 用 aria-pressed 驱动配色，压过全局 button[aria-pressed] 的高亮样式 */
+      .sfx-config-row .sfx-config-toggle[aria-pressed='true'] {
+        border-color: rgba(153, 207, 237, 0.55);
+        background: rgba(79, 141, 253, 0.45);
+        color: #f2f7fb;
+      }
+
+      .sfx-config-row.is-off .sfx-config-row-label {
+        color: #8b98ab;
+      }
+
+      .sfx-config-row-main {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .sfx-config-row-label {
+        font-size: 14px;
+      }
+
+      .sfx-config-row-detail {
+        color: var(--text-dim);
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sfx-config-row-size {
+        color: var(--text-dim);
+        font-size: 11px;
+        min-width: 56px;
+        text-align: right;
+      }
+
+      .sfx-config-row-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .sfx-config-row-actions button {
+        min-height: 28px;
+        padding: 4px 10px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .sfx-config-row-actions button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      .sfx-config-footer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      #sfx-config-status {
+        flex: 1;
+        min-width: 160px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      #sfx-config-status[data-tone='ok'] {
+        color: var(--accent);
+      }
+
+      #sfx-config-status[data-tone='error'] {
+        color: var(--red);
       }
 
       .mode-dialog-options {
@@ -1802,6 +2071,43 @@
         letter-spacing: 0.02em;
         white-space: nowrap;
         text-align: center;
+      }
+
+      /* 局内音效开关：贴在返回键右侧，同一行横向排开 */
+      .sfx-toggle.is-battle {
+        position: absolute;
+        top: max(calc(12 * var(--hu)), var(--stage-safe-top));
+        left: calc(max(calc(12 * var(--hu)), var(--stage-safe-left)) + calc(96 * var(--hu)));
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: calc(34 * var(--hu));
+        height: calc(30 * var(--hu));
+        padding: 0;
+        border: 1px solid var(--btn-secondary-border);
+        border-radius: calc(10 * var(--hu));
+        background: var(--btn-secondary-bg);
+        color: #d5e2ec;
+        pointer-events: auto;
+        font-size: calc(14 * var(--hu));
+        line-height: 1;
+      }
+
+      .sfx-toggle.is-battle .sfx-toggle-icon {
+        font-size: calc(16 * var(--hu));
+        line-height: 1;
+      }
+
+      .sfx-toggle.is-battle.is-muted {
+        color: #8fa3b4;
+      }
+
+      /* 关闭态用斜杠划掉音符，比换一个 emoji 更稳、也不受字体影响 */
+      .sfx-toggle.is-battle.is-muted .sfx-toggle-icon {
+        opacity: 0.55;
+        text-decoration: line-through;
+        text-decoration-thickness: calc(2 * var(--hu));
       }
 
       /* 挂在 #battle-hud 文档流里，始终在血条下方，避免绝对定位叠上去 */
@@ -5537,6 +5843,10 @@
             </div>
           </button>
           <div class="lobby-topbar-actions">
+            <button id="btn-settings" class="topbar-action" type="button" aria-label="打开设置">
+              <span class="topbar-action-icon" aria-hidden="true">⚙</span>
+              <span class="topbar-action-label">设置</span>
+            </button>
             <button id="btn-patch-notes" class="topbar-action" type="button" aria-label="查看更新公告">
               <span class="topbar-action-icon" aria-hidden="true">✦</span>
               <span class="topbar-action-label">更新公告</span>
@@ -5683,6 +5993,34 @@
                 <button id="btn-feedback-submit" type="submit">提交</button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <div id="settings-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="settings-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭设置" data-settings-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="settings-title" class="mode-dialog-title">设置</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-settings-close>×</button>
+            </header>
+            <div class="settings-list">
+              <button id="btn-settings-mute" class="settings-row" type="button" role="switch" aria-checked="true">
+                <span class="settings-row-copy">
+                  <span class="settings-row-label">音效</span>
+                  <span id="settings-mute-hint" class="settings-row-hint">局内战斗与界面提示音</span>
+                </span>
+                <span class="settings-switch" aria-hidden="true">
+                  <span class="settings-switch-thumb"></span>
+                </span>
+              </button>
+              <button id="btn-settings-sfx-config" class="settings-row dev-only" type="button" data-sfx="open">
+                <span class="settings-row-copy">
+                  <span class="settings-row-label">音效调整</span>
+                  <span class="settings-row-hint">开发服：逐个试听并替换音效资源</span>
+                </span>
+                <span class="settings-row-arrow" aria-hidden="true">›</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -6298,6 +6636,20 @@
       </div>
     </main>
 
+    <main id="sfx-config" class="is-hidden" aria-hidden="true">
+      <div class="sfx-config-shell">
+        <header class="sfx-config-header">
+          <button id="btn-sfx-config-back" type="button" data-sfx="back">返回设置</button>
+          <h1>音效调整</h1>
+          <span class="sfx-config-hint">只收 .ogg；替换会直接覆盖 public/sfx 下的文件，改完记得提交</span>
+        </header>
+        <section id="sfx-config-list" aria-label="音效列表"></section>
+        <footer class="sfx-config-footer">
+          <div id="sfx-config-status" role="status" aria-live="polite">点击试听，选中文件后可先试听候选再替换</div>
+        </footer>
+      </div>
+    </main>
+
     <div id="app" class="is-hidden"></div>
 
     <div id="hud" class="is-hidden">
@@ -6504,6 +6856,9 @@
         </div>
       </div>
       <button id="btn-back-menu" type="button">返回</button>
+      <button id="btn-battle-sfx-toggle" class="sfx-toggle is-battle" type="button" aria-label="音效开关" aria-pressed="false">
+        <span class="sfx-toggle-icon" aria-hidden="true">♪</span>
+      </button>
       <section class="panel" id="panel-stats">
         <div class="title">模拟状态</div>
         <dl class="stats-grid">

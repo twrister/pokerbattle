@@ -70,6 +70,7 @@ function mountMainMenuDom(): void {
         <div id="player-level"></div>
       </button>
       <div class="lobby-topbar-actions">
+        <button id="btn-settings" type="button">设置</button>
         <button id="btn-patch-notes" type="button">更新公告</button>
         <button id="btn-feedback-open" type="button" aria-expanded="false">提意见</button>
       </div>
@@ -116,6 +117,15 @@ function mountMainMenuDom(): void {
           <button id="btn-feedback-cancel" type="button" data-feedback-close>取消</button>
           <button id="btn-feedback-submit" type="submit">提交</button>
         </form>
+      </div>
+      <div id="settings-dialog" class="is-hidden" aria-hidden="true">
+        <button data-settings-close type="button">关闭</button>
+        <div class="mode-dialog-panel">
+          <button id="btn-settings-mute" type="button" role="switch" aria-checked="true">
+            <span class="settings-row-label">音效</span>
+            <span id="settings-mute-hint"></span>
+          </button>
+        </div>
       </div>
     </main>
   `;
@@ -470,11 +480,11 @@ describe('大厅玩家档案展示', () => {
     expect(dialog.classList.contains('is-hidden')).toBe(true);
   });
 
-  it('提意见入口在更新公告下方，点击打开独立弹层', () => {
+  it('顶栏依次是设置、更新公告、提意见，点击打开独立弹层', () => {
     createMainMenu(menuOptions());
     const actions = document.querySelector('.lobby-topbar-actions')!;
     const buttons = Array.from(actions.querySelectorAll('button')).map((button) => button.id);
-    expect(buttons).toEqual(['btn-patch-notes', 'btn-feedback-open']);
+    expect(buttons).toEqual(['btn-settings', 'btn-patch-notes', 'btn-feedback-open']);
 
     document.querySelector<HTMLButtonElement>('#btn-feedback-open')!.click();
     expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(false);
@@ -482,5 +492,22 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-feedback-cancel')!.click();
     expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('点设置打开设置弹层，且收起公告与反馈', () => {
+    createMainMenu(menuOptions());
+    const dialog = document.querySelector('#settings-dialog')!;
+
+    document.querySelector<HTMLButtonElement>('#btn-patch-notes')!.click();
+    expect(document.querySelector('#patch-notes-dialog')?.classList.contains('is-hidden')).toBe(false);
+
+    document.querySelector<HTMLButtonElement>('#btn-settings')!.click();
+    expect(dialog.classList.contains('is-hidden')).toBe(false);
+    // 同级弹层互斥，避免叠着两层遮罩
+    expect(document.querySelector('#patch-notes-dialog')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('#feedback-dialog')?.classList.contains('is-hidden')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('[data-settings-close]')!.click();
+    expect(dialog.classList.contains('is-hidden')).toBe(true);
   });
 });

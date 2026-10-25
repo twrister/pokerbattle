@@ -15,6 +15,7 @@ import {
   type UnitTypeId,
 } from '@pb/sim';
 import { cardImageUrl } from '../cards/cardImageUrl.js';
+import { sfx } from '../audio/sfx.js';
 import {
   appendFormationBombDamage,
   fuseBombDisplayDamage,
@@ -297,6 +298,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const finishPointerSelection = (event: PointerEvent): void => {
     if (event.pointerId !== pointerId) return;
     if (cardsElement.hasPointerCapture(event.pointerId)) cardsElement.releasePointerCapture(event.pointerId);
+    // 加选时出「啪」一下的选牌音；取消选中不配音，避免连点太吵
+    if (dragSelectMode && preview.size > 0) sfx.play('card_select');
     for (const cardId of preview) {
       if (dragSelectMode) selected.add(cardId);
       else selected.delete(cardId);
@@ -336,10 +339,13 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (cards.length === 0) return false;
     if (options.onRequestSpawn?.({ formation, cards, point }) === false) {
       setActionStatus(STATUS_INVALID_DROP);
+      // 落点非法：给一声短促报错，比只靠文字更容易注意到
+      sfx.play('ui_error');
       return false;
     }
 
     setActionStatus(null);
+    sfx.play('card_play');
     const playedIds = cards.map((card) => card.id);
     playing = true;
     formationsElement.querySelectorAll<HTMLButtonElement>('.formation-option').forEach((button) => {
@@ -396,6 +402,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     selected.clear();
     for (const card of options[next]!.cards) selected.add(card.id);
     syncSelection();
+    sfx.play('card_select');
   };
 
   /** 手牌组成变了就丢掉上一圈的推荐档位。 */
@@ -713,8 +720,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const previousRects = captureCardRects();
     syncHandLayoutVars();
     const fragment = document.createDocumentFragment();
+    // 有牌是新发入的就配一声发牌音，整手重排时不响
+    let dealtAny = false;
     deck.hand.forEach((card, index) => {
       const isNew = !knownCardIds.has(card.id);
+      if (isNew) dealtAny = true;
       knownCardIds.add(card.id);
       const cardElement = document.createElement('button');
       cardElement.type = 'button';
@@ -750,6 +760,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     syncSelection();
     setDealOrigins();
     animateLayoutShift(previousRects);
+    if (dealtAny) sfx.play('card_draw');
   }
 
   /** 只更新选择态，避免 pointermove 时反复创建图片节点；加选/取消预览都置灰，划过轻晃另由 playCardWobble 触发。 */

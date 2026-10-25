@@ -7,6 +7,7 @@ import {
   type MatchState,
   type SlotDamageStats,
 } from '@pb/sim';
+import { sfx } from '../audio/sfx.js';
 
 export interface BattleResultContext {
   localName: string;
@@ -108,6 +109,8 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
     },
     show(result, playerFaction, match) {
       const outcome = result.winner === null ? '平局' : result.winner === playerFaction ? '胜利' : '失败';
+      // 胜负用不同短音，平局走中性音，避免输了还响胜利号
+      sfx.play(result.winner === null ? 'result_draw' : result.winner === playerFaction ? 'result_win' : 'result_lose');
       const is2v2 = match?.mode === '2v2';
       title.textContent = outcome;
       root.dataset.outcome = outcome;

@@ -43,6 +43,9 @@ import {
   shouldRecordVersusAbandon,
 } from './account/index.js';
 import { SimLoop } from './loop.js';
+import { sfx } from './audio/sfx.js';
+import { bindGlobalUiSfx } from './audio/uiSfx.js';
+import { createSfxToggle } from './ui/sfxToggle.js';
 import { createPanel } from './debug/panel.js';
 import { IS_DEV_SERVER } from './env.js';
 import {
@@ -108,6 +111,7 @@ import { createOnlineRoomPage } from './ui/onlineRoomPage.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
 import { createSceneConfigPage } from './ui/sceneConfigPage.js';
+import { createSfxConfigPage } from './ui/sfxConfigPage.js';
 import { createUnitStatsPage } from './ui/unitStatsPage.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import { applyMatchRulesView, defaultMatchRulesView } from './debug/matchRulesView.js';
@@ -127,6 +131,17 @@ import {
 const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
 const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
+
+// 音效：预加载全部短音资源，首次交互时解锁 AudioContext，再挂全局按钮点击音
+sfx.attachUnlock();
+sfx.preloadAll();
+bindGlobalUiSfx(document);
+// 局内音符按钮；大厅设置弹层里的开关与它共用 sfx 状态，靠订阅互相同步
+createSfxToggle({
+  buttons: [
+    document.querySelector<HTMLButtonElement>('#btn-battle-sfx-toggle'),
+  ].filter((button): button is HTMLButtonElement => Boolean(button)),
+});
 
 // 供 CSS 区分开发服 / 正式服可见功能
 document.documentElement.classList.toggle('is-dev', IS_DEV_SERVER);
@@ -217,6 +232,7 @@ const mainMenu = createMainMenu({
   onOpenCodex: () => screens.show('codex'),
   onOpenLeaderboard: () => screens.show('leaderboard'),
   onOpenReplays: () => screens.show('replay-list'),
+  onOpenSfxConfig: () => screens.show('sfx-config'),
   onSyncBattleScore: async () => {
     try {
       const board = await ensureAppLobbyPresence().listLeaderboard();
@@ -252,6 +268,7 @@ const handOddsPage = createHandOddsPage({
   onBeforeBalance: () => unitStatsPage.flushPending(),
 });
 const sceneConfigPage = createSceneConfigPage({ onBack: () => screens.show('codex') });
+const sfxConfigPage = createSfxConfigPage({ onBack: () => screens.show('menu') });
 const codexPage = createCodexPage({
   onBack: () => screens.show('menu'),
   onOpenUnitStats: () => screens.show('unit-stats'),
@@ -617,7 +634,12 @@ function enterBattleSession(mode: BattleMode): () => void {
           const match = loop.match;
           if (!match) return;
           const command = claimCastlePackCommand(Faction.Blue);
-          if (!match.validate(command)) return;
+          if (!match.validate(command)) {
+            // 校验不过通常是半场未到，给一声拒绝音解释「点了没反应」
+            sfx.play('ui_error');
+            return;
+          }
+          sfx.play('pack_open');
           loop.enqueue(command);
         },
       })
@@ -1143,6 +1165,8 @@ function enterBattleSession(mode: BattleMode): () => void {
       const packState = loop.match.getCastlePackState(Faction.Blue);
       if (loop.world.tick !== lastHandSyncTick) {
         dealFromCastle = prevPackState === 'pending' && packState === 'claimed';
+        // 卡包真正进手牌的瞬间补一声收牌音，与开包声区分开
+        if (dealFromCastle) sfx.play('pack_claim');
         prevPackState = packState;
       }
       battleView.syncCastlePack(loop.match, sceneContext.camera);
@@ -1347,7 +1371,11 @@ function runVersusSession(
       ),
     onClaim: () => {
       const command = claimCastlePackCommand(faction, localSlot);
-      if (!netLoop.match.validate(command)) return;
+      if (!netLoop.match.validate(command)) {
+        sfx.play('ui_error');
+        return;
+      }
+      sfx.play('pack_open');
       netLoop.sendInput([command]);
     },
   });
@@ -1634,6 +1662,7 @@ function runVersusSession(
     const packState = netLoop.match.getSlotCastlePackState(localSlot);
     if (netLoop.world.tick !== lastHandSyncTick) {
       dealFromCastle = prevPackState === 'pending' && packState === 'claimed';
+      if (dealFromCastle) sfx.play('pack_claim');
       prevPackState = packState;
     }
     battleView.syncCastlePack(netLoop.match, sceneContext.camera);
@@ -2049,6 +2078,11 @@ screens = createScreenController({
     sceneConfigPage.show();
     return () => sceneConfigPage.hide();
   },
+  'sfx-config': () => {
+    syncLobbyPresenceForScreen('sfx-config');
+    sfxConfigPage.show();
+    return () => sfxConfigPage.hide();
+  },
   sandbox: () => {
     syncLobbyPresenceForScreen('sandbox');
     return enterSandbox();
@@ -2089,6 +2123,7 @@ function disposeApp(): void {
   handOddsPage.dispose();
   unitStatsPage.dispose();
   sceneConfigPage.dispose();
+  sfxConfigPage.dispose();
   codexPage.dispose();
 }
 

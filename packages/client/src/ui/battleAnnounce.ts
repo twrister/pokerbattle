@@ -1,4 +1,5 @@
 import { TICK_RATE, type MatchPhase, type MatchState } from '@pb/sim';
+import { sfx } from '../audio/sfx.js';
 
 export interface BattleAnnounceShowOpts {
   holdMs?: number;
@@ -67,6 +68,8 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
     if (showingText === text && !root.classList.contains('is-hidden')) return;
     clearHideTimer();
     showingText = text;
+    // 播报音只在阶段切换时响；倒计时数字每秒一次会太吵，靠 sfx 自身节流也压不住
+    if (!opts?.countdown) sfx.play('ui_announce');
     textEl.textContent = text;
     root.classList.toggle('is-countdown', Boolean(opts?.countdown));
     root.classList.remove('is-hidden');

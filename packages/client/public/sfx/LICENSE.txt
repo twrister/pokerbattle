@@ -1,0 +1,70 @@
+Sound effects (packages/client/public/sfx)
+==========================================
+
+All sound effects in this folder are from Kenney (https://kenney.nl) and are
+released under the Creative Commons Zero (CC0) license:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+CC0 means these files are free to use in personal, educational and commercial
+projects without attribution. Crediting Kenney is appreciated but not required.
+
+Source packs
+------------
+- Interface Sounds (1.0)      https://kenney.nl/assets/interface-sounds
+    ui_error, ui_announce, spawn
+- Casino Audio                https://kenney.nl/assets/casino-audio
+    card_select, card_play, card_draw, pack_open, pack_claim
+- RPG Audio                   https://kenney.nl/assets/rpg-audio
+    melee, arrow
+- Digital Audio               https://kenney.nl/assets/digital-audio
+    result_draw
+- Impact Sounds (1.0)         https://kenney.nl/assets/impact-sounds
+    hit, hit_big, death, building_down
+
+Files were renamed to match the game's sfx ids; audio content is unmodified,
+except for the files listed under "Project-own replacements" below.
+
+Project-own replacements
+------------------------
+These files no longer come from the Kenney packs; they are project-own audio
+(already baked in, no attribution required). The Kenney entries for the same
+ids above are superseded.
+
+- explode, explode_big
+    Two separate project-own explosion sources now: explode is 0.90 s (formerly
+    the shared 1.03 s clip), explode_big is 1.64 s with a much deeper low end.
+    Both are level-matched to the old explode (-21.0 LUFS integrated), so the
+    bigger/louder feel of explode_big still comes purely from SFX_DEFS volume
+    (0.55 vs 0.42). DC offset removed, trimmed, edge-faded, Ogg Vorbis.
+- arrow
+    Project-own bow release, attenuated by 8 dB.
+- ui_click, ui_confirm, ui_back, ui_open, ui_close
+    One shared click/pop source, peak-normalised to -1 dBFS, trimmed of trailing
+    silence and mixed to mono. Confirm and back reuse the click sound verbatim;
+    their louder feel comes from SFX_DEFS volume (0.42 / 0.38 vs 0.34).
+- bomb_toss
+    Project-own throw source (0.15 s), trimmed of trailing silence, mixed to mono
+    and set to the same RMS as the previous sound (-18.3 dBFS), so the replacement
+    is level-matched rather than louder.
+- magic
+    Project-own spell source (1.83 s, stereo). Light 2:1 RMS compression evens
+    out its wider dynamic range, then the level is matched to the previous sound's
+    short-term loudness (-13.7 LUFS median) and a look-ahead limiter holds peaks
+    at -1 dBFS, so repeated casts stay clean instead of clipping.
+- heal
+    Project-own heal source (0.82 s mono at 22.05 kHz). Resampled to 44.1 kHz and
+    raised 8.9 dB so its RMS matches the previous heal sound (-19.5 dBFS); peak
+    lands at -4 dBFS, leaving headroom for the overlapping-voice case.
+- result_win, result_lose
+    Two separate project-own 5 s resolution cues replacing the previous 0.8 s
+    stingers. Both are trimmed, peak-limited to -1 dBFS (the sources arrived at
+    0 dBFS with slight clipping) and kept 1-2 dB below the old stingers: a 5 s
+    cue holds attention far longer than a 0.8 s chime at equal loudness. The
+    lose cue stays 1.1 dB quieter than the win cue, preserving the emotional
+    contrast the two sources shipped with.
+
+The thirteen files listed above come from project sources and need no attribution.
+Every replaced file is 44.1 kHz, edge-faded (5 ms in; 15 ms out for UI, 30 ms for
+bomb_toss, 60 ms for heal, 100-250 ms for the explosions, magic and the result
+cues, whose tails run longer) and Ogg Vorbis encoded. Only the encoded .ogg files
+live in this folder.

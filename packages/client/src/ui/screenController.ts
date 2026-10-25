@@ -11,6 +11,7 @@ export type AppScreen =
   | 'replay'
   | 'unit-stats'
   | 'scene-config'
+  | 'sfx-config'
   | 'sandbox'
   | 'solo'
   | 'versus'

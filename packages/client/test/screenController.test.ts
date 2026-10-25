@@ -48,6 +48,7 @@ describe('页面状态管理', () => {
       replay: enterReplay,
       'unit-stats': enterUnitStats,
       'scene-config': enterSceneConfig,
+      'sfx-config': () => vi.fn(),
       versus: enterVersus,
       spectate: enterSpectate,
     });
@@ -99,6 +100,7 @@ describe('页面状态管理', () => {
       replay: () => vi.fn(),
       'unit-stats': () => vi.fn(),
       'scene-config': () => vi.fn(),
+      'sfx-config': () => vi.fn(),
       versus: () => vi.fn(),
       spectate: () => vi.fn(),
     });
@@ -130,6 +132,7 @@ describe('页面状态管理', () => {
       replay: () => vi.fn(),
       'unit-stats': () => vi.fn(),
       'scene-config': () => vi.fn(),
+      'sfx-config': () => vi.fn(),
       versus: enterVersus,
       spectate: () => vi.fn(),
     });

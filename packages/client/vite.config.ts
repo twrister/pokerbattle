@@ -5,8 +5,12 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import { validatePatchNotes } from './src/data/patchNotes.js';
+import { SFX_DEFS } from './src/audio/sfxManifest.js';
+import { SFX_UPLOAD_MAX_BYTES, validateSfxUpload } from './src/audio/sfxUploadRules.js';
 
 const clientDir = path.dirname(fileURLToPath(import.meta.url));
+/** 音效文件的唯一落盘目录；替换音效直接覆盖这里的同名 .ogg */
+const sfxDirPath = path.resolve(clientDir, 'public/sfx');
 /** monorepo 内 sim 兵种配置的唯一落盘路径 */
 const unitsJsonPath = path.resolve(clientDir, '../sim/src/config/units.json');
 /** monorepo 内牌型阵型配置的唯一落盘路径 */
@@ -379,6 +383,64 @@ function validateMatchRulesBody(value: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * 开发服务器：POST /__pb/sfx?id=<SfxId> 覆盖写回 public/sfx 下的音效文件。
+ * body 直接用原始二进制（不套 JSON），音频体积大，省一层 base64 膨胀。
+ */
+function sfxWritePlugin(): Plugin {
+  return {
+    name: 'pb-sfx-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const requestUrl = new URL(req.url ?? '/', 'http://localhost');
+        if (requestUrl.pathname !== '/__pb/sfx') {
+          next();
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { error: 'only POST is supported' });
+          return;
+        }
+        readRawBody(req, SFX_UPLOAD_MAX_BYTES + 1)
+          .then((bytes) => {
+            const check = validateSfxUpload(requestUrl.searchParams.get('id'), bytes);
+            if (!check.ok) {
+              sendJson(res, 400, { error: check.error });
+              return;
+            }
+            // 文件名只由白名单 id 派生，路径不可能越出 sfx 目录
+            const target = path.join(sfxDirPath, `${SFX_DEFS[check.id].file}.ogg`);
+            fs.writeFileSync(target, bytes);
+            sendJson(res, 200, { ok: true, id: check.id, bytes: bytes.length });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, message === 'too large' ? 413 : 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
+/** 收集原始二进制 body；超过上限时立刻中断，避免把大文件读进内存。 */
+function readRawBody(req: IncomingMessage, limit: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error('too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 /** 开发服与正式预览共用：把同源 /ws 转到权威服，前端无需写死双端口。 */
 const wsProxy = {
   '/ws': { target: 'ws://localhost:9090', ws: true },
@@ -423,6 +485,7 @@ export default defineConfig({
     arenaConfigWritePlugin(),
     patchNotesWritePlugin(),
     matchRulesWritePlugin(),
+    sfxWritePlugin(),
   ],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力
   server: {
