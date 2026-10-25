@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import {
+  addArenaLights,
+  addOutline,
+  applyArenaRendererStyle,
+  ARENA_STYLE,
+  createCheckerTexture,
+  createToonMaterial,
+  seededRandom,
+} from './arenaStyle.js';
 import {
   arenaFullSize,
   dumpArenaConfigDraft,
@@ -168,7 +178,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
   let soloCameraMode: ArenaCameraMode = options.soloCameraMode ?? initial.camera.mode;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
+  applyArenaRendererStyle(renderer);
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -185,14 +195,8 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
     soloCameraOffsetY,
   );
 
-  scene.add(new THREE.HemisphereLight(0xbdd4ff, 0x20242c, 1.2));
-
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(14, 30, 12);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  const sun = addArenaLights(scene);
   applySunShadowSpan(sun, ARENA_W, ARENA_H);
-  scene.add(sun);
 
   const arenaRoot = new THREE.Group();
   scene.add(arenaRoot);
@@ -594,8 +598,8 @@ function mountArenaVisuals(
   layout: ArenaVisualLayout,
 ): { sandboxMarkers: THREE.Group; arenaTerrain: THREE.Group } {
   root.add(createArenaGround(layout));
-  root.add(createArenaGrid(layout));
   root.add(createArenaBorder(layout));
+  root.add(createOutfield(layout));
   const sandboxMarkers = createSandboxMarkers(layout);
   const arenaTerrain = createArenaTerrain(layout);
   root.add(sandboxMarkers);
@@ -637,7 +641,7 @@ function createVolumeBox(
   width: number,
   thickness: number,
   depth: number,
-  material: THREE.Material,
+  material: THREE.Material | THREE.Material[],
   topY: number,
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, depth), material);
@@ -647,31 +651,56 @@ function createVolumeBox(
   return mesh;
 }
 
-function createGroundMaterial(layout: ArenaVisualLayout): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: hexColorToNumber(layout.colors.ground),
-    roughness: 0.95,
-    metalness: 0,
-  });
+/**
+ * 半场地面盒的六面材质：顶面棋盘草地，其余为泥土侧面。
+ * BoxGeometry 顶面 v=0 在 +Z 侧，正好对应 sim 行号小的一边，rowOffset 对齐全局格奇偶。
+ */
+function createGroundMaterials(
+  layout: ArenaVisualLayout,
+  rows: number,
+  rowOffset: number,
+): THREE.Material[] {
+  const grass = createToonMaterial(0xffffff, 0.9);
+  grass.map = createCheckerTexture(
+    layout.width,
+    Math.max(1, rows),
+    layout.colors.ground,
+    layout.colors.grid,
+    rowOffset,
+  );
+  const dirt = createToonMaterial(ARENA_STYLE.dirt);
+  return [dirt, dirt, grass, dirt, dirt, dirt];
 }
 
 /** 两侧半场地面盒，中间留出河槽。 */
 function createArenaGround(layout: ArenaVisualLayout): THREE.Group {
   const group = new THREE.Group();
-  const material = createGroundMaterial(layout);
   const river = riverSceneZBand(layout);
   const halfH = layout.height / 2;
 
   const blueDepth = halfH - river.maxZ;
   if (blueDepth > 0) {
-    const blue = createVolumeBox(layout.width, ARENA_GROUND_THICKNESS, blueDepth, material, 0);
+    const blue = createVolumeBox(
+      layout.width,
+      ARENA_GROUND_THICKNESS,
+      blueDepth,
+      createGroundMaterials(layout, blueDepth, 0),
+      0,
+    );
     blue.position.z = (halfH + river.maxZ) / 2;
     group.add(blue);
   }
 
   const redDepth = river.minZ + halfH;
   if (redDepth > 0) {
-    const red = createVolumeBox(layout.width, ARENA_GROUND_THICKNESS, redDepth, material, 0);
+    // 红方半场贴图首行（+Z 侧）紧挨河道，对应 sim 行号 riverMaxY
+    const red = createVolumeBox(
+      layout.width,
+      ARENA_GROUND_THICKNESS,
+      redDepth,
+      createGroundMaterials(layout, redDepth, layout.riverMaxY),
+      0,
+    );
     red.position.z = (-halfH + river.minZ) / 2;
     group.add(red);
   }
@@ -689,7 +718,7 @@ function createSandboxMarkers(layout: ArenaVisualLayout): THREE.Group {
       layout.width,
       ARENA_GROUND_THICKNESS,
       river.depth,
-      createGroundMaterial(layout),
+      createGroundMaterials(layout, river.depth, layout.riverMinY),
       0,
     );
     fill.position.z = river.centerZ;
@@ -698,49 +727,285 @@ function createSandboxMarkers(layout: ArenaVisualLayout): THREE.Group {
   return group;
 }
 
-/** 一格一线的参考网格。河道带内不画，避免线悬在河槽上。 */
-function createArenaGrid(layout: ArenaVisualLayout): THREE.LineSegments {
+/** 场边石沿宽度（世界单位），完全落在场地边界之外。 */
+export const ARENA_RIM_WIDTH = 0.55;
+/** 石块高出地面的平均高度（压低后不再像一堵墙）。 */
+const ARENA_RIM_HEIGHT = 0.22;
+/** 石块沿边排布的平均间距。 */
+const ARENA_RIM_STONE_STEP = 0.62;
+/** 石沿外侧的渐变过渡带宽度，把场地边缘柔和地融进场外沙地。 */
+const ARENA_APRON_WIDTH = 1.4;
+/** 场外草坪向四周延伸的距离，需盖住任意镜头下的可见范围。 */
+const ARENA_OUTFIELD_EXTENT = 40;
+/** 场外装饰离石沿外缘的最小间距，避免贴着场地显得拥挤。 */
+const ARENA_DECOR_MIN_GAP = 0.6;
+/** 场外装饰分布带宽度。 */
+const ARENA_DECOR_BAND = 7;
+
+/**
+ * 场地外沿：贴地矮基座 + 一圈大小、高度、朝向略有差异的圆角石块，
+ * 打破连续直墙的生硬感；全部落在 |x|>W/2 或 |z|>H/2 外，不占可走格子。
+ */
+function createArenaBorder(layout: ArenaVisualLayout): THREE.Group {
+  const group = new THREE.Group();
   const halfW = layout.width / 2;
   const halfH = layout.height / 2;
-  const river = riverSceneZBand(layout);
-  const points: number[] = [];
-  const y = 0.01;
-  for (let x = 1; x < layout.width; x++) {
-    const sx = x - halfW;
-    if (river.minZ > -halfH) points.push(sx, y, -halfH, sx, y, river.minZ);
-    if (river.maxZ < halfH) points.push(sx, y, river.maxZ, sx, y, halfH);
-  }
-  for (let z = 1; z < layout.height; z++) {
-    const sz = z - halfH;
-    if (sz > river.minZ && sz < river.maxZ) continue;
-    points.push(-halfW, y, sz, halfW, y, sz);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-  return new THREE.LineSegments(
-    geometry,
-    new THREE.LineBasicMaterial({
-      color: hexColorToNumber(layout.colors.grid),
-      transparent: true,
-      opacity: 0.6,
-    }),
+  const rim = ARENA_RIM_WIDTH;
+  const color = hexColorToNumber(layout.colors.border);
+
+  // 矮基座：从河底到略高于地面，挡住河道两端截面；颜色比石块深，读作阴影底座
+  const baseMaterial = createToonMaterial(
+    new THREE.Color(color).multiplyScalar(0.78).getHex(),
+    0.9,
   );
+  const baseH = ARENA_GROUND_THICKNESS + 0.06;
+  const outerW = layout.width + rim * 2;
+  const bases: Array<{ w: number; d: number; x: number; z: number }> = [
+    { w: outerW, d: rim, x: 0, z: -halfH - rim / 2 },
+    { w: outerW, d: rim, x: 0, z: halfH + rim / 2 },
+    { w: rim, d: layout.height, x: -halfW - rim / 2, z: 0 },
+    { w: rim, d: layout.height, x: halfW + rim / 2, z: 0 },
+  ];
+  for (const seg of bases) {
+    const base = new THREE.Mesh(
+      new RoundedBoxGeometry(seg.w, baseH, seg.d, 2, 0.08),
+      baseMaterial,
+    );
+    base.position.set(seg.x, 0.06 - baseH / 2, seg.z);
+    base.receiveShadow = true;
+    group.add(base);
+  }
+
+  group.add(createRimStones(layout, color));
+  return group;
 }
 
-function createArenaBorder(layout: ArenaVisualLayout): THREE.Line {
+/** 沿场地四周生成错落的圆角石块（Instanced），尺寸/高度/旋转由固定种子决定。 */
+function createRimStones(layout: ArenaVisualLayout, color: number): THREE.InstancedMesh {
+  const random = seededRandom(layout.width * 53 + layout.height * 29 + 7);
   const halfW = layout.width / 2;
   const halfH = layout.height / 2;
-  const points = [
-    new THREE.Vector3(-halfW, 0.02, -halfH),
-    new THREE.Vector3(halfW, 0.02, -halfH),
-    new THREE.Vector3(halfW, 0.02, halfH),
-    new THREE.Vector3(-halfW, 0.02, halfH),
-    new THREE.Vector3(-halfW, 0.02, -halfH),
+  const center = ARENA_RIM_WIDTH / 2;
+  const items: Array<{ x: number; z: number; alongX: boolean }> = [];
+  /** 在一条边上按近似等距撒石块，留出随机缝隙。 */
+  const placeEdge = (length: number, at: (t: number) => { x: number; z: number }, alongX: boolean) => {
+    const count = Math.max(2, Math.round(length / ARENA_RIM_STONE_STEP));
+    for (let i = 0; i < count; i++) {
+      if (random() < 0.12) continue;
+      const t = (i + 0.5) / count - 0.5 + (random() - 0.5) * 0.3 / count;
+      items.push({ ...at(t * length), alongX });
+    }
+  };
+  const spanW = layout.width + ARENA_RIM_WIDTH * 2;
+  placeEdge(spanW, (s) => ({ x: s, z: -halfH - center }), true);
+  placeEdge(spanW, (s) => ({ x: s, z: halfH + center }), true);
+  placeEdge(layout.height, (s) => ({ x: -halfW - center, z: s }), false);
+  placeEdge(layout.height, (s) => ({ x: halfW + center, z: s }), false);
+
+  const geometry = new RoundedBoxGeometry(1, 1, 1, 3, 0.3);
+  const stones = new THREE.InstancedMesh(geometry, createToonMaterial(color, 0.85), items.length);
+  const matrix = new THREE.Matrix4();
+  const quat = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  const scale = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  const tint = new THREE.Color();
+  items.forEach((item, i) => {
+    const long = ARENA_RIM_STONE_STEP * (0.75 + random() * 0.35);
+    // 宽度不超过石沿，保证不伸进场地
+    const wide = ARENA_RIM_WIDTH * (0.65 + random() * 0.2);
+    const tall = ARENA_RIM_HEIGHT * (0.7 + random() * 0.7);
+    scale.set(item.alongX ? long : wide, tall, item.alongX ? wide : long);
+    euler.set((random() - 0.5) * 0.12, (random() - 0.5) * 0.12, (random() - 0.5) * 0.12);
+    quat.setFromEuler(euler);
+    pos.set(item.x, tall / 2 - 0.02, item.z);
+    stones.setMatrixAt(i, matrix.compose(pos, quat, scale));
+    // 每块石头亮度轻微浮动，像手工砌的
+    stones.setColorAt(i, tint.set(0xffffff).multiplyScalar(0.88 + random() * 0.14));
+  });
+  stones.instanceMatrix.needsUpdate = true;
+  if (stones.instanceColor) stones.instanceColor.needsUpdate = true;
+  stones.castShadow = true;
+  stones.receiveShadow = true;
+  stones.raycast = () => {};
+  return addOutline(stones, 0.03);
+}
+
+/** 场外装饰点：kind 区分树/岩石，scale 为整体缩放。 */
+export interface OutfieldDecor {
+  kind: 'tree' | 'rock';
+  x: number;
+  z: number;
+  scale: number;
+}
+
+/**
+ * 用固定种子在石沿外的环带里撒树丛和岩石。
+ * 只保留落在场地+石沿+间隙矩形之外的点，保证不会遮挡战场。
+ */
+export function createOutfieldDecorPositions(layout: ArenaVisualLayout): OutfieldDecor[] {
+  const random = seededRandom(layout.width * 131 + layout.height * 17);
+  const innerHalfW = layout.width / 2 + ARENA_RIM_WIDTH + ARENA_DECOR_MIN_GAP;
+  const innerHalfH = layout.height / 2 + ARENA_RIM_WIDTH + ARENA_DECOR_MIN_GAP;
+  const outerHalfW = innerHalfW + ARENA_DECOR_BAND;
+  const outerHalfH = innerHalfH + ARENA_DECOR_BAND;
+  const count = Math.round((layout.width + layout.height) * 2.2);
+  const result: OutfieldDecor[] = [];
+  for (let attempt = 0; attempt < count * 6 && result.length < count; attempt++) {
+    const x = (random() * 2 - 1) * outerHalfW;
+    const z = (random() * 2 - 1) * outerHalfH;
+    if (Math.abs(x) < innerHalfW && Math.abs(z) < innerHalfH) continue;
+    const kind = random() < 0.72 ? 'tree' : 'rock';
+    result.push({ kind, x, z, scale: 0.75 + random() * 0.6 });
+  }
+  return result;
+}
+
+/**
+ * 石沿外的渐变过渡带：内缘用场地地面色，外缘过渡到场外沙地色，
+ * 用顶点色插值消除场内外两种颜色的硬边。
+ */
+function createOutfieldApron(
+  layout: ArenaVisualLayout,
+  innerHalfW: number,
+  innerHalfH: number,
+): THREE.Mesh {
+  const outerHalfW = innerHalfW + ARENA_APRON_WIDTH;
+  const outerHalfH = innerHalfH + ARENA_APRON_WIDTH;
+  // 内外各 4 个角点，按 0..3 顺时针，组成 4 个梯形
+  const inner = [
+    [-innerHalfW, -innerHalfH],
+    [innerHalfW, -innerHalfH],
+    [innerHalfW, innerHalfH],
+    [-innerHalfW, innerHalfH],
   ];
-  return new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color: hexColorToNumber(layout.colors.border) }),
+  const outer = [
+    [-outerHalfW, -outerHalfH],
+    [outerHalfW, -outerHalfH],
+    [outerHalfW, outerHalfH],
+    [-outerHalfW, outerHalfH],
+  ];
+  const innerColor = new THREE.Color(layout.colors.ground).multiplyScalar(0.92);
+  const outerColor = new THREE.Color(ARENA_STYLE.outfield);
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  for (const [x, z] of inner) {
+    positions.push(x!, 0, z!);
+    colors.push(innerColor.r, innerColor.g, innerColor.b);
+  }
+  for (const [x, z] of outer) {
+    positions.push(x!, 0, z!);
+    colors.push(outerColor.r, outerColor.g, outerColor.b);
+  }
+  for (let i = 0; i < 4; i++) {
+    const next = (i + 1) % 4;
+    // 两个三角形，绕序保证法线朝上
+    indices.push(i, 4 + i, 4 + next, i, 4 + next, next);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const material = createToonMaterial(0xffffff, 0.95);
+  material.vertexColors = true;
+  material.side = THREE.DoubleSide;
+  const apron = new THREE.Mesh(geometry, material);
+  apron.position.y = -0.02;
+  apron.receiveShadow = true;
+  apron.raycast = () => {};
+  return apron;
+}
+
+/** 场外：中间挖空的草坪环 + Instanced 树丛和岩石，一次绘制、无每帧开销。 */
+function createOutfield(layout: ArenaVisualLayout): THREE.Group {
+  const group = new THREE.Group();
+  const rimHalfW = layout.width / 2 + ARENA_RIM_WIDTH;
+  const rimHalfH = layout.height / 2 + ARENA_RIM_WIDTH;
+  group.add(createOutfieldApron(layout, rimHalfW, rimHalfH));
+  // 草坪从过渡带外缘开始铺
+  const holeHalfW = rimHalfW + ARENA_APRON_WIDTH;
+  const holeHalfH = rimHalfH + ARENA_APRON_WIDTH;
+  const outerHalfW = holeHalfW + ARENA_OUTFIELD_EXTENT;
+  const outerHalfH = holeHalfH + ARENA_OUTFIELD_EXTENT;
+  const shape = new THREE.Shape()
+    .moveTo(-outerHalfW, -outerHalfH)
+    .lineTo(outerHalfW, -outerHalfH)
+    .lineTo(outerHalfW, outerHalfH)
+    .lineTo(-outerHalfW, outerHalfH)
+    .closePath();
+  shape.holes.push(
+    new THREE.Path()
+      .moveTo(-holeHalfW, -holeHalfH)
+      .lineTo(-holeHalfW, holeHalfH)
+      .lineTo(holeHalfW, holeHalfH)
+      .lineTo(holeHalfW, -holeHalfH)
+      .closePath(),
   );
+  const lawn = new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    createToonMaterial(ARENA_STYLE.outfield, 0.95),
+  );
+  lawn.rotation.x = -Math.PI / 2;
+  // 略低于场地顶面，避免与石沿底边 z-fighting
+  lawn.position.y = -0.02;
+  lawn.receiveShadow = true;
+  lawn.raycast = () => {};
+  group.add(lawn);
+
+  const decor = createOutfieldDecorPositions(layout);
+  const trees = decor.filter((item) => item.kind === 'tree');
+  const rocks = decor.filter((item) => item.kind === 'rock');
+  const matrix = new THREE.Matrix4();
+  const quat = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  const yAxis = new THREE.Vector3(0, 1, 0);
+
+  /** 按装饰点批量写入实例矩阵；yOffset 为模型底部抬高量。 */
+  const fill = (
+    mesh: THREE.InstancedMesh,
+    items: OutfieldDecor[],
+    yOffset: number,
+    squash = 1,
+  ): THREE.InstancedMesh => {
+    items.forEach((item, i) => {
+      quat.setFromAxisAngle(yAxis, (item.x * 7.3 + item.z * 3.1) % (Math.PI * 2));
+      scale.set(item.scale, item.scale * squash, item.scale);
+      pos.set(item.x, yOffset * item.scale * squash, item.z);
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    return mesh;
+  };
+
+  if (trees.length > 0) {
+    const trunk = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.12, 0.16, 0.5, 8),
+      createToonMaterial(ARENA_STYLE.treeTrunk),
+      trees.length,
+    );
+    group.add(fill(trunk, trees, 0.25));
+    const leaf = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(0.55, 1),
+      createToonMaterial(ARENA_STYLE.treeLeaf, 0.8),
+      trees.length,
+    );
+    group.add(addOutline(fill(leaf, trees, 0.95), 0.05));
+  }
+  if (rocks.length > 0) {
+    const rock = new THREE.InstancedMesh(
+      new THREE.DodecahedronGeometry(0.38, 0),
+      createToonMaterial(ARENA_STYLE.rock, 0.9),
+      rocks.length,
+    );
+    group.add(addOutline(fill(rock, rocks, 0.2, 0.7), 0.04));
+  }
+  return group;
 }
 
 /** 中线，只用来标记两边半场 */
@@ -787,39 +1052,117 @@ function createBaseMarkerBox(
 function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
   const terrain = new THREE.Group();
   const river = riverSceneZBand(layout);
+  if (river.depth <= 0) return terrain;
+  // 水面略带光泽，比草地更"亮"一些，呈现卡通水体
   const riverMesh = createVolumeBox(
     layout.width,
     ARENA_RIVER_THICKNESS,
     river.depth,
-    new THREE.MeshStandardMaterial({
-      color: hexColorToNumber(layout.colors.river),
-      roughness: 0.72,
-      metalness: 0.08,
-    }),
+    createToonMaterial(hexColorToNumber(layout.colors.river), 0.35),
     -ARENA_RIVER_DROP,
   );
   riverMesh.position.z = river.centerZ;
+  riverMesh.castShadow = false;
   terrain.add(riverMesh);
+  terrain.add(createRiverBanks(layout, river));
 
-  const bridgeMaterial = new THREE.MeshStandardMaterial({
-    color: hexColorToNumber(layout.colors.bridge),
-    roughness: 0.82,
-    metalness: 0,
-  });
+  const deckMaterial = createToonMaterial(hexColorToNumber(layout.colors.bridge), 0.8);
+  const railMaterial = createToonMaterial(ARENA_STYLE.rail, 0.8);
   for (const bridge of layout.bridges) {
-    const bridgeWidth = bridge.maxX - bridge.minX;
-    const bridgeDeck = createVolumeBox(
-      bridgeWidth,
-      ARENA_BRIDGE_THICKNESS,
-      river.depth,
-      bridgeMaterial,
-      ARENA_BRIDGE_DECK_Y,
-    );
-    bridgeDeck.position.x = bridge.minX + bridgeWidth / 2 - layout.width / 2;
-    bridgeDeck.position.z = river.centerZ;
-    terrain.add(bridgeDeck);
+    terrain.add(createBridge(layout, river, bridge, deckMaterial, railMaterial));
   }
   return terrain;
+}
+
+/** 河道两岸：沙色斜坡条 + 水面浪花条，都在河道带内，不占可走格子。 */
+function createRiverBanks(
+  layout: ArenaVisualLayout,
+  river: ReturnType<typeof riverSceneZBand>,
+): THREE.Group {
+  const group = new THREE.Group();
+  const bankWidth = Math.min(0.22, river.depth * 0.15);
+  const bankHeight = ARENA_RIVER_DROP + 0.02;
+  const bankMaterial = createToonMaterial(ARENA_STYLE.bank, 0.9);
+  const foamMaterial = new THREE.MeshBasicMaterial({
+    color: ARENA_STYLE.foam,
+    transparent: true,
+    opacity: 0.75,
+  });
+  for (const side of [-1, 1] as const) {
+    const edgeZ = side < 0 ? river.minZ : river.maxZ;
+    const bank = new THREE.Mesh(
+      new RoundedBoxGeometry(layout.width, bankHeight, bankWidth, 2, bankWidth * 0.45),
+      bankMaterial,
+    );
+    bank.position.set(0, -bankHeight / 2 + 0.01, edgeZ - side * (bankWidth / 2));
+    bank.receiveShadow = true;
+    group.add(bank);
+
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(layout.width, bankWidth * 0.8), foamMaterial);
+    foam.rotation.x = -Math.PI / 2;
+    foam.position.set(0, -ARENA_RIVER_DROP + 0.01, edgeZ - side * bankWidth * 1.3);
+    foam.raycast = () => {};
+    group.add(foam);
+  }
+  return group;
+}
+
+/**
+ * 圆角木板拼成的卡通木桥：桥面宽度严格等于配置桥宽，两端略搭到岸上；
+ * 矮栏放在桥面 x 边缘内侧，带粗描边。
+ */
+function createBridge(
+  layout: ArenaVisualLayout,
+  river: ReturnType<typeof riverSceneZBand>,
+  bridge: { minX: number; maxX: number },
+  deckMaterial: THREE.Material,
+  railMaterial: THREE.Material,
+): THREE.Group {
+  const group = new THREE.Group();
+  const bridgeWidth = bridge.maxX - bridge.minX;
+  group.position.set(bridge.minX + bridgeWidth / 2 - layout.width / 2, 0, river.centerZ);
+
+  const overhang = 0.25;
+  const deckDepth = river.depth + overhang * 2;
+  const plankCount = Math.max(2, Math.round(deckDepth / 0.45));
+  const gap = 0.05;
+  const plankDepth = deckDepth / plankCount - gap;
+  const plankGeometry = new RoundedBoxGeometry(
+    bridgeWidth,
+    ARENA_BRIDGE_THICKNESS,
+    plankDepth,
+    2,
+    Math.min(0.05, plankDepth * 0.3),
+  );
+  for (let i = 0; i < plankCount; i++) {
+    const plank = new THREE.Mesh(plankGeometry, deckMaterial);
+    plank.position.set(
+      0,
+      ARENA_BRIDGE_DECK_Y - ARENA_BRIDGE_THICKNESS / 2,
+      -deckDepth / 2 + (i + 0.5) * (plankDepth + gap),
+    );
+    plank.castShadow = true;
+    plank.receiveShadow = true;
+    group.add(addOutline(plank, 0.025));
+  }
+
+  const railWidth = Math.min(0.16, bridgeWidth * 0.08);
+  const railHeight = 0.28;
+  for (const side of [-1, 1] as const) {
+    const rail = new THREE.Mesh(
+      new RoundedBoxGeometry(railWidth, railHeight, deckDepth, 2, railWidth * 0.45),
+      railMaterial,
+    );
+    rail.position.set(
+      side * (bridgeWidth / 2 - railWidth / 2),
+      ARENA_BRIDGE_DECK_Y + railHeight / 2,
+      0,
+    );
+    rail.castShadow = true;
+    rail.raycast = () => {};
+    group.add(addOutline(rail, 0.03));
+  }
+  return group;
 }
 
 /** 按场景模式切换对局河桥与沙盒中线，避免沙盒地形发生变化。 */
@@ -833,8 +1176,9 @@ function setArenaTerrainVisibility(
   arenaTerrain.visible = isSolo;
 }
 
-function applySunShadowSpan(sun: THREE.DirectionalLight, width: number, height: number): void {
-  const shadowSpan = Math.max(width, height) * 0.75;
+/** 按场地尺寸设置主光阴影视锥，覆盖场地与场外装饰带。 */
+export function applySunShadowSpan(sun: THREE.DirectionalLight, width: number, height: number): void {
+  const shadowSpan = Math.max(width, height) * 0.75 + 4;
   sun.shadow.camera.left = -shadowSpan;
   sun.shadow.camera.right = shadowSpan;
   sun.shadow.camera.top = shadowSpan;
@@ -856,7 +1200,11 @@ function disposeObject3D(object: THREE.Object3D): void {
     if (mesh.geometry) mesh.geometry.dispose();
     const material = (child as THREE.Mesh).material;
     if (!material) return;
-    if (Array.isArray(material)) material.forEach((item) => item.dispose());
-    else material.dispose();
+    const list = Array.isArray(material) ? material : [material];
+    for (const item of list) {
+      // 棋盘草地等贴图随材质一起释放
+      (item as THREE.MeshStandardMaterial).map?.dispose();
+      item.dispose();
+    }
   });
 }

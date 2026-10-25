@@ -276,12 +276,12 @@ function fallbackArena2v2ConfigDraft(): ArenaConfigDraft {
       offsetY: 5,
     },
     colors: {
-      background: '#0d1117',
-      ground: '#3a465a',
-      river: '#548196',
-      bridge: '#3a465a',
-      grid: '#484d56',
-      border: '#8394ad',
+      background: '#e6c69c',
+      ground: '#ecca98',
+      river: '#5cc3c4',
+      bridge: '#c4875a',
+      grid: '#e3bd8a',
+      border: '#d98a62',
     },
   };
 }
@@ -307,12 +307,12 @@ function fallbackArenaConfigDraft(): ArenaConfigDraft {
       offsetY: 0,
     },
     colors: {
-      background: '#0d1117',
-      ground: '#2b3444',
-      river: '#173c4d',
-      bridge: '#8b6a42',
-      grid: '#3b4557',
-      border: '#8394ad',
+      background: '#e6c69c',
+      ground: '#ecca98',
+      river: '#5cc3c4',
+      bridge: '#c4875a',
+      grid: '#e3bd8a',
+      border: '#d98a62',
     },
   };
 }

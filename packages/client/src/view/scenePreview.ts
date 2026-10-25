@@ -6,8 +6,10 @@ import {
   calculateSoloOrthoBounds,
   clampSoloCameraFov,
   createArenaVisualGroup,
+  applySunShadowSpan,
   hexColorToNumber,
 } from './scene.js';
+import { addArenaLights, applyArenaRendererStyle } from './arenaStyle.js';
 
 /** 配置页独立 3D 预览，避免改表单时碰到正在进行的对局场景。 */
 export interface ScenePreviewHandle {
@@ -20,13 +22,11 @@ export interface ScenePreviewHandle {
 export function createScenePreview(container: HTMLElement): ScenePreviewHandle {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  applyArenaRendererStyle(renderer);
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xbdd4ff, 0x20242c, 1.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(14, 30, 12);
-  scene.add(sun);
+  const sun = addArenaLights(scene);
 
   let camera: THREE.Camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
   let arenaGroup: THREE.Group | null = null;
@@ -62,6 +62,8 @@ export function createScenePreview(container: HTMLElement): ScenePreviewHandle {
     }
     arenaGroup = createArenaVisualGroup(arenaVisualFromDraft(draft, { showBases: true }), true);
     scene.add(arenaGroup);
+    const full = arenaFullSize(draft);
+    applySunShadowSpan(sun, full.width, full.height);
     const width = container.clientWidth || 1;
     const height = container.clientHeight || 1;
     renderer.setSize(width, height, false);
@@ -129,7 +131,10 @@ function disposeObject3D(object: THREE.Object3D): void {
     if (mesh.geometry) mesh.geometry.dispose();
     const material = mesh.material;
     if (!material) return;
-    if (Array.isArray(material)) material.forEach((item) => item.dispose());
-    else material.dispose();
+    const list = Array.isArray(material) ? material : [material];
+    for (const item of list) {
+      (item as THREE.MeshStandardMaterial).map?.dispose();
+      item.dispose();
+    }
   });
 }
