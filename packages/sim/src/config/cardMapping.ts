@@ -1,4 +1,12 @@
-import { getCardStrength, getPokerCardById, type CardRank, type PlayingCard } from '../cards/deck.js';
+import {
+  getCardStrength,
+  getPokerCardById,
+  isWildCard,
+  WILD_CARD_RANK,
+  type CardRank,
+  type PlayingCard,
+} from '../cards/deck.js';
+import { splitWildCards, wildCardsMatchRule } from '../cards/wildRule.js';
 import { fromFloat, type Fx } from '../math/fixed.js';
 import { UNIT_CONFIGS, type UnitTypeId } from './units.js';
 import type {
@@ -43,9 +51,9 @@ export const FUSE_BOMB_DAMAGE_RANK_LABELS: Readonly<Record<FuseBombDamageRank, s
   A: 'A',
 };
 
-/** 把牌面点数映射到伤害档；王牌没有点数档。 */
+/** 把牌面点数映射到伤害档；王牌与万能牌本身没有点数档。 */
 export function fuseBombDamageRankOf(rank: PlayingCard['rank']): FuseBombDamageRank | null {
-  if (rank === 'JOKER') return null;
+  if (rank === 'JOKER' || rank === WILD_CARD_RANK) return null;
   if (rank === 'J' || rank === 'Q' || rank === 'K' || rank === 'A') return rank;
   return '2-10';
 }
@@ -57,7 +65,7 @@ export interface MappedFormationUnit {
 
 /** 判断点数是否为数字牌 2～10。 */
 function isNumberRank(card: PlayingCard): boolean {
-  return !card.joker && ['2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(card.rank);
+  return !card.joker && !isWildCard(card) && ['2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(card.rank);
 }
 
 /** 获取组合中牌力最大的牌；规则牌型保证 cards 非空。 */
@@ -67,7 +75,7 @@ function strongestCard(cards: readonly PlayingCard[]): PlayingCard {
 
 /** 取出恰好出现 3 次的点数；王牌或没有三条时返回 null。 */
 function tripleRankOf(cards: readonly PlayingCard[]): CardRank | null {
-  if (cards.some((card) => card.joker || card.rank === 'JOKER')) return null;
+  if (cards.some((card) => card.joker || card.rank === 'JOKER' || card.rank === WILD_CARD_RANK)) return null;
   const counts = new Map<CardRank, number>();
   for (const card of cards) {
     const rank = card.rank as CardRank;
@@ -79,8 +87,19 @@ function tripleRankOf(cards: readonly PlayingCard[]): CardRank | null {
   return null;
 }
 
-/** 手牌是否命中配置的牌面匹配规则。 */
+/**
+ * 手牌是否命中配置的牌面匹配规则。
+ * 无万能牌走具体判定；含万能牌走解析式推导，不再枚举替身。
+ */
 export function cardsMatchRule(cards: readonly PlayingCard[], match: FormationMatchRule): boolean {
+  if (cards.length === 0) return false;
+  const split = splitWildCards(cards);
+  if (!split) return cardsMatchConcreteRule(cards, match);
+  return wildCardsMatchRule(split, match);
+}
+
+/** 具体牌面（无万能牌）的匹配判定；含万能牌时由 cardsMatchRule 先替换。 */
+export function cardsMatchConcreteRule(cards: readonly PlayingCard[], match: FormationMatchRule): boolean {
   if (cards.length === 0) return false;
   switch (match.kind) {
     case 'any':
@@ -121,6 +140,7 @@ function cardsMatchRankCount(
 /**
  * 校验牌面匹配后，按配置 rows 展开站位。
  * 不适用时返回 null，调用方不应向玩家展示。
+ * 万能牌由 cardsMatchRule 内部推导，这里只关心是否命中。
  */
 export function resolveMappedRows(
   rows: readonly (readonly UnitTypeId[])[],
@@ -151,6 +171,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 
 /**
  * 按阵型配置查引信炸弹伤害：火箭读固定伤，其余按最强牌点数查表。
+ * 含万能牌时按「能替到的最高点数」算，避免癞子被默认当 2 造成伤害跳档。
  * 缺档或缺字段时返回 undefined，调用方回落单位配置。
  */
 export function resolveFuseBombDamage(
@@ -161,13 +182,38 @@ export function resolveFuseBombDamage(
   if (formation.category === 'rocket') {
     return formation.damage !== undefined ? fromFloat(formation.damage) : undefined;
   }
-  const top = strongestCard(cards);
-  const key = fuseBombDamageRankOf(top.rank);
+  const key = highestDamageRankOf(cards);
   if (!key) {
     return formation.damage !== undefined ? fromFloat(formation.damage) : undefined;
   }
   const value = formation.rankDamage?.[key];
   return value !== undefined ? fromFloat(value) : undefined;
+}
+
+/**
+ * 组合能取到的最高伤害档；万能牌按「替成 A」计，王炸没有点数档返回 null。
+ * 仅枚举点数不看花色，因此用万能牌替代枚举的第一种花色即可。
+ */
+function highestDamageRankOf(cards: readonly PlayingCard[]): FuseBombDamageRank | null {
+  let best: FuseBombDamageRank | null = null;
+  const consider = (key: FuseBombDamageRank | null): void => {
+    if (!key) return;
+    if (best === null || FUSE_BOMB_DAMAGE_RANKS.indexOf(key) > FUSE_BOMB_DAMAGE_RANKS.indexOf(best)) {
+      best = key;
+    }
+  };
+  const split = splitWildCards(cards);
+  if (split) {
+    // 万能牌可替成 A，其余真牌取最强；含王牌时没有点数档
+    if (!split.hasJoker) {
+      const concreteBest = split.concretes.length > 0 ? fuseBombDamageRankOf(strongestCard(split.concretes).rank) : null;
+      consider('A');
+      consider(concreteBest);
+    }
+    return best;
+  }
+  consider(fuseBombDamageRankOf(strongestCard(cards).rank));
+  return best;
 }
 
 /** 引信炸弹伤害与半径配置来源；与阵型上的可选字段对齐。 */

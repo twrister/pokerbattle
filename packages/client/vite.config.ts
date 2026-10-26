@@ -380,6 +380,10 @@ function validateMatchRulesBody(value: unknown): string | undefined {
       return `${key} must be a finite number`;
     }
   }
+  // 万能牌开关允许缺省（旧文件），存在则必须是布尔值
+  if (rec.wildCardsEnabled !== undefined && typeof rec.wildCardsEnabled !== 'boolean') {
+    return 'wildCardsEnabled must be a boolean';
+  }
   return undefined;
 }
 

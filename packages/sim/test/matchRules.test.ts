@@ -30,8 +30,20 @@ describe('对局节奏配置', () => {
       normalHandLimit: 9,
       doubleSpeedHandLimit: 10,
       finalHandLimit: 11,
+      wildCardsEnabled: true,
     });
     expect(defaultMatchRules().phaseDurations.normalTicks).toBe(TICK_RATE * 120);
+    expect(defaultMatchRules().wildCardsEnabled).toBe(true);
+  });
+
+  it('万能牌开关可关掉，非法类型回落默认', () => {
+    applyMatchRulesDraft({ ...dumpMatchRulesDraft(), wildCardsEnabled: false });
+    expect(defaultMatchRules().wildCardsEnabled).toBe(false);
+    expect(sanitizeMatchRulesDraft({ ...dumpMatchRulesDraft(), wildCardsEnabled: 'no' as never }))
+      .toMatchObject({ wildCardsEnabled: true });
+    expect(validateMatchRulesDraft({ ...dumpMatchRulesDraft(), wildCardsEnabled: 1 })).toBe(
+      'wildCardsEnabled 必须是布尔值',
+    );
   });
 
   it('应用草稿后新默认立刻按秒换算 tick', () => {

@@ -23,6 +23,7 @@ import {
   claimCastlePackCommand,
   dumpDefaultArenaConfigDraft,
   fromFloat,
+  isWildCard,
   playFormationCommand,
   toFloat,
 } from '../src/index.js';
@@ -121,7 +122,13 @@ describe('MatchState 对局规则', () => {
     expect(match.getTicksUntilDraw(Faction.Red)).toBe(NORMAL_DRAW_INTERVAL_TICKS);
 
     const numberCard = match.decks[Faction.Blue].hand.find(
-      (card) => card.rank !== 'JOKER' && card.rank !== 'A' && card.rank !== 'J' && card.rank !== 'Q' && card.rank !== 'K',
+      (card) =>
+        !isWildCard(card) &&
+        card.rank !== 'JOKER' &&
+        card.rank !== 'A' &&
+        card.rank !== 'J' &&
+        card.rank !== 'Q' &&
+        card.rank !== 'K',
     );
     expect(numberCard).toBeDefined();
     match.step([
@@ -540,7 +547,13 @@ describe('MatchState 2v2', () => {
     expect(match.result).toBeNull();
 
     const numberCard = match.decks[0]!.hand.find(
-      (card) => card.rank !== 'JOKER' && card.rank !== 'A' && card.rank !== 'J' && card.rank !== 'Q' && card.rank !== 'K',
+      (card) =>
+        !isWildCard(card) &&
+        card.rank !== 'JOKER' &&
+        card.rank !== 'A' &&
+        card.rank !== 'J' &&
+        card.rank !== 'Q' &&
+        card.rank !== 'K',
     );
     expect(numberCard).toBeDefined();
     const play = playFormationCommand(

@@ -141,6 +141,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const normalHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-normal');
   const doubleSpeedHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-double');
   const finalHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-final');
+  const wildCardsEnabledInput = required<HTMLInputElement>('#solo-wild-cards-enabled');
   const matchRuleInputs = [
     initialHandSizeInput,
     normalPhaseDurationInput,
@@ -154,6 +155,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
     normalHandLimitInput,
     doubleSpeedHandLimitInput,
     finalHandLimitInput,
+    wildCardsEnabledInput,
   ];
 
   const tickOut = required<HTMLElement>('#stat-tick');
@@ -189,6 +191,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
     normalHandLimitInput.value = String(next.normalHandLimit);
     doubleSpeedHandLimitInput.value = String(next.doubleSpeedHandLimit);
     finalHandLimitInput.value = String(next.finalHandLimit);
+    wildCardsEnabledInput.checked = next.wildCardsEnabled;
   };
 
   function selectFaction(next: Faction): void {
@@ -340,6 +343,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
       normalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.normalDrawIntervalSeconds),
       doubleSpeedDrawIntervalSeconds: clampDrawIntervalSeconds(raw.doubleSpeedDrawIntervalSeconds),
       finalDrawIntervalSeconds: clampDrawIntervalSeconds(raw.finalDrawIntervalSeconds),
+      wildCardsEnabled: wildCardsEnabledInput.checked,
     });
   };
 
@@ -422,6 +426,8 @@ export function createPanel(options: PanelOptions): PanelHandle {
       for (const input of matchRuleInputs) {
         input.addEventListener('input', onMatchRulesInput);
       }
+      // 复选框在部分浏览器只派发 change，单独挂一次保证勾选立刻生效
+      wildCardsEnabledInput.addEventListener('change', onMatchRulesInput);
     }
     if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
       saveDefaultsButton.addEventListener('click', onSaveDefaults);
@@ -500,6 +506,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
           for (const input of matchRuleInputs) {
             input.removeEventListener('input', onMatchRulesInput);
           }
+          wildCardsEnabledInput.removeEventListener('change', onMatchRulesInput);
         }
         if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
           saveDefaultsButton.removeEventListener('click', onSaveDefaults);

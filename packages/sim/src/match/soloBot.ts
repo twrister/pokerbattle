@@ -1,5 +1,5 @@
 import { detectHandCategories } from '../cards/handCategory.js';
-import type { CardRank, PlayingCard } from '../cards/deck.js';
+import { isWildCard, type CardRank, type PlayingCard } from '../cards/deck.js';
 import { claimCastlePackCommand, playFormationCommand, type Command } from '../commands.js';
 import {
   HAND_CATEGORY_STRENGTH_ORDER,
@@ -487,13 +487,14 @@ function forEachCombination(cards: readonly PlayingCard[], size: number, visit: 
 function findWasteCardIds(hand: readonly PlayingCard[]): Set<string> {
   const core = new Set<string>();
   for (const card of hand) {
-    if (card.joker) core.add(card.id);
+    // 王牌与万能牌都是可塑性最强的资源，不进废牌池
+    if (card.joker || isWildCard(card)) core.add(card.id);
   }
 
   const byRank = new Map<string, PlayingCard[]>();
   const bySuit = new Map<string, PlayingCard[]>();
   for (const card of hand) {
-    if (card.joker) continue;
+    if (card.joker || isWildCard(card)) continue;
     const ranks = byRank.get(card.rank) ?? [];
     ranks.push(card);
     byRank.set(card.rank, ranks);
@@ -521,7 +522,7 @@ function findWasteCardIds(hand: readonly PlayingCard[]): Set<string> {
 function markStraightCore(hand: readonly PlayingCard[], core: Set<string>): void {
   const byValue = new Map<number, PlayingCard[]>();
   for (const card of hand) {
-    if (card.joker || card.rank === 'JOKER') continue;
+    if (card.joker || isWildCard(card)) continue;
     const value = STRAIGHT_VALUE[card.rank as CardRank];
     if (value === undefined) continue;
     const group = byValue.get(value) ?? [];

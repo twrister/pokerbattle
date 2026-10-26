@@ -47,6 +47,8 @@ export function applyMatchRulesView(match: MatchState, view: MatchRulesView): vo
     doubleSpeed: next.doubleSpeedHandLimit,
     final: next.finalHandLimit,
   });
+  // 万能牌只影响未开打的牌堆，已在局中的对局会在下一局生效
+  match.setWildCardsEnabled(next.wildCardsEnabled);
 }
 
 /** 非法字段回落默认，合法则夹紧到控件区间。 */

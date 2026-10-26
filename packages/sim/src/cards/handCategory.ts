@@ -1,12 +1,23 @@
 import {
   CARD_FORMATIONS,
-  HAND_CATEGORY_STRENGTH_ORDER,
   matchRuleKey,
   type FormationMatchRule,
-  type HandCategory,
 } from '../config/cardFormations.js';
-import { cardsMatchRule } from '../config/cardMapping.js';
-import { compareCardsByStrength, type CardRank, type PlayingCard } from './deck.js';
+import { HAND_CATEGORY_STRENGTH_ORDER, type HandCategory } from '../config/handCategories.js';
+import { cardsMatchConcreteRule } from '../config/cardMapping.js';
+import { compareCardsByStrength, isWildCard, type CardRank, type PlayingCard } from './deck.js';
+import {
+  categoriesFromMask,
+  detectConcreteMask,
+} from './handCategoryDetect.js';
+import {
+  detectWildMask,
+  splitWildCards,
+  strongestWildRanks,
+  wildCardsMatchRule,
+} from './wildRule.js';
+
+export { detectConcreteCategories } from './handCategoryDetect.js';
 
 /** 推荐列表中的一档：主牌型 + 映射情况 + 该档最小牌面。 */
 export interface RecommendHand {
@@ -16,58 +27,75 @@ export interface RecommendHand {
 }
 
 /**
- * 顺子专用点数表：A 同时可作 1 与 14，由 isStraight 分别尝试。
- * 与手牌排序牌力一致（2 最小），但顺子不走大小王。
+ * 识别一组选中牌命中的全部牌型，按强度降序；不合法组合返回空数组。
+ * 含万能牌时按解析式推导牌型，与暴力枚举替代方案的结果一致。
  */
-const STRAIGHT_VALUE: Readonly<Record<CardRank, number>> = {
-  A: 14,
-  '2': 2,
-  '3': 3,
-  '4': 4,
-  '5': 5,
-  '6': 6,
-  '7': 7,
-  '8': 8,
-  '9': 9,
-  '10': 10,
-  J: 11,
-  Q: 12,
-  K: 13,
-};
-
-/** 强度序号：越小越强，与 HAND_CATEGORY_STRENGTH_ORDER 一致。 */
-const CATEGORY_RANK = new Map(
-  HAND_CATEGORY_STRENGTH_ORDER.map((category, index) => [category, index]),
-);
-
-/** 识别一组选中牌命中的全部牌型，按强度降序；不合法组合返回空数组。 */
 export function detectHandCategories(cards: readonly PlayingCard[]): HandCategory[] {
   const count = cards.length;
   if (count < 1 || count > 5) return [];
+  return categoriesFromMask(detectMask(cards));
+}
 
-  let hits: HandCategory[];
-  switch (count) {
-    case 1:
-      hits = ['single'];
-      break;
-    case 2:
-      hits = detectTwo(cards);
-      break;
-    case 3:
-      hits = detectThree(cards);
-      break;
-    case 4:
-      hits = detectFour(cards);
-      break;
-    case 5:
-      hits = detectFive(cards);
-      break;
-    default:
-      hits = [];
-  }
+/** 组合的牌型位掩码；万能牌走解析式判定，避免逐替身重复识别。 */
+function detectMask(cards: readonly PlayingCard[]): number {
+  const split = splitWildCards(cards);
+  if (!split) return detectConcreteMask(cards);
+  return detectWildMask(split, cards.length);
+}
 
-  if (hits.length <= 1) return hits;
-  return [...hits].sort((left, right) => (CATEGORY_RANK.get(left) ?? 99) - (CATEGORY_RANK.get(right) ?? 99));
+/** 一张万能牌被当作的牌面。 */
+export interface WildSubstitutionCard {
+  /** 万能牌自身 id，便于 UI 定位到具体那张牌。 */
+  cardId: string;
+  /** 被当作的点数；同花这类无点数含义的牌型为 null。 */
+  rank: CardRank | null;
+  /** 点数的短标签，与 rank 一致；rank 为 null 时为空串，由 UI 换成「同花色」。 */
+  label: string;
+}
+
+/** 万能牌替身说明：命中牌型 + 每张万能牌被当作什么。 */
+export interface WildSubstitutionInfo {
+  /** 命中的最强牌型；万能牌无法成型时不会返回本结构。 */
+  category: HandCategory;
+  /** 按选中顺序列出全部万能牌；同花等无点数含义的牌型 rank 为 null。 */
+  wilds: WildSubstitutionCard[];
+}
+
+/**
+ * 描述含万能牌的组合实际打成了什么牌型、万能牌各自当作什么点数。
+ *
+ * 替身点数直接复用 strongestWildRanks，与 getFormationsFor 判定阵型时用的是同一档，
+ * 所以提示里写的点数就是兵种按钮实际生效的点数，不会出现「提示 Q-K-A、按钮却是 J-Q-K」。
+ *
+ * 返回 null 的情形：不含万能牌、万能牌没能凑成牌型（含单独选万能牌、混入大小王）。
+ * 这类「为什么不成型」的判断留给调用方，避免 UI 还要复述规则细节。
+ */
+export function describeWildSubstitution(
+  cards: readonly PlayingCard[],
+): WildSubstitutionInfo | null {
+  const count = cards.length;
+  if (count < 1 || count > 5) return null;
+  const split = splitWildCards(cards);
+  if (!split) return null;
+
+  const category = strongestCategory(detectWildMask(split, count));
+  if (!category) return null;
+
+  // 同花只看花色，替身点数没有意义；其余牌型按最强替身逐张对应
+  const ranks = strongestWildRanks(split, category);
+  const wilds: WildSubstitutionCard[] = cards
+    .filter((card) => isWildCard(card))
+    .map((card) => {
+      const rank = ranks?.shift() ?? null;
+      // 点数标签直接给 UI 用；无点数含义时留空，由调用方按牌型换成「同花色」
+      return { cardId: card.id, rank, label: rank ?? '' };
+    });
+  return { category, wilds };
+}
+
+/** 掩码里最强的一档；没有牌型返回 undefined。 */
+function strongestCategory(mask: number): HandCategory | undefined {
+  return categoriesFromMask(mask)[0];
 }
 
 /**
@@ -83,9 +111,9 @@ export function findStrongestHand(cards: readonly PlayingCard[]): PlayingCard[] 
   const maxSize = Math.min(5, cards.length);
   for (let size = 1; size <= maxSize; size += 1) {
     forEachCombination(cards, size, (combo) => {
-      const top = detectHandCategories(combo)[0];
+      const top = strongestCategory(detectMask(combo));
       if (!top) return;
-      const rank = CATEGORY_RANK.get(top) ?? 99;
+      const rank = categoryRankOf(top);
       if (rank > bestCategoryRank) return;
       if (rank < bestCategoryRank || compareCombosByStrength(combo, bestCards) < 0) {
         bestCategoryRank = rank;
@@ -107,15 +135,17 @@ export function listRecommendHands(cards: readonly PlayingCard[]): RecommendHand
   const maxSize = Math.min(5, cards.length);
   for (let size = 1; size <= maxSize; size += 1) {
     forEachCombination(cards, size, (combo) => {
-      const top = detectHandCategories(combo)[0];
+      const top = strongestCategory(detectMask(combo));
       if (!top) return;
-      for (const match of listUniqueMatchRules(top)) {
-        if (!cardsMatchRule(combo, match)) continue;
+      // 先取同档已存的更弱一组，命中后就不必再试匹配规则
+      const rules = listUniqueMatchRules(top);
+      for (const match of rules) {
         const matchKey = matchRuleKey(match);
         const slotKey = `${top}:${matchKey}`;
         const previous = bestBySlot.get(slotKey);
         // 同档保留更弱一组，把大牌留给后续出牌。
         if (previous && compareCombosByStrength(combo, previous.cards) <= 0) continue;
+        if (!matchesAnySubstitution(combo, match)) continue;
         bestBySlot.set(slotKey, { category: top, matchKey, cards: combo.slice() });
       }
     });
@@ -131,6 +161,23 @@ export function listRecommendHands(cards: readonly PlayingCard[]): RecommendHand
   return result;
 }
 
+/**
+ * 枚举手牌全部 1～5 张组合，汇总「至少出现过一次」的牌型。
+ * 同花顺会同时计入同花/五顺，与 detectHandCategories 一致；供概率统计使用。
+ */
+export function listPresentCategories(cards: readonly PlayingCard[]): HandCategory[] {
+  if (cards.length === 0) return [];
+
+  let mask = 0;
+  const maxSize = Math.min(5, cards.length);
+  for (let size = 1; size <= maxSize; size += 1) {
+    forEachCombination(cards, size, (combo) => {
+      mask |= detectMask(combo);
+    });
+  }
+  return HAND_CATEGORY_STRENGTH_ORDER.filter((category) => categoriesFromMask(mask).includes(category));
+}
+
 /** 该牌型阵型配置里按首次出现顺序去重后的映射情况。 */
 function listUniqueMatchRules(category: HandCategory): FormationMatchRule[] {
   const seen = new Set<string>();
@@ -144,24 +191,17 @@ function listUniqueMatchRules(category: HandCategory): FormationMatchRule[] {
   return rules;
 }
 
-/**
- * 枚举手牌全部 1～5 张组合，汇总「至少出现过一次」的牌型。
- * 同花顺会同时计入同花/五顺，与 detectHandCategories 一致；供概率统计使用。
- */
-export function listPresentCategories(cards: readonly PlayingCard[]): HandCategory[] {
-  if (cards.length === 0) return [];
+/** 含万能牌时按解析式试匹配；无万能牌只跑一次，保持原性能。 */
+function matchesAnySubstitution(cards: readonly PlayingCard[], match: FormationMatchRule): boolean {
+  const split = splitWildCards(cards);
+  if (!split) return cardsMatchConcreteRule(cards, match);
+  return wildCardsMatchRule(split, match);
+}
 
-  const present = new Set<HandCategory>();
-  const maxSize = Math.min(5, cards.length);
-  for (let size = 1; size <= maxSize; size += 1) {
-    forEachCombination(cards, size, (combo) => {
-      for (const category of detectHandCategories(combo)) {
-        present.add(category);
-      }
-    });
-  }
-
-  return HAND_CATEGORY_STRENGTH_ORDER.filter((category) => present.has(category));
+/** 牌型强度序号，越小越强。 */
+function categoryRankOf(category: HandCategory): number {
+  const index = HAND_CATEGORY_STRENGTH_ORDER.indexOf(category);
+  return index < 0 ? 99 : index;
 }
 
 /** 按牌力降序逐张比较两组牌；先出现更强牌的一侧更强。 */
@@ -200,103 +240,4 @@ function forEachCombination(
     }
   };
   walk(0);
-}
-
-/** 两张：对子；大小王额外命中王炸。 */
-function detectTwo(cards: readonly PlayingCard[]): HandCategory[] {
-  const [a, b] = cards;
-  if (!a || !b) return [];
-  if (a.joker && b.joker && a.joker !== b.joker) return ['rocket', 'pair'];
-  if (!a.joker && !b.joker && a.rank === b.rank) return ['pair'];
-  return [];
-}
-
-/** 三张：三条或三顺。 */
-function detectThree(cards: readonly PlayingCard[]): HandCategory[] {
-  if (hasJoker(cards)) return [];
-  const groups = rankCounts(cards);
-  if (groups.length === 1 && groups[0] === 3) return ['triple'];
-  if (isStraight(cards)) return ['straight3'];
-  return [];
-}
-
-/** 四张：炸弹 / 连对（相邻点数的两对） / 四顺。 */
-function detectFour(cards: readonly PlayingCard[]): HandCategory[] {
-  if (hasJoker(cards)) return [];
-  const groups = rankCounts(cards);
-  if (groups.length === 1 && groups[0] === 4) return ['bomb'];
-  if (groups.length === 2 && groups[0] === 2 && groups[1] === 2 && isConsecutivePairRanks(cards)) {
-    return ['two_pair'];
-  }
-  if (isStraight(cards)) return ['straight4'];
-  return [];
-}
-
-/** 五张：葫芦 / 同花顺 / 同花 / 五顺。同花顺同时命中三者。 */
-function detectFive(cards: readonly PlayingCard[]): HandCategory[] {
-  if (hasJoker(cards)) return [];
-  const groups = rankCounts(cards);
-  if (groups.length === 2 && groups[0] === 3 && groups[1] === 2) return ['full_house'];
-
-  const flush = isFlush(cards);
-  const straight = isStraight(cards);
-  if (flush && straight) return ['straight_flush', 'flush', 'straight5'];
-  if (flush) return ['flush'];
-  if (straight) return ['straight5'];
-  return [];
-}
-
-function hasJoker(cards: readonly PlayingCard[]): boolean {
-  return cards.some((card) => card.joker !== undefined);
-}
-
-/** 按点数出现次数降序返回，如葫芦 → [3, 2]。 */
-function rankCounts(cards: readonly PlayingCard[]): number[] {
-  const counts = new Map<string, number>();
-  for (const card of cards) {
-    counts.set(card.rank, (counts.get(card.rank) ?? 0) + 1);
-  }
-  return [...counts.values()].sort((a, b) => b - a);
-}
-
-function isFlush(cards: readonly PlayingCard[]): boolean {
-  const suit = cards[0]?.suit;
-  if (!suit) return false;
-  return cards.every((card) => card.suit === suit);
-}
-
-/**
- * 判断是否为连续顺子。
- * A 同时尝试高牌 14 与低牌 1，以覆盖 A-2-3-4-5 与 J-Q-K-A。
- */
-function isStraight(cards: readonly PlayingCard[]): boolean {
-  if (cards.length < 3 || hasJoker(cards)) return false;
-  const highValues = cards.map((card) => STRAIGHT_VALUE[card.rank as CardRank]);
-  if (isConsecutiveUnique(highValues)) return true;
-  if (!cards.some((card) => card.rank === 'A')) return false;
-  const lowValues = cards.map((card) =>
-    card.rank === 'A' ? 1 : STRAIGHT_VALUE[card.rank as CardRank],
-  );
-  return isConsecutiveUnique(lowValues);
-}
-
-/** 两对点数是否相邻（如 3-3-4-4）；A 同顺子规则可作 1 或 14。 */
-function isConsecutivePairRanks(cards: readonly PlayingCard[]): boolean {
-  const ranks = [...new Set(cards.map((card) => card.rank))];
-  if (ranks.length !== 2) return false;
-  const highValues = ranks.map((rank) => STRAIGHT_VALUE[rank as CardRank]);
-  if (isConsecutiveUnique(highValues)) return true;
-  if (!ranks.includes('A')) return false;
-  const lowValues = ranks.map((rank) => (rank === 'A' ? 1 : STRAIGHT_VALUE[rank as CardRank]));
-  return isConsecutiveUnique(lowValues);
-}
-
-/** 去重后排序，长度不变且相邻差均为 1 才算顺。 */
-function isConsecutiveUnique(values: readonly number[]): boolean {
-  const unique = [...new Set(values)].sort((a, b) => a - b);
-  if (unique.length !== values.length) return false;
-  for (let index = 1; index < unique.length; index += 1) {
-    if (unique[index]! - unique[index - 1]! !== 1) return false;
-  }
-  return true;
 }

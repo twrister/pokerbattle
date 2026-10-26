@@ -194,26 +194,37 @@ export {
   MAX_HAND_SIZE,
   PokerDeck,
   RETURN_MIN_DEPTH,
+  WILD_CARD_IDS,
+  WILD_CARD_RANK,
   clampHandSize,
   compareCardsByStrength,
   createPokerCards,
   getPokerCardById,
   getCardStrength,
+  isWildCard,
   type CardRank,
   type CardSuit,
   type PlayingCard,
+  type PokerDeckOptions,
 } from './cards/deck.js';
 export {
+  describeWildSubstitution,
   detectHandCategories,
   findStrongestHand,
   listPresentCategories,
   listRecommendHands,
   type RecommendHand,
+  type WildSubstitutionCard,
+  type WildSubstitutionInfo,
 } from './cards/handCategory.js';
+export { detectConcreteCategories } from './cards/handCategoryDetect.js';
+export { expandWildSubstitutions, substituteWildCards } from './cards/wildCard.js';
+export { splitWildCards, strongestWildRanks, type WildSplit } from './cards/wildRule.js';
 export {
   FORMATION_MATCH_RANKS,
   FUSE_BOMB_DAMAGE_RANKS,
   FUSE_BOMB_DAMAGE_RANK_LABELS,
+  cardsMatchConcreteRule,
   cardsMatchRule,
   fuseBombDamageRankOf,
   getPreviewCardsForFormation,

@@ -19,6 +19,16 @@ describe('单机扑克牌堆', () => {
     expect(cardImageUrl(cards.find((card) => card.id === 'joker-red')!)).toBe('cards/Joker_2.png');
   });
 
+  it('开启万能牌后追加 2 张并使用独立立绘', () => {
+    const cards = createPokerCards({ wildCards: true });
+
+    expect(cards).toHaveLength(56);
+    expect(new Set(cards.map((card) => card.id))).toHaveLength(56);
+    const wilds = cards.filter((card) => card.wild);
+    expect(wilds.map((card) => card.id)).toEqual(['wild-1', 'wild-2']);
+    expect(cardImageUrl(wilds[0]!)).toBe('cards/Wild.png');
+  });
+
   it('无视上限抽牌在满手时仍能入手，空堆返回 undefined', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     deck.drawMany(20);

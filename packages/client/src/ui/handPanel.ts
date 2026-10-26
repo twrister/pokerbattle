@@ -1,4 +1,6 @@
 import {
+  HAND_CATEGORY_NAMES,
+  describeWildSubstitution,
   detectHandCategories,
   listRecommendHands,
   getExclusiveFormationUnitTag,
@@ -9,6 +11,7 @@ import {
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
   PokerDeck,
+  splitWildCards,
   UNIT_CONFIGS,
   type CardFormation,
   type PlayingCard,
@@ -38,6 +41,12 @@ const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
 const STATUS_INVALID_DROP = '请在白色高亮区域内放置';
 /** 拖拽建筑阵型时的操作提示。 */
 const STATUS_BUILDING_DRAG = '拖到白色格子上松手放置';
+/** 选中牌里只有万能牌（没搭配任何真牌）时的提示。 */
+const STATUS_WILD_ALONE = '万能牌需搭配其他牌，不能单独打出';
+/** 万能牌与大小王混选时的提示：规则上万能牌不能替代王牌。 */
+const STATUS_WILD_WITH_JOKER = '万能牌不能替代大小王';
+/** 同花这类牌型没有点数含义，替身只能说成同花色。 */
+const WILD_SUIT_LABEL = '同花色任意牌';
 /** 单次出牌可识别的牌型最多张数。 */
 const MAX_CATEGORY_CARDS = 5;
 /** 循环切换可凑牌型时的按钮文案。 */
@@ -631,12 +640,19 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     let selectionStatus = '';
     if (!playing && selected.size > MAX_CATEGORY_CARDS) {
       selectionStatus = STATUS_TOO_MANY_CARDS;
-    } else if (!playing && selected.size > 0 && formations.length === 0) {
-      selectionStatus = STATUS_NO_CATEGORY;
+    } else if (!playing && selected.size > 0) {
+      // 有搭配按钮时说明万能牌被当成什么；按钮为空时只解释不成型的原因
+      const wildStatus = describeWildStatus(collectSelectedCards(), formations.length > 0);
+      selectionStatus = wildStatus || (formations.length === 0 ? STATUS_NO_CATEGORY : '');
     }
     const text = actionStatus ?? selectionStatus;
     statusElement.textContent = text;
     statusElement.classList.toggle('is-visible', text.length > 0);
+  }
+
+  /** 当前正式选中的牌，按手牌顺序返回；提示文案按这个顺序描述每张万能牌。 */
+  function collectSelectedCards(): PlayingCard[] {
+    return deck.hand.filter((card) => selected.has(card.id));
   }
 
   /** 记录当前手牌屏幕坐标，供重建 DOM 后做 FLIP 位移。 */
@@ -781,9 +797,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
 
   /** 根据正式选中牌识别牌型并列出兵种搭配按钮（3D 缩略图；炸弹另叠伤害）。 */
   function renderFormations(force: boolean): void {
-    const selectedCards = deck.hand.filter((card) => selected.has(card.id));
-    const categories = detectHandCategories(selectedCards);
-    formations = getFormationsFor(categories, selectedCards);
+    const cards = collectSelectedCards();
+    const categories = detectHandCategories(cards);
+    formations = getFormationsFor(categories, cards);
     const visible = formations.length > 0 && !playing;
     const renderKey = visible
       ? formations
@@ -793,7 +809,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
               formation.slots.map((slot) => `${slot.typeId}:${slot.row}:${slot.col}`).join(','),
               getExclusiveFormationUnitTag(formation),
               getFormationSpecialTier(formation) ?? '',
-              fuseBombDisplayDamage(formation, selectedCards) ?? '',
+              fuseBombDisplayDamage(formation, cards) ?? '',
             ].join('#'),
           )
           .join('\0')
@@ -815,7 +831,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       button.type = 'button';
       button.className = formationOptionClassName(formation);
       button.dataset.formationId = formation.id;
-      const damage = fuseBombDisplayDamage(formation, selectedCards);
+      const damage = fuseBombDisplayDamage(formation, cards);
       button.setAttribute(
         'aria-label',
         withBombDamageAriaLabel(`${formation.name}：${formatFormationUnits(formation)}`, damage),
@@ -826,7 +842,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       image.draggable = false;
       button.appendChild(image);
       appendFormationTag(button, formation);
-      appendFormationBombDamage(button, formation, selectedCards);
+      appendFormationBombDamage(button, formation, cards);
       fragment.appendChild(button);
       void applyThumbnail(button, image, formation, generation);
     }
@@ -1092,6 +1108,32 @@ function formatRowUnits(formation: CardFormation, rowIndex: number): string {
       return `${name}x${counts.get(typeId)}`;
     })
     .join(' · ');
+}
+
+/**
+ * 选出含万能牌时的专用提示，拼不出牌型的普通组合返回空串交给上层兜底。
+ *
+ * 提示只借用 #hand-status 这一行现有位置，不新增浮层，避免遮挡手牌、牌堆和阵型按钮。
+ * 优先说明「为什么不成型」，其次才说明替身点数：
+ * - 只选了万能牌 / 万能牌 + 大小王：规则上直接不成立，说清原因比「未凑成」有用；
+ * - 已命中牌型：写出每张万能牌被当作的点数和最终牌型。
+ *
+ * hasFormations 只在已经出现搭配按钮时才写替身点数：
+ * 配置里缺该档阵型时按钮为空，这时说明替身反而会误导玩家去点不存在的按钮。
+ */
+function describeWildStatus(cards: readonly PlayingCard[], hasFormations: boolean): string {
+  const split = splitWildCards(cards);
+  if (!split) return '';
+  // 单出万能牌是规则禁止项，单独选一张时也要给具体原因，不能落到「未凑成有效牌型」
+  if (split.concretes.length === 0) return STATUS_WILD_ALONE;
+  if (split.hasJoker) return STATUS_WILD_WITH_JOKER;
+  if (!hasFormations) return '';
+
+  const info = describeWildSubstitution(cards);
+  if (!info) return '';
+  const categoryName = HAND_CATEGORY_NAMES[info.category];
+  const labels = info.wilds.map((wild) => wild.label || WILD_SUIT_LABEL);
+  return `万能牌当作${labels.join('、')}，凑成${categoryName}`;
 }
 
 /** 将面板输入收敛为安全的毫秒值，避免零间隔导致单帧连续抽牌。 */

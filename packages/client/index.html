@@ -2358,6 +2358,14 @@
         font: inherit;
       }
 
+      /* 万能牌是开关，别继承数字框的满宽与内边距 */
+      #solo-match-rules input[type='checkbox'] {
+        width: auto;
+        padding: 0;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
       /* 保存为默认：仅单机可调参数时显示 */
       #controls-defaults-row {
         display: none;
@@ -7796,6 +7804,12 @@
                   step="1"
                   value="11"
                 />
+              </label>
+            </div>
+            <div class="solo-match-rules-group">
+              <label for="solo-wild-cards-enabled">
+                万能牌
+                <input id="solo-wild-cards-enabled" type="checkbox" />
               </label>
             </div>
           </div>

@@ -10,5 +10,6 @@
   "finalDrawIntervalSeconds": 2,
   "normalHandLimit": 9,
   "doubleSpeedHandLimit": 10,
-  "finalHandLimit": 11
+  "finalHandLimit": 11,
+  "wildCardsEnabled": true
 }

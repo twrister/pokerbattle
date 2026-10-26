@@ -507,6 +507,40 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('单选万能牌时提示需要搭配其他牌', () => {
+    const panel = createHandPanel({ deck: deckWithCards(['wild-1']) });
+    selectAllCards();
+
+    expect(document.querySelectorAll('.formation-option')).toHaveLength(0);
+    const status = document.querySelector<HTMLElement>('#hand-status')!;
+    expect(status.textContent).toBe('万能牌需搭配其他牌，不能单独打出');
+
+    panel.dispose();
+  });
+
+  it('万能牌凑成牌型时提示实际替身点数与牌型', () => {
+    const panel = createHandPanel({ deck: deckWithCards(['wild-1', '9-hearts']) });
+    selectAllCards();
+
+    expect(document.querySelectorAll('.formation-option').length).toBeGreaterThan(0);
+    const status = document.querySelector<HTMLElement>('#hand-status')!;
+    expect(status.textContent).toBe('万能牌当作9，凑成对子');
+    expect(status.classList.contains('is-visible')).toBe(true);
+
+    panel.dispose();
+  });
+
+  it('万能牌与大小王混选时说明替代限制', () => {
+    const panel = createHandPanel({ deck: deckWithCards(['wild-1', 'joker-red']) });
+    selectAllCards();
+
+    expect(document.querySelectorAll('.formation-option')).toHaveLength(0);
+    const status = document.querySelector<HTMLElement>('#hand-status')!;
+    expect(status.textContent).toBe('万能牌不能替代大小王');
+
+    panel.dispose();
+  });
+
   it('选中超过5张牌时提示牌型上限', () => {
     const panel = createHandPanel({
       deck: deckWithCards([
@@ -1206,7 +1240,8 @@ function pointerEvent(type: string, pointerId: number, clientX = 10, clientY = 1
 
 /** 构造仅含指定牌的牌堆，并按给定顺序抽到手牌，便于测固定牌型。 */
 function deckWithCards(ids: readonly string[]): PokerDeck {
-  const all = createPokerCards();
+  // 带上万能牌，测试才能用 wild-1 / wild-2 构造癞子牌。
+  const all = createPokerCards({ wildCards: true });
   const cards = ids.map((id) => {
     const found = all.find((card) => card.id === id);
     if (!found) throw new Error(`测试牌不存在：${id}`);

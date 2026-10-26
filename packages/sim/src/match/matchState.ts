@@ -7,6 +7,7 @@ import {
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
   PokerDeck,
+  type PlayingCard,
 } from '../cards/deck.js';
 import { detectHandCategories } from '../cards/handCategory.js';
 import {
@@ -136,6 +137,8 @@ export class MatchState {
   private readonly nextDrawTicks: number[];
   /** 周期到点却满手时记一张待发，空位出现后同帧补上。 */
   private readonly pendingDraw: boolean[];
+  /** 本局牌堆是否含万能牌；重开时据此重建牌面。 */
+  private wildCardsEnabled = false;
 
   constructor(seed = 1, mode: MatchMode = '1v1') {
     this.mode = mode;
@@ -151,13 +154,33 @@ export class MatchState {
     // 各席牌堆共用 world.rng，抽牌顺序固定为 slot 升序，保证确定性
     const rules = defaultMatchRules();
     this.applyDefaultRules(rules);
+    this.wildCardsEnabled = rules.wildCardsEnabled;
     for (let slot = 0; slot < slots; slot += 1) {
-      this.decks.push(new PokerDeck(createPokerCards(), this.world.rng));
+      this.decks.push(new PokerDeck(this.createDeckCards(), this.world.rng));
       this.castleIds.push(null);
       this.packStates.push('none');
       this.nextDrawTicks.push(rules.drawIntervals.normalTicks);
       this.pendingDraw.push(false);
     }
+    this.dealStartingHands();
+  }
+
+  /** 按本局开关生成牌面；万能牌开启时为 56 张。 */
+  private createDeckCards(): PlayingCard[] {
+    return createPokerCards({ wildCards: this.wildCardsEnabled });
+  }
+
+  /**
+   * 同步本局万能牌开关。
+   * 未推进的对局立刻重洗，让调试面板改完就能看到 56 张；
+   * 已开打的对局只记下开关，避免中途换牌破坏联机与回放一致性。
+   */
+  setWildCardsEnabled(enabled: boolean): void {
+    if (this.wildCardsEnabled === enabled) return;
+    this.wildCardsEnabled = enabled;
+    if (this.world.tick !== 0 || this.result) return;
+    const cards = this.createDeckCards();
+    for (const slot of allSlots(this.mode)) this.decks[slot]!.reset(cards);
     this.dealStartingHands();
   }
 
@@ -250,6 +273,8 @@ export class MatchState {
     h = mix(h, this.normalHandLimit);
     h = mix(h, this.doubleSpeedHandLimit);
     h = mix(h, this.finalHandLimit);
+    // 万能牌开关决定牌堆张数，两端读不同配置时必须能立刻对账出差异
+    h = mix(h, this.wildCardsEnabled ? 1 : 0);
     return h >>> 0;
   }
 
@@ -259,8 +284,10 @@ export class MatchState {
     this.world.clear();
     applyArenaTerrain(this.world.nav);
     // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象
+    // 牌面按当前万能牌开关重建，避免中途改开关后重开仍是旧牌堆
+    const cards = this.createDeckCards();
     for (const slot of allSlots(this.mode)) {
-      this.decks[slot]!.reset();
+      this.decks[slot]!.reset(cards);
       this.castleIds[slot] = null;
       this.packStates[slot] = 'none';
     }

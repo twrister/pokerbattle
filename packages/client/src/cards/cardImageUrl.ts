@@ -1,4 +1,4 @@
-import type { CardSuit, PlayingCard } from '@pb/sim';
+import { isWildCard, type CardSuit, type PlayingCard } from '@pb/sim';
 
 const SUIT_FILE_INDEX: Readonly<Record<CardSuit, number>> = {
   spades: 1,
@@ -13,6 +13,8 @@ const SUIT_FILE_INDEX: Readonly<Record<CardSuit, number>> = {
  * 兵种立绘同样用相对路径（units/...），线上已能显示。
  */
 export function cardImageUrl(card: PlayingCard): string {
+  // 万能牌有独立立绘，先于花色判断，避免落到 Joker 兜底
+  if (isWildCard(card)) return 'cards/Wild.png';
   if (card.joker === 'black') return 'cards/Joker_1.png';
   if (card.joker === 'red') return 'cards/Joker_2.png';
   const suit = card.suit;

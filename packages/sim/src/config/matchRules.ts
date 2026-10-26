@@ -33,6 +33,8 @@ export interface MatchRulesDraft {
   normalHandLimit: number;
   doubleSpeedHandLimit: number;
   finalHandLimit: number;
+  /** 是否在 54 张牌堆上追加 2 张万能牌（癞子牌）。 */
+  wildCardsEnabled: boolean;
 }
 
 /** 三阶段补牌周期。 */
@@ -65,6 +67,8 @@ export interface MatchRules {
   handLimits: MatchHandLimits;
   /** 决胜与结算的单位逻辑加速倍率。 */
   finalUnitTimeScale: number;
+  /** 牌堆是否额外包含 2 张万能牌。 */
+  wildCardsEnabled: boolean;
 }
 
 const DRAFT_KEYS = [
@@ -95,6 +99,7 @@ const fallbackDraft: MatchRulesDraft = {
   normalHandLimit: HAND_LIMIT_NORMAL,
   doubleSpeedHandLimit: HAND_LIMIT_DOUBLE_SPEED,
   finalHandLimit: HAND_LIMIT_FINAL,
+  wildCardsEnabled: true,
 };
 
 /** 文件快照：非法 JSON 回落到硬编码默认，避免启动失败。 */
@@ -151,6 +156,10 @@ export function validateMatchRulesDraft(value: unknown): string | undefined {
     if (typeof rec[key] !== 'number' || !Number.isFinite(rec[key])) {
       return `${key} 必须是有限数字`;
     }
+  }
+  // 布尔开关单独校验，避免被数字循环跳过
+  if (rec.wildCardsEnabled !== undefined && typeof rec.wildCardsEnabled !== 'boolean') {
+    return 'wildCardsEnabled 必须是布尔值';
   }
   return undefined;
 }
@@ -236,6 +245,7 @@ function sanitizeMatchRulesDraftWithFallback(
     normalHandLimit: readHandSize(values.normalHandLimit, fallback.normalHandLimit),
     doubleSpeedHandLimit: readHandSize(values.doubleSpeedHandLimit, fallback.doubleSpeedHandLimit),
     finalHandLimit: readHandSize(values.finalHandLimit, fallback.finalHandLimit),
+    wildCardsEnabled: readBoolean(values.wildCardsEnabled, fallback.wildCardsEnabled),
   };
 }
 
@@ -260,6 +270,7 @@ function draftToMatchRules(draft: MatchRulesDraft): MatchRules {
       final: next.finalHandLimit,
     },
     finalUnitTimeScale: next.finalUnitTimeScale,
+    wildCardsEnabled: next.wildCardsEnabled,
   };
 }
 
@@ -285,6 +296,11 @@ function readUnitTimeScale(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? clampFinalUnitTimeScale(value)
     : fallback;
+}
+
+/** 布尔开关只接受真正的 boolean，其他类型一律回落，避免 "false" 字符串被当成开启。 */
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 function clampRange(value: number, min: number, max: number): number {

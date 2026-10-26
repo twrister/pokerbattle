@@ -1,5 +1,7 @@
 import { type Fx, fromFloat, toFloat } from '../math/fixed.js';
 import type { CardRank, PlayingCard } from '../cards/deck.js';
+import { splitWildCards, strongestWildRanks } from '../cards/wildRule.js';
+import { substituteWildCards } from '../cards/wildCard.js';
 import { Faction } from '../entity/unit.js';
 import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, type UnitTypeId } from './units.js';
 import {
@@ -21,56 +23,20 @@ import {
   type MappedFormationUnit,
 } from './cardMapping.js';
 import rawCardFormations from './cardFormations.json';
+import {
+  HAND_CATEGORY_NAMES,
+  HAND_CATEGORY_ORDER,
+  HAND_CATEGORY_STRENGTH_ORDER,
+  type HandCategory,
+} from './handCategories.js';
 
-/** 发牌限制可识别的全部牌型 id。 */
-export type HandCategory =
-  | 'single'
-  | 'pair'
-  | 'rocket'
-  | 'triple'
-  | 'straight3'
-  | 'bomb'
-  | 'two_pair'
-  | 'straight4'
-  | 'full_house'
-  | 'straight5'
-  | 'flush'
-  | 'straight_flush';
-
-/** 牌型强度降序：同花顺最强，单张最弱；出牌比对与阵型并集按此顺序。 */
-export const HAND_CATEGORY_STRENGTH_ORDER: readonly HandCategory[] = [
-  'straight_flush',
-  'bomb',
-  'rocket',
-  'flush',
-  'full_house',
-  'straight5',
-  'two_pair',
-  'triple',
-  'straight4',
-  'straight3',
-  'pair',
-  'single',
-] as const;
-
-/** 卡组页选项顺序：单张在上，同花顺在下，由强度序反转派生。 */
-export const HAND_CATEGORY_ORDER: readonly HandCategory[] = [...HAND_CATEGORY_STRENGTH_ORDER].reverse();
-
-/** 牌型中文名，供 UI 与调试展示。 */
-export const HAND_CATEGORY_NAMES: Readonly<Record<HandCategory, string>> = {
-  single: '单张',
-  pair: '对子',
-  rocket: '王炸',
-  triple: '三张',
-  straight3: '三顺',
-  bomb: '炸弹',
-  two_pair: '连对',
-  straight4: '四顺',
-  full_house: '葫芦',
-  straight5: '五顺',
-  flush: '同花',
-  straight_flush: '同花顺',
-};
+// 牌型常量下沉到 handCategories.ts 以打断循环依赖，这里原样再导出供旧引用路径使用
+export {
+  HAND_CATEGORY_NAMES,
+  HAND_CATEGORY_ORDER,
+  HAND_CATEGORY_STRENGTH_ORDER,
+  type HandCategory,
+} from './handCategories.js';
 
 /** 同排相邻兵种的默认横向间距（格）。 */
 export const FORMATION_COL_SPACING = 1.2;
@@ -473,6 +439,7 @@ export function createCardFormation(category: HandCategory, draft: FormationDraf
 /**
  * 将静态方案模板按实际牌面展开为可出兵阵型。
  * 全部牌型均以配置的 match / rows 为准；不适用的方案返回 null。
+ * 万能牌由 resolveMappedRows 内部替换，这里不必单独处理。
  */
 export function resolveCardFormation(
   formation: CardFormation,
@@ -863,6 +830,36 @@ export function getFormationsFor(
   if (categories.length === 0) return [];
   // 实际出牌只允许使用命中牌型中最强的一种，避免同花顺同时展示五顺/同花方案。
   const wanted = new Set(cards ? categories.slice(0, 1) : categories);
+  if (!cards) return collectFormationsFor(wanted);
+
+  // 含万能牌时，同一牌型会因替身不同命中多条点数规则（癞子+K+Q 既能当 J-Q-K 也能当 Q-K-A），
+  // 改为只按牌面最大的替身判定，按钮列表就只剩最强的一档。
+  const judgeCards = strongestJudgementCards(categories[0]!, cards);
+  const strongest = collectFormationsFor(wanted, judgeCards);
+  // 配置里缺该档规则时可能收敛到 0 条，此时退回原牌面，避免选了牌却没有任何按钮
+  if (strongest.length > 0 || judgeCards === cards) return strongest;
+  return collectFormationsFor(wanted, cards);
+}
+
+/**
+ * 供阵型列表判定用的牌组：含万能牌时把万能牌替成该牌型下最强的点数。
+ * 无万能牌、牌型没有点数含义（同花/王炸）或替身不成型时原样返回。
+ */
+function strongestJudgementCards(
+  category: HandCategory,
+  cards: readonly PlayingCard[],
+): readonly PlayingCard[] {
+  const split = splitWildCards(cards);
+  if (!split) return cards;
+  const ranks = strongestWildRanks(split, category);
+  return ranks ? substituteWildCards(cards, ranks) : cards;
+}
+
+/** 收集命中牌型的全部搭配；cards 为空表示不按牌面过滤（图鉴/预览）。 */
+function collectFormationsFor(
+  wanted: ReadonlySet<HandCategory>,
+  cards?: readonly PlayingCard[],
+): CardFormation[] {
   const seen = new Set<string>();
   const result: CardFormation[] = [];
   for (const category of HAND_CATEGORY_STRENGTH_ORDER) {
