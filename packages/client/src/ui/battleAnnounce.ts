@@ -5,6 +5,8 @@ export interface BattleAnnounceShowOpts {
   holdMs?: number;
   /** 倒计时数字用更夸张的放大动画，与阶段文案区分。 */
   countdown?: boolean;
+  /** 最后几秒：数字改红，配合更高更长的提示音。 */
+  urgent?: boolean;
 }
 
 export interface BattleAnnounceHandle {
@@ -36,6 +38,12 @@ export const PHASE_ANNOUNCE_RULES: Record<MatchPhase, PhaseAnnounceRule> = {
 const PHASE_HOLD_MS = 2800;
 /** 倒计时数字约 1 秒一换，略长于间隔以免提前淡出。 */
 const COUNTDOWN_HOLD_MS = 1400;
+/** 进入红色紧迫态的秒数；最后 3 秒留出反应时间比只红 1 秒更有用。 */
+export const COUNTDOWN_URGENT_SECONDS = 3;
+/** 10~4 秒的提示音：中频短音。 */
+const COUNTDOWN_TONE = { frequency: 880, durationMs: 110, volume: 0.22 };
+/** 3~1 秒的提示音：更高更响，把紧迫感推上来。 */
+const COUNTDOWN_TONE_URGENT = { frequency: 1320, durationMs: 160, volume: 0.28 };
 export const TEAMMATE_DOWN_ANNOUNCE = '队友阵亡';
 export const BASE_DOWN_ANNOUNCE = '基地陷落';
 
@@ -58,7 +66,7 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
   const hide = (): void => {
     clearHideTimer();
     root.classList.add('is-hidden');
-    root.classList.remove('is-visible', 'is-countdown');
+    root.classList.remove('is-visible', 'is-countdown', 'is-urgent');
     showingText = '';
   };
 
@@ -68,10 +76,11 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
     if (showingText === text && !root.classList.contains('is-hidden')) return;
     clearHideTimer();
     showingText = text;
-    // 播报音只在阶段切换时响；倒计时数字每秒一次会太吵，靠 sfx 自身节流也压不住
+    // 播报音只在阶段切换时响；倒计时数字走 playTone 的合成短音，避免素材音每秒重复
     if (!opts?.countdown) sfx.play('ui_announce');
     textEl.textContent = text;
     root.classList.toggle('is-countdown', Boolean(opts?.countdown));
+    root.classList.toggle('is-urgent', Boolean(opts?.urgent));
     root.classList.remove('is-hidden');
     // 强制重触发 CSS 动画
     root.classList.remove('is-visible');
@@ -110,7 +119,10 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
       if (seconds >= 1 && seconds <= rule.countdownLastSeconds) {
         if (seconds !== lastCountdownSec) {
           lastCountdownSec = seconds;
-          show(String(seconds), { holdMs: COUNTDOWN_HOLD_MS, countdown: true });
+          const urgent = seconds <= COUNTDOWN_URGENT_SECONDS;
+          show(String(seconds), { holdMs: COUNTDOWN_HOLD_MS, countdown: true, urgent });
+          // 声音跟数字一起走：每秒一声，最后 3 秒换更高更长的音
+          sfx.playTone(urgent ? COUNTDOWN_TONE_URGENT : COUNTDOWN_TONE);
         }
         return;
       }

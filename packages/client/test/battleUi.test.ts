@@ -223,6 +223,33 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-timer')?.textContent).toBe('1:30');
   });
 
+  it('剩余 10 秒内计时器进入警戒态，结束后恢复', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    // HUD 截止 = 三阶段合计 300 帧，刚好在警戒线（TICK_RATE*10 = 200 帧）之外
+    match.setPhaseDurations({
+      normalTicks: 294,
+      doubleSpeedTicks: 2,
+      finalTicks: 2,
+      settlementTicks: 2,
+    });
+    const hud = createBattleHud();
+    hud.setContext({ localFaction: Faction.Blue, localName: 'A', opponentName: 'B' });
+    const timer = document.querySelector<HTMLElement>('#battle-timer')!;
+
+    hud.update(match);
+    expect(timer.classList.contains('is-warning')).toBe(false);
+
+    // 消耗 100 帧后只剩 200 帧，进入警戒
+    while (match.world.tick < 100) match.step();
+    hud.update(match);
+    expect(timer.classList.contains('is-warning')).toBe(true);
+
+    // 重新开局后警戒色必须摘掉，不能带到下一局
+    hud.hide();
+    expect(timer.classList.contains('is-warning')).toBe(false);
+  });
+
   it('进入决胜后切换阶段与倒计时文案', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();

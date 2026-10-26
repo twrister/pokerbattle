@@ -3,9 +3,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MatchState, TICK_RATE } from '@pb/sim';
 import { createBattleAnnounce } from '../src/ui/battleAnnounce.js';
+import { sfx } from '../src/audio/sfx.js';
+
+/** 只替换合成音，避免 jsdom 里没有 Web Audio 导致断言拿不到调用。 */
+const toneSpy = vi.spyOn(sfx, 'playTone').mockReturnValue(true);
+const announceSfxSpy = vi.spyOn(sfx, 'play');
 
 describe('对局文字提示', () => {
   beforeEach(() => {
+    toneSpy.mockClear();
+    announceSfxSpy.mockClear();
     document.body.innerHTML = `
       <div id="battle-announce" class="is-hidden">
         <span id="battle-announce-text"></span>
@@ -145,6 +152,90 @@ describe('对局文字提示', () => {
     while (match.world.tick < matchEnd - TICK_RATE * 9) match.step();
     announce.tick(match);
     expect(document.querySelector('#battle-announce-text')?.textContent).toBe('9');
+  });
+
+  it('倒计时每秒响一声合成音，阶段文案不走合成音', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const finalTicks = TICK_RATE * 12;
+    shortenDealPhases(match, { normalTicks: 2, doubleSpeedTicks: 2, finalTicks });
+    const announce = createBattleAnnounce();
+
+    // 开局阶段文案：只响素材播报音，不该有倒计时滴答
+    announce.tick(match);
+    expect(announceSfxSpy).toHaveBeenCalledWith('ui_announce');
+    expect(toneSpy).not.toHaveBeenCalled();
+
+    toneSpy.mockClear();
+    announceSfxSpy.mockClear();
+    // 先走到决胜阶段并让倒计时初始化，否则首次 tick 会被当成阶段边沿
+    while (match.world.tick < 4) match.step();
+    announce.tick(match);
+    // 阶段切入的那一声播报已响过，之后倒计时期间不该再响素材音
+    announceSfxSpy.mockClear();
+    const settlementStart = 4 + finalTicks;
+    while (match.world.tick < settlementStart - TICK_RATE * 10) match.step();
+    announce.tick(match);
+    expect(toneSpy).toHaveBeenCalledTimes(1);
+
+    // 同一秒内重复 tick 不能重复发声
+    announce.tick(match);
+    expect(toneSpy).toHaveBeenCalledTimes(1);
+
+    while (match.world.tick < settlementStart - TICK_RATE * 9) match.step();
+    announce.tick(match);
+    expect(toneSpy).toHaveBeenCalledTimes(2);
+    // 数字倒计时只用合成音，不再叠素材播报音
+    expect(announceSfxSpy).not.toHaveBeenCalled();
+  });
+
+  it('最后 3 秒数字变红并换成更高更长的提示音', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const finalTicks = TICK_RATE * 12;
+    shortenDealPhases(match, { normalTicks: 2, doubleSpeedTicks: 2, finalTicks });
+    const announce = createBattleAnnounce();
+    announce.tick(match);
+
+    // 决胜阶段边沿：只弹阶段名，倒计时从这里开始接管
+    while (match.world.tick < 4) match.step();
+    announce.tick(match);
+    expect(match.phase).toBe('final');
+    const settlementStart = 4 + finalTicks;
+    const root = document.querySelector<HTMLElement>('#battle-announce')!;
+
+    // 第 5 秒还不该发红
+    while (match.world.tick < settlementStart - TICK_RATE * 5) match.step();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('5');
+    expect(root.classList.contains('is-urgent')).toBe(false);
+
+    toneSpy.mockClear();
+    while (match.world.tick < settlementStart - TICK_RATE * 3) match.step();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('3');
+    expect(root.classList.contains('is-urgent')).toBe(true);
+    expect(toneSpy).toHaveBeenCalledWith(expect.objectContaining({ frequency: 1320 }));
+
+    // 切到较小数字后紧迫态要跟着更新，不能残留
+    while (match.world.tick < settlementStart - TICK_RATE * 2) match.step();
+    announce.tick(match);
+    expect(root.classList.contains('is-urgent')).toBe(true);
+  });
+
+  it('阶段切换清掉紧迫态，避免红字带到下一段', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    shortenDealPhases(match, { normalTicks: 2, doubleSpeedTicks: 2, finalTicks: 2, settlementTicks: 20 });
+    const announce = createBattleAnnounce();
+    announce.tick(match);
+    const root = document.querySelector<HTMLElement>('#battle-announce')!;
+
+    while (match.world.tick < 6) match.step();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('结算阶段 停止发牌');
+    expect(root.classList.contains('is-urgent')).toBe(false);
+    expect(root.classList.contains('is-countdown')).toBe(false);
   });
 });
 

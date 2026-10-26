@@ -33,6 +33,9 @@ interface CastleHudCache {
   protect: boolean;
 }
 
+/** 顶部计时器进入警戒色的剩余帧数；与居中倒计时的 10 秒对齐。 */
+const TIMER_WARNING_TICKS = TICK_RATE * 10;
+
 interface TeamTotalCache {
   text: string;
   width: string;
@@ -92,6 +95,7 @@ export function createBattleHud(): BattleHudHandle {
   let lastPhaseText = '';
   let lastTimerLabel = '';
   let lastTimerText = '';
+  let lastTimerWarning = false;
   let lastOppHandText = '';
   const selfCastle: CastleHudCache = emptyCastleCache();
   const oppCastle: CastleHudCache = emptyCastleCache();
@@ -105,6 +109,9 @@ export function createBattleHud(): BattleHudHandle {
       lastTick = -1;
       lastDeadlineTick = -1;
       lastPhase = '';
+      // 重新开局时先摘掉警戒色，否则上一局的红字会留到新一局
+      lastTimerWarning = false;
+      timer.classList.remove('is-warning');
       spectators.classList.add('is-hidden');
       catchup.classList.add('is-hidden');
     },
@@ -190,6 +197,12 @@ export function createBattleHud(): BattleHudHandle {
       writeText(timer, formatTicks(remainingTicks), (value) => {
         lastTimerText = value;
       }, lastTimerText);
+      // 最后 10 秒整条计时器变红脉动，和居中倒计时数字一起提醒
+      const warning = remainingTicks > 0 && remainingTicks <= TIMER_WARNING_TICKS;
+      if (warning !== lastTimerWarning) {
+        lastTimerWarning = warning;
+        timer.classList.toggle('is-warning', warning);
+      }
 
       const oppHandSlot = context.opponentSlot ?? opp;
       const nextOppHand = formatHandCount(

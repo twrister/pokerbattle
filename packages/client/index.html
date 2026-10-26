@@ -2979,6 +2979,7 @@
       }
 
       #battle-timer {
+        display: inline-block;
         color: #fff;
         font-family: var(--font-display);
         font-size: calc(26 * var(--hu));
@@ -2986,6 +2987,23 @@
         letter-spacing: 0.04em;
         font-variant-numeric: tabular-nums;
         text-shadow: var(--text-outline);
+      }
+
+      /* 最后 10 秒：变红并放大脉动，与居中倒计时数字同步提醒 */
+      #battle-timer.is-warning {
+        animation: battle-timer-warning-pulse 0.9s ease-in-out infinite;
+      }
+
+      @keyframes battle-timer-warning-pulse {
+        0%,
+        100% {
+          color: var(--red);
+          transform: scale(1);
+        }
+        50% {
+          color: #ffe4de;
+          transform: scale(1.14);
+        }
       }
 
       /* 阶段切换 / 最后 10 秒倒计时共用居中大字 */
@@ -3015,9 +3033,12 @@
         animation: battle-announce-countdown-pop 1.4s ease-out both;
       }
 
-      /* 阶段大字：金色字 + 粗描边 + 实色下投影，Supercell 式立体标题 */
+      /*
+       * 阶段大字：白字 + 粗描边 + 实色下投影，Supercell 式立体标题。
+       * 场地底板是米黄色，原来的金色字与之明度接近，这里改白字拉开对比。
+       */
       #battle-announce-text {
-        color: var(--gold);
+        color: #fff;
         font-family: var(--font-display);
         font-size: calc(56 * var(--hu));
         font-weight: 400;
@@ -3028,6 +3049,17 @@
           0 calc(6 * var(--hu)) 0 var(--outline),
           0 calc(10 * var(--hu)) calc(18 * var(--hu)) rgba(0, 0, 0, 0.35);
         white-space: nowrap;
+      }
+
+      /* 倒计时数字比阶段文案更大、描边更粗，最后 10 秒才有紧迫感 */
+      #battle-announce.is-countdown #battle-announce-text {
+        font-size: calc(64 * var(--hu));
+        -webkit-text-stroke-width: calc(4 * var(--hu));
+      }
+
+      /* 最后 3 秒改红，和顶部计时器的红字呼应 */
+      #battle-announce.is-urgent #battle-announce-text {
+        color: var(--red);
       }
 
       @keyframes battle-announce-pop {
@@ -3053,12 +3085,17 @@
         }
       }
 
+      /* 倒计时从略大的位置砸落到定格尺寸，读起来像拍在屏幕上 */
       @keyframes battle-announce-countdown-pop {
         0% {
           opacity: 0;
-          transform: translate(-50%, -50%) scale(1);
+          transform: translate(-50%, -50%) scale(2.4);
         }
-        10% {
+        14% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1.95);
+        }
+        22% {
           opacity: 1;
           transform: translate(-50%, -50%) scale(2);
         }
@@ -3068,7 +3105,7 @@
         }
         100% {
           opacity: 0;
-          transform: translate(-50%, -50%) scale(2);
+          transform: translate(-50%, -50%) scale(2.1);
         }
       }
 
@@ -3618,8 +3655,9 @@
         transition: color 0.18s;
       }
 
+      /* 白字压在米黄场地上才看得清；金黄会和底板糊在一起 */
       #hand-status.is-visible {
-        color: var(--gold);
+        color: #fff;
         font-family: var(--font-display);
         text-shadow: var(--text-outline);
       }
@@ -3695,8 +3733,11 @@
         pointer-events: none;
       }
 
+      /* 满手提示同样改白字，靠文案「手牌已满」和加粗描边表示，不再依赖黄色 */
       #hand-count.is-full {
-        color: var(--gold);
+        color: #fff;
+        -webkit-text-stroke: calc(1 * var(--hu)) var(--outline);
+        paint-order: stroke fill;
       }
 
       .hand-draw-pile-card {

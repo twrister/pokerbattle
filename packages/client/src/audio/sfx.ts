@@ -17,6 +17,19 @@ export interface SfxPlayOptions {
   rate?: number;
 }
 
+/**
+ * 合成提示音的播放参数。
+ * 只支持正弦波短音，够覆盖倒计时这类「不需要素材」的提示。
+ */
+export interface SfxToneOptions {
+  /** 频率 Hz；越高越尖锐。 */
+  frequency: number;
+  /** 持续时长 ms；实际取音头 + 衰减，过短会听不见，过长会拖尾。 */
+  durationMs: number;
+  /** 基础音量 0~1，仍受总静音与主音量控制。 */
+  volume?: number;
+}
+
 /** 便于单测替换的注入点；生产环境全部走默认实现。 */
 export interface SfxEngineOptions {
   /** 创建 AudioContext；返回 null 表示环境不支持（如 jsdom、Safari 隐私模式）。 */
@@ -195,6 +208,50 @@ export class SfxEngine {
     const jitter = def.pitchJitter ?? 0;
     const rate = options.rate ?? (jitter > 0 ? 1 + (Math.random() * 2 - 1) * jitter : 1);
     this.playBuffer(id, buffer, def.volume * (options.volumeScale ?? 1), rate);
+  }
+
+  /**
+   * 播放一个代码合成的正弦短音，用于倒计时这类没有素材文件的提示音。
+   *
+   * 走主增益，所以总静音立刻生效；不占 SFX_DEFS 的并发名额，
+   * 也不进试听页——它不是可替换的资源，而是一段固定听感。
+   * 返回是否真的发声（环境不支持 Web Audio 时为 false）。
+   */
+  playTone(options: SfxToneOptions): boolean {
+    if (this.muted) return false;
+    const context = this.ensureContext();
+    if (!context || !this.master) return false;
+    if (context.state === 'suspended') void context.resume().catch(() => {});
+
+    const durationSec = Math.max(0.02, options.durationMs / 1000);
+    const volume = clampVolume(options.volume ?? 0.25);
+    const now = context.currentTime;
+    const attackSec = Math.min(0.01, durationSec / 4);
+
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = Math.max(20, options.frequency);
+    const gain = context.createGain();
+    // 音头极短淡入避免爆音，随后指数衰减到接近 0，听起来干净利落
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(volume, now + attackSec);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+    osc.connect(gain).connect(this.master);
+
+    /** 收尾：断开节点，防止短音在混音图上越积越多。 */
+    const release = (): void => {
+      gain.disconnect();
+      osc.disconnect();
+    };
+    osc.onended = release;
+    try {
+      osc.start(now);
+      osc.stop(now + durationSec);
+      return true;
+    } catch {
+      release();
+      return false;
+    }
   }
 
   /**

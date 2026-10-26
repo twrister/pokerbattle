@@ -10,6 +10,8 @@ interface Harness {
   played: { count: number };
   /** 被 stop 掐断的实例数，用于验证关掉开关能立刻停声。 */
   stopped: { count: number };
+  /** 每次 playTone 实际起振的振荡器参数，用于验证合成音。 */
+  tones: { frequency: number; startedAt: number; stoppedAt: number }[];
 }
 
 /** 构造一个够用的 AudioContext 替身，只实现引擎实际调用的方法。 */
@@ -17,17 +19,42 @@ function createFakeContext(
   played: { count: number },
   stopped: { count: number },
   decode: () => Promise<AudioBuffer>,
+  tones: Harness['tones'],
 ): AudioContext {
   /** 所有节点共用的空壳；connect 返回对端，够走通链路。 */
   const node = {
     connect: (target: unknown) => target,
     disconnect: () => {},
   };
+  /** 音量自动化只需接收调用，不需要真的算包络。 */
+  const gainParam = {
+    value: 1,
+    setValueAtTime: () => {},
+    linearRampToValueAtTime: () => {},
+    exponentialRampToValueAtTime: () => {},
+  };
   return {
     state: 'running',
+    currentTime: 0,
     destination: node,
     resume: async () => {},
-    createGain: () => ({ ...node, gain: { value: 1 } }),
+    createGain: () => ({ ...node, gain: gainParam }),
+    createOscillator: () => {
+      const record = { frequency: 0, startedAt: 0, stoppedAt: 0 };
+      return {
+        ...node,
+        type: 'sine',
+        frequency: { get value() { return record.frequency; }, set value(v: number) { record.frequency = v; } },
+        onended: null,
+        start: (at: number) => {
+          record.startedAt = at;
+          tones.push(record);
+        },
+        stop: (at: number) => {
+          record.stoppedAt = at;
+        },
+      };
+    },
     createBufferSource: () => ({
       ...node,
       buffer: null,
@@ -53,9 +80,15 @@ function createHarness(
   const urls: string[] = [];
   const played = { count: 0 };
   const stopped = { count: 0 };
+  const tones: Harness['tones'] = [];
   const engine = new SfxEngine({
     createContext: () =>
-      createFakeContext(played, stopped, decode ?? (async () => ({ duration: 1 }) as AudioBuffer)),
+      createFakeContext(
+        played,
+        stopped,
+        decode ?? (async () => ({ duration: 1 }) as AudioBuffer),
+        tones,
+      ),
     loadBytes: async (url) => {
       urls.push(url);
       return new ArrayBuffer(8);
@@ -63,7 +96,7 @@ function createHarness(
     storage,
     now,
   });
-  return { engine, urls, played, stopped };
+  return { engine, urls, played, stopped, tones };
 }
 
 describe('音效引擎的试听与重载', () => {
@@ -210,5 +243,35 @@ describe('单个音效开关', () => {
 
     expect(engine.isEnabled('ui_click')).toBe(false);
     expect(engine.isEnabled('explode')).toBe(true);
+  });
+});
+
+describe('合成提示音', () => {
+  it('按给定频率起振并按音量包络收尾', () => {
+    const { engine, tones } = createHarness();
+
+    expect(engine.playTone({ frequency: 880, durationMs: 120, volume: 0.2 })).toBe(true);
+    expect(tones.length).toBe(1);
+    expect(tones[0]!.frequency).toBe(880);
+    // stop 时间应落在音头后的 120ms，过长会拖尾盖住下一声
+    expect(tones[0]!.stoppedAt - tones[0]!.startedAt).toBeCloseTo(0.12, 5);
+  });
+
+  it('总静音时不出声，也不占音频上下文', () => {
+    const { engine, tones } = createHarness();
+    engine.setMuted(true);
+
+    expect(engine.playTone({ frequency: 1320, durationMs: 160 })).toBe(false);
+    expect(tones.length).toBe(0);
+  });
+
+  it('不受单个音效开关影响，因为它不是资源音效', async () => {
+    const { engine, tones } = createHarness();
+    engine.setEnabled('ui_click', false);
+
+    expect(engine.playTone({ frequency: 880, durationMs: 110 })).toBe(true);
+    expect(tones.length).toBe(1);
+    // 合成音不该触发任何素材下载
+    expect(engine.hasBuffer('ui_click')).toBe(false);
   });
 });
