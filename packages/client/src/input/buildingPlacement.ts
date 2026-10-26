@@ -43,17 +43,20 @@ export interface BuildingPlacementOptions {
 
 const VALID_COLOR = 0x3dd68c;
 const INVALID_COLOR = 0xf05353;
-/** 建筑可放置区域与兵种部署区统一使用白色。 */
-const SLOT_COLOR = 0xffffff;
-/** 全场可放置目标格：降低透明度以免盖住战场和光标预览。 */
-const SLOT_OPACITY = 0.1;
+/**
+ * 建筑可放置区域与兵种部署区统一使用亮蓝。
+ * 场地底板是米黄色，白色低透明度叠上去几乎看不出，蓝色才能拉开对比。
+ */
+const SLOT_COLOR = 0x3ad2ff;
+/** 全场可放置目标格：亮蓝保持中等透明度，既不盖住战场又能一眼看到边界。 */
+const SLOT_OPACITY = 0.32;
 /** 格子完整贴合，形成连续部署区而不留间距。 */
 const SLOT_SCALE = 1;
 const SLOT_FADE_DURATION_MS = 160;
 const PREVIEW_FILL_OPACITY = 0.38;
 
 export interface BuildingPlacementHandle {
-  /** 世界占格变化后刷新白色目标格 */
+  /** 世界占格变化后刷新蓝色目标格 */
   refreshSlots: () => void;
   /** 用屏幕坐标同步光标吸附预览（拖拽悬停时用） */
   syncPointer: (clientX: number, clientY: number) => void;
@@ -129,7 +132,7 @@ export function collectPlaceableBuildingCells(
 }
 
 /**
- * 建筑放置模式：场景铺满可放置白色目标格，指针吸附预览（合法绿 / 非法红），
+ * 建筑放置模式：场景铺满可放置蓝色目标格，指针吸附预览（合法绿 / 非法红），
  * 箭塔等远程建筑再叠白色攻击范围圈。点击合法格下发 PlaceBuilding。
  * 与放兵点击监听互斥，由调用方切换。
  */

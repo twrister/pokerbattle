@@ -87,12 +87,12 @@ export function isFormationInsideFactionHalf(
   return isFormationInsideHalfCourt(points, faction);
 }
 
-/** 出兵锚点是否落在蓝方白色部署区内。 */
+/** 出兵锚点是否落在蓝方可放置区域内。 */
 export function isDeployAnchorInsideBlueHalf(x: number, y: number): boolean {
   return isDeployAnchorInsideHalfCourt(x, y, Faction.Blue);
 }
 
-/** 出兵锚点是否落在指定阵营白色部署区内。 */
+/** 出兵锚点是否落在指定阵营可放置区域内。 */
 export function isDeployAnchorInsideFactionHalf(
   x: number,
   y: number,

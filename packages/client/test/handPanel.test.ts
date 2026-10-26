@@ -744,7 +744,7 @@ describe('单机手牌交互', () => {
 
     vi.advanceTimersByTime(360);
     expect(panel.deck.hand).toHaveLength(3);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
     // 非法落点不消耗选牌，阵型按钮应全部保留
     expect(document.querySelectorAll('.formation-option')).toHaveLength(formationCount);
 
@@ -796,11 +796,11 @@ describe('单机手牌交互', () => {
     const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
     option.getBoundingClientRect = () => buttonRect();
     dropOn(document.querySelector('#battle-canvas')!, option, 52, 200, 300);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
 
     panel.update(250);
     expect(panel.deck.hand).toHaveLength(4);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在白色高亮区域内放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
 
     panel.dispose();
   });
@@ -829,7 +829,7 @@ describe('单机手牌交互', () => {
     // 纯点击只提示拖拽，不落成
     option.click();
     expect(onRequestSpawn).not.toHaveBeenCalled();
-    expect(document.querySelector('#hand-status')?.textContent).toBe('拖到白色格子上松手放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('拖到蓝色格子上松手放置');
 
     // 未拖出按钮：不画指引线、不开预览，松开也不自动放置
     option.dispatchEvent(pointerEvent('pointerdown', 50, 120, 500));

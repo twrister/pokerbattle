@@ -2,8 +2,16 @@ import * as THREE from 'three';
 import { Faction, halfCourtYRange } from '@pb/sim';
 import { ARENA_W, toSceneX, toSceneZ } from '../view/coords.js';
 
-const HIGHLIGHT_COLOR = 0xffffff;
-const HIGHLIGHT_OPACITY = 0.1;
+/**
+ * 高亮用饱和亮蓝而不是白色：场地底板是米黄、河道是青绿，
+ * 纯白叠上去只剩一点点提亮，很难看出哪片区域能放。
+ */
+const HIGHLIGHT_COLOR = 0x3ad2ff;
+/** 呼吸动画的透明度上下限；下限保证静止时也足够显眼。 */
+const HIGHLIGHT_OPACITY_MIN = 0.28;
+const HIGHLIGHT_OPACITY_MAX = 0.46;
+/** 一次呼吸（亮 → 暗 → 亮）的时长，慢一点避免闪烁干扰瞄准。 */
+const HIGHLIGHT_PULSE_PERIOD_MS = 1400;
 const HIGHLIGHT_SCALE = 1;
 const HIGHLIGHT_FADE_DURATION_MS = 160;
 
@@ -18,7 +26,7 @@ export interface PlaceableHighlightHandle {
 
 /**
  * 枚举指定阵营部署半场内的 1×1 格心。
- * 与 isDeployAnchorInsideHalfCourt 对齐：白色高亮区域内锚点均可放置。
+ * 与 isDeployAnchorInsideHalfCourt 对齐：高亮区域内锚点均可放置。
  */
 export function collectHalfCourtPlaceableCells(faction: Faction): PlaceableCell[] {
   const { minY, maxY } = halfCourtYRange(faction);
@@ -33,7 +41,8 @@ export function collectHalfCourtPlaceableCells(faction: Faction): PlaceableCell[
 }
 
 /**
- * 在场地上显示白色半透明部署区格，并返回释放场景资源的句柄。
+ * 在场地上显示蓝色半透明部署区格，并返回释放场景资源的句柄。
+ * 淡入后转入持续呼吸，让可放置区域在混战画面里也能一眼看到。
  */
 export function showPlaceableHighlight(
   scene: THREE.Scene,
@@ -67,9 +76,33 @@ export function showPlaceableHighlight(
   let disposed = false;
   let animationFrameId: number | null = null;
 
-  /** 在淡入或淡出时平滑更新材质透明度，避免部署区突兀跳变。 */
+  /** 停掉在跑的 rAF；呼吸与淡入淡出共用同一个句柄，避免两条动画抢 opacity。 */
+  const stopAnimation = (): void => {
+    if (animationFrameId === null) return;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  };
+
+  /** 正弦呼吸：相位从波峰开始，接住淡入结束时的最大透明度，避免接手瞬间跳变。 */
+  const pulseOpacity = (now: number): number => {
+    const phase = (now % HIGHLIGHT_PULSE_PERIOD_MS) / HIGHLIGHT_PULSE_PERIOD_MS;
+    const wave = (Math.sin(phase * Math.PI * 2 + Math.PI / 2) + 1) / 2;
+    return HIGHLIGHT_OPACITY_MIN + (HIGHLIGHT_OPACITY_MAX - HIGHLIGHT_OPACITY_MIN) * wave;
+  };
+
+  /** 常驻呼吸循环：每次重设不透明度，直到被 stopAnimation 取消。 */
+  const startPulse = (): void => {
+    stopAnimation();
+    const tick = (now: number): void => {
+      material.opacity = pulseOpacity(now);
+      animationFrameId = requestAnimationFrame(tick);
+    };
+    animationFrameId = requestAnimationFrame(tick);
+  };
+
+  /** 在淡入或淡出时平滑更新材质透明度，结束后交给 onComplete。 */
   const fadeTo = (targetOpacity: number, onComplete?: () => void): void => {
-    if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+    stopAnimation();
     const startOpacity = material.opacity;
     const startedAt = performance.now();
     const tick = (now: number): void => {
@@ -92,7 +125,10 @@ export function showPlaceableHighlight(
     material.dispose();
   };
 
-  fadeTo(HIGHLIGHT_OPACITY);
+  // 先淡入到呼吸上限，再接着呼吸，避免第一帧突然出现
+  fadeTo(HIGHLIGHT_OPACITY_MAX, () => {
+    if (!disposed) startPulse();
+  });
   return {
     dispose() {
       if (disposed) return;

@@ -681,7 +681,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     attackRangePreview = null;
   };
 
-  /** 显示蓝方半场白色部署区；含射程预览兵种时再叠白圈。 */
+  /** 显示蓝方半场蓝色部署区；含射程预览兵种时再叠白圈。 */
   const startPlaceableHighlight = (formation?: CardFormation): void => {
     stopPlaceableHighlight();
     stopAttackRangePreview();

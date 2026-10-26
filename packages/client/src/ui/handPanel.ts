@@ -37,10 +37,10 @@ const DRAW_WRAP_NEAR_ZERO_RATIO = 0.2;
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
 /** 选中超过牌型上限（5 张）时的提示。 */
 const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
-/** 拖到战场但落点不在白色部署区时的提示。 */
-const STATUS_INVALID_DROP = '请在白色高亮区域内放置';
+/** 拖到战场但落点不在可放置区域时的提示。 */
+const STATUS_INVALID_DROP = '请在蓝色高亮区域内放置';
 /** 拖拽建筑阵型时的操作提示。 */
-const STATUS_BUILDING_DRAG = '拖到白色格子上松手放置';
+const STATUS_BUILDING_DRAG = '拖到蓝色格子上松手放置';
 /** 选中牌里只有万能牌（没搭配任何真牌）时的提示。 */
 const STATUS_WILD_ALONE = '万能牌需搭配其他牌，不能单独打出';
 /** 万能牌与大小王混选时的提示：规则上万能牌不能替代王牌。 */
@@ -103,11 +103,11 @@ export interface HandPanelOptions {
     point: { clientX: number; clientY: number } | null,
     formation: CardFormation,
   ) => boolean;
-  /** 开始拖拽单建筑阵型：进入放置预览（白色格）。 */
+  /** 开始拖拽单建筑阵型：进入放置预览（蓝色格）。 */
   onBuildingDragStart?: (formation: CardFormation) => void;
   /** 拖拽建筑时同步吸附预览位置。 */
   onBuildingDragMove?: (clientX: number, clientY: number) => void;
-  /** 结束建筑拖拽（松手或取消）：卸下白色格预览。 */
+  /** 结束建筑拖拽（松手或取消）：卸下蓝色格预览。 */
   onBuildingDragEnd?: () => void;
   /** 开始拖拽巨型炸弹：显示全图范围落点预览。 */
   onAoeDragStart?: (formation: CardFormation) => void;
