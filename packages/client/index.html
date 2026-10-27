@@ -2738,6 +2738,15 @@
         gap: calc(8 * var(--hu));
       }
 
+      /*
+       * 三块各自钉死列位。无基地关卡把两侧血条 display:none 后，
+       * 被隐藏的元素不再参与自动排布，中栏会被顺移到第 1 列并撑宽；
+       * 显式写列号后中间阶段块的位置与正常对局完全一致。
+       */
+      .battle-hud-main > .battle-team-self { grid-column: 1; }
+      .battle-hud-main > .battle-center { grid-column: 2; }
+      .battle-hud-main > .battle-opp-side { grid-column: 3; }
+
       /* 敌方血条信息 + 右侧手牌张数；手牌数脱离文档流，避免挤压血条宽度 */
       .battle-opp-side {
         position: relative;

@@ -94,9 +94,10 @@ export class StageRunner {
  * 按关卡固定手牌点数挑出具体牌。
  * 同点数按黑桃、红桃、梅花、方片的固定顺序取不同花色，保证每次开局完全一致；
  * 点数写错或超过四种花色时直接跳过，避免关卡数据笔误把整局卡死。
+ * 点数写 "WILD" 表示要一张万能牌：牌面始终按含万能牌构建，因此会按顺序取到 wild-1、wild-2。
  */
 function cardsForFixedHand(ranks: readonly string[]): PlayingCard[] {
-  const cards = createPokerCards({ wildCards: false });
+  const cards = createPokerCards({ wildCards: true });
   const used = new Set<string>();
   const picked: PlayingCard[] = [];
   for (const rank of ranks) {

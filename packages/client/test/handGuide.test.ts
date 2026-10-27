@@ -211,10 +211,11 @@ describe('手牌弱引导', () => {
 });
 
 describe('弱引导启用范围', () => {
-  it('战役前两关提示，第三关起不提示', () => {
+  it('战役第 1 章只在教学关提示（1-1、1-2、1-3），后续章节不提示', () => {
     expect(shouldShowHandGuide({ chapter: 1, index: 1 }, stats())).toBe(true);
     expect(shouldShowHandGuide({ chapter: 1, index: 2 }, stats())).toBe(true);
-    expect(shouldShowHandGuide({ chapter: 1, index: 3 }, stats())).toBe(false);
+    expect(shouldShowHandGuide({ chapter: 1, index: 3 }, stats())).toBe(true);
+    expect(shouldShowHandGuide({ chapter: 1, index: 4 }, stats())).toBe(false);
     expect(shouldShowHandGuide({ chapter: 2, index: 1 }, stats())).toBe(false);
   });
 

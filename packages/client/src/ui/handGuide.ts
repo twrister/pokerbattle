@@ -271,16 +271,22 @@ export function createHandGuide(options: HandGuideOptions = {}): HandGuideHandle
 }
 
 /**
+ * 第 1 章里需要手牌弱引导的教学关：1-1 首次出兵、1-2 凑炸弹、1-3 万能牌。
+ * 删掉原 1-3「手牌有上限」后，万能牌关前移为 1-3，仍属于需要演示的教学关。
+ */
+const CHAPTER1_GUIDE_STAGES: readonly number[] = [1, 2, 3];
+
+/**
  * 该局是否需要手牌弱引导。
  *
- * - 战役局只在前两关（第 1 章 index 1/2）教学段提示，后续关卡玩家已熟悉操作；
+ * - 战役局只在第 1 章的教学关提示，其余关卡玩家已熟悉操作；
  * - 普通人机则看档案：还没有任何对战与关卡记录时视为首次上手，整个账号只在这一局提示。
  */
 export function shouldShowHandGuide(
   stage: Pick<StageDef, 'chapter' | 'index'> | null,
   stats: PlayerProfileStats,
 ): boolean {
-  if (stage) return stage.chapter === 1 && stage.index <= 2;
+  if (stage) return stage.chapter === 1 && CHAPTER1_GUIDE_STAGES.includes(stage.index);
   const battles = stats.wins + stats.losses + stats.draws;
   return battles === 0 && stats.stageAttempts === 0;
 }

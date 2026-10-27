@@ -54,17 +54,31 @@
     "id": "c1_3",
     "chapter": 1,
     "index": 3,
-    "title": "手牌有上限",
-    "seed": 1103,
+    "title": "万能牌",
+    "seed": 1104,
     "rules": {
-      "wildCardsEnabled": false,
-      "initialHandSize": 5,
-      "normalHandLimit": 5,
-      "doubleSpeedHandLimit": 5,
-      "finalHandLimit": 5,
-      "normalDrawIntervalSeconds": 2
+      "wildCardsEnabled": true,
+      "initialHandSize": 7,
+      "normalHandLimit": 7
     },
-    "enemy": { "kind": "bot", "difficulty": "easy" },
-    "objectives": [{ "kind": "destroy_base" }]
+    "fixedHand": ["WILD", "8", "8", "8", "7", "6", "5"],
+    "periodicDraw": false,
+    "castles": false,
+    "enemy": { "kind": "none" },
+    "preset": [
+      { "faction": 1, "typeId": "melee_grunt", "x": 7.5, "y": 21.4 },
+      { "faction": 1, "typeId": "melee_guard", "x": 9.5, "y": 21.4 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 11.5, "y": 21.4 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 8.5, "y": 22.8 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 10.5, "y": 22.8 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 7.5, "y": 22.8 },
+      { "faction": 1, "typeId": "melee_guard", "x": 11.5, "y": 22.8 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 9.5, "y": 22.8 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 8.5, "y": 24.2 },
+      { "faction": 1, "typeId": "melee_guard", "x": 10.5, "y": 24.2 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 7.5, "y": 24.2 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 11.5, "y": 24.2 }
+    ],
+    "objectives": [{ "kind": "clear_enemy_units" }]
   }
 ]

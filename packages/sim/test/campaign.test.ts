@@ -14,6 +14,7 @@ import {
   getFormationsFor,
   getStageById,
   detectHandCategories,
+  isWildCard,
   playFormationCommand,
   toFloat,
   type PlayingCard,
@@ -53,7 +54,9 @@ describe('战役关卡数据', () => {
     expect(ids).toEqual(['c1_1', 'c1_2', 'c1_3']);
     expect(new Set(ids).size).toBe(ids.length);
     expect(getStageById('c1_2')?.title).toBe('凑出炸弹');
+    expect(getStageById('c1_3')?.title).toBe('万能牌');
     expect(getNextStage('c1_1')?.id).toBe('c1_2');
+    expect(getNextStage('c1_2')?.id).toBe('c1_3');
     expect(getNextStage('c1_3')).toBeUndefined();
   });
 
@@ -149,7 +152,7 @@ describe('ObjectiveTracker', () => {
     expect(runner.tracker.getStatus()).toBe('fail');
   });
 
-  it('结果落定后不再改变', () => {
+  it('结果落定后不再改动', () => {
     const { match, runner } = createStageMatch(baseDef);
     run(match, runner, TICK_RATE * 6);
     const first = runner.tracker.getOutcome();
@@ -248,6 +251,73 @@ describe('第 1 章试玩（无头仿真）', () => {
 
   it('1-2：全程不出牌，时间耗尽判定失败', () => {
     const { match, runner } = createStageMatch(getStageById('c1_2')!);
+    run(match, runner, TICK_RATE * (CAMPAIGN_STAGE_SECONDS + 1));
+    expect(runner.tracker.getStatus()).toBe('fail');
+  });
+
+  it('1-3：固定手牌含一张万能牌与三张 8，无基地且不补牌', () => {
+    const { match, runner } = createStageMatch(getStageById('c1_3')!);
+    const hand = match.decks[Faction.Blue].hand;
+    // 手牌按牌力降序：万能牌最强排最前，其后三个 8、7、6、5
+    expect(hand).toHaveLength(7);
+    expect(hand.map((card) => card.rank)).toEqual(['WILD', '8', '8', '8', '7', '6', '5']);
+    expect(hand.filter(isWildCard)).toHaveLength(1);
+    run(match, runner, TICK_RATE * 30);
+    expect(match.decks[Faction.Blue].hand).toHaveLength(7);
+    expect(match.decks[Faction.Blue].availableCount).toBe(0);
+    expect(match.world.units.some((unit) => unit.typeId === 'building_base')).toBe(false);
+    expect(match.result).toBeNull();
+    expect(runner.tracker.getStatus()).toBe('pending');
+  });
+
+  it('1-3：三张 8 单独不成炸弹，配万能牌才凑成炸弹', () => {
+    const { match } = createStageMatch(getStageById('c1_3')!);
+    const hand = match.decks[Faction.Blue].hand;
+    const wild = hand.find(isWildCard)!;
+    const eights = hand.filter((card) => card.rank === '8');
+    expect(eights).toHaveLength(3);
+
+    // 少了那张 8：三条不构成炸弹，阵型列表里也就没有炸弹方案
+    expect(detectHandCategories(eights)).not.toContain('bomb');
+    expect(getFormationsFor(detectHandCategories(eights), eights).some((item) => item.category === 'bomb')).toBe(false);
+    // 万能牌补第四张 8：牌型与阵型都变成炸弹
+    const withWild = [...eights, wild];
+    expect(detectHandCategories(withWild)).toContain('bomb');
+    expect(getFormationsFor(detectHandCategories(withWild), withWild).map((item) => item.id)).toContain(
+      'bomb_giant_bomb',
+    );
+  });
+
+  it('1-3：万能牌当第四张 8 凑成炸弹，一次炸光敌方全部部队后通关', () => {
+    const { match, runner } = createStageMatch(getStageById('c1_3')!);
+    const hand = match.decks[Faction.Blue].hand;
+    const wild = hand.find(isWildCard)!;
+    const eights = hand.filter((card) => card.rank === '8');
+    const bomb = [...eights, wild];
+    // 落点取敌阵中心：炸弹半径 4.5 格，敌阵 4×3 铺在 7.5～11.5，正对中心可全清
+    match.step([
+      playFormationCommand(Faction.Blue, 'bomb_giant_bomb', bomb.map((card) => card.id), fromFloat(9.5), fromFloat(22.8)),
+    ]);
+    run(match, runner, TICK_RATE * 4);
+    expect(match.world.units.filter((unit) => unit.faction === Faction.Red && !unit.dead)).toHaveLength(0);
+    expect(runner.tracker.getStatus()).toBe('success');
+  });
+
+  it('1-3：只出三条 8 兵力不足，清场目标仍未达成', () => {
+    const { match, runner } = createStageMatch(getStageById('c1_3')!);
+    const eights = match.decks[Faction.Blue].hand.filter((card) => card.rank === '8');
+    const triple = getFormationsFor(detectHandCategories(eights), eights)[0]!;
+    match.step([
+      playFormationCommand(Faction.Blue, triple.id, eights.map((card) => card.id), fromFloat(9), fromFloat(12)),
+    ]);
+    run(match, runner, TICK_RATE * 60);
+    // 六只民兵打不完十二个敌人：清场目标仍未达成
+    expect(match.world.units.some((unit) => unit.faction === Faction.Red && !unit.dead)).toBe(true);
+    expect(runner.tracker.getStatus()).toBe('pending');
+  });
+
+  it('1-3：全程不出牌，时间耗尽判定失败', () => {
+    const { match, runner } = createStageMatch(getStageById('c1_3')!);
     run(match, runner, TICK_RATE * (CAMPAIGN_STAGE_SECONDS + 1));
     expect(runner.tracker.getStatus()).toBe('fail');
   });
