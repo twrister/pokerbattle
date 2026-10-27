@@ -2,6 +2,8 @@ import {
   encodeMessage,
   normalizeRoomId,
   normalizeRoomName,
+  type CheckRejoinMessage,
+  type DeclineRejoinMessage,
   type ErrorMessage,
   type JoinMessage,
   type RejoinMessage,
@@ -13,7 +15,7 @@ import { randomInt } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { OpsRoomSnapshot, OpsRoomSummary } from './opsTypes.js';
 import { normalizePlayerId, type OnlinePresence, type PlayerStatsStore } from './playerStatsStore.js';
-import { MatchRoom } from './room.js';
+import { MatchRoom, type RejoinProbe } from './room.js';
 
 export interface RoomManagerOptions {
   playerStats?: PlayerStatsStore;
@@ -79,6 +81,24 @@ export class RoomManager {
       return fail('rejoin_failed', '重连失败，席位已释放或令牌无效');
     }
     return { ok: true, room, playerId: identity?.playerId ?? null, name: identity?.name };
+  }
+
+  /** 局外探测：该令牌对应的对局是否还在重连窗口内；房间已关则视为不存活。 */
+  queryRejoin(message: CheckRejoinMessage): RejoinProbe | null {
+    const roomId = normalizeRoomId(message.roomId ?? '');
+    if (!roomId) return null;
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    return room.queryRejoin(message.token ?? '');
+  }
+
+  /** 局外放弃重连：立即释放席位，让对手收到离开而非干等窗口超时。 */
+  declineRejoin(message: DeclineRejoinMessage): boolean {
+    const roomId = normalizeRoomId(message.roomId ?? '');
+    if (!roomId) return false;
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    return room.forfeitSeat(message.token ?? '');
   }
 
   /** 列出全部存活房间（含对局中），供大厅加入或观战。 */

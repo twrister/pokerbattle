@@ -74,6 +74,20 @@ export interface ListRoomsMessage {
   type: 'listRooms';
 }
 
+/** C→S：探测席位是否还在重连窗口内；只查询，不占席、不改握手状态。 */
+export interface CheckRejoinMessage {
+  type: 'checkRejoin';
+  roomId: string;
+  token: string;
+}
+
+/** C→S：玩家拒绝重连，服务端立即释放该席，不再等窗口超时。 */
+export interface DeclineRejoinMessage {
+  type: 'declineRejoin';
+  roomId: string;
+  token: string;
+}
+
 /** C→S：查询战斗积分排行榜（不占用 join 握手）。 */
 export interface ListLeaderboardMessage {
   type: 'listLeaderboard';
@@ -174,6 +188,8 @@ export interface PickSeatMessage {
 export type ClientMessage =
   | JoinMessage
   | RejoinMessage
+  | CheckRejoinMessage
+  | DeclineRejoinMessage
   | SpectateMessage
   | ListRoomsMessage
   | ListLeaderboardMessage
@@ -270,6 +286,17 @@ export interface RoomStateMessage {
   maxPlayers?: number;
 }
 
+/** S→C：重连探测结果；alive=false 表示房间已关、已结算或席位已释放。 */
+export interface RejoinStatusMessage {
+  type: 'rejoinStatus';
+  alive: boolean;
+  roomId?: string;
+  roomName?: string;
+  /** 距窗口关闭的剩余毫秒，供弹窗倒计时。 */
+  remainingMs?: number;
+  opponentName?: string;
+}
+
 /** S→C：对局开始，告知首个逻辑 tick。 */
 export interface StartMessage {
   type: 'start';
@@ -331,6 +358,7 @@ export type ServerMessage =
   | RoomListMessage
   | LeaderboardMessage
   | RoomStateMessage
+  | RejoinStatusMessage
   | SpectateWelcomeMessage
   | FrameBatchMessage
   | SpectatorCountMessage

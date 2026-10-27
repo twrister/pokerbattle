@@ -6,13 +6,17 @@ import {
   type LeaderboardMessage,
   type LobbyActivity,
   type RoomListEntry,
+  type RejoinStatusMessage,
   type RoomStateMessage,
   type ServerMessage,
 } from '@pb/net';
 import type { Faction, MatchMode, MatchResult } from '@pb/sim';
 import { NetSimLoop } from './netLoop.js';
 
-/** 创建或加入已有房间；不再提供快速匹配。 */
+/** 服务端因同席位被新连接接管而关闭旧连接时使用的关闭码。 */
+const RECONNECT_TAKEOVER_CODE = 4003;
+
+/** 创建、加入或接回已有房间；rejoin 用于局外冷启动接回原席位。 */
 export interface RoomJoinRequest {
   mode: 'create' | 'room';
   roomId?: string;
@@ -41,6 +45,10 @@ export interface RoomSession {
 }
 
 export interface ConnectRoomOptions {
+  /** 连接意图；rejoin 时凭 roomId + token 直接接回原席位。 */
+  intent?: 'join' | 'rejoin';
+  /** intent=rejoin 时必须提供：上次 welcome 下发的重连令牌。 */
+  rejoinToken?: string;
   name?: string;
   /** 设备档案 ID，供服务端按设备记账；缺省则服务端跳过该席。 */
   playerId?: string;
@@ -66,6 +74,8 @@ export interface ConnectRoomOptions {
   onReconnected?: () => void;
   /** 重连窗口耗尽或服务端拒绝恢复。 */
   onReconnectFailed?: (reason: string) => void;
+  /** 进入对局后拿到令牌即回调，供应用落局外重连凭据。 */
+  onRejoinTicket?: (roomId: string, token: string) => void;
 }
 
 /** 入房连接句柄：done 等 welcome，close 可在入房前立刻断连。 */
@@ -81,6 +91,8 @@ export interface RoomConnecting {
 export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnecting {
   const status = options.onStatus ?? (() => {});
   const mode = options.mode === 'room' ? 'room' : 'create';
+  /** 首次连接就用 rejoin：局外冷启动接回原席位。 */
+  const intent: 'join' | 'rejoin' = options.intent === 'rejoin' ? 'rejoin' : 'join';
   const joinRoomId = options.roomId ?? '';
   const joinRoomName = options.roomName ?? '';
   const playerName = options.name ?? `player-${Math.floor(Math.random() * 1000)}`;
@@ -124,11 +136,12 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
     let faction: Faction | null = null;
     let seat = 0;
     let hostSeat = 0;
-    let roomId = '';
+    let roomId = intent === 'rejoin' ? joinRoomId : '';
     let roomName = '';
     let opponentName = '';
     let matchMode: MatchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
-    let reconnectToken = '';
+    /** 冷启动接回时令牌来自局外存档，先用它占位，等 welcome 带回新值再覆盖。 */
+    let reconnectToken = options.rejoinToken?.trim() ?? '';
     let reconnectDeadline = 0;
     let reconnectAttempt = 0;
     /** 最近一次房间快照；换座 welcome 更新本机席位后再重放，避免开始按钮按旧席隐藏。 */
@@ -221,7 +234,13 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
     };
 
     /** 收到带种子的 welcome 后建 loop；start 再通知外层切到对局。 */
-    const ensureMatchLoop = (seed: number, side: Faction, delay: number): NetSimLoop => {
+    const ensureMatchLoop = (
+      seed: number,
+      side: Faction,
+      delay: number,
+      /** 冷启动接回时要本地补一条 start；正常 join 由服务端下发。 */
+      startTick = 0,
+    ): NetSimLoop => {
       loop = new NetSimLoop({
         seed,
         faction: side,
@@ -240,6 +259,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
           options.onMatchEnd?.(result);
         },
       });
+      // 冷启动接回：服务端只补发 lastTick 之后的帧，不会再发 start，本地补一条起点
+      if (startTick > 0) applyServerMessage({ type: 'start', startTick });
       for (const queued of pending.splice(0)) {
         applyServerMessage(queued);
       }
@@ -270,6 +291,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         inMatch = true;
         reconnectDeadline = 0;
         reconnectAttempt = 0;
+        // 只有真正开局才落凭据；等待期的令牌留着无用，还会让局外误弹窗
+        if (reconnectToken) options.onRejoinTicket?.(roomId, reconnectToken);
         status(`对局开始（房间 ${roomId}${roomName ? ` · ${roomName}` : ''}）`);
         options.onMatchStart?.(loop, faction, opponentName);
       }
@@ -281,7 +304,7 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
       activeWs = ws;
 
       ws.addEventListener('open', () => {
-        if (kind === 'join') {
+        if (kind === 'join' && intent === 'join') {
           if (mode === 'create') {
             status('已连接，正在创建房间…');
           } else {
@@ -321,9 +344,20 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         // 重连阶段的 error 会伴随 close，统一在 close 里重试
       });
 
-      ws.addEventListener('close', () => {
+      ws.addEventListener('close', (event) => {
         if (activeWs === ws) activeWs = null;
         if (intentionalClose) return;
+        /**
+         * 被同一席位的新连接顶替（服务端 takeover 或对局被关）：
+         * 说明这局已经不由本页掌控，继续自动重连会和新连接来回抢席位。
+         */
+        if ((event as CloseEvent | undefined)?.code === RECONNECT_TAKEOVER_CODE) {
+          intentionalClose = true;
+          clearReconnectTimer();
+          loop?.setInputPaused(false);
+          options.onReconnectFailed?.('本局已在另一个窗口接续');
+          return;
+        }
 
         // 尚未入座或已不在对局：直接失败 / 通知房间页
         if (!settled) {
@@ -344,15 +378,17 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         if (!message) return;
 
         if (message.type === 'error') {
+          // 尚未入座（含冷启动接回）：统一走 done 的 reject，由调用方收尾
+          if (!settled) {
+            fail(new Error(message.message));
+            return;
+          }
+          // 已在局内重连失败：席位大概率已被释放，交给外层回大厅
           if (kind === 'rejoin') {
             intentionalClose = true;
             clearReconnectTimer();
             loop?.setInputPaused(false);
             options.onReconnectFailed?.(message.message);
-            return;
-          }
-          if (!settled) {
-            fail(new Error(message.message));
             return;
           }
           status(message.message);
@@ -395,7 +431,13 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
           }
 
           status('正在开局…');
-          ensureMatchLoop(message.seed, message.faction, message.inputDelay);
+          // 局外冷启动接回：本地从第 1 tick 起转，靠服务端补帧追平状态
+          ensureMatchLoop(
+            message.seed,
+            message.faction,
+            message.inputDelay,
+            intent === 'rejoin' ? 1 : 0,
+          );
           return;
         }
 
@@ -660,6 +702,10 @@ export interface LobbyPresenceHandle {
   listRooms(): Promise<RoomListEntry[]>;
   /** 复用大厅连接查询积分排行榜。 */
   listLeaderboard(): Promise<LeaderboardMessage>;
+  /** 探测该席位是否仍可重连；连接不可用时 reject，调用方按"不弹窗"处理。 */
+  checkRejoin(roomId: string, token: string): Promise<RejoinStatusMessage>;
+  /** 放弃重连：服务端立刻释放席位；失败无需重试。 */
+  declineRejoin(roomId: string, token: string): void;
   /** 切到单机/回大厅时刷新 activity，不断开连接。 */
   setActivity(activity: LobbyActivity): void;
   /** 离开主菜单时关闭连接，服务端注销大厅计数。 */
@@ -695,6 +741,12 @@ export function createLobbyPresence(
     resolve: (board: LeaderboardMessage) => void;
     reject: (error: Error) => void;
   }> = [];
+  /** 重连探测与放弃共用一个 waiter 队列：同一时刻只会有一个弹窗在等结果。 */
+  let probeInflight: Promise<RejoinStatusMessage> | null = null;
+  let probeWaiters: Array<{
+    resolve: (status: RejoinStatusMessage) => void;
+    reject: (error: Error) => void;
+  }> = [];
 
   const rejectOpenWaiters = (error: Error): void => {
     const waiters = openWaiters;
@@ -713,6 +765,14 @@ export function createLobbyPresence(
     const waiters = boardWaiters;
     boardWaiters = [];
     boardInflight = null;
+    for (const waiter of waiters) waiter.reject(error);
+  };
+
+  /** 探测失败按"不可重连"处理，不让等待方永远挂住。 */
+  const rejectProbeWaiters = (error: Error): void => {
+    const waiters = probeWaiters;
+    probeWaiters = [];
+    probeInflight = null;
     for (const waiter of waiters) waiter.reject(error);
   };
 
@@ -795,6 +855,7 @@ export function createLobbyPresence(
       rejectOpenWaiters(error);
       rejectListWaiters(error);
       rejectBoardWaiters(error);
+      rejectProbeWaiters(error);
     });
     socket.addEventListener('close', () => {
       if (disposed || ws !== socket) return;
@@ -802,6 +863,7 @@ export function createLobbyPresence(
       rejectOpenWaiters(error);
       rejectListWaiters(error);
       rejectBoardWaiters(error);
+      rejectProbeWaiters(error);
       scheduleReconnect();
     });
     socket.addEventListener('message', (event) => {
@@ -820,6 +882,13 @@ export function createLobbyPresence(
         const waiters = boardWaiters;
         boardWaiters = [];
         boardInflight = null;
+        for (const waiter of waiters) waiter.resolve(message);
+        return;
+      }
+      if (message.type === 'rejoinStatus') {
+        const waiters = probeWaiters;
+        probeWaiters = [];
+        probeInflight = null;
         for (const waiter of waiters) waiter.resolve(message);
       }
     });
@@ -864,6 +933,28 @@ export function createLobbyPresence(
       });
       return boardInflight;
     },
+    checkRejoin(roomId, token) {
+      if (probeInflight) return probeInflight;
+      probeInflight = new Promise<RejoinStatusMessage>((resolve, reject) => {
+        probeWaiters.push({ resolve, reject });
+        void ensureOpen()
+          .then((active) => {
+            if (disposed || probeWaiters.length === 0) return;
+            active.send(encodeMessage({ type: 'checkRejoin', roomId, token }));
+          })
+          .catch((error: unknown) => {
+            rejectProbeWaiters(error instanceof Error ? error : new Error(String(error)));
+          });
+      });
+      return probeInflight;
+    },
+    declineRejoin(roomId, token) {
+      // 服务端已回收或不支持该指令时静默忽略，本地凭据照清
+      if (disposed) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(encodeMessage({ type: 'declineRejoin', roomId, token }));
+      }
+    },
     setActivity(next) {
       const normalized: LobbyActivity = next === 'solo' ? 'solo' : 'lobby';
       if (activity === normalized) {
@@ -889,6 +980,7 @@ export function createLobbyPresence(
       rejectOpenWaiters(new Error('大厅连接已关闭'));
       rejectListWaiters(new Error('大厅连接已关闭'));
       rejectBoardWaiters(new Error('大厅连接已关闭'));
+      rejectProbeWaiters(new Error('大厅连接已关闭'));
       const active = ws;
       ws = null;
       try {

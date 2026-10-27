@@ -41,6 +41,8 @@ interface Seat {
   ready: boolean;
   connected: boolean;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
+  /** 断线重连截止时间戳（毫秒）；0 表示未在重连窗口内。 */
+  disconnectDeadline: number;
   /** 避免同一连接 close 被重复处理。 */
   closeHandler: (() => void) | null;
   messageHandler: ((data: RawData) => void) | null;
@@ -53,6 +55,14 @@ interface Spectator {
   playerId: string | null;
   closeHandler: (() => void) | null;
   messageHandler: ((data: RawData) => void) | null;
+}
+
+/** 重连探测结果；供局外界面决定是否弹窗。 */
+export interface RejoinProbe {
+  roomId: string;
+  roomName: string;
+  remainingMs: number;
+  opponentName: string;
 }
 
 export interface MatchRoomOptions {
@@ -218,6 +228,7 @@ export class MatchRoom {
       ready: true,
       connected: true,
       disconnectTimer: null,
+      disconnectDeadline: 0,
       closeHandler: null,
       messageHandler: null,
     };
@@ -241,17 +252,56 @@ export class MatchRoom {
   }
 
   /**
+   * 探测席位可否重连：房间仍在对局中、令牌有效、且还有补帧能力。
+   * 只读，不占席、不改连接，供局外界面决定是否弹重连窗口。
+   */
+  queryRejoin(token: string): RejoinProbe | null {
+    if (this.disposed || !this.started || this.ended || !this.match) return null;
+    const seat = this.seats.find((entry) => entry?.reconnectToken === token) ?? null;
+    if (!seat) return null;
+    // 席位仍标记在线时可能是半开连接，允许顶号，但剩余时间按完整窗口给
+    const remaining = seat.connected
+      ? RECONNECT_TIMEOUT_MS
+      : Math.max(0, seat.disconnectDeadline - Date.now());
+    if (remaining <= 0) return null;
+    // 局外接回要从第 1 tick 重跑；帧历史被裁剪后无法补齐中间状态，宁可判死
+    if (this.serverTick > 0 && !this.frameHistory.has(1)) return null;
+    return {
+      roomId: this.roomId,
+      roomName: this.roomName,
+      remainingMs: remaining,
+      opponentName: this.opponentNameOf(seat),
+    };
+  }
+
+  /**
+   * 玩家在局外主动放弃重连：立即释放席位并结束本局，
+   * 对手收到 peerLeft，不必再等重连窗口自然过期。
+   */
+  forfeitSeat(token: string): boolean {
+    if (this.disposed || !this.started || this.ended) return false;
+    const seat = this.seats.find((entry) => entry?.reconnectToken === token) ?? null;
+    // 已经重连回来的人不该被局外存档误杀
+    if (!seat || seat.connected) return false;
+    this.closeRoomDueToDisconnect();
+    return true;
+  }
+
+  /**
    * 用令牌恢复席位：校验通过后重绑 socket，并补发 lastTick 之后的权威帧。
    * 返回 false 表示令牌无效、窗口已过或房间已清理。
    */
   handleRejoin(ws: WebSocket, token: string, lastTick: number): boolean {
     if (this.disposed || !this.started) return false;
     const seat = this.seats.find((entry) => entry?.reconnectToken === token) ?? null;
-    if (!seat || seat.connected) return false;
+    if (!seat) return false;
+    // 半开连接时旧 socket 可能还没触发 close，先踢掉再绑定，避免两路抢同一席
+    if (seat.connected) this.dropSeatSocket(seat);
 
     this.clearDisconnectTimer(seat);
     seat.ws = ws;
     seat.connected = true;
+    seat.disconnectDeadline = 0;
     this.touchActive();
     this.bindSocket(seat);
     this.syncBothOfflineTimer();
@@ -549,6 +599,7 @@ export class MatchRoom {
     this.unbindSocket(seat);
     seat.ws = null;
     seat.connected = false;
+    seat.disconnectDeadline = 0;
     this.touchActive();
 
     // 未开局或已结算：无需重连，腾出座位并在空房时回收
@@ -566,6 +617,7 @@ export class MatchRoom {
 
     this.broadcastExcept(seatIndex, { type: 'peerDisconnected' });
     this.clearDisconnectTimer(seat);
+    seat.disconnectDeadline = Date.now() + RECONNECT_TIMEOUT_MS;
     seat.disconnectTimer = setTimeout(() => {
       this.finishDisconnectedSeat(seatIndex);
     }, RECONNECT_TIMEOUT_MS);
@@ -671,6 +723,22 @@ export class MatchRoom {
     seat.ws.on('message', messageHandler);
   }
 
+  /**
+   * 踢掉席位上的旧 socket（半开连接顶号用）：
+   * 先解绑避免触发腾座，再关闭旧连接。
+   */
+  private dropSeatSocket(seat: Seat): void {
+    const stale = seat.ws;
+    this.unbindSocket(seat);
+    seat.ws = null;
+    if (!stale) return;
+    try {
+      stale.close(4003, 'rejoin_takeover');
+    } catch {
+      /* ignore */
+    }
+  }
+
   private unbindSocket(seat: Seat): void {
     if (!seat.ws) return;
     if (seat.closeHandler) seat.ws.off('close', seat.closeHandler);
@@ -711,6 +779,14 @@ export class MatchRoom {
         isHost: entry.seat === this.hostSeat,
         faction: entry.faction,
       }));
+  }
+
+  /** 本席视角的对手名：优先取对队第一人，1v1 即另一位玩家。 */
+  private opponentNameOf(seat: Seat): string {
+    const opponent = this.seats.find(
+      (entry) => entry && entry.seat !== seat.seat && entry.faction !== seat.faction,
+    );
+    return opponent?.name ?? '';
   }
 
   /** 指定队伍第一人名字，供观战欢迎包兼容旧字段。 */

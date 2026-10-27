@@ -13,6 +13,8 @@ export function decodeClientMessage(raw: string): ClientMessage | null {
   if (
     type === 'join' ||
     type === 'rejoin' ||
+    type === 'checkRejoin' ||
+    type === 'declineRejoin' ||
     type === 'spectate' ||
     type === 'listRooms' ||
     type === 'listLeaderboard' ||
@@ -40,6 +42,7 @@ export function decodeServerMessage(raw: string): ServerMessage | null {
     type === 'roomList' ||
     type === 'leaderboard' ||
     type === 'roomState' ||
+    type === 'rejoinStatus' ||
     type === 'spectateWelcome' ||
     type === 'frameBatch' ||
     type === 'spectatorCount' ||

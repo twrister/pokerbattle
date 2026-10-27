@@ -92,6 +92,7 @@ import {
 } from './net/session.js';
 import type { RoomStateMessage } from '@pb/net';
 import type { NetSimLoop } from './net/netLoop.js';
+import { createRejoinTicketStore } from './net/rejoinStore.js';
 import { createHandPanel, type FormationSpawnRequest } from './ui/handPanel.js';
 import { enableDebugUnitDrag } from './ui/debugUnitDrag.js';
 import {
@@ -107,6 +108,7 @@ import { createCampaignPage } from './ui/campaignPage.js';
 import { createStageHud } from './ui/stageHud.js';
 import { shouldShowHandGuide } from './ui/handGuide.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
+import { createRejoinDialog } from './ui/rejoinDialog.js';
 import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
 import { createDeckConfigPage } from './ui/deckConfigPage.js';
@@ -197,6 +199,22 @@ let reconnectBanner: ReturnType<typeof createReconnectBanner> | null = null;
  * 单机页会上报 activity=solo，供运维站区分「大厅」与「单机模式」。
  */
 let appLobbyPresence: LobbyPresenceHandle | null = null;
+/** 局外重连凭据：把 roomId + token 落盘，页面刷新或回大厅后仍能自救。 */
+const rejoinTickets = createRejoinTicketStore();
+/** 局外重连窗；同一时刻只允许一个，避免重复探测弹多窗。 */
+let rejoinDialog: ReturnType<typeof createRejoinDialog> | null = null;
+/** 正在进行的重连探测，用于阻止并发重复询问。 */
+let rejoinProbe: Promise<void> | null = null;
+/**
+ * 页面正在卸载（刷新/关标签）。
+ * 卸载不是玩家主动退出：必须保留局外重连凭据，也不能把本局记成 abandoned。
+ */
+let appUnloading = false;
+/**
+ * 已收到开局但会话引用尚未就绪：冷启动接回时 welcome 与补帧可能同批到达，
+ * 先记下意图，等 activeRoomSession 落好再跳对局屏。
+ */
+let versusScreenPending = false;
 
 /** 未入房页面里，只有单机对局单独标成 solo。 */
 function lobbyActivityForScreen(screen: AppScreen | null): 'lobby' | 'solo' {
@@ -385,13 +403,19 @@ function cancelJoiningRoom(): void {
   joiningRoom = null;
 }
 
-/** 主动离房：关会话并清掉房间快照。 */
-function disposeRoomSession(): void {
+/**
+ * 主动离房：关会话并清掉房间快照。
+ * @param clearTicket 是否作废局外重连凭据；页面卸载时传 false，否则刷新页面就再也接不回来
+ */
+function disposeRoomSession(clearTicket = true): void {
   cancelJoiningRoom();
   activeRoomSession?.close();
   activeRoomSession = null;
   latestRoomState = null;
   pendingMatch = null;
+  versusScreenPending = false;
+  // 主动离开会话即不再有可接回的对局，顺手作废凭据；页面卸载时保留
+  if (clearTicket && !appUnloading) rejoinTickets.clear();
 }
 
 /** 关闭观战连接，避免离开后仍占服务端观战席。 */
@@ -404,22 +428,125 @@ function disposeSpectateSession(): void {
   spectateMatchEnded = false;
 }
 
+/** 局外页面：只有这两屏才允许弹重连窗，避免打断单机/回放。 */
+function canOfferRejoin(screen: AppScreen | null): boolean {
+  return screen === 'menu' || screen === 'online';
+}
+
+/** 玩家拒绝重连：通知服务端立刻释放席位并清凭据。 */
+function declineRejoinTicket(
+  roomId: string,
+  token: string,
+  /** 玩家主动关闭才记失败；倒计时归零属自然超时，服务端已判负，不重复记。 */
+  recordAbandon: boolean,
+): void {
+  rejoinTickets.clear();
+  // 大厅连接可能刚被关掉，重新登记后再发，避免放弃指令发不出去
+  ensureAppLobbyPresence('lobby').declineRejoin(roomId, token);
+  if (!recordAbandon) return;
+  // 关闭弹窗即放弃本局，和局内中途退出口径一致
+  try {
+    playerProfile.recordBattle({ mode: 'versus', outcome: 'loss', reason: 'abandoned' });
+    mainMenu.refreshProfile();
+  } catch (error) {
+    console.error('[account] 放弃重连记录失败', error);
+  }
+}
+
+/**
+ * 局外检测：本机是否有仍在重连窗口内的对局。
+ * 只在大厅允许的页面执行；探测期间切屏或已入房则丢弃本次结果。
+ */
+function checkPendingRejoin(): void {
+  if (rejoinProbe || rejoinDialog?.isOpen()) return;
+  const playerId = playerProfile.getProfile().deviceAccountId;
+  if (!playerId) return;
+  const ticket = rejoinTickets.load(playerId);
+  if (!ticket) return;
+  if (!canOfferRejoin(screens.current)) return;
+  rejoinProbe = (async () => {
+    try {
+      const status = await ensureAppLobbyPresence('lobby').checkRejoin(ticket.roomId, ticket.token);
+      // 房间已关/已结算/席位被占：凭据作废，安静清掉
+      if (!status.alive) {
+        rejoinTickets.clear();
+        return;
+      }
+      // 结果回来时页面可能已变，或已自行入房，则不再打扰
+      if (!canOfferRejoin(screens.current) || activeRoomSession || joiningRoom) return;
+      if (rejoinDialog?.isOpen()) return;
+      rejoinDialog = rejoinDialog ?? createRejoinDialog();
+      rejoinDialog.show(
+        {
+          roomId: status.roomId || ticket.roomId,
+          roomName: status.roomName ?? '',
+          opponentName: status.opponentName ?? '',
+          remainingMs: status.remainingMs ?? 0,
+        },
+        {
+          onAccept: () => beginRejoinMatch(status.roomId || ticket.roomId, ticket.token),
+          onDecline: (reason) =>
+            declineRejoinTicket(ticket.roomId, ticket.token, reason === 'user'),
+        },
+      );
+    } catch {
+      // 服务端不可达时不打扰玩家，留到下次进大厅再查
+    } finally {
+      rejoinProbe = null;
+    }
+  })();
+}
+
 /** 创建或加入房间，成功后进入房间页。 */
 function beginJoinRoom(request: RoomJoinRequest): void {
+  startRoomSession(
+    {
+      mode: request.mode,
+      roomId: request.roomId,
+      roomName: request.roomName,
+      matchMode: request.matchMode,
+    },
+    false,
+  );
+}
+
+/**
+ * 接回局外那局：凭本机存档的令牌直接 rejoin，
+ * 成功即进对局屏，失败则清凭据并回大厅提示。
+ */
+function beginRejoinMatch(roomId: string, token: string): void {
+  startRoomSession({ mode: 'room', roomId }, true, token);
+}
+
+/**
+ * 建房间会话的统一入口：join 与 rejoin 共用断线/结算回调，
+ * 差别只在首个包与成功后跳哪一屏。
+ * @param coldRejoin 是否从局外凭令牌接回（成功后直接进对局，不回房间页）
+ */
+function startRoomSession(
+  request: RoomJoinRequest,
+  coldRejoin: boolean,
+  rejoinToken = '',
+): void {
   cancelJoiningRoom();
   stopAppLobbyPresence();
-  onlineLobbyPage.showError(
-    request.mode === 'create' ? '正在创建房间…' : `正在加入房间 ${request.roomId ?? ''}…`,
-  );
+  if (!coldRejoin) {
+    onlineLobbyPage.showError(
+      request.mode === 'create' ? '正在创建房间…' : `正在加入房间 ${request.roomId ?? ''}…`,
+    );
+  }
+  const deviceId = playerProfile.getProfile().deviceAccountId;
   const connecting = connectRoomSession({
     name: playerProfile.getProfile().displayName,
-    playerId: playerProfile.getProfile().deviceAccountId,
+    playerId: deviceId,
     mode: request.mode,
     roomId: request.roomId,
     roomName: request.roomName,
     matchMode: request.matchMode,
+    ...(coldRejoin ? { intent: 'rejoin' as const, rejoinToken } : {}),
     onStatus: (text) => {
-      if (screens.current === 'online') onlineLobbyPage.showError(text);
+      if (coldRejoin) rejoinDialog?.setBusy(text);
+      else if (screens.current === 'online') onlineLobbyPage.showError(text);
       else onlineRoomPage.showStatus(text);
     },
     onRoomState: (state) => {
@@ -431,14 +558,25 @@ function beginJoinRoom(request: RoomJoinRequest): void {
     onMatchStart: (loop, faction, opponentName) => {
       pendingMatch = { loop, faction, opponentName };
       keepRoomSession = true;
+      rejoinDialog?.hide();
+      // 会话引用还没落好时先挂起，由 startRoomSession 的 then 补跳，避免 enterVersus 误判无会话
+      if (!activeRoomSession) {
+        versusScreenPending = true;
+        return;
+      }
       // 败方可能还停在结算屏；重复 show('versus') 会被忽略，上一局 playLocked / 旧 loop 会留下。
       screens.show('versus', { remount: screens.current === 'versus' });
     },
     onSpectatorCount: (count) => {
       battleHud.setSpectatorCount(count);
     },
+    onRejoinTicket: (ticketRoomId, ticketToken) => {
+      // 真正开局才落凭据：只有这时候重连才有意义，也避免等待期误弹窗
+      rejoinTickets.save({ playerId: deviceId, roomId: ticketRoomId, token: ticketToken });
+    },
     onMatchEnd: () => {
       // 结算展示与记账由对局循环处理，避免重复写入档案
+      rejoinTickets.clear();
     },
     onPeerDisconnected: () => {
       reconnectBanner?.showPeerDisconnected();
@@ -455,6 +593,7 @@ function beginJoinRoom(request: RoomJoinRequest): void {
     onPeerLeft: () => {
       versusPeerLeft = true;
       keepRoomSession = false;
+      rejoinTickets.clear();
       disposeRoomSession();
       onlineLobbyPage.showError('对手已离开');
       screens.show('online');
@@ -467,6 +606,8 @@ function beginJoinRoom(request: RoomJoinRequest): void {
     },
     onReconnectFailed: (reason) => {
       keepRoomSession = false;
+      // 席位窗口已关，凭据自然作废
+      rejoinTickets.clear();
       disposeRoomSession();
       onlineLobbyPage.showError(reason);
       screens.show('online');
@@ -481,12 +622,27 @@ function beginJoinRoom(request: RoomJoinRequest): void {
       }
       joiningRoom = null;
       activeRoomSession = session;
-      screens.show('room');
+      // 冷启动接回时对局屏由 onMatchStart 负责；若它早于会话就绪，这里补跳
+      if (versusScreenPending) {
+        versusScreenPending = false;
+        screens.show('versus', { remount: screens.current === 'versus' });
+        return;
+      }
+      if (!coldRejoin) screens.show('room');
     })
     .catch((error: unknown) => {
       if (joiningRoom !== connecting) return;
       joiningRoom = null;
+      versusScreenPending = false;
       const message = error instanceof Error ? error.message : String(error);
+      if (coldRejoin) {
+        // 令牌已失效（房间结束/席位被占），丢掉存档并让玩家留在大厅
+        rejoinTickets.clear();
+        rejoinDialog?.hide();
+        ensureAppLobbyPresence('lobby');
+        onlineLobbyPage.showError(message);
+        return;
+      }
       if (screens.current === 'online') {
         ensureAppLobbyPresence('lobby');
         onlineLobbyPage.showError(message);
@@ -1366,6 +1522,8 @@ function enterVersus(): () => void {
   };
 
   const recordVersusAbandonedIfNeeded = (): void => {
+    // 刷新/关标签会走到这里，但玩家并没有放弃对局，记账交给重连结果决定
+    if (appUnloading) return;
     if (!shouldRecordVersusAbandon({ matchStarted, battleRecorded, peerLeft })) return;
     battleRecorded = true;
     try {
@@ -1402,7 +1560,8 @@ function enterVersus(): () => void {
     hud.classList.remove('is-versus');
     container.classList.remove('is-versus');
     if (!keepRoomSession) {
-      disposeRoomSession();
+      // 刷新时保留凭据，否则新页面再也接不回这一局
+      disposeRoomSession(!appUnloading);
     }
     keepRoomSession = false;
   };
@@ -2108,8 +2267,12 @@ function enterSolo(): () => void {
 function enterOnline(): () => void {
   syncLobbyPresenceForScreen('online');
   onlineLobbyPage.show();
+  // 进大厅顺手查一次：若还有未结束的局，弹窗让玩家自己决定回不回去
+  checkPendingRejoin();
   return () => {
     onlineLobbyPage.hide();
+    // 离开大厅必须收起弹窗，避免盖在其他页面上
+    rejoinDialog?.hide();
     if (!activeRoomSession) cancelJoiningRoom();
     if (!activeSpectateSession && !pendingSpectate) {
       joiningSpectate?.close();
@@ -2140,7 +2303,12 @@ screens = createScreenController({
   menu: () => {
     syncLobbyPresenceForScreen('menu');
     mainMenu.show();
-    return () => mainMenu.hide();
+    // 回到主菜单是主要入口：刷新后重启也能凭本地凭据接回对局
+    checkPendingRejoin();
+    return () => {
+      mainMenu.hide();
+      rejoinDialog?.hide();
+    };
   },
   online: () => enterOnline(),
   room: () => enterRoom(),
@@ -2219,14 +2387,19 @@ screens = createScreenController({
 screens.show('menu');
 
 function disposeApp(): void {
+  // 先置位：后续所有清理（含对局屏 leave）都按"刷新"处理，不能作废凭据也不记放弃
+  appUnloading = true;
   screens.dispose();
   stopAppLobbyPresence();
+  rejoinDialog?.dispose();
+  rejoinDialog = null;
   sharedBattleView?.reset();
   sharedBattleView = null;
   sharedScene?.dispose();
   sharedScene = null;
   disposeFormationThumbnailRenderer();
-  disposeRoomSession();
+  // 卸载保留凭据：刷新页面后仍能凭它接回未结束的对局
+  disposeRoomSession(false);
   disposeSpectateSession();
   spectatorHands.dispose();
   onlineLobbyPage.dispose();

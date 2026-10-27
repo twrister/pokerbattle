@@ -41,7 +41,7 @@ class MockWebSocket {
     this.emit('close');
   }
 
-  emit(type: string, event: { data?: string } = {}): void {
+  emit(type: string, event: { data?: string; code?: number } = {}): void {
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event);
     }
@@ -289,6 +289,48 @@ describe('connectRoomSession', () => {
     close();
   });
 
+  it('被另一窗口顶替席位后不再自动重连，避免来回抢席', async () => {
+    vi.useFakeTimers();
+    const onReconnectFailed = vi.fn();
+    const onReconnecting = vi.fn();
+    const onMatchStart = vi.fn();
+    const { done, close } = connectRoomSession({
+      mode: 'create',
+      name: 'Tester',
+      onReconnectFailed,
+      onReconnecting,
+      onMatchStart,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({
+      type: 'welcome',
+      seat: 0,
+      faction: Faction.Blue,
+      seed: 77,
+      inputDelay: 4,
+      roomId: '090',
+      roomName: '顶号房',
+      reconnectToken: 'tok-x',
+      opponentName: 'Rival',
+    });
+    ws.pushServer({ type: 'start', startTick: 1 });
+    await done;
+    expect(onMatchStart).toHaveBeenCalledTimes(1);
+    const wsCountBefore = MockWebSocket.instances.length;
+
+    // 服务端用 4003 告知本席位已被新连接接管
+    ws.readyState = MockWebSocket.CLOSED;
+    ws.emit('close', { code: 4003 });
+
+    expect(onReconnectFailed).toHaveBeenCalledWith('本局已在另一个窗口接续');
+    expect(onReconnecting).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    // 不允许再起新的重连连接，否则两个窗口会互相顶号
+    expect(MockWebSocket.instances).toHaveLength(wsCountBefore);
+    close();
+  });
+
   it('换座后用新席位重放房间快照，保持房主身份', async () => {
     const onRoomState = vi.fn();
     const { done, close } = connectRoomSession({
@@ -533,6 +575,73 @@ describe('connectRoomSession', () => {
     expect(onMatchStart.mock.calls[1]?.[0].match.world.seed).toBe(44);
     close();
   });
+  it('冷启动 rejoin：首包直发令牌，welcome 后用补帧追平并进对局', async () => {
+    const onMatchStart = vi.fn();
+    const onRejoinTicket = vi.fn();
+    const { done } = connectRoomSession({
+      intent: 'rejoin',
+      rejoinToken: 'tok-cold',
+      mode: 'room',
+      roomId: '077',
+      name: 'Tester',
+      onMatchStart,
+      onRejoinTicket,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toEqual({
+      type: 'rejoin',
+      roomId: '077',
+      token: 'tok-cold',
+      lastTick: 0,
+    });
+
+    ws.pushServer({
+      type: 'welcome',
+      seat: 1,
+      faction: Faction.Red,
+      seed: 55,
+      inputDelay: 4,
+      roomId: '077',
+      roomName: '冷启动房',
+      reconnectToken: 'tok-cold',
+      opponentName: 'Host',
+    });
+    const session = await done;
+
+    // 服务端只补 lastTick 之后的帧，本地需自行从第 1 tick 起转
+    ws.pushServer({ type: 'frame', tick: 1, commands: [] });
+    ws.pushServer({ type: 'frame', tick: 2, commands: [] });
+    expect(onMatchStart).toHaveBeenCalledTimes(1);
+    const loop = onMatchStart.mock.calls[0]?.[0];
+    expect(loop.lastConfirmedTick).toBe(2);
+    expect(session.roomId).toBe('077');
+    expect(onRejoinTicket).toHaveBeenCalledWith('077', 'tok-cold');
+    session.close();
+  });
+
+  it('冷启动 rejoin 被服务端拒绝时 done 直接 reject，不进对局', async () => {
+    const onReconnectFailed = vi.fn();
+    const onMatchStart = vi.fn();
+    const { done } = connectRoomSession({
+      intent: 'rejoin',
+      rejoinToken: 'tok-dead',
+      mode: 'room',
+      roomId: '078',
+      name: 'Tester',
+      onMatchStart,
+      onReconnectFailed,
+    });
+    const pending = done;
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    ws.pushServer({ type: 'error', code: 'rejoin_failed', message: '席位已释放' });
+
+    // 冷启动接回失败只走 done 的 reject，由调用方清凭据并回大厅
+    expect(onMatchStart).not.toHaveBeenCalled();
+    await expect(pending).rejects.toThrow('席位已释放');
+    expect(onReconnectFailed).not.toHaveBeenCalled();
+  });
 });
 
 describe('createLobbyPresence', () => {
@@ -593,6 +702,52 @@ describe('createLobbyPresence', () => {
     expect(JSON.parse(second.sent[0]!)).toMatchObject({ type: 'lobby', activity: 'solo' });
     presence.dispose();
     vi.useRealTimers();
+  });
+
+  it('复用大厅连接探测重连并回传剩余时间', async () => {
+    const presence = createLobbyPresence({ name: 'Tester', playerId: 'device-1' });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+
+    const pending = presence.checkRejoin('042', 'tok-a');
+    await Promise.resolve();
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({
+      type: 'checkRejoin',
+      roomId: '042',
+      token: 'tok-a',
+    });
+
+    ws.pushServer({
+      type: 'rejoinStatus',
+      alive: true,
+      roomId: '042',
+      roomName: '对局房',
+      remainingMs: 12_000,
+      opponentName: 'Rival',
+    });
+    await expect(pending).resolves.toMatchObject({
+      alive: true,
+      roomId: '042',
+      remainingMs: 12_000,
+    });
+    presence.dispose();
+  });
+
+  it('放弃重连直接发 declineRejoin，连接断开时静默丢弃', async () => {
+    const presence = createLobbyPresence({ name: 'Tester', playerId: 'device-1' });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    presence.declineRejoin('042', 'tok-a');
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({
+      type: 'declineRejoin',
+      roomId: '042',
+      token: 'tok-a',
+    });
+
+    ws.close();
+    // 已断线时不应抛错，局外弹窗不该因此卡住
+    expect(() => presence.declineRejoin('042', 'tok-a')).not.toThrow();
+    presence.dispose();
   });
 
   it('复用大厅连接查询排行榜并带回自己的名次', async () => {

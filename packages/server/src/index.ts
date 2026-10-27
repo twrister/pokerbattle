@@ -112,6 +112,30 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    /**
+     * 局外重连探测：只回状态，不占握手。
+     * 用大厅连接即可询问，避免为确认而先占一个席位。
+     */
+    if (message.type === 'checkRejoin') {
+      const probe = rooms.queryRejoin(message);
+      if (ws.readyState === ws.OPEN) {
+        ws.send(
+          encodeMessage({
+            type: 'rejoinStatus',
+            alive: probe !== null,
+            ...(probe ?? {}),
+          }),
+        );
+      }
+      return;
+    }
+
+    // 局外拒绝重连：立刻释放席位，对手不必等窗口超时。
+    if (message.type === 'declineRejoin') {
+      rooms.declineRejoin(message);
+      return;
+    }
+
     // 大厅 presence：可与 listRooms 共用连接，入房前计入 lobbyPlayers
     if (message.type === 'lobby') {
       if (!handshaked) {

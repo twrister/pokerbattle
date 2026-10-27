@@ -219,6 +219,8 @@
       #btn-battle-result-return,
       #btn-versus-exit-cancel,
       #btn-versus-exit-confirm,
+      #btn-rejoin-decline,
+      #btn-rejoin-accept,
       #btn-back-menu,
       .sfx-toggle.is-battle,
       #btn-select-best,
@@ -279,6 +281,8 @@
       #btn-battle-result-return:hover,
       #btn-versus-exit-cancel:hover,
       #btn-versus-exit-confirm:hover,
+      #btn-rejoin-decline:hover:not(:disabled),
+      #btn-rejoin-accept:hover:not(:disabled),
       #btn-back-menu:hover,
       .sfx-toggle.is-battle:hover,
       #btn-select-best:hover:not(:disabled),
@@ -336,7 +340,8 @@
       #btn-rename-confirm,
       #btn-feedback-submit,
       #btn-online-create-confirm,
-      #btn-online-join-confirm {
+      #btn-online-join-confirm,
+      #btn-rejoin-accept {
         --btn-bg: var(--btn-confirm-bg);
         --btn-shadow: var(--btn-confirm-shadow);
       }
@@ -3573,6 +3578,52 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: calc(10 * var(--hu));
+      }
+
+      /* 局外重连窗：挂在 body 上，用 fixed 覆盖整屏并压过大厅与底部导航 */
+      #rejoin-dialog {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        pointer-events: auto;
+      }
+
+      /*
+       * 弹窗正文：奶油底（--cream）上必须用近墨色。
+       * --ink-soft 在奶油底上只有 ~4.0:1，读起来发灰，这里统一用 --ink。
+       */
+      #rejoin-detail,
+      #rejoin-countdown {
+        margin: 0;
+        color: var(--ink);
+        font-size: calc(15 * var(--hu));
+        line-height: 1.6;
+      }
+
+      #rejoin-countdown {
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      /* 倒计时归零/重连中会禁用按钮，仍要看清文字，别靠降低不透明度压暗 */
+      #btn-rejoin-decline:disabled,
+      #btn-rejoin-accept:disabled {
+        filter: saturate(0.55) brightness(0.92);
+      }
+
+      /* 按钮本体由卡通按钮统一上色，这里只保留布局 */
+      .rejoin-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(10 * var(--hu));
+      }
+
+      #btn-rejoin-decline,
+      #btn-rejoin-accept {
+        width: 100%;
+        padding: calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(12 * var(--hu));
+        font-size: calc(17 * var(--hu));
       }
 
       #btn-versus-exit-cancel,
@@ -7719,6 +7770,23 @@
     </main>
 
     <div id="app" class="is-hidden"></div>
+
+    <!-- 局外重连窗：主菜单/联机大厅检测到未结束的本机对局时弹出 -->
+    <div id="rejoin-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="rejoin-title">
+      <button class="mode-dialog-backdrop" type="button" aria-label="放弃重连" data-rejoin-close></button>
+      <div class="mode-dialog-panel">
+        <header class="mode-dialog-header">
+          <h2 id="rejoin-title" class="mode-dialog-title">继续对局</h2>
+          <button class="mode-dialog-close" type="button" aria-label="放弃重连" data-rejoin-close><span class="ui-icon icon-cross" aria-hidden="true"></span></button>
+        </header>
+        <p id="rejoin-detail"></p>
+        <p id="rejoin-countdown" role="timer" aria-live="off"></p>
+        <div class="rejoin-actions">
+          <button id="btn-rejoin-decline" type="button" data-rejoin-close>放弃</button>
+          <button id="btn-rejoin-accept" type="button">重连</button>
+        </div>
+      </div>
+    </div>
 
     <div id="hud" class="is-hidden">
       <section id="battle-hud" class="is-hidden" aria-label="对局信息">

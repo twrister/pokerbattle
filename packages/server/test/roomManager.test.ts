@@ -456,6 +456,94 @@ describe('MatchRoom 断线重连', () => {
     room.dispose();
   });
 
+  it('局外探测只在窗口内报告存活，并给出剩余时间与对手名', () => {
+    vi.useFakeTimers();
+    const room = new MatchRoom({ roomId: '007', roomName: '探测房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    // 未开局没有对局可接回
+    expect(room.queryRejoin(latestWelcome(a).reconnectToken)).toBeNull();
+    hostStart(a);
+
+    const tokenA = latestWelcome(a).reconnectToken;
+    // 仍在线时允许顶号，剩余时间给满窗口
+    expect(room.queryRejoin(tokenA)?.remainingMs).toBe(30_000);
+
+    a.close();
+    vi.advanceTimersByTime(10_000);
+    const probe = room.queryRejoin(tokenA);
+    expect(probe).toEqual({
+      roomId: '007',
+      roomName: '探测房',
+      remainingMs: 20_000,
+      opponentName: 'B',
+    });
+    expect(room.queryRejoin('bad-token')).toBeNull();
+
+    // 窗口耗尽后不再存活
+    vi.advanceTimersByTime(20_000);
+    expect(room.queryRejoin(tokenA)).toBeNull();
+  });
+
+  it('重连回来后探测不再视为可接回，且旧连接被顶掉', () => {
+    const room = new MatchRoom({ roomId: '008', roomName: '顶号房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+    const tokenA = latestWelcome(a).reconnectToken;
+
+    // 直接顶号：旧 socket 未触发 close 时也必须能接管，否则半开连接会把人锁在局外
+    const resumed = new FakeWebSocket();
+    expect(room.handleRejoin(resumed as never, tokenA, 0)).toBe(true);
+    expect(a.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(room.queryRejoin(tokenA)?.remainingMs).toBe(30_000);
+    room.dispose();
+  });
+
+  it('局外放弃重连立即释放席位并通知对手离开', () => {
+    vi.useFakeTimers();
+    let disposed = false;
+    const room = new MatchRoom({
+      roomId: '009',
+      roomName: '放弃房',
+      onDispose: () => {
+        disposed = true;
+      },
+    });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+    const tokenA = latestWelcome(a).reconnectToken;
+
+    a.close();
+    expect(room.forfeitSeat(tokenA)).toBe(true);
+    expect(b.messages().some((m) => m.type === 'peerLeft')).toBe(true);
+    expect(disposed).toBe(true);
+    // 房间已清场，重复放弃与错误令牌都不再生效
+    expect(room.forfeitSeat(tokenA)).toBe(false);
+    expect(room.queryRejoin(tokenA)).toBeNull();
+  });
+
+  it('已重连的席位不会被局外放弃误杀', () => {
+    const room = new MatchRoom({ roomId: '010', roomName: '在线房' });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+    const tokenA = latestWelcome(a).reconnectToken;
+
+    expect(room.forfeitSeat(tokenA)).toBe(false);
+    expect(room.toOpsSnapshot().connectedCount).toBe(2);
+    room.dispose();
+  });
+
   it('非房主可取消准备，取消后房主无法开局', () => {
     const room = new MatchRoom({ roomId: '006', roomName: '准备房' });
     const a = new FakeWebSocket();

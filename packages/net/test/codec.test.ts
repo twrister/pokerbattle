@@ -247,6 +247,44 @@ describe('协议编解码', () => {
     });
   });
 
+  it('可编解码 checkRejoin / declineRejoin / rejoinStatus', () => {
+    const check = encodeMessage({ type: 'checkRejoin', roomId: '042', token: 'tok' });
+    expect(decodeClientMessage(check)).toEqual({
+      type: 'checkRejoin',
+      roomId: '042',
+      token: 'tok',
+    });
+
+    const decline = encodeMessage({ type: 'declineRejoin', roomId: '042', token: 'tok' });
+    expect(decodeClientMessage(decline)).toEqual({
+      type: 'declineRejoin',
+      roomId: '042',
+      token: 'tok',
+    });
+
+    const alive = encodeMessage({
+      type: 'rejoinStatus',
+      alive: true,
+      roomId: '042',
+      roomName: '对局房',
+      remainingMs: 12_000,
+      opponentName: 'Rival',
+    });
+    expect(decodeServerMessage(alive)).toEqual({
+      type: 'rejoinStatus',
+      alive: true,
+      roomId: '042',
+      roomName: '对局房',
+      remainingMs: 12_000,
+      opponentName: 'Rival',
+    });
+
+    expect(decodeServerMessage(encodeMessage({ type: 'rejoinStatus', alive: false }))).toEqual({
+      type: 'rejoinStatus',
+      alive: false,
+    });
+  });
+
   it('规范化三位房号并拒绝非法值', () => {
     expect(normalizeRoomId('  042  ')).toBe('042');
     expect(normalizeRoomId('999')).toBe('999');
