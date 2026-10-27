@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CASTLE_PROTECT_HP,
   Faction,
@@ -117,6 +117,9 @@ describe('对局 HUD 与结算弹窗', () => {
           </div>
         </div>
         <div id="battle-result-members" class="battle-result-table is-hidden"></div>
+        <p id="battle-result-stage" class="is-hidden"></p>
+        <button id="btn-battle-result-next" class="is-hidden"></button>
+        <button id="btn-battle-result-retry" class="is-hidden"></button>
         <button id="btn-battle-result-return"></button>
       </section>
     `;
@@ -340,6 +343,44 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-result-members')?.classList.contains('is-hidden')).toBe(true);
   });
 
+  it('战役结算只显示成败、用时与对应按钮，普通结算会清掉战役态', () => {
+    const result = createBattleResult(() => {});
+    const root = document.querySelector('#battle-result-dialog')!;
+    const next = document.querySelector('#btn-battle-result-next')!;
+    const retry = document.querySelector('#btn-battle-result-retry')!;
+    const stageLine = document.querySelector('#battle-result-stage')!;
+    const onNext = vi.fn();
+    const onRetry = vi.fn();
+
+    result.showStage({ cleared: true, seconds: 86.6, hasNext: true, onNext, onRetry });
+    expect(document.querySelector('#battle-result-title')?.textContent).toBe('通关');
+    expect(root.classList.contains('is-stage')).toBe(true);
+    expect(stageLine.textContent).toBe('用时 87 秒');
+    expect(stageLine.classList.contains('is-failed')).toBe(false);
+    expect(next.classList.contains('is-hidden')).toBe(false);
+    expect(retry.classList.contains('is-hidden')).toBe(true);
+    (next as HTMLButtonElement).click();
+    expect(onNext).toHaveBeenCalledTimes(1);
+
+    result.showStage({ cleared: false, seconds: 120, hasNext: true, onNext, onRetry });
+    expect(document.querySelector('#battle-result-title')?.textContent).toBe('失败');
+    expect(stageLine.textContent).toBe('未达成目标');
+    expect(stageLine.classList.contains('is-failed')).toBe(true);
+    expect(next.classList.contains('is-hidden')).toBe(true);
+    expect(retry.classList.contains('is-hidden')).toBe(false);
+    (retry as HTMLButtonElement).click();
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    // 最后一关通关：没有下一关按钮，也不出现重试
+    result.showStage({ cleared: true, seconds: 50, hasNext: false, onNext, onRetry });
+    expect(next.classList.contains('is-hidden')).toBe(true);
+    expect(retry.classList.contains('is-hidden')).toBe(true);
+
+    result.show({ winner: Faction.Blue, reason: 'time_limit', endTick: 10 }, Faction.Blue);
+    expect(root.classList.contains('is-stage')).toBe(false);
+    expect(stageLine.classList.contains('is-hidden')).toBe(true);
+  });
+
   it('结算弹窗展示双方名字与城堡残血', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();
@@ -530,6 +571,16 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-team-self-hp')?.textContent).toBe('10000 / 10000');
     expect(document.querySelector('#battle-team-opp-hp')?.textContent).toBe('10000 / 10000');
     expect(document.querySelector('#battle-team-self-bar')?.getAttribute('style')).toContain('100%');
+  });
+
+  it('无基地关卡收起血条，返回普通关卡后可恢复', () => {
+    const hud = createBattleHud();
+    const root = () => document.querySelector('#battle-hud')!;
+    expect(root().classList.contains('is-no-castle')).toBe(false);
+    hud.setCastleBarsVisible(false);
+    expect(root().classList.contains('is-no-castle')).toBe(true);
+    hud.setCastleBarsVisible(true);
+    expect(root().classList.contains('is-no-castle')).toBe(false);
   });
 
   it('1v1 不显示实时伤害面板', () => {

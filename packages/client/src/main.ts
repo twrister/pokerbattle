@@ -2,7 +2,11 @@ import {
   applyArenaPreset,
   Faction,
   opposingFaction,
+  CAMPAIGN_STAGES,
+  getNextStage,
+  getStageById,
   SoloBotController,
+  StageRunner,
   teammateSlot,
   teamSlots,
   TICK_RATE,
@@ -10,6 +14,8 @@ import {
   UNIT_TYPE_IDS,
   type CardFormation,
   type MatchResult,
+  type StageDef,
+  type StageOutcome,
   type SoloDifficulty,
   type UnitTypeId,
   fromFloat,
@@ -96,6 +102,10 @@ import {
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleDamagePanel } from './ui/battleDamagePanel.js';
 import { createBattleResult } from './ui/battleResult.js';
+import { createCampaignProgressStore } from './campaign/progress.js';
+import { createCampaignPage } from './ui/campaignPage.js';
+import { createStageHud } from './ui/stageHud.js';
+import { shouldShowHandGuide } from './ui/handGuide.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
 import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
@@ -128,6 +138,12 @@ import {
   type ReplaySideContext,
 } from './replay/index.js';
 
+/**
+ * 战役结算延迟（毫秒）：目标落定后先让战场演完最后一击/清场动画，再停局弹结算。
+ * 太久会让玩家以为卡住，1 秒刚好看得见结果又不拖节奏。
+ */
+const STAGE_RESULT_DELAY_MS = 1000;
+
 const container = requiredElement<HTMLElement>('#app');
 const hud = requiredElement<HTMLElement>('#hud');
 const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
@@ -156,6 +172,10 @@ let screens: ScreenController;
 let selectedSoloDifficulty: SoloDifficulty = 'hard';
 /** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置；正常人机必须保持 false。 */
 let selectedSoloDebugSpawn = false;
+/** 战役选中的关卡；非 null 时单机局按关卡规则开打，进入普通人机前必须清空。 */
+let selectedStage: StageDef | null = null;
+/** 战役进度（本地存储）。 */
+const campaignProgress = createCampaignProgressStore();
 /** 房间会话跨 room/versus 复用；切屏时靠 keepRoomSession 避免误关 WS。 */
 let activeRoomSession: RoomSession | null = null;
 let joiningRoom: RoomConnecting | null = null;
@@ -219,14 +239,17 @@ const mainMenu = createMainMenu({
   onStartSolo: (difficulty) => {
     selectedSoloDifficulty = difficulty;
     selectedSoloDebugSpawn = false;
+    selectedStage = null;
     screens.show('solo');
   },
   onStartSoloDebug: () => {
     if (!IS_DEV_SERVER) return;
     selectedSoloDifficulty = 'hard';
     selectedSoloDebugSpawn = true;
+    selectedStage = null;
     screens.show('solo');
   },
+  onOpenCampaign: () => screens.show('campaign'),
   onOpenOnline: () => screens.show('online'),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
@@ -293,7 +316,27 @@ const battleResult = createBattleResult(() => {
     screens.show('room');
     return;
   }
+  // 战役局结算后回选关页；用后清空，防止下次普通人机误读
+  if (selectedStage) {
+    selectedStage = null;
+    screens.show('campaign');
+    return;
+  }
   screens.show('menu');
+});
+const stageHud = createStageHud();
+const campaignPage = createCampaignPage({
+  onBack: () => screens.show('menu'),
+  onStartStage: (stageId) => {
+    const stage = getStageById(stageId);
+    if (!stage) return;
+    selectedStage = stage;
+    selectedSoloDifficulty = 'hard';
+    selectedSoloDebugSpawn = false;
+    screens.show('solo');
+  },
+  getStages: () => CAMPAIGN_STAGES,
+  getProgress: () => campaignProgress.load(),
 });
 const leaderboardPage = createLeaderboardPage({
   onBack: () => screens.show('menu'),
@@ -563,6 +606,8 @@ function enterBattleSession(mode: BattleMode): () => void {
   applyArenaPreset('1v1');
   const isSolo = mode === 'solo';
   const debugSpawn = isSolo && selectedSoloDebugSpawn && IS_DEV_SERVER;
+  // 战役关卡：仅单机且非调试模式；本局期间不再读 selectedStage，避免重开串关
+  const stageDef: StageDef | null = isSolo && !debugSpawn ? selectedStage : null;
 
   container.classList.toggle('is-solo', isSolo);
   hud.classList.toggle('is-solo', isSolo);
@@ -573,11 +618,19 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleResult.setReturnLabel('返回主界面');
     battleResult.hide();
     battleAnnounce.reset();
+    // 战役只有一段常规阶段，常规阶段末尾也读 10 秒
+    if (stageDef) {
+      battleAnnounce.setCountdownSeconds('normal', 10);
+      // 无基地关卡没有城堡可拆，去掉默认的「摧毁对方城堡」开场播报
+      if (stageDef.castles === false) battleAnnounce.setEnterText('normal', '');
+    }
     battleHud.setContext({
       localFaction: Faction.Blue,
       localName: playerProfile.getProfile().displayName,
       opponentName: '电脑',
     });
+    // 无基地关卡没有血量可看，整块血条收起，只留中间的阶段与计时
+    battleHud.setCastleBarsVisible(stageDef ? stageDef.castles !== false : true);
     battleDamagePanel.setContext({
       localName: playerProfile.getProfile().displayName,
     });
@@ -599,7 +652,7 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   // 单机走 MatchState，与联机共用出牌/抽牌规则，避免双路径漂移
   // 每局随机 seed（对齐服务端 room.ts），避免开局手牌永远相同
-  const battleSeed = isSolo ? createBattleSeed() : 20260806;
+  const battleSeed = stageDef ? stageDef.seed : isSolo ? createBattleSeed() : 20260806;
   const loop = new SimLoop(battleSeed, { withMatch: isSolo });
   // 开发服「保存为默认」后的节奏；本局改数只动这份内存，重开/再进局都套它
   let soloMatchRulesView = isSolo ? loadRuntimeDefaults().matchRules : defaultMatchRulesView();
@@ -610,16 +663,35 @@ function enterBattleSession(mode: BattleMode): () => void {
     loop.curr = takeSnapshot(loop.world, loop.curr);
     loop.prev = takeSnapshot(loop.world, loop.prev);
   }
-  const soloBot = isSolo ? new SoloBotController(selectedSoloDifficulty, battleSeed) : null;
-  const removeSoloBot = soloBot
-    ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
-    : () => {};
+  // 关卡局由 StageRunner 提供敌方行为与目标判定，不再挂默认人机
+  let stageRunner = stageDef ? new StageRunner(stageDef, loop.match!) : null;
+  const soloBot = isSolo && !stageDef ? new SoloBotController(selectedSoloDifficulty, battleSeed) : null;
+  const removeSoloBot = stageDef
+    ? loop.addCommandSource((match) => (match && stageRunner ? stageRunner.decide(match) : null))
+    : soloBot
+      ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
+      : () => {};
+  if (stageDef) {
+    stageHud.start();
+    // 套完关卡规则与预置单位后重拍首帧快照
+    loop.curr = takeSnapshot(loop.world, loop.curr);
+    loop.prev = takeSnapshot(loop.world, loop.prev);
+  }
 
   let disableUnitPlacement = (): void => {};
   let disableBuildingPlacementFn = (): void => {};
   let disableDebugUnitDrag = (): void => {};
   let dealFromCastle = false;
   let prevPackState = loop.match?.getCastlePackState(Faction.Blue) ?? 'none';
+  // 结算状态要在 clearBattlefield 之前声明：重开与首帧都会读写这几个字段
+  let resultShown = false;
+  /** 关卡结果已落定但还在等演出结束；null 表示尚未落定。 */
+  let pendingStageOutcome: StageOutcome | null = null;
+  /** 结果落定的时间戳（performance.now），用来算满 1 秒延迟。 */
+  let pendingStageOutcomeAt = 0;
+  /** 结果落定后是否已等满延迟。 */
+  const isResultDelayElapsed = (now: number): boolean =>
+    pendingStageOutcomeAt > 0 && now - pendingStageOutcomeAt >= STAGE_RESULT_DELAY_MS;
   const disableCastlePackClick = isSolo
     ? enableCastlePackClick({
         domElement: sceneContext.renderer.domElement,
@@ -932,10 +1004,13 @@ function enterBattleSession(mode: BattleMode): () => void {
         deck: loop.match!.decks[Faction.Blue],
         externalDraw: true,
         externalCardConsume: true,
+        // 教学段/首次上手才开虚拟手指；后续关卡与老玩家不再打扰
+        guideEnabled: shouldShowHandGuide(stageDef, playerProfile.getProfile().stats),
         getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw(Faction.Blue) * 1000) / TICK_RATE,
         getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
         getMaxHandSize: () => loop.match!.getMaxHandSizeForSlot(Faction.Blue),
         getHasPendingDraw: () => loop.match!.hasPendingDraw(Faction.Blue),
+        getDrawDisabled: () => !loop.match!.isPeriodicDrawEnabled(),
         getDealOrigin: () => {
           if (!dealFromCastle) return null;
           return battleView.getCastlePackClientPoint(
@@ -973,10 +1048,24 @@ function enterBattleSession(mode: BattleMode): () => void {
 
   const clearBattlefield = (): void => {
     loop.reset();
+    // 重开要把上一局的结算等待一起清掉，否则新一局开局就立刻弹结算
+    resultShown = false;
+    pendingStageOutcome = null;
+    pendingStageOutcomeAt = 0;
     if (isSolo && loop.match) applyMatchRulesView(loop.match, soloMatchRulesView);
+    if (stageDef && loop.match) {
+      // 重开必须重新套关卡规则/牌池/预置单位，并换新的目标判定器与脚本敌人
+      stageRunner = new StageRunner(stageDef, loop.match);
+      stageHud.start();
+      // 无基地关卡会在这里拆掉刚播种的主堡，必须重拍快照否则会闪一帧基地
+      loop.curr = takeSnapshot(loop.world, loop.curr);
+      loop.prev = takeSnapshot(loop.world, loop.prev);
+    }
     battleView.invalidateUnitViews();
     dealFromCastle = false;
     prevPackState = loop.match?.getCastlePackState(Faction.Blue) ?? 'none';
+    // 上一局结算前锁过手牌，重开要放开，否则新一局出不了牌
+    handPanel?.setPlayLocked(false);
     handPanel?.syncFromDeck();
   };
 
@@ -1153,7 +1242,6 @@ function enterBattleSession(mode: BattleMode): () => void {
   let smoothedFps = 60;
   let animationFrameId = 0;
   let lastHandSyncTick = loop.world.tick;
-  let resultShown = false;
 
   const frame = (now: number): void => {
     const deltaMs = Math.min(now - lastFrameAt, 250);
@@ -1180,7 +1268,26 @@ function enterBattleSession(mode: BattleMode): () => void {
       battleHud.update(loop.match!);
       battleDamagePanel.update(loop.match!);
       battleAnnounce.tick(loop.match!);
-      if (loop.match!.result && !resultShown) {
+      if (stageDef && stageRunner) {
+        stageRunner.update();
+        stageHud.update(stageRunner.tracker.getProgress(loop.match!));
+        const outcome = stageRunner.tracker.getOutcome();
+        if (outcome && !resultShown) {
+          // 先记下结果并开始计时，让最后一击的弹道与死亡动画演完再弹结算
+          if (!pendingStageOutcome) {
+            pendingStageOutcome = outcome;
+            pendingStageOutcomeAt = now;
+            // 结果已锁定，这段等待里继续出牌只会让战场和结算对不上，先收走操作权
+            handPanel?.setPlayLocked(true);
+          }
+          if (isResultDelayElapsed(now)) {
+            resultShown = true;
+            // 目标落定后冻结对局，避免结算面板出现后战场还在继续打
+            loop.paused = true;
+            showStageResult(stageDef, pendingStageOutcome);
+          }
+        }
+      } else if (loop.match!.result && !resultShown) {
         resultShown = true;
         // 调试模式不写档案，避免污染正常人机战绩
         if (!debugSpawn) {
@@ -1206,6 +1313,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleDamagePanel.hide();
     battleAnnounce.reset();
     battleResult.hide();
+    stageHud.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-solo-debug');
     container.classList.remove('is-solo');
@@ -1346,6 +1454,7 @@ function runVersusSession(
   battleHud.setContext(hudContext);
   battleDamagePanel.setContext(hudContext);
   battleResult.setContext(hudContext);
+  battleHud.setCastleBarsVisible(true);
   battleHud.show();
   battleDamagePanel.show();
 
@@ -1746,6 +1855,7 @@ function runReplaySession(record: ReplayRecord): () => void {
   battleHud.setContext(record.context);
   battleDamagePanel.setContext(record.context);
   battleResult.setContext(record.context);
+  battleHud.setCastleBarsVisible(true);
   spectatorHands.setNames(replayHandNames(record.context));
   spectatorHands.show();
   battleHud.show();
@@ -1907,6 +2017,7 @@ function runSpectateSession(
   battleHud.setContext(spectateContext);
   battleDamagePanel.setContext(spectateContext);
   battleResult.setContext(spectateContext);
+  battleHud.setCastleBarsVisible(true);
   spectatorHands.setNames({
     blue: spectateContext.localName,
     blueMate: spectateContext.teammateName,
@@ -2053,6 +2164,11 @@ screens = createScreenController({
     codexPage.show();
     return () => codexPage.hide();
   },
+  campaign: () => {
+    syncLobbyPresenceForScreen('campaign');
+    campaignPage.show();
+    return () => campaignPage.hide();
+  },
   leaderboard: () => {
     syncLobbyPresenceForScreen('leaderboard');
     leaderboardPage.show();
@@ -2115,6 +2231,7 @@ function disposeApp(): void {
   spectatorHands.dispose();
   onlineLobbyPage.dispose();
   leaderboardPage.dispose();
+  campaignPage.dispose();
   replayListPage.dispose();
   onlineRoomPage.dispose();
   mainMenu.dispose();
@@ -2163,6 +2280,47 @@ function recordLocalBattle(
   } catch (error) {
     console.error('[account] 对战记录写入失败', error);
   }
+}
+
+/**
+ * 战役关卡结算：通关写本地进度，成败都记一条关卡挑战摘要，再展示结算面板。
+ * 「下一关」切换选中关卡后重挂 solo 页；「重试」重挂当前关卡。
+ */
+function showStageResult(def: StageDef, outcome: StageOutcome): void {
+  const cleared = outcome.status === 'success';
+  if (cleared) {
+    campaignProgress.recordClear({
+      stageId: def.id,
+      seconds: outcome.seconds,
+    });
+  }
+  try {
+    playerProfile.recordStageChallenge({
+      stageId: def.id,
+      outcome: cleared ? 'cleared' : 'failed',
+    });
+    mainMenu.refreshProfile();
+  } catch (error) {
+    console.error('[account] 关卡挑战记录写入失败', error);
+  }
+
+  const next = getNextStage(def.id);
+  // 结算按钮回到战役选关页，而不是主界面
+  battleResult.setReturnLabel('返回战役');
+  battleResult.showStage({
+    cleared,
+    seconds: outcome.seconds,
+    hasNext: Boolean(next),
+    onNext: () => {
+      if (!next) return;
+      selectedStage = next;
+      screens.show('solo', { remount: true });
+    },
+    onRetry: () => {
+      selectedStage = def;
+      screens.show('solo', { remount: true });
+    },
+  });
 }
 
 /** 引信炸弹拖拽预览半径：读取兵种 aoeRadius，缺省回落 8。 */

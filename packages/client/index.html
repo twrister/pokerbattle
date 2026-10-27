@@ -166,6 +166,7 @@
       #main-menu,
       #online-lobby,
       #online-room,
+      #campaign,
       #leaderboard,
       #replay-list {
         position: fixed;
@@ -180,6 +181,7 @@
       #main-menu h1,
       #online-lobby h1,
       #online-room h1,
+      #campaign h1,
       #leaderboard h1,
       #replay-list h1,
       #codex h1 {
@@ -1740,6 +1742,162 @@
         text-align: center;
       }
 
+      /* 战役结算：用时文案与下一关/重试按钮，复用返回按钮的外观 */
+      /* 用时胶囊：深色字 + 淡金底，在米色面板上保持足够对比；失败态换红 */
+      #battle-result-stage {
+        margin: calc(8 * var(--hu)) 0;
+        padding: calc(8 * var(--hu)) calc(14 * var(--hu));
+        border-radius: 999px;
+        background: rgba(255, 201, 40, 0.3);
+        color: #4a3200;
+        font-family: var(--font-display);
+        font-size: calc(20 * var(--hu));
+        text-align: center;
+      }
+
+      #battle-result-stage.is-failed {
+        background: rgba(208, 53, 44, 0.16);
+        color: #9c1f18;
+      }
+
+      /* 战役结算只留成败、用时与按钮：双方名牌、对比行、明细表与说明整块收起 */
+      #battle-result-dialog.is-stage #battle-result-detail,
+      #battle-result-dialog.is-stage .battle-result-head,
+      #battle-result-dialog.is-stage .battle-result-rows,
+      #battle-result-dialog.is-stage #battle-result-members {
+        display: none;
+      }
+
+      #btn-battle-result-next,
+      #btn-battle-result-retry {
+        width: 100%;
+        margin-bottom: calc(8 * var(--hu));
+        padding: calc(10 * var(--hu));
+        border: calc(3 * var(--hu)) solid var(--outline);
+        border-radius: calc(14 * var(--hu));
+        background: linear-gradient(180deg, #7be07b, #3fb83f);
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: calc(17 * var(--hu));
+        cursor: pointer;
+      }
+
+      #btn-battle-result-retry {
+        background: linear-gradient(180deg, #ffd37a, #f0a020);
+      }
+
+      #battle-result-stage.is-hidden,
+      #btn-battle-result-next.is-hidden,
+      #btn-battle-result-retry.is-hidden {
+        display: none;
+      }
+
+      /* 战役局内：目标卡片贴舞台左缘，纵向让开左上角的返回键/音效键按钮列。不拦截鼠标 */
+      #stage-hud {
+        position: absolute;
+        top: calc(max(calc(12 * var(--hu)), var(--stage-safe-top)) + calc(88 * var(--hu)));
+        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
+        z-index: 3;
+        width: calc(210 * var(--hu));
+        box-sizing: border-box;
+        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
+        border-radius: calc(12 * var(--hu));
+        background: rgba(20, 33, 61, 0.78);
+        color: #fff;
+        font-size: calc(13 * var(--hu));
+        pointer-events: none;
+      }
+
+      #stage-hud-title {
+        display: block;
+        margin-bottom: calc(4 * var(--hu));
+        font-family: var(--font-display);
+        font-size: calc(15 * var(--hu));
+      }
+
+      #stage-hud-objectives {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      #stage-hud-objectives li.is-done {
+        color: #9be59b;
+        text-decoration: line-through;
+      }
+
+      /* 战役选关页：按章节分组，关卡卡片显示完成标记与锁定态 */
+      #campaign .online-page-header {
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      }
+
+      #campaign .online-page-back {
+        justify-self: start;
+      }
+
+      #campaign-list {
+        display: grid;
+        gap: calc(8 * var(--hu));
+        flex: 1;
+        align-content: start;
+        overflow: auto;
+      }
+
+      .campaign-chapter {
+        margin: calc(10 * var(--hu)) 0 calc(2 * var(--hu));
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: calc(17 * var(--hu));
+        text-shadow: var(--text-outline);
+      }
+
+      .campaign-stage {
+        display: grid;
+        grid-template-columns: calc(40 * var(--hu)) minmax(0, 1fr) auto;
+        align-items: center;
+        gap: calc(10 * var(--hu));
+        width: 100%;
+        padding: calc(10 * var(--hu)) calc(14 * var(--hu));
+        border: 0;
+        border-radius: calc(14 * var(--hu));
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .campaign-stage:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .campaign-stage-index {
+        display: grid;
+        place-items: center;
+        width: calc(36 * var(--hu));
+        height: calc(36 * var(--hu));
+        border: calc(2 * var(--hu)) solid var(--outline);
+        border-radius: 50%;
+        background: #8fa3bf;
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: calc(15 * var(--hu));
+      }
+
+      .campaign-stage.is-cleared .campaign-stage-index {
+        background: linear-gradient(180deg, #ffe066, #f5a300);
+      }
+
+      .campaign-stage-title {
+        font-size: calc(16 * var(--hu));
+        font-weight: 700;
+      }
+
+      .campaign-stage-status {
+        color: #2f9e44;
+        font-size: calc(15 * var(--hu));
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
       #replay-list-items {
         display: grid;
         gap: calc(8 * var(--hu));
@@ -2565,6 +2723,12 @@
       /* 2v2 两侧各两座并排，总条再占一行，加宽避免名字被挤没 */
       #battle-hud.is-2v2 {
         width: min(calc(680 * var(--hu)), calc(100vw - 16px));
+      }
+
+      /* 无基地关卡：血条与对手手牌数都没有意义，整块收起只留中间计时 */
+      #battle-hud.is-no-castle .battle-team,
+      #battle-hud.is-no-castle #battle-opp-hand {
+        display: none;
       }
 
       .battle-hud-main {
@@ -3956,6 +4120,62 @@
         cursor: default;
         filter: none;
         opacity: 0.8;
+      }
+
+      /*
+       * 手牌弱引导虚拟手指：由脚本按 client 像素给 transform 定位，这里只管外观。
+       * 外层节点的 opacity/transform 全部交给 Web Animations，CSS 不写过渡，避免两套插值打架；
+       * 内层贴图只自己做按下缩放，所以过渡写在 .hand-guide-hand 上。
+       */
+      #hand-guide-finger {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 39;
+        display: block;
+        width: calc(96 * var(--hu));
+        height: calc(96 * var(--hu));
+        opacity: 0;
+        visibility: hidden;
+        transform-origin: 50% 50%;
+        pointer-events: none;
+        /* 贴图本身是偏白的柔光，米黄战场上需要一点暗投影才看得清落点 */
+        filter: drop-shadow(0 calc(4 * var(--hu)) calc(7 * var(--hu)) rgba(0, 0, 0, 0.35));
+      }
+
+      #hand-guide-finger.is-visible {
+        visibility: visible;
+      }
+
+      /*
+       * 贴图 227x280，发光质心（真正的按压点）在自身约 34.6% / 30% 处，而不是几何中心。
+       * 这里用 left/top 50% 把左上角锚到节点中心，再用 translate(-34.6%, -30%) 把质心掰回锚点，
+       * 于是节点中心恒等于按下的那一点，脚本按宽高算的半宽居中才准确。
+       * transform-origin 设在质心上，按下缩放就不会让按压点漂移。
+       */
+      .hand-guide-hand {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        /* 与手牌等宽，按压时刚好盖住一张牌 */
+        width: 100%;
+        height: auto;
+        transform: translate(-34.6%, -30%) scale(1);
+        transform-origin: 34.6% 30%;
+        transition: transform 140ms ease-out;
+        user-select: none;
+      }
+
+      /* 按下时轻轻收紧，模拟指尖压屏 */
+      #hand-guide-finger.is-pressed .hand-guide-hand {
+        transform: translate(-34.6%, -30%) scale(0.9);
+      }
+
+      /* 关闭动效偏好下不再播手指动画，避免给敏感玩家造成干扰 */
+      @media (prefers-reduced-motion: reduce) {
+        #hand-guide-finger {
+          display: none;
+        }
       }
 
       /* 箭头层浮在最上层但不拦截事件，落点判定仍由画布接收。 */
@@ -6715,9 +6935,9 @@
                 调试模式
                 <small>任意单兵种，拖到半场放置</small>
               </button>
-              <button class="mode-option mode-option-soon" type="button" data-placeholder="关卡挑战">
-                关卡挑战
-                <small>筹备中</small>
+              <button id="btn-solo-campaign" class="mode-option mode-option-ready" type="button">
+                战役
+                <small>从教学关开始，逐关闯关</small>
               </button>
             </div>
           </div>
@@ -6917,6 +7137,16 @@
             </div>
           </div>
         </div>
+      </div>
+    </main>
+
+    <main id="campaign" class="is-hidden" aria-hidden="true">
+      <div class="lobby-shell">
+        <header class="online-page-header">
+          <button id="btn-campaign-back" class="online-page-back" type="button">返回</button>
+          <h1>战役</h1>
+        </header>
+        <div id="campaign-list" role="list"></div>
       </div>
     </main>
 
@@ -7579,6 +7809,10 @@
           </div>
         </section>
       </section>
+      <section id="stage-hud" class="is-hidden" aria-label="关卡目标">
+        <strong id="stage-hud-title">通关条件</strong>
+        <ul id="stage-hud-objectives"></ul>
+      </section>
       <div id="battle-announce" class="is-hidden" role="status" aria-live="polite">
         <span id="battle-announce-text"></span>
       </div>
@@ -7630,6 +7864,9 @@
             </div>
           </div>
           <div id="battle-result-members" class="battle-result-table is-hidden"></div>
+          <p id="battle-result-stage" class="is-hidden"></p>
+          <button id="btn-battle-result-next" class="is-hidden" type="button">下一关</button>
+          <button id="btn-battle-result-retry" class="is-hidden" type="button">重试</button>
           <button id="btn-battle-result-return" type="button">返回</button>
         </div>
       </section>
@@ -7953,6 +8190,12 @@
         <div id="hand-cards"></div>
         <div id="hand-count" role="status" aria-live="polite">0 / 9</div>
       </section>
+    </div>
+
+    <!-- 手牌弱引导虚拟手指：铺满视口的定位层，脚本按 client 像素移动手指本体 -->
+    <div id="hand-guide-finger" aria-hidden="true">
+      <!-- 贴图质心即手势落点（CSS 已把质心对到节点中心），脚本只用节点宽高算半宽 -->
+      <img class="hand-guide-hand" src="%BASE_URL%ui/spr_FingerEffect.png" alt="" draggable="false" />
     </div>
 
     <!-- 出兵拖拽箭头层：铺满视口、不吃事件，坐标直接用 client 像素 -->

@@ -21,7 +21,20 @@ export interface BattleResultContext {
   extraOpponentSlot?: number | null;
 }
 
+/** 战役关卡结算信息；传给 showStage 叠加到普通结算面板上。 */
+export interface StageResultInfo {
+  cleared: boolean;
+  /** 通关用时，秒。 */
+  seconds: number;
+  /** 有下一关时才显示「下一关」按钮。 */
+  hasNext: boolean;
+  onNext: () => void;
+  onRetry: () => void;
+}
+
 export interface BattleResultHandle {
+  /** 战役结算：只显示通关/失败、用时与按钮，不展示双方对局细节。 */
+  showStage(info: StageResultInfo): void;
   /** 写入双方显示名，结算时与残血一起展示。 */
   setContext(context: BattleResultContext): void;
   /** 联机结算回房间，单机结算回主界面。 */
@@ -73,6 +86,26 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
   const memberTable = requiredElement<HTMLElement>('#battle-result-members');
   const button = requiredElement<HTMLButtonElement>('#btn-battle-result-return');
   button.addEventListener('click', onReturnToMenu);
+  const stageLine = requiredElement<HTMLElement>('#battle-result-stage');
+  const nextButton = requiredElement<HTMLButtonElement>('#btn-battle-result-next');
+  const retryButton = requiredElement<HTMLButtonElement>('#btn-battle-result-retry');
+  /** 当前战役按钮回调；普通结算时为空。 */
+  let stageInfo: StageResultInfo | null = null;
+  nextButton.addEventListener('click', () => stageInfo?.onNext());
+  retryButton.addEventListener('click', () => stageInfo?.onRetry());
+
+  /** 战役按钮与用时行的显隐；普通结算全部收起。通关显示下一关，失败显示重试。 */
+  const setStageUi = (info: StageResultInfo | null): void => {
+    stageInfo = info;
+    root.classList.toggle('is-stage', Boolean(info));
+    stageLine.classList.toggle('is-hidden', !info);
+    stageLine.classList.toggle('is-failed', Boolean(info && !info.cleared));
+    nextButton.classList.toggle('is-hidden', !info || !info.cleared || !info.hasNext);
+    retryButton.classList.toggle('is-hidden', !info || info.cleared);
+    if (info) {
+      stageLine.textContent = info.cleared ? `用时 ${Math.round(info.seconds)} 秒` : '未达成目标';
+    }
+  };
 
   /** 联机结算回房间，单机结算回主界面。 */
   const setReturnLabel = (label: string): void => {
@@ -84,21 +117,8 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
     opponentName: '对手',
   };
 
-  return {
-    setReturnLabel,
-    setContext(next) {
-      context = {
-        localName: next.localName || '玩家',
-        opponentName: next.opponentName || '对手',
-        localSlot: next.localSlot,
-        teammateName: next.teammateName,
-        teammateSlot: next.teammateSlot,
-        opponentSlot: next.opponentSlot,
-        extraOpponentName: next.extraOpponentName,
-        extraOpponentSlot: next.extraOpponentSlot,
-      };
-    },
-    show(result, playerFaction, match) {
+  /** 填充并显示结算面板主体；普通结算与战役结算共用。 */
+  const renderResult = (result: MatchResult, playerFaction: Faction, match?: MatchState): void => {
       const outcome = result.winner === null ? '平局' : result.winner === playerFaction ? '胜利' : '失败';
       // 胜负用不同短音，平局走中性音，避免输了还响胜利号
       sfx.play(result.winner === null ? 'result_draw' : result.winner === playerFaction ? 'result_win' : 'result_lose');
@@ -149,6 +169,35 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
 
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
+  };
+
+  return {
+    showStage(info) {
+      setStageUi(info);
+      // 战役标题以关卡成败为准，不看对局胜负（例如守城目标在超时时也算通关）
+      sfx.play(info.cleared ? 'result_win' : 'result_lose');
+      title.textContent = info.cleared ? '通关' : '失败';
+      root.dataset.outcome = info.cleared ? '胜利' : '失败';
+      root.classList.remove('is-hidden');
+      root.setAttribute('aria-hidden', 'false');
+    },
+    setReturnLabel,
+    setContext(next) {
+      context = {
+        localName: next.localName || '玩家',
+        opponentName: next.opponentName || '对手',
+        localSlot: next.localSlot,
+        teammateName: next.teammateName,
+        teammateSlot: next.teammateSlot,
+        opponentSlot: next.opponentSlot,
+        extraOpponentName: next.extraOpponentName,
+        extraOpponentSlot: next.extraOpponentSlot,
+      };
+    },
+    show(result, playerFaction, match) {
+      // 普通结算先收起战役用时与按钮，避免沿用上一关的状态
+      setStageUi(null);
+      renderResult(result, playerFaction, match);
     },
     hide() {
       root.classList.add('is-hidden');

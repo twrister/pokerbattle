@@ -58,6 +58,33 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
+  it('本关不补牌时牌堆置灰、读条收起，满手也不晃', () => {
+    // 与真实战役一致：抽牌由 MatchState 驱动（externalDraw），面板只负责展示
+    const panel = createHandPanel({
+      externalDraw: true,
+      getDrawRemainingMs: () => 0,
+      getDrawDisabled: () => true,
+    });
+    const pile = document.querySelector<HTMLElement>('#hand-draw-pile')!;
+    const handCount = document.querySelector<HTMLElement>('#hand-count')!;
+    panel.update(0);
+
+    expect(pile.classList.contains('is-empty')).toBe(true);
+    expect(pile.classList.contains('is-full')).toBe(false);
+    expect(pile.style.getPropertyValue('--draw-progress')).toBe('0%');
+    expect(pile.getAttribute('aria-label')).toBe('本关不再补牌');
+    // 等不到下一张，所以不报「手牌已满」
+    const handSize = panel.deck.hand.length;
+    expect(handCount.textContent).toBe(`${handSize} / 11`);
+    expect(handCount.classList.contains('is-full')).toBe(false);
+
+    // 时间再走也不会自己补牌
+    panel.update(2500);
+    expect(panel.deck.hand).toHaveLength(handSize);
+
+    panel.dispose();
+  });
+
   it('卡包超手牌上限时写入重叠布局变量', () => {
     const deck = new PokerDeck(createPokerCards(), new Rng(1));
     deck.drawMany(11);
@@ -744,7 +771,8 @@ describe('单机手牌交互', () => {
 
     vi.advanceTimersByTime(360);
     expect(panel.deck.hand).toHaveLength(3);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
+    // 落点非法不出文字提示，改由红色指引线与报错音提示
+    expect(document.querySelector('#hand-status')?.textContent).toBe('');
     // 非法落点不消耗选牌，阵型按钮应全部保留
     expect(document.querySelectorAll('.formation-option')).toHaveLength(formationCount);
 
@@ -772,7 +800,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('补牌重渲不会冲掉拖拽或落点提示', () => {
+  it('落点非法后补牌重渲不会残留提示文案', () => {
     const onRequestSpawn = vi.fn((_request: FormationSpawnRequest) => false);
     // 先抽满再把 9 打回牌堆：手牌固定为 3-4-5 顺子，牌堆留 1 张供补牌触发重渲
     const ids = ['3-spades', '4-hearts', '5-clubs', '9-diamonds'];
@@ -796,11 +824,11 @@ describe('单机手牌交互', () => {
     const option = document.querySelector<HTMLButtonElement>('.formation-option')!;
     option.getBoundingClientRect = () => buttonRect();
     dropOn(document.querySelector('#battle-canvas')!, option, 52, 200, 300);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('');
 
     panel.update(250);
     expect(panel.deck.hand).toHaveLength(4);
-    expect(document.querySelector('#hand-status')?.textContent).toBe('请在蓝色高亮区域内放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('');
 
     panel.dispose();
   });
@@ -826,10 +854,10 @@ describe('单机手牌交互', () => {
     const arrow = document.querySelector('#hand-arrow')!;
     const formations = document.querySelector('#hand-formations')!;
 
-    // 纯点击只提示拖拽，不落成
+    // 纯点击不落成，也不再出文字提示（改由虚拟手指动画弱引导）
     option.click();
     expect(onRequestSpawn).not.toHaveBeenCalled();
-    expect(document.querySelector('#hand-status')?.textContent).toBe('拖到蓝色格子上松手放置');
+    expect(document.querySelector('#hand-status')?.textContent).toBe('');
 
     // 未拖出按钮：不画指引线、不开预览，松开也不自动放置
     option.dispatchEvent(pointerEvent('pointerdown', 50, 120, 500));

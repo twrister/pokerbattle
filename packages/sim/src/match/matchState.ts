@@ -24,6 +24,7 @@ import {
 } from '../config/cardFormations.js';
 import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePositions } from '../config/arenaConfig.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
+import type { HandCategory } from '../config/handCategories.js';
 import { isBuildingInsideHalfCourt, normalizeDeployAnchor } from '../config/halfCourt.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../config/arena.js';
 import { isBuildingConfig, UNIT_CONFIGS } from '../config/units.js';
@@ -139,6 +140,13 @@ export class MatchState {
   private readonly pendingDraw: boolean[];
   /** 本局牌堆是否含万能牌；重开时据此重建牌面。 */
   private wildCardsEnabled = false;
+  /**
+   * 是否允许周期补牌，缺省 true。
+   * 教学关关掉后只发开局手牌，重开（clear）必须保持关闭，故不做复位。
+   */
+  private periodicDrawEnabled = true;
+  /** 各席本局累计打出的牌型次数；clear 时清零。 */
+  private readonly playedCategoryCounts: Array<Map<HandCategory, number>> = [];
 
   constructor(seed = 1, mode: MatchMode = '1v1') {
     this.mode = mode;
@@ -161,6 +169,7 @@ export class MatchState {
       this.packStates.push('none');
       this.nextDrawTicks.push(rules.drawIntervals.normalTicks);
       this.pendingDraw.push(false);
+      this.playedCategoryCounts.push(new Map());
     }
     this.dealStartingHands();
   }
@@ -182,6 +191,91 @@ export class MatchState {
     const cards = this.createDeckCards();
     for (const slot of allSlots(this.mode)) this.decks[slot]!.reset(cards);
     this.dealStartingHands();
+  }
+
+  /**
+   * 整体套用一份规则（战役关卡覆盖用）。
+   * 未开打时重洗重发，已开打只更新节奏参数，避免中途换牌。
+   */
+  applyRules(rules: MatchRules): void {
+    this.applyDefaultRules(rules);
+    this.wildCardsEnabled = rules.wildCardsEnabled;
+    if (this.world.tick === 0 && !this.result) {
+      const cards = this.createDeckCards();
+      for (const slot of allSlots(this.mode)) this.decks[slot]!.reset(cards);
+      this.dealStartingHands();
+      this.resetDrawClocks(this.normalDrawIntervalTicks);
+      return;
+    }
+    this.syncHandLimits();
+    this.clampDrawCountdown();
+  }
+
+  /**
+   * 把指定席位的牌堆换成给定牌面并重发起手牌（限定牌池用，教学/残局关）。
+   * 仅开局前可用；已开打则忽略，保证确定性。
+   * handSize 缺省沿用规则里的起手张数，固定手牌关直接传发牌张数。
+   */
+  setSlotDeckCards(slot: number, cards: readonly PlayingCard[], handSize?: number): void {
+    if (this.world.tick !== 0 || this.result) return;
+    const deck = this.decks[slot];
+    if (!deck) return;
+    deck.reset(cards);
+    deck.drawMany(handSize ?? this.initialHandSize);
+    this.nextDrawTicks[slot] = this.normalDrawIntervalTicks;
+    this.pendingDraw[slot] = false;
+  }
+
+  /** 指定席位本局累计打出某牌型的次数，供关卡目标判定。 */
+  getPlayedCategoryCount(slot: number, category: HandCategory): number {
+    return this.playedCategoryCounts[slot]?.get(category) ?? 0;
+  }
+
+  /** 指定席位本局累计出牌次数（不分牌型），供「打出任意一手」类目标判定。 */
+  getPlayedFormationCount(slot: number): number {
+    let total = 0;
+    for (const count of this.playedCategoryCounts[slot]?.values() ?? []) total += count;
+    return total;
+  }
+
+  /**
+   * 覆盖是否周期补牌。
+   * 关闭后各席只保留开局手牌；招式关（如炸弹教学）靠固定手牌逼玩家解题。
+   */
+  setPeriodicDrawEnabled(enabled: boolean): void {
+    this.periodicDrawEnabled = enabled;
+  }
+
+  /** 本局是否还会周期补牌。 */
+  isPeriodicDrawEnabled(): boolean {
+    return this.periodicDrawEnabled;
+  }
+
+  /**
+   * 拆掉开局播种的主堡（无基地关卡用）。
+   * 清实体与席位记录，让 updateMatchState 走「未播种」分支，
+   * 既不判胜负也不切阶段，通关完全交给关卡目标。
+   */
+  clearStartingCastles(): void {
+    for (const slot of allSlots(this.mode)) {
+      const castle = this.findSlotCastle(slot);
+      if (castle) {
+        castle.hp = 0;
+        castle.dead = true;
+      }
+      this.castleIds[slot] = null;
+      this.packStates[slot] = 'none';
+    }
+    // 统一走清尸流程：拆除占格与寻路阻挡，避免留下看不见的墙
+    this.world.removeDeadUnits();
+  }
+
+  /** 记一次出牌的牌型；阵型模板未知时忽略。 */
+  private recordPlayedCategory(slot: number, formationId: string): void {
+    const category = findFormationById(formationId)?.category;
+    if (!category) return;
+    const counts = this.playedCategoryCounts[slot];
+    if (counts) counts.set(category, (counts.get(category) ?? 0) + 1);
   }
 
   /** 把当前运行时默认节奏写进本局字段，避免构造后再覆盖漏字段。 */
@@ -211,6 +305,7 @@ export class MatchState {
       if (command.kind === CommandKind.PlayFormation) {
         if (!this.validate(command)) continue;
         this.decks[commandSlot(command)].play(command.cardIds);
+        this.recordPlayedCategory(commandSlot(command), command.formationId);
         accepted.push(this.clampTroopPlayFormation(command));
         continue;
       }
@@ -275,6 +370,8 @@ export class MatchState {
     h = mix(h, this.finalHandLimit);
     // 万能牌开关决定牌堆张数，两端读不同配置时必须能立刻对账出差异
     h = mix(h, this.wildCardsEnabled ? 1 : 0);
+    // 补牌开关决定手牌是否还会增长，同样影响两端一致性
+    h = mix(h, this.periodicDrawEnabled ? 1 : 0);
     return h >>> 0;
   }
 
@@ -290,6 +387,7 @@ export class MatchState {
       this.decks[slot]!.reset(cards);
       this.castleIds[slot] = null;
       this.packStates[slot] = 'none';
+      this.playedCategoryCounts[slot]!.clear();
     }
     this.phase = 'normal';
     this.result = null;
@@ -411,7 +509,12 @@ export class MatchState {
    * 有待发牌时视为 0（读条收起）；未传时默认蓝方席 0，兼容旧调用。
    */
   getTicksUntilDraw(slot: number = Faction.Blue): number {
-    if (this.result || this.phase === 'settlement' || this.pendingDraw[slot]) {
+    if (
+      this.result
+      || this.phase === 'settlement'
+      || this.pendingDraw[slot]
+      || !this.periodicDrawEnabled
+    ) {
       return 0;
     }
     return Math.max(0, this.nextDrawTicks[slot]! - this.world.tick);
@@ -420,7 +523,8 @@ export class MatchState {
   /** 该席是否有一张周期已到、因满手尚未发出的待发牌。 */
   hasPendingDraw(slot: number): boolean {
     return (
-      !this.result
+      this.periodicDrawEnabled
+      && !this.result
       && this.phase !== 'settlement'
       && this.pendingDraw[slot] === true
     );
@@ -476,12 +580,15 @@ export class MatchState {
     this.clampDrawCountdown();
   }
 
-  /** 覆盖各阶段时长；边界从 tick 0 重算，并立刻按当前 tick 切阶段。 */
+  /**
+   * 覆盖各阶段时长；边界从 tick 0 重算，并立刻按当前 tick 切阶段。
+   * 后三段允许为 0（战役用它跳过倍速/决胜/结算），到点时同帧连跳直接收局。
+   */
   setPhaseDurations(durations: MatchPhaseDurations): void {
     this.normalPhaseTicks = clampPositiveTicks(durations.normalTicks);
-    this.doubleSpeedPhaseTicks = clampPositiveTicks(durations.doubleSpeedTicks);
-    this.finalPhaseTicks = clampPositiveTicks(durations.finalTicks);
-    this.settlementPhaseTicks = clampPositiveTicks(durations.settlementTicks);
+    this.doubleSpeedPhaseTicks = clampPhaseTicks(durations.doubleSpeedTicks);
+    this.finalPhaseTicks = clampPhaseTicks(durations.finalTicks);
+    this.settlementPhaseTicks = clampPhaseTicks(durations.settlementTicks);
     // 未播种主堡时不启用对局结算，避免沙盒/单测被改时长直接收局
     if (!this.result && this.castleIds.some((id) => id !== null)) {
       this.advancePhases();
@@ -546,6 +653,7 @@ export class MatchState {
   /**
    * 按当前 tick 连续越过已到期的阶段边界。
    * 调试改时长时也走这里，避免暂停或同帧改数后阶段仍停在旧边界。
+   * 零时长阶段在同一帧内顺序连跳，不会停留可见的中间阶段。
    */
   private advancePhases(): void {
     if (this.phase === 'normal' && this.world.tick >= this.doubleSpeedStartTick()) {
@@ -692,6 +800,8 @@ export class MatchState {
    */
   private tryDrawForSlot(slot: number): void {
     if (this.phase === 'settlement') return;
+    // 关卡关闭补牌后只保留开局手牌，待发与读条都不再推进
+    if (!this.periodicDrawEnabled) return;
     const deck = this.decks[slot]!;
     const interval = this.drawIntervalTicks();
     if (this.pendingDraw[slot]) {
@@ -861,6 +971,12 @@ function commandSlot(cmd: { slot?: number; faction: Faction }): number {
 function clampPositiveTicks(ticks: number): number {
   if (!Number.isFinite(ticks)) return 1;
   return Math.max(1, Math.floor(ticks));
+}
+
+/** 阶段时长取整并允许 0：0 表示跳过该阶段。 */
+function clampPhaseTicks(ticks: number): number {
+  if (!Number.isFinite(ticks)) return 0;
+  return Math.max(0, Math.floor(ticks));
 }
 
 /** 调试覆盖加速倍率时夹到 1–3，非法值回落默认 1.5。 */

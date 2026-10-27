@@ -42,6 +42,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onStartSandbox: vi.fn(),
     onStartSolo: vi.fn(),
     onStartSoloDebug: vi.fn(),
+    onOpenCampaign: vi.fn(),
     onOpenOnline: vi.fn(),
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
@@ -82,6 +83,7 @@ function mountMainMenuDom(): void {
       <button id="btn-replays"></button>
       <button id="btn-solo-ai"></button>
       <button id="btn-solo-debug"></button>
+      <button id="btn-solo-campaign"></button>
       <div class="lobby-status-row">
         <div id="lobby-status"></div>
       </div>
@@ -212,6 +214,17 @@ describe('大厅玩家档案展示', () => {
     document.querySelector<HTMLButtonElement>('#btn-solo-debug')!.click();
 
     expect(onStartSoloDebug).toHaveBeenCalledTimes(1);
+    expect(onStartSolo).not.toHaveBeenCalled();
+  });
+
+  it('点击战役进入选关页，且不走人机入口', () => {
+    const onStartSolo = vi.fn();
+    const onOpenCampaign = vi.fn();
+    createMainMenu(menuOptions({ onStartSolo, onOpenCampaign }));
+
+    document.querySelector<HTMLButtonElement>('#btn-solo-campaign')!.click();
+
+    expect(onOpenCampaign).toHaveBeenCalledTimes(1);
     expect(onStartSolo).not.toHaveBeenCalled();
   });
 

@@ -138,6 +138,14 @@ export function defaultMatchRules(): MatchRules {
   return draftToMatchRules(liveDraft);
 }
 
+/**
+ * 在当前运行时默认之上叠加局部覆盖并转成规则。
+ * 战役关卡只写需要改的字段，其余沿用默认；不会修改全局草稿。
+ */
+export function matchRulesWithOverrides(overrides: Partial<MatchRulesDraft>): MatchRules {
+  return draftToMatchRules({ ...liveDraft, ...overrides });
+}
+
 /** 导出当前运行时草稿，供调试面板与写盘。 */
 export function dumpMatchRulesDraft(): MatchRulesDraft {
   return cloneDraft(liveDraft);

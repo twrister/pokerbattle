@@ -25,6 +25,7 @@ import {
   withBombDamageAriaLabel,
 } from './formationBombDamage.js';
 import { appendFormationTag, applyFormationNameFallback } from './formationTag.js';
+import { createHandGuide, type HandGuideHandle } from './handGuide.js';
 import { getFormationThumbnail } from '../view/formationThumbnail.js';
 
 const PLAY_ANIMATION_MS = 360;
@@ -37,10 +38,6 @@ const DRAW_WRAP_NEAR_ZERO_RATIO = 0.2;
 const STATUS_NO_CATEGORY = '未凑成有效牌型';
 /** 选中超过牌型上限（5 张）时的提示。 */
 const STATUS_TOO_MANY_CARDS = '牌型最多5张，请减少选牌';
-/** 拖到战场但落点不在可放置区域时的提示。 */
-const STATUS_INVALID_DROP = '请在蓝色高亮区域内放置';
-/** 拖拽建筑阵型时的操作提示。 */
-const STATUS_BUILDING_DRAG = '拖到蓝色格子上松手放置';
 /** 选中牌里只有万能牌（没搭配任何真牌）时的提示。 */
 const STATUS_WILD_ALONE = '万能牌需搭配其他牌，不能单独打出';
 /** 万能牌与大小王混选时的提示：规则上万能牌不能替代王牌。 */
@@ -84,6 +81,11 @@ export interface HandPanelOptions {
   /** 当前阶段手牌上限；未提供时回退到 MAX_HAND_SIZE。 */
   getMaxHandSize?: () => number;
   /**
+   * 本关是否已禁止补牌（战役一次性手牌关）。
+   * 为 true 时牌堆读条恒为空、置灰，读屏提示改成「本关不再补牌」。
+   */
+  getDrawDisabled?: () => boolean;
+  /**
    * 外部权威待发标记。提供后不再用倒计时回绕猜测晃动，
    * 避免冲掉 pending 重开读条时被误判成又一次发牌失败。
    */
@@ -123,6 +125,11 @@ export interface HandPanelOptions {
   onPlaceableHighlightEnd?: () => void;
   /** 出兵成功且出牌动画结束后的回调。 */
   onPlay?: (cards: readonly PlayingCard[], formation: CardFormation | null) => void;
+  /**
+   * 启用虚拟手指弱引导：长时间没选牌/没出兵时用动效演示下一步，不显示文字。
+   * 缺省关闭，联机对局与已过教学段的关卡不需要。
+   */
+  guideEnabled?: boolean;
 }
 
 export interface HandPanelHandle {
@@ -219,6 +226,25 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   let blockedDrawShake = false;
   let lastRemainingMs: number | undefined;
   let lastHandWasFull = false;
+  /**
+   * 手牌弱引导：长时间没选牌/没出兵时用手指动效演示下一步。
+   * 未开启时为空壳，update 里照常 tick 也不会产生视觉影响。
+   */
+  const guide: HandGuideHandle = createHandGuide({
+    enabled: options.guideEnabled === true,
+    cardsElement,
+    formationsElement,
+    battlefieldElement: document.querySelector<HTMLElement>('#app'),
+  });
+
+  /** 推进弱引导：状态全取自面板自身，调用方不必额外传参。 */
+  function tickGuide(deltaMs: number): void {
+    guide.tick(deltaMs, {
+      canGuide: !playing && !playLocked,
+      hasSelection: selected.size > 0,
+      formationVisible: formations.length > 0 && !playing,
+    });
+  }
 
   // #solo-hand 是跨局复用的节点；上一局败方锁定会留下 is-play-locked（pointer-events:none），
   // 不先清掉的话新手牌面板看起来能亮、实际点不了牌。
@@ -282,6 +308,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const cardElement = (event.target as Element).closest<HTMLElement>('.playing-card[data-card-id]');
     const cardId = cardElement?.dataset.cardId;
     if (!cardId || !cardsElement.contains(cardElement)) return;
+    guide.notifyInteraction();
     const anchorIndex = deck.hand.findIndex((card) => card.id === cardId);
     if (anchorIndex < 0) return;
     event.preventDefault();
@@ -347,14 +374,15 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const cards = deck.hand.filter((card) => selected.has(card.id));
     if (cards.length === 0) return false;
     if (options.onRequestSpawn?.({ formation, cards, point }) === false) {
-      setActionStatus(STATUS_INVALID_DROP);
-      // 落点非法：给一声短促报错，比只靠文字更容易注意到
+      // 落点非法不再出文字：指引线已变红，再补一声短促报错足够提示
       sfx.play('ui_error');
       return false;
     }
 
     setActionStatus(null);
     sfx.play('card_play');
+    // 出兵已成功，本轮弱引导目标达成，收起手指并重新计时
+    guide.notifyInteraction();
     const playedIds = cards.map((card) => card.id);
     playing = true;
     formationsElement.querySelectorAll<HTMLButtonElement>('.formation-option').forEach((button) => {
@@ -393,6 +421,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
    */
   const onSelectBestClick = (): void => {
     if (playing) return;
+    guide.notifyInteraction();
     clearPreview();
     pointerId = null;
     dragAnchorIndex = null;
@@ -450,6 +479,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const formationId = button.dataset.formationId;
     const formation = formations.find((entry) => entry.id === formationId) ?? null;
     if (!formation) return;
+    guide.notifyInteraction();
     event.preventDefault();
     dragFormationId = formation.id;
     dragPointerId = event.pointerId;
@@ -486,12 +516,9 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
 
     if (buttonRect && isInsideRect(buttonRect, clientX, clientY)) {
       // 已拖出再回来，或建筑/炸弹：按钮内松手只取消
-      if (leftButton || wasBuilding || wasAoe) setActionStatus(null);
-      else requestPlay(formation, null);
+      if (!leftButton && !wasBuilding && !wasAoe) requestPlay(formation, null);
     } else if (isOverBattlefield(clientX, clientY)) {
       requestPlay(formation, { clientX, clientY });
-    } else if (wasBuilding || wasAoe) {
-      setActionStatus(null);
     }
     endFormationDrag(event.pointerId);
   };
@@ -499,12 +526,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   const onFormationPointerCancel = (event: PointerEvent): void => {
     if (event.pointerId !== dragPointerId) return;
     endFormationDrag(event.pointerId);
-    setActionStatus(null);
   };
 
   /**
    * 非建筑：键盘/辅助技术触发的点击等价于自动放置。
-   * 建筑：只提示拖拽，不落成；指针手势已处理过的 click 直接吞掉。
+   * 建筑：没有自动落点，点击不落成（弱引导由虚拟手指动画承担）；指针手势已处理过的 click 直接吞掉。
    */
   const onFormationClick = (event: Event): void => {
     if (suppressClick) {
@@ -517,10 +543,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (!button || button.disabled) return;
     const formation = formations.find((entry) => entry.id === button.dataset.formationId) ?? null;
     if (!formation) return;
-    if (isBuildingOnlyFormation(formation) || isFuseBombFormation(formation)) {
-      setActionStatus(STATUS_BUILDING_DRAG);
-      return;
-    }
+    if (isBuildingOnlyFormation(formation) || isFuseBombFormation(formation)) return;
     requestPlay(formation, null);
   };
 
@@ -582,7 +605,6 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     if (draggingBuilding) {
       options.onBuildingDragStart?.(formation);
       options.onBuildingDragMove?.(clientX, clientY);
-      setActionStatus(STATUS_BUILDING_DRAG);
     } else if (draggingAoe) {
       options.onAoeDragStart?.(formation);
       options.onAoeDragMove?.(clientX, clientY);
@@ -896,7 +918,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     return Boolean(drawn);
   }
 
-  /** 同步牌堆补牌进度；待发晃动时收起黑罩，空堆同样无遮罩。 */
+  /** 同步牌堆补牌进度；待发晃动或本关不补牌时收起黑罩，空堆同样无遮罩。 */
   function syncStatus(): void {
     const ms = options.getDrawRemainingMs?.() ?? remainingMs;
     // 联机/MatchState 路径必须用阶段表间隔，否则会按调试默认夹断倒计时。
@@ -904,8 +926,14 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     const maxHandSize = Math.max(1, options.getMaxHandSize?.() ?? MAX_HAND_SIZE);
     const handCount = deck.hand.length;
     const isFull = handCount >= maxHandSize;
-    const isEmpty = deck.availableCount === 0;
-    if (options.getHasPendingDraw) {
+    // 关卡关掉补牌后牌堆只是一叠摆设：既不读条也不晃动
+    const drawDisabled = options.getDrawDisabled?.() === true;
+    const isPileEmpty = deck.availableCount === 0;
+    // 读条收起与置灰共用同一判据：空堆或本关不补牌
+    const dimPile = drawDisabled || isPileEmpty;
+    if (drawDisabled) {
+      blockedDrawShake = false;
+    } else if (options.getHasPendingDraw) {
       blockedDrawShake = options.getHasPendingDraw();
     } else if (!isFull) {
       blockedDrawShake = false;
@@ -916,7 +944,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     lastHandWasFull = isFull;
     lastRemainingMs = ms;
     // 晃动代表待发卡住，黑罩应收起；空堆同样不盖遮罩。
-    const progress = blockedDrawShake || isEmpty
+    const progress = blockedDrawShake || dimPile
       ? 0
       : Math.min(Math.max(ms, 0), intervalMs) / intervalMs;
     drawPile.style.setProperty('--draw-progress', `${progress * 100}%`);
@@ -924,30 +952,34 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       drawPile.classList.toggle('is-full', blockedDrawShake);
       lastPileFull = blockedDrawShake;
     }
-    if (lastPileEmpty !== isEmpty) {
-      drawPile.classList.toggle('is-empty', isEmpty);
-      lastPileEmpty = isEmpty;
+    if (lastPileEmpty !== dimPile) {
+      drawPile.classList.toggle('is-empty', dimPile);
+      lastPileEmpty = dimPile;
     }
     const pileLabel = blockedDrawShake
       ? '手牌已满，牌堆等待出牌'
-      : isEmpty
-        ? '牌堆已空'
-        : '牌堆正在准备补牌';
+      : drawDisabled
+        ? '本关不再补牌'
+        : isPileEmpty
+          ? '牌堆已空'
+          : '牌堆正在准备补牌';
     if (lastPileLabel !== pileLabel) {
       drawPile.setAttribute('aria-label', pileLabel);
       lastPileLabel = pileLabel;
     }
     // 张数与满手提示共用一条：未满只报 x/x，满手加「已满」并改提示色。
-    const countText = isFull
+    // 本关不补牌时「已满」没有意义（等不到下一张），只报张数。
+    const countText = isFull && !drawDisabled
       ? `手牌已满 ${handCount} / ${maxHandSize}`
       : `${handCount} / ${maxHandSize}`;
     if (lastHandCountText !== countText) {
       handCountLabel.textContent = countText;
       lastHandCountText = countText;
     }
-    if (lastHandFull !== isFull) {
-      handCountLabel.classList.toggle('is-full', isFull);
-      lastHandFull = isFull;
+    const showFull = isFull && !drawDisabled;
+    if (lastHandFull !== showFull) {
+      handCountLabel.classList.toggle('is-full', showFull);
+      lastHandFull = showFull;
     }
   }
 
@@ -955,6 +987,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
     deck,
     update(deltaMs: number) {
       if (disposed) return;
+      // 弱引导与抽牌路径无关，放在所有早返回之前推进，联机/外部抽牌时也能计时
+      tickGuide(deltaMs);
       // MatchState 负责抽牌时只刷新倒计时文案
       if (options.externalDraw) {
         syncStatus();
@@ -994,6 +1028,8 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       playLocked = locked;
       root.classList.toggle('is-play-locked', locked);
       if (locked) {
+        // 锁定出牌后不再引导，手指立刻收起
+        guide.hide();
         selected.clear();
         setActionStatus('基地陷落 · 停止发牌');
       }
@@ -1057,6 +1093,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
       formationsElement.removeEventListener('click', onFormationClick);
       hideArrow();
       setActionStatus(null);
+      guide.dispose();
       cardsElement.replaceChildren();
       formationsElement.replaceChildren();
       formationsElement.classList.remove('is-visible');

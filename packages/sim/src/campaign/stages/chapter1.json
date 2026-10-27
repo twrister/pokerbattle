@@ -1,0 +1,70 @@
+[
+  {
+    "id": "c1_1",
+    "chapter": 1,
+    "index": 1,
+    "title": "第一次出兵",
+    "seed": 1101,
+    "rules": {
+      "wildCardsEnabled": false,
+      "initialHandSize": 1,
+      "normalHandLimit": 5,
+      "normalDrawIntervalSeconds": 5
+    },
+    "castles": false,
+    "enemy": { "kind": "none" },
+    "preset": [{ "faction": 1, "typeId": "building_tower", "x": 9, "y": 24 }],
+    "objectives": [
+      { "kind": "play_any" },
+      { "kind": "destroy_towers" }
+    ]
+  },
+  {
+    "id": "c1_2",
+    "chapter": 1,
+    "index": 2,
+    "title": "凑出炸弹",
+    "seed": 1102,
+    "rules": {
+      "wildCardsEnabled": false,
+      "initialHandSize": 7,
+      "normalHandLimit": 7
+    },
+    "fixedHand": ["8", "8", "8", "8", "7", "7", "6"],
+    "periodicDraw": false,
+    "castles": false,
+    "enemy": { "kind": "none" },
+    "preset": [
+      { "faction": 1, "typeId": "melee_grunt", "x": 6, "y": 21 },
+      { "faction": 1, "typeId": "melee_guard", "x": 7.2, "y": 21 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 8.4, "y": 21 },
+      { "faction": 1, "typeId": "melee_guard", "x": 9.6, "y": 21 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 10.8, "y": 21 },
+      { "faction": 1, "typeId": "melee_guard", "x": 12, "y": 21 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 6.6, "y": 22.4 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 7.8, "y": 22.4 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 9, "y": 22.4 },
+      { "faction": 1, "typeId": "melee_grunt", "x": 10.2, "y": 22.4 },
+      { "faction": 1, "typeId": "ranged_archer", "x": 11.4, "y": 22.4 },
+      { "faction": 1, "typeId": "melee_guard", "x": 12.6, "y": 22.4 }
+    ],
+    "objectives": [{ "kind": "clear_enemy_units" }]
+  },
+  {
+    "id": "c1_3",
+    "chapter": 1,
+    "index": 3,
+    "title": "手牌有上限",
+    "seed": 1103,
+    "rules": {
+      "wildCardsEnabled": false,
+      "initialHandSize": 5,
+      "normalHandLimit": 5,
+      "doubleSpeedHandLimit": 5,
+      "finalHandLimit": 5,
+      "normalDrawIntervalSeconds": 2
+    },
+    "enemy": { "kind": "bot", "difficulty": "easy" },
+    "objectives": [{ "kind": "destroy_base" }]
+  }
+]

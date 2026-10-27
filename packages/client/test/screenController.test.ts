@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { createScreenController } from '../src/ui/screenController.js';
 
 describe('页面状态管理', () => {
@@ -43,6 +43,7 @@ describe('页面状态管理', () => {
       'special-tiers': () => vi.fn(),
       'hand-odds': enterHandOdds,
       codex: enterCodex,
+      campaign: () => vi.fn(),
       leaderboard: enterLeaderboard,
       'replay-list': enterReplayList,
       replay: enterReplay,
@@ -95,6 +96,7 @@ describe('页面状态管理', () => {
       'special-tiers': () => vi.fn(),
       'hand-odds': () => vi.fn(),
       codex: () => vi.fn(),
+      campaign: () => vi.fn(),
       leaderboard: () => vi.fn(),
       'replay-list': () => vi.fn(),
       replay: () => vi.fn(),
@@ -127,6 +129,7 @@ describe('页面状态管理', () => {
       'special-tiers': () => vi.fn(),
       'hand-odds': () => vi.fn(),
       codex: () => vi.fn(),
+      campaign: () => vi.fn(),
       leaderboard: () => vi.fn(),
       'replay-list': () => vi.fn(),
       replay: () => vi.fn(),
@@ -148,3 +151,4 @@ describe('页面状态管理', () => {
     expect(screens.current).toBe('versus');
   });
 });
+

@@ -87,6 +87,39 @@ describe('对局文字提示', () => {
     expect(document.querySelector('#battle-announce-text')?.textContent).toBe('摧毁对方城堡');
   });
 
+  it('战役可开启常规阶段读秒，reset 后恢复默认不读秒', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    shortenDealPhases(match, { normalTicks: TICK_RATE * 15 });
+    const announce = createBattleAnnounce();
+    announce.setCountdownSeconds('normal', 10);
+    announce.tick(match);
+
+    while (match.world.tick < TICK_RATE * 5) match.step();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('10');
+    expect(document.querySelector('#battle-announce')?.classList.contains('is-countdown')).toBe(true);
+
+    announce.reset();
+    announce.tick(match);
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).not.toBe('10');
+  });
+
+  it('战役可覆盖常规阶段开场文案，reset 后恢复默认', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const announce = createBattleAnnounce();
+    announce.setEnterText('normal', '');
+    announce.tick(match);
+    // 空串表示该阶段不播报，避免无基地关卡喊着「摧毁对方城堡」
+    expect(document.querySelector('#battle-announce')?.classList.contains('is-hidden')).toBe(true);
+
+    announce.reset();
+    announce.tick(match);
+    expect(document.querySelector('#battle-announce-text')?.textContent).toBe('摧毁对方城堡');
+  });
+
   it('决胜最后 10 秒逐秒弹出数字', () => {
     const match = new MatchState(1);
     match.seedStartingCastles();

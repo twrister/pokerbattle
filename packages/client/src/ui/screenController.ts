@@ -6,6 +6,7 @@ export type AppScreen =
   | 'special-tiers'
   | 'hand-odds'
   | 'codex'
+  | 'campaign'
   | 'leaderboard'
   | 'replay-list'
   | 'replay'

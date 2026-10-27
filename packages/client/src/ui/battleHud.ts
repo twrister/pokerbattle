@@ -18,6 +18,11 @@ export interface BattleHudHandle {
   show(): void;
   hide(): void;
   setContext(context: BattleHudContext): void;
+  /**
+   * 显示/隐藏双方主堡血条。
+   * 战役里存在没有主堡的关卡，此时血条只有 0 / 0，必须整块收起。
+   */
+  setCastleBarsVisible(visible: boolean): void;
   /** 观战人数；0 人时隐藏。 */
   setSpectatorCount(count: number): void;
   /** 观战追帧提示。 */
@@ -119,6 +124,9 @@ export function createBattleHud(): BattleHudHandle {
       const n = Math.max(0, count | 0);
       spectators.textContent = `观战 ${n}`;
       spectators.classList.toggle('is-hidden', n === 0);
+    },
+    setCastleBarsVisible(visible) {
+      root.classList.toggle('is-no-castle', !visible);
     },
     setCatchingUp(catchingUp) {
       catchup.classList.toggle('is-hidden', !catchingUp);

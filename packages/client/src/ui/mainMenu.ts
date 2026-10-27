@@ -20,6 +20,8 @@ export interface MainMenuOptions {
   onStartSolo: (difficulty: SoloDifficulty) => void;
   /** 开发服调试模式：人机对局但玩家侧改为任意单兵种放置。 */
   onStartSoloDebug: () => void;
+  /** 进入战役选关页。 */
+  onOpenCampaign: () => void;
   /** 进入独立联机大厅页。 */
   onOpenOnline: () => void;
   onOpenDeckConfig: () => void;
@@ -58,6 +60,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const replaysButton = required<HTMLButtonElement>('#btn-replays', root);
   const soloAiButton = required<HTMLButtonElement>('#btn-solo-ai', root);
   const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
+  const soloCampaignButton = required<HTMLButtonElement>('#btn-solo-campaign', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
   const renamePanel = required<HTMLElement>('.mode-dialog-panel', renameDialog);
@@ -275,6 +278,11 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     closeModeDialogs();
     options.onStartSolo('hard');
   };
+  /** 关弹层后进入战役选关页。 */
+  const openCampaign = (): void => {
+    closeModeDialogs();
+    options.onOpenCampaign();
+  };
   /** 开发服进入调试放兵；正式服仅提示不可进入。 */
   const startSoloDebug = (): void => {
     closeModeDialogs();
@@ -334,6 +342,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   replaysButton.addEventListener('click', openReplays);
   soloAiButton.addEventListener('click', startSoloAi);
   soloDebugButton.addEventListener('click', startSoloDebug);
+  soloCampaignButton.addEventListener('click', openCampaign);
   profileButton.addEventListener('click', openRenameFromProfile);
   patchNotesButton.addEventListener('click', openPatchNotes);
   settingsButton.addEventListener('click', openSettings);
@@ -378,6 +387,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       replaysButton.removeEventListener('click', openReplays);
       soloAiButton.removeEventListener('click', startSoloAi);
       soloDebugButton.removeEventListener('click', startSoloDebug);
+      soloCampaignButton.removeEventListener('click', openCampaign);
       profileButton.removeEventListener('click', openRenameFromProfile);
       patchNotesButton.removeEventListener('click', openPatchNotes);
       settingsButton.removeEventListener('click', openSettings);

@@ -15,8 +15,15 @@ export interface BattleAnnounceHandle {
   /** 手动弹出；同文案且仍在展示中时不重播，避免闪烁。 */
   show(text: string, opts?: BattleAnnounceShowOpts): void;
   hide(): void;
-  /** 离开对局时清空边沿状态。 */
+  /** 离开对局时清空边沿状态，并把各阶段读秒恢复为默认。 */
   reset(): void;
+  /** 覆盖某阶段末尾的读秒秒数；0 关闭该阶段读秒。战役常规阶段借此读秒。 */
+  setCountdownSeconds(phase: MatchPhase, seconds: number): void;
+  /**
+   * 覆盖某阶段的开场播报文案；空串表示该阶段不播报。
+   * 无基地关卡不能再说「摧毁对方城堡」，改由关卡自己下一句。
+   */
+  setEnterText(phase: MatchPhase, text: string): void;
 }
 
 /** 阶段切入文案与是否在本阶段末尾倒数。 */
@@ -56,6 +63,14 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
   let lastCountdownSec: number | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let showingText = '';
+  /** 各阶段读秒秒数，默认取 PHASE_ANNOUNCE_RULES，可被 setCountdownSeconds 临时覆盖。 */
+  const countdownSeconds = new Map<MatchPhase, number>();
+  const countdownFor = (phase: MatchPhase): number =>
+    countdownSeconds.get(phase) ?? PHASE_ANNOUNCE_RULES[phase].countdownLastSeconds;
+  /** 各阶段开场播报文案覆盖；未登记时用 PHASE_ANNOUNCE_RULES。 */
+  const enterTexts = new Map<MatchPhase, string>();
+  const enterTextFor = (phase: MatchPhase): string =>
+    enterTexts.get(phase) ?? PHASE_ANNOUNCE_RULES[phase].enterText;
 
   const clearHideTimer = (): void => {
     if (!hideTimer) return;
@@ -96,12 +111,21 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
     reset() {
       lastPhase = null;
       lastCountdownSec = null;
+      // 战役的读秒与开场文案覆盖不能泄漏到联机/观战/回放
+      countdownSeconds.clear();
+      enterTexts.clear();
       hide();
     },
+    setCountdownSeconds(phase, seconds) {
+      countdownSeconds.set(phase, Math.max(0, Math.floor(seconds)));
+    },
+    setEnterText(phase, text) {
+      enterTexts.set(phase, text);
+    },
     tick(match) {
-      const rule = PHASE_ANNOUNCE_RULES[match.phase];
       if (match.phase !== lastPhase) {
-        if (rule.enterText) show(rule.enterText, { holdMs: PHASE_HOLD_MS });
+        const enterText = enterTextFor(match.phase);
+        if (enterText) show(enterText, { holdMs: PHASE_HOLD_MS });
         lastPhase = match.phase;
         // 切入时清空倒数，避免与阶段名同帧抢显
         lastCountdownSec = null;
@@ -109,14 +133,15 @@ export function createBattleAnnounce(): BattleAnnounceHandle {
       }
 
       if (match.phase === 'ended' || match.result) return;
-      if (rule.countdownLastSeconds <= 0) {
+      const lastSeconds = countdownFor(match.phase);
+      if (lastSeconds <= 0) {
         lastCountdownSec = null;
         return;
       }
 
       const remainingTicks = Math.max(0, match.getPhaseDeadlineTick() - match.world.tick);
       const seconds = Math.ceil(remainingTicks / TICK_RATE);
-      if (seconds >= 1 && seconds <= rule.countdownLastSeconds) {
+      if (seconds >= 1 && seconds <= lastSeconds) {
         if (seconds !== lastCountdownSec) {
           lastCountdownSec = seconds;
           const urgent = seconds <= COUNTDOWN_URGENT_SECONDS;

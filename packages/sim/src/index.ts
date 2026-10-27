@@ -307,6 +307,23 @@ export {
   type MatchMode,
 } from './match/matchMode.js';
 export { SoloBotController, type SoloDifficulty } from './match/soloBot.js';
+export {
+  type ScriptedEnemyStep,
+  type StageDef,
+  type StageEnemy,
+  type StageObjective,
+  type StagePresetUnit,
+  type StageStatus,
+} from './campaign/stageDef.js';
+export {
+  ObjectiveTracker,
+  type ObjectiveProgress,
+  type StageOutcome,
+} from './campaign/objectiveTracker.js';
+export { ScriptedEnemy } from './campaign/scriptedEnemy.js';
+export { CAMPAIGN_STAGE_SECONDS, StageRunner } from './campaign/stageRunner.js';
+export { CAMPAIGN_STAGES, getNextStage, getStageById } from './campaign/stages.js';
+export { matchRulesWithOverrides } from './config/matchRules.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';
