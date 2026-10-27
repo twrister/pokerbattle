@@ -88,10 +88,36 @@
         --stage-h: min(100svh, calc(100vw * 16 / 9));
         --stage-left: calc((100vw - var(--stage-w)) / 2);
         --hu: calc(var(--stage-w) / 720);
+        /*
+         * 字号专用单位：除 40 号以上的巨型展示字外，所有字号都用它。
+         * 默认与 --hu 完全同步，字号才能和间距/边框/图标一起等比缩放；
+         * 一旦给它独立下限，小分辨率下文字会先「停止缩小」，把只由文字决定高度的容器撑高、
+         * 让本该单行的文案提前折行，同宽高比的不同分辨率就会出现不同布局。
+         * 真正的窄屏（手机竖屏）另有媒体查询把下限打开，见下方 @media。
+         */
+        --fsu: var(--hu);
+        /*
+         * 页面壳高度：大厅/卡组/图鉴/档位表四类页面共用同一语义。
+         * 早期混用 min-height:100svh（可增长）与 height:100svh（锁死），
+         * 会让内容偏多的页在不同分辨率下纵向节奏不同，这里收敛成唯一来源。
+         */
+        --page-h: 100svh;
         /* 局内画布已铺满视口高度，上下不再扣留边；左右仍按舞台外场扣一次，避免安全区双计 */
         --stage-safe-top: env(safe-area-inset-top);
         --stage-safe-bottom: env(safe-area-inset-bottom);
         --stage-safe-left: max(0px, calc(env(safe-area-inset-left) - var(--stage-left)));
+      }
+
+      /*
+       * 仅在真正的窄屏档（手机竖屏）给字号 0.85px 下限。
+       * 此时 --hu 已缩到 0.5～0.6，10～17 号字实显只有 5～8px 读不清；
+       * 而这一档本身就走窄屏布局分支，字号放大不会再破坏等比关系。
+       * 其余分辨率一律保持 --fsu == --hu，同宽高比下布局逐像素一致。
+       */
+      @media (max-width: 620px) {
+        :root {
+          --fsu: max(var(--hu), 0.85px);
+        }
       }
 
       * {
@@ -107,7 +133,8 @@
         background: var(--backdrop-bg);
         color: var(--text);
         font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        font-size: 13px;
+        /* 基准字号也走舞台单位：开发页里 font: inherit 的输入框/按钮才会同比例缩放 */
+        font-size: calc(13 * var(--fsu));
         user-select: none;
       }
 
@@ -151,7 +178,7 @@
       /* 窄屏正式服：牌型/情况/阵型三行之后直接接满高预览 */
       @media (max-width: 580px) {
         html:not(.is-dev) .deck-content {
-          grid-template-rows: auto auto auto minmax(240px, 1.4fr);
+          grid-template-rows: auto auto auto minmax(calc(240 * var(--hu)), 1.4fr);
         }
 
         html:not(.is-dev) .deck-preview-panel {
@@ -385,7 +412,8 @@
         display: flex;
         flex-direction: column;
         width: var(--stage-w);
-        min-height: 100svh;
+        /* 页面壳高度统一走 --page-h，避免 min-height/height 混用导致纵向节奏不一致 */
+        min-height: var(--page-h);
         margin: 0 auto;
         padding:
           max(env(safe-area-inset-top), calc(54 * var(--hu)))
@@ -472,7 +500,7 @@
         box-shadow: 0 calc(4 * var(--hu)) 0 var(--btn-primary-shadow);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(24 * var(--hu));
+        font-size: calc(24 * var(--fsu));
         text-shadow: var(--text-outline);
       }
 
@@ -484,7 +512,7 @@
         overflow: hidden;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(21 * var(--hu));
+        font-size: calc(21 * var(--fsu));
         text-shadow: var(--text-outline);
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -500,7 +528,7 @@
         background: rgba(20, 33, 61, 0.55);
         color: var(--highlight);
         font-family: var(--font-display);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         letter-spacing: 0.04em;
       }
 
@@ -531,7 +559,7 @@
         min-height: calc(42 * var(--hu));
         padding: calc(4 * var(--hu)) calc(16 * var(--hu)) calc(4 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(999 * var(--hu));
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         letter-spacing: 0.04em;
         white-space: nowrap;
       }
@@ -552,7 +580,7 @@
       }
 
       .topbar-action-icon {
-        font-size: calc(26 * var(--hu));
+        font-size: calc(26 * var(--fsu));
       }
 
       .icon-gear { background-image: url('%BASE_URL%ui/icons/gear.png'); }
@@ -615,23 +643,23 @@
         width: 100%;
         box-sizing: border-box;
         padding: calc(12 * var(--hu)) calc(14 * var(--hu));
-        border: 1px solid rgba(169, 198, 220, 0.28);
+        border: calc(1 * var(--hu)) solid rgba(169, 198, 220, 0.28);
         border-radius: calc(10 * var(--hu));
         background: rgba(8, 14, 22, 0.88);
         color: #f2f5f7;
         font: inherit;
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
       }
 
       #rename-input:focus {
-        outline: 1px solid rgba(153, 207, 237, 0.55);
-        outline-offset: 1px;
+        outline: calc(1 * var(--hu)) solid rgba(153, 207, 237, 0.55);
+        outline-offset: calc(1 * var(--hu));
       }
 
       #rename-error {
         min-height: 1.2em;
         color: transparent;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       #rename-error.is-visible {
@@ -649,7 +677,7 @@
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
       }
 
       .lobby-hero {
@@ -701,7 +729,7 @@
         background: rgba(20, 33, 61, 0.55);
         color: var(--highlight);
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         letter-spacing: 0.16em;
         text-transform: uppercase;
       }
@@ -725,7 +753,7 @@
         max-width: 28em;
         margin: calc(20 * var(--hu)) auto 0;
         color: #fff;
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 700;
         line-height: 1.7;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.55);
@@ -748,7 +776,7 @@
         border-width: calc(4 * var(--hu));
         border-radius: calc(18 * var(--hu));
         --press-depth: calc(8 * var(--hu));
-        font-size: calc(28 * var(--hu));
+        font-size: calc(28 * var(--fsu));
         letter-spacing: 0.04em;
       }
 
@@ -756,7 +784,8 @@
         display: block;
         margin-top: calc(4 * var(--hu));
         color: rgba(255, 255, 255, 0.9);
-        font-size: 0.5em;
+        /* 原来是 0.5em：父级 28hu 缩到手机后只剩 7px，改用字号单位兜底 */
+        font-size: calc(14 * var(--fsu));
         letter-spacing: 0.18em;
       }
 
@@ -771,7 +800,7 @@
       #lobby-status {
         min-height: 1.4em;
         color: transparent;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         text-align: center;
         transition: color 0.18s;
       }
@@ -905,7 +934,7 @@
         margin: 0;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(26 * var(--hu));
+        font-size: calc(26 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         text-shadow: var(--text-outline);
@@ -919,7 +948,7 @@
         padding: 0;
         border-radius: calc(12 * var(--hu));
         --press-depth: calc(4 * var(--hu));
-        font-size: calc(22 * var(--hu));
+        font-size: calc(22 * var(--fsu));
         line-height: 1;
       }
 
@@ -970,13 +999,13 @@
       .patch-note-version {
         color: var(--sky-bottom);
         font-family: var(--font-display);
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         letter-spacing: 0.04em;
       }
 
       .patch-note-date {
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         letter-spacing: 0.06em;
       }
 
@@ -984,7 +1013,7 @@
         margin: 0;
         padding-left: calc(18 * var(--hu));
         color: var(--ink);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         line-height: 1.55;
       }
 
@@ -1002,7 +1031,7 @@
       .patch-note-date-input,
       .patch-note-items-input {
         box-sizing: border-box;
-        border: 1px solid rgba(169, 198, 220, 0.28);
+        border: calc(1 * var(--hu)) solid rgba(169, 198, 220, 0.28);
         border-radius: calc(8 * var(--hu));
         background: rgba(8, 14, 22, 0.88);
         color: #f2f5f7;
@@ -1012,7 +1041,7 @@
       .patch-note-version-input {
         width: calc(110 * var(--hu));
         padding: calc(8 * var(--hu)) calc(10 * var(--hu));
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 700;
       }
 
@@ -1020,14 +1049,14 @@
         width: calc(140 * var(--hu));
         padding: calc(8 * var(--hu)) calc(8 * var(--hu));
         color: #c5d4e0;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
       }
 
       .patch-note-remove {
         margin-left: auto;
         padding: calc(6 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(8 * var(--hu));
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
       }
 
       .patch-note-items-input {
@@ -1035,7 +1064,7 @@
         min-height: calc(84 * var(--hu));
         padding: calc(10 * var(--hu));
         color: #c5d4e0;
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         line-height: 1.5;
         resize: vertical;
       }
@@ -1054,11 +1083,11 @@
         width: 100%;
         padding: calc(11 * var(--hu)) calc(14 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
       }
 
       .patch-notes-feedback-icon {
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
       }
 
       .patch-notes-dev-bar {
@@ -1069,7 +1098,7 @@
       #patch-notes-status {
         min-height: 1.2em;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       #patch-notes-status.is-error {
@@ -1087,7 +1116,7 @@
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
       }
 
       #btn-patch-notes-save {
@@ -1106,12 +1135,12 @@
         box-sizing: border-box;
         min-height: calc(96 * var(--hu));
         padding: calc(10 * var(--hu));
-        border: 1px solid rgba(169, 198, 220, 0.28);
+        border: calc(1 * var(--hu)) solid rgba(169, 198, 220, 0.28);
         border-radius: calc(8 * var(--hu));
         background: rgba(8, 14, 22, 0.88);
         color: #f2f5f7;
         font: inherit;
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         line-height: 1.5;
         resize: vertical;
       }
@@ -1121,14 +1150,14 @@
       }
 
       #feedback-input:focus {
-        outline: 1px solid rgba(153, 207, 237, 0.55);
-        outline-offset: 1px;
+        outline: calc(1 * var(--hu)) solid rgba(153, 207, 237, 0.55);
+        outline-offset: calc(1 * var(--hu));
       }
 
       #feedback-status {
         min-height: 1.2em;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       #feedback-status.is-error {
@@ -1146,7 +1175,7 @@
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
       }
 
       /* 设置弹层：每行一个可点开关，行样式与联机成员卡片同质感 */
@@ -1183,13 +1212,13 @@
       .settings-row-label {
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(18 * var(--hu));
+        font-size: calc(18 * var(--fsu));
         letter-spacing: 0.04em;
       }
 
       .settings-row-hint {
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       /* 开关轨道：滑块位置完全由 aria-checked 决定，JS 只改属性 */
@@ -1234,7 +1263,7 @@
       .settings-row-arrow {
         flex: 0 0 auto;
         color: var(--ink-soft);
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         line-height: 1;
       }
 
@@ -1252,30 +1281,32 @@
       .sfx-config-shell {
         display: flex;
         flex-direction: column;
-        width: 100%;
-        height: 100%;
-        padding: 16px 20px 12px;
-        gap: 12px;
+        /* 与其它页面共用 9:16 舞台宽度，宽屏时居中并露出外场底板 */
+        width: var(--stage-w);
+        height: var(--page-h);
+        margin: 0 auto;
+        padding: calc(16 * var(--hu)) calc(20 * var(--hu)) calc(12 * var(--hu));
+        gap: calc(12 * var(--hu));
         overflow: hidden;
       }
 
       .sfx-config-header {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         flex-shrink: 0;
       }
 
       .sfx-config-header h1 {
         margin: 0;
-        font-size: 22px;
+        font-size: calc(22 * var(--fsu));
       }
 
       .sfx-config-header button {
-        min-height: 34px;
-        padding: 7px 12px;
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
+        min-height: calc(34 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
         background: rgba(28, 42, 57, 0.78);
         color: var(--text);
         font: inherit;
@@ -1284,7 +1315,7 @@
 
       .sfx-config-hint {
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
       }
 
       #sfx-config-list {
@@ -1292,14 +1323,14 @@
         min-height: 0;
         overflow: auto;
         display: grid;
-        gap: 14px;
+        gap: calc(14 * var(--hu));
         align-content: start;
-        padding-right: 4px;
+        padding-right: calc(4 * var(--hu));
       }
 
       .sfx-config-group h2 {
-        margin: 0 0 8px;
-        font-size: 13px;
+        margin: 0 0 calc(8 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 600;
         color: var(--text-dim);
       }
@@ -1308,25 +1339,25 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto auto auto;
         align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
+        gap: calc(10 * var(--hu));
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
         background: rgba(16, 24, 34, 0.72);
       }
 
       /* 单音效开关：关闭态整行压暗，一眼看出局内不会响 */
       .sfx-config-row .sfx-config-toggle {
         flex: 0 0 auto;
-        min-width: 40px;
-        min-height: 26px;
-        padding: 3px 8px;
-        border: 1px solid rgba(139, 165, 184, 0.28);
+        min-width: calc(40 * var(--hu));
+        min-height: calc(26 * var(--hu));
+        padding: calc(3 * var(--hu)) calc(8 * var(--hu));
+        border: calc(1 * var(--hu)) solid rgba(139, 165, 184, 0.28);
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.08);
         color: #8b98ab;
         font: inherit;
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         cursor: pointer;
         transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
       }
@@ -1344,17 +1375,17 @@
 
       .sfx-config-row-main {
         display: grid;
-        gap: 2px;
+        gap: calc(2 * var(--hu));
         min-width: 0;
       }
 
       .sfx-config-row-label {
-        font-size: 14px;
+        font-size: calc(14 * var(--fsu));
       }
 
       .sfx-config-row-detail {
         color: var(--text-dim);
-        font-size: 11px;
+        font-size: calc(11 * var(--fsu));
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1362,29 +1393,29 @@
 
       .sfx-config-row-size {
         color: var(--text-dim);
-        font-size: 11px;
-        min-width: 56px;
+        font-size: calc(11 * var(--fsu));
+        min-width: calc(56 * var(--hu));
         text-align: right;
       }
 
       .sfx-config-row-actions {
         display: flex;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
         flex-wrap: wrap;
         justify-content: flex-end;
       }
 
       .sfx-config-row-actions button {
-        min-height: 28px;
-        padding: 4px 10px;
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
+        min-height: calc(28 * var(--hu));
+        padding: calc(4 * var(--hu)) calc(10 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(6 * var(--hu));
         background: rgba(28, 42, 57, 0.78);
         color: var(--text);
         font: inherit;
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         cursor: pointer;
-        max-width: 180px;
+        max-width: calc(180 * var(--hu));
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1398,15 +1429,15 @@
       .sfx-config-footer {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
         flex-shrink: 0;
       }
 
       #sfx-config-status {
         flex: 1;
-        min-width: 160px;
+        min-width: calc(160 * var(--hu));
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
       }
 
       #sfx-config-status[data-tone='ok'] {
@@ -1427,7 +1458,7 @@
         padding: calc(16 * var(--hu)) calc(14 * var(--hu));
         border-radius: calc(14 * var(--hu));
         --press-depth: calc(6 * var(--hu));
-        font-size: calc(22 * var(--hu));
+        font-size: calc(22 * var(--fsu));
         letter-spacing: 0.04em;
         text-align: center;
       }
@@ -1436,7 +1467,8 @@
         display: block;
         margin-top: calc(4 * var(--hu));
         color: rgba(255, 255, 255, 0.92);
-        font-size: 0.6em;
+        /* 原来是 0.6em：父级 22hu 缩到手机后只剩 6.6px，改用字号单位兜底 */
+        font-size: calc(14 * var(--fsu));
         letter-spacing: 0.06em;
       }
 
@@ -1450,7 +1482,7 @@
 
       .online-page-header h1 {
         margin: 0;
-        font-size: calc(30 * var(--hu));
+        font-size: calc(30 * var(--fsu));
         letter-spacing: 0.04em;
         text-align: center;
       }
@@ -1466,7 +1498,7 @@
         padding: calc(8 * var(--hu)) calc(14 * var(--hu));
         border-radius: calc(12 * var(--hu));
         --press-depth: calc(4 * var(--hu));
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         white-space: nowrap;
       }
 
@@ -1483,9 +1515,10 @@
         min-height: 0;
       }
 
+      /* 一行一个房间：单列铺满，房间名可获得完整横向空间，不再挤成两列 */
       #online-lobby-list {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--space-2);
         flex: 1;
         align-content: start;
@@ -1503,7 +1536,7 @@
         border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.1);
         color: #fff;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 700;
         text-align: center;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -1535,9 +1568,15 @@
         background: #ecd9a8;
       }
 
+      /*
+       * 单列后卡片变宽，房号/房名/人数/状态合并成一行；
+       * 不换行，长房间名交给省略号处理，保证每行卡片高度一致。
+       */
       .online-room-card-meta {
-        display: grid;
-        gap: var(--space-1);
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: baseline;
+        gap: var(--space-3);
         min-width: 0;
       }
 
@@ -1546,6 +1585,7 @@
         align-items: baseline;
         gap: calc(8 * var(--hu));
         min-width: 0;
+        flex: 1 1 auto;
       }
 
       .online-room-card-info {
@@ -1553,12 +1593,13 @@
         align-items: center;
         gap: calc(8 * var(--hu));
         min-width: 0;
+        flex: 0 0 auto;
       }
 
       .online-room-card-state {
         overflow: hidden;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1575,7 +1616,7 @@
         min-width: calc(72 * var(--hu));
         padding: calc(8 * var(--hu)) calc(12 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         cursor: pointer;
       }
 
@@ -1599,7 +1640,7 @@
         color: var(--sky-bottom);
         font-family: var(--font-display);
         letter-spacing: 0.08em;
-        font-size: calc(22 * var(--hu));
+        font-size: calc(22 * var(--fsu));
       }
 
       .online-room-card-name {
@@ -1607,14 +1648,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 700;
       }
 
       .online-room-card-count {
         flex: 0 0 auto;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       .online-lobby-actions,
@@ -1640,7 +1681,7 @@
         padding: calc(14 * var(--hu)) calc(12 * var(--hu));
         border-radius: calc(14 * var(--hu));
         --press-depth: calc(6 * var(--hu));
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
       }
 
       #btn-online-room-start:disabled {
@@ -1654,7 +1695,7 @@
         min-height: 1.4em;
         margin-top: var(--space-2);
         color: transparent;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         text-align: center;
       }
 
@@ -1683,7 +1724,7 @@
       .replay-list-empty {
         padding: calc(28 * var(--hu)) 0;
         color: #fff;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 700;
         text-align: center;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -1716,7 +1757,7 @@
         background: #8fa3bf;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
       }
 
@@ -1729,13 +1770,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 700;
       }
 
       .leaderboard-stats {
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         white-space: nowrap;
       }
 
@@ -1743,7 +1784,7 @@
         min-height: 1.4em;
         margin-top: calc(10 * var(--hu));
         color: transparent;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         text-align: center;
       }
 
@@ -1756,7 +1797,7 @@
         background: rgba(255, 201, 40, 0.3);
         color: #4a3200;
         font-family: var(--font-display);
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         text-align: center;
       }
 
@@ -1783,7 +1824,7 @@
         background: linear-gradient(180deg, #7be07b, #3fb83f);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         cursor: pointer;
       }
 
@@ -1809,7 +1850,7 @@
         border-radius: calc(12 * var(--hu));
         background: rgba(20, 33, 61, 0.78);
         color: #fff;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         pointer-events: none;
       }
 
@@ -1817,7 +1858,7 @@
         display: block;
         margin-bottom: calc(4 * var(--hu));
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
       }
 
       #stage-hud-objectives {
@@ -1852,7 +1893,7 @@
         margin: calc(10 * var(--hu)) 0 calc(2 * var(--hu));
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         text-shadow: var(--text-outline);
       }
 
@@ -1884,7 +1925,7 @@
         background: #8fa3bf;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
       }
 
       .campaign-stage.is-cleared .campaign-stage-index {
@@ -1892,13 +1933,13 @@
       }
 
       .campaign-stage-title {
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 700;
       }
 
       .campaign-stage-status {
         color: #2f9e44;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 700;
         white-space: nowrap;
       }
@@ -1939,7 +1980,7 @@
 
       .replay-list-time {
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         white-space: nowrap;
       }
 
@@ -1948,13 +1989,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 700;
       }
 
       .replay-list-meta {
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         white-space: nowrap;
       }
 
@@ -1962,7 +2003,7 @@
         min-height: 1.4em;
         margin-top: calc(10 * var(--hu));
         color: #fff;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 700;
         text-align: center;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.55);
@@ -1975,7 +2016,7 @@
 
       .online-dialog-label {
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 650;
         letter-spacing: 0.08em;
       }
@@ -1985,25 +2026,25 @@
         width: 100%;
         box-sizing: border-box;
         padding: calc(12 * var(--hu)) calc(14 * var(--hu));
-        border: 1px solid rgba(169, 198, 220, 0.28);
+        border: calc(1 * var(--hu)) solid rgba(169, 198, 220, 0.28);
         border-radius: calc(10 * var(--hu));
         background: rgba(8, 14, 22, 0.88);
         color: #f2f5f7;
         font: inherit;
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
       }
 
       #online-create-name-input:focus,
       #online-join-id-input:focus {
-        outline: 1px solid rgba(153, 207, 237, 0.55);
-        outline-offset: 1px;
+        outline: calc(1 * var(--hu)) solid rgba(153, 207, 237, 0.55);
+        outline-offset: calc(1 * var(--hu));
       }
 
       #online-create-error,
       #online-join-error {
         min-height: 1.2em;
         color: transparent;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       #online-create-error.is-visible,
@@ -2023,13 +2064,13 @@
       #online-room-id {
         color: var(--sky-bottom);
         font-family: var(--font-display);
-        font-size: calc(34 * var(--hu));
+        font-size: calc(34 * var(--fsu));
         letter-spacing: 0.12em;
       }
 
       #online-room-name {
         color: var(--ink);
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 700;
       }
 
@@ -2068,7 +2109,7 @@
         margin: 0;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(18 * var(--hu));
+        font-size: calc(18 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         text-shadow: var(--text-outline);
@@ -2092,8 +2133,8 @@
 
       .online-mode-switch legend {
         position: absolute;
-        width: 1px;
-        height: 1px;
+        width: calc(1 * var(--hu));
+        height: calc(1 * var(--hu));
         overflow: hidden;
         clip: rect(0, 0, 0, 0);
       }
@@ -2106,7 +2147,7 @@
         border-radius: calc(10 * var(--hu));
         color: #dbe6f5;
         font-family: var(--font-display);
-        font-size: calc(18 * var(--hu));
+        font-size: calc(18 * var(--fsu));
         cursor: pointer;
       }
 
@@ -2133,7 +2174,7 @@
         background: transparent;
         color: #dbe6f5;
         font-family: var(--font-display);
-        font-size: calc(18 * var(--hu));
+        font-size: calc(18 * var(--fsu));
       }
 
       .online-room-member {
@@ -2159,7 +2200,7 @@
         overflow: hidden;
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -2169,7 +2210,7 @@
         flex-wrap: wrap;
         gap: var(--space-1);
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
       }
 
       /* 标签：实色小胶囊 + 细描边 */
@@ -2179,7 +2220,7 @@
         border-radius: 999px;
         background: #aab6c7;
         color: #fff;
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
         text-shadow: 0 calc(1 * var(--hu)) 0 rgba(20, 33, 61, 0.6);
       }
@@ -2213,7 +2254,7 @@
         background: var(--btn-secondary-bg);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         letter-spacing: 0.02em;
         text-align: center;
         text-shadow: var(--text-outline);
@@ -2280,18 +2321,18 @@
       }
 
       .nav-icon {
-        font-size: calc(34 * var(--hu));
+        font-size: calc(34 * var(--fsu));
       }
 
       .nav-label {
         font-family: var(--font-display);
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         text-shadow: var(--text-outline);
       }
 
       .nav-tag {
         color: rgba(255, 255, 255, 0.85);
-        font-size: calc(10 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         letter-spacing: 0.06em;
       }
@@ -2302,7 +2343,7 @@
         bottom: max(env(safe-area-inset-bottom), calc(16 * var(--hu)));
         z-index: 1;
         color: rgba(255, 255, 255, 0.75);
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         letter-spacing: 0.08em;
         pointer-events: none;
       }
@@ -2314,7 +2355,7 @@
       .deck-shell,
       .special-tiers-shell,
       .hand-odds-shell {
-        height: 100svh;
+        height: var(--page-h);
         min-height: 0;
         overflow: hidden;
       }
@@ -2346,7 +2387,7 @@
       }
 
       @media (max-width: 420px) {
-        #online-lobby-list,
+        /* 房间列表已固定单列，这里只处理房间内的队伍栏 */
         .online-room-teams {
           grid-template-columns: 1fr;
         }
@@ -2385,39 +2426,39 @@
         pointer-events: none;
       }
 
+      /* 局内面板与 HUD 同源：内边距/描边/圆角/投影全部走 --hu，才能随舞台等比缩放 */
       .panel {
         position: absolute;
         pointer-events: auto;
-        padding: 12px 14px;
-        border-radius: 12px;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border-radius: calc(12 * var(--hu));
         background: var(--panel-bg);
-        border: 2px solid var(--panel-border);
-        backdrop-filter: blur(6px);
-        box-shadow: 0 3px 0 rgba(20, 33, 61, 0.55);
+        border: calc(2 * var(--hu)) solid var(--panel-border);
+        backdrop-filter: blur(calc(6 * var(--hu)));
+        box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.55);
       }
 
-      /* 局内伤害面板随舞台缩放，描边与 HUD 同粗 */
+      /* 局内伤害面板描边与 HUD 同粗 */
       #battle-damage-panel.panel {
         border-width: var(--stroke-w);
-        border-radius: calc(12 * var(--hu));
       }
 
-      /* 调试面板跳出舞台，按视口四角锚定，宽屏落在 letterbox 里 */
+      /* 调试面板跳出舞台，按舞台四角锚定，宽屏落在 letterbox 里 */
       #panel-stats {
         position: fixed;
-        top: max(16px, env(safe-area-inset-top));
-        left: max(16px, env(safe-area-inset-left));
-        min-width: 188px;
+        top: max(calc(16 * var(--hu)), env(safe-area-inset-top));
+        left: max(calc(16 * var(--hu)), env(safe-area-inset-left));
+        min-width: calc(188 * var(--hu));
       }
 
       #panel-controls {
         position: fixed;
-        top: max(16px, env(safe-area-inset-top));
-        right: max(16px, env(safe-area-inset-right));
-        min-width: 188px;
+        top: max(calc(16 * var(--hu)), env(safe-area-inset-top));
+        right: max(calc(16 * var(--hu)), env(safe-area-inset-right));
+        min-width: calc(188 * var(--hu));
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
         z-index: 5;
       }
 
@@ -2425,7 +2466,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         margin-bottom: 0;
         flex-shrink: 0;
       }
@@ -2435,8 +2476,8 @@
       }
 
       #btn-controls-toggle {
-        padding: 4px 10px;
-        font-size: 12px;
+        padding: calc(4 * var(--hu)) calc(10 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         flex-shrink: 0;
         min-width: 3.5em;
       }
@@ -2455,7 +2496,7 @@
       #controls-body {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       /* 单机镜头俯仰角 / 下方留白 / 对局节奏；沙盒不展示 */
@@ -2469,13 +2510,13 @@
       #hud.is-solo #solo-view-bottom-extra-row {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 8px 10px;
+        gap: calc(8 * var(--hu)) calc(10 * var(--hu));
         align-items: center;
       }
 
       #hud.is-solo #solo-match-rules {
         display: grid;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       #solo-camera-angle-row label,
@@ -2501,21 +2542,21 @@
 
       #solo-match-rules .solo-match-rules-group {
         display: grid;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
       }
 
       #solo-match-rules label {
         display: grid;
-        grid-template-columns: auto 70px;
-        gap: 8px;
+        grid-template-columns: auto calc(70 * var(--hu));
+        gap: calc(8 * var(--hu));
         align-items: center;
       }
 
       #solo-match-rules input {
         width: 100%;
-        padding: 4px 6px;
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
+        padding: calc(4 * var(--hu)) calc(6 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(6 * var(--hu));
         background: rgba(255, 255, 255, 0.06);
         color: var(--text);
         font: inherit;
@@ -2554,7 +2595,7 @@
         border-radius: calc(12 * var(--hu));
         --press-depth: calc(4 * var(--hu));
         pointer-events: auto;
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         line-height: 1.25;
         letter-spacing: 0.02em;
         white-space: nowrap;
@@ -2582,7 +2623,7 @@
       }
 
       .sfx-toggle.is-battle .sfx-toggle-icon {
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
       }
 
       /* 关闭态换成灰色按钮 + 划线音符图标 */
@@ -2632,7 +2673,7 @@
         background: rgba(255, 255, 255, 0.12);
         color: var(--text-dim);
         font-family: var(--font-display);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         cursor: pointer;
       }
 
@@ -2656,7 +2697,7 @@
         box-shadow: 0 calc(3 * var(--hu)) 0 var(--btn-secondary-shadow);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
         cursor: pointer;
       }
@@ -2682,7 +2723,7 @@
       .battle-damage-row {
         display: grid;
         gap: calc(3 * var(--hu));
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-variant-numeric: tabular-nums;
       }
 
@@ -2717,7 +2758,8 @@
         /* 去掉顶部手牌行后整体上提；安全区扣掉舞台 letterbox，避免双计 */
         top: max(calc(6 * var(--hu)), var(--stage-safe-top));
         left: 50%;
-        width: min(calc(480 * var(--hu)), calc(100vw - 16px));
+        /* 父级 #hud 已经是舞台宽，用 100% 而不是 100vw，避免宽屏下跟随视口变形 */
+        width: min(calc(480 * var(--hu)), 100%);
         transform: translateX(-50%);
         display: flex;
         flex-direction: column;
@@ -2727,7 +2769,7 @@
 
       /* 2v2 两侧各两座并排，总条再占一行，加宽避免名字被挤没 */
       #battle-hud.is-2v2 {
-        width: min(calc(680 * var(--hu)), calc(100vw - 16px));
+        width: min(calc(680 * var(--hu)), 100%);
       }
 
       /* 无基地关卡：血条与对手手牌数都没有意义，整块收起只留中间计时 */
@@ -2789,7 +2831,7 @@
         transform: translateY(-50%);
         color: #ffd2cc;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.04em;
         line-height: 1;
@@ -2827,7 +2869,7 @@
         overflow: hidden;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         text-overflow: ellipsis;
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
         white-space: nowrap;
@@ -2836,7 +2878,7 @@
       .battle-hp {
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 400;
         text-shadow: var(--text-outline);
       }
@@ -2860,18 +2902,18 @@
 
       .battle-hp-protect-mark {
         position: absolute;
-        top: -2px;
-        bottom: -2px;
-        width: 2px;
-        margin-left: -1px;
+        top: calc(-2 * var(--hu));
+        bottom: calc(-2 * var(--hu));
+        width: calc(2 * var(--hu));
+        margin-left: calc(-1 * var(--hu));
         background: #f4d27a;
-        box-shadow: 0 0 5px rgba(244, 210, 122, 0.85);
+        box-shadow: 0 0 calc(5 * var(--hu)) rgba(244, 210, 122, 0.85);
         pointer-events: none;
         z-index: 1;
       }
 
       .battle-hp-track.is-protect {
-        box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.85);
+        box-shadow: 0 0 0 calc(1 * var(--hu)) rgba(244, 210, 122, 0.85);
       }
 
       .battle-team {
@@ -2935,13 +2977,13 @@
 
       .battle-team-total-label {
         color: var(--text-dim);
-        font-size: calc(10 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         letter-spacing: 0.04em;
       }
 
       .battle-team-total .battle-hp {
         justify-self: end;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
       .battle-team-total .battle-hp-track {
@@ -2967,14 +3009,14 @@
         background: rgba(20, 33, 61, 0.82);
         box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.55);
         color: var(--text-dim);
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         text-align: center;
       }
 
       #battle-phase-label {
         color: var(--highlight);
         font-family: var(--font-display);
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         letter-spacing: 0.04em;
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
         white-space: nowrap;
@@ -2982,7 +3024,7 @@
 
       #battle-timer-label {
         color: var(--text-dim);
-        font-size: calc(10 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 600;
         letter-spacing: 0.04em;
         white-space: nowrap;
@@ -2995,7 +3037,7 @@
         border-radius: 999px;
         background: rgba(255, 178, 56, 0.22);
         color: var(--warn);
-        font-size: calc(10 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 600;
         white-space: nowrap;
       }
@@ -3014,7 +3056,7 @@
       #watch-bottom-stack {
         position: absolute;
         right: 0;
-        bottom: max(10px, var(--stage-safe-bottom));
+        bottom: max(calc(10 * var(--hu)), var(--stage-safe-bottom));
         left: 0;
         z-index: 13;
         display: flex;
@@ -3060,7 +3102,7 @@
         border-width: calc(2 * var(--hu));
         border-radius: calc(10 * var(--hu));
         --press-depth: calc(3 * var(--hu));
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
       }
 
       #replay-controls button.is-active {
@@ -3072,7 +3114,7 @@
         min-width: calc(88 * var(--hu));
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-variant-numeric: tabular-nums;
         text-align: center;
       }
@@ -3102,7 +3144,7 @@
 
       #spectator-hands.is-2v2 .spectator-hand-group + .spectator-hand-group {
         padding-left: calc(14 * var(--hu));
-        border-left: 1px solid rgba(185, 207, 225, 0.22);
+        border-left: calc(1 * var(--hu)) solid rgba(185, 207, 225, 0.22);
       }
 
       .spectator-hand-label {
@@ -3115,7 +3157,7 @@
         background: var(--blue);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         text-overflow: ellipsis;
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
         white-space: nowrap;
@@ -3160,7 +3202,7 @@
         display: inline-block;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(26 * var(--hu));
+        font-size: calc(26 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         font-variant-numeric: tabular-nums;
@@ -3355,7 +3397,7 @@
 
       .battle-result-side-tag {
         color: var(--ink-soft);
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
         letter-spacing: 0.08em;
       }
@@ -3373,7 +3415,7 @@
       .battle-result-name {
         overflow: hidden;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         font-weight: 400;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -3382,7 +3424,7 @@
       .battle-result-vs {
         color: var(--ink-soft);
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         letter-spacing: 0.06em;
       }
 
@@ -3400,7 +3442,7 @@
       .battle-result-row-title {
         color: var(--ink-soft);
         font-family: var(--font-display);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.06em;
         text-align: left;
@@ -3414,7 +3456,7 @@
       }
 
       .battle-result-value {
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         overflow: hidden;
@@ -3475,7 +3517,7 @@
         padding: calc(5 * var(--hu)) calc(9 * var(--hu));
         border: calc(2 * var(--hu)) solid var(--outline);
         border-radius: calc(10 * var(--hu));
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-variant-numeric: tabular-nums;
       }
 
@@ -3492,7 +3534,7 @@
         border-color: transparent;
         background: none;
         color: var(--ink-soft);
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
         letter-spacing: 0.04em;
       }
@@ -3557,7 +3599,7 @@
       #battle-result-detail {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         line-height: 1.6;
       }
 
@@ -3570,7 +3612,7 @@
       #versus-exit-detail {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         line-height: 1.6;
       }
 
@@ -3596,7 +3638,7 @@
       #rejoin-countdown {
         margin: 0;
         color: var(--ink);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         line-height: 1.6;
       }
 
@@ -3623,7 +3665,7 @@
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
       }
 
       #btn-versus-exit-cancel,
@@ -3631,19 +3673,19 @@
         width: 100%;
         padding: calc(12 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(12 * var(--hu));
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
       }
 
-      /* 底部居中：建造在上、出兵在下；贴视口底边，不跟舞台 letterbox */
+      /* 底部居中：建造在上、出兵在下；贴舞台底边 */
       #panel-bottom-dock {
         position: fixed;
-        bottom: max(16px, env(safe-area-inset-bottom));
+        bottom: max(calc(16 * var(--hu)), env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         pointer-events: none;
       }
 
@@ -3657,25 +3699,25 @@
 
       #panel-spawn {
         display: flex;
-        gap: 20px;
+        gap: calc(20 * var(--hu));
         align-items: flex-end;
       }
 
       #panel-building {
         display: flex;
-        gap: 16px;
+        gap: calc(16 * var(--hu));
         align-items: flex-end;
       }
 
       #panel-building.is-building [data-building][aria-pressed='true'] {
-        outline: 2px solid var(--accent, #3dd68c);
+        outline: calc(2 * var(--hu)) solid var(--accent, #3dd68c);
       }
 
       #panel-help {
         position: fixed;
-        bottom: max(16px, env(safe-area-inset-bottom));
-        left: max(16px, env(safe-area-inset-left));
-        max-width: 230px;
+        bottom: max(calc(16 * var(--hu)), env(safe-area-inset-bottom));
+        left: max(calc(16 * var(--hu)), env(safe-area-inset-left));
+        max-width: calc(230 * var(--hu));
         color: var(--text-dim);
         line-height: 1.7;
       }
@@ -3708,7 +3750,7 @@
 
       /* 窄屏舞台贴边时，统计下移避免叠在返回键上 */
       #hud.is-solo #panel-stats {
-        top: max(52px, calc(env(safe-area-inset-top) + 40px));
+        top: max(calc(52 * var(--hu)), calc(env(safe-area-inset-top) + calc(40 * var(--hu))));
       }
 
       #hud.is-solo #panel-help,
@@ -3722,46 +3764,46 @@
         display: none !important;
       }
 
-      /* 战场入口：视口右下角打开单位参数 / 场景配置（overlay） */
+      /* 战场入口：舞台右下角打开单位参数 / 场景配置（overlay） */
       #btn-open-unit-stats,
       #btn-open-scene-config {
         position: fixed;
-        bottom: max(16px, env(safe-area-inset-bottom));
-        right: max(16px, env(safe-area-inset-right));
+        bottom: max(calc(16 * var(--hu)), env(safe-area-inset-bottom));
+        right: max(calc(16 * var(--hu)), env(safe-area-inset-right));
         z-index: 5;
-        padding: 8px 12px;
+        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
         font: inherit;
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         color: var(--text);
         background: rgba(18, 28, 40, 0.92);
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
         cursor: pointer;
       }
 
       #btn-open-scene-config {
-        right: max(112px, env(safe-area-inset-right));
+        right: max(calc(112 * var(--hu)), env(safe-area-inset-right));
       }
 
-      /* 联机藏单位参数后，场景配置占回视口右下角 */
+      /* 联机藏单位参数后，场景配置占回舞台右下角 */
       #hud.is-versus #btn-open-scene-config,
       #hud.is-replay #btn-open-scene-config {
-        right: max(16px, env(safe-area-inset-right));
+        right: max(calc(16 * var(--hu)), env(safe-area-inset-right));
       }
 
       .title {
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--text-dim);
-        margin-bottom: 10px;
+        margin-bottom: calc(10 * var(--hu));
       }
 
       .stats-grid {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 5px 14px;
+        gap: calc(5 * var(--hu)) calc(14 * var(--hu));
         font-variant-numeric: tabular-nums;
       }
 
@@ -3777,7 +3819,7 @@
 
       .btn-row {
         display: flex;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
         flex-wrap: wrap;
       }
 
@@ -3786,9 +3828,9 @@
         font: inherit;
         color: var(--text);
         background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
-        padding: 7px 12px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
         cursor: pointer;
         transition: background 0.15s, border-color 0.15s, transform 0.06s;
       }
@@ -3798,7 +3840,7 @@
       }
 
       button:active {
-        transform: translateY(1px);
+        transform: translateY(calc(1 * var(--hu)));
       }
 
       button[aria-pressed='true'] {
@@ -3821,14 +3863,14 @@
 
       kbd {
         display: inline-block;
-        min-width: 18px;
-        padding: 1px 5px;
-        margin-right: 2px;
-        border-radius: 4px;
+        min-width: calc(18 * var(--hu));
+        padding: calc(1 * var(--hu)) calc(5 * var(--hu));
+        margin-right: calc(2 * var(--hu));
+        border-radius: calc(4 * var(--hu));
         background: rgba(255, 255, 255, 0.08);
-        border: 1px solid var(--panel-border);
+        border: calc(1 * var(--hu)) solid var(--panel-border);
         font-family: 'Cascadia Mono', 'Consolas', monospace;
-        font-size: 11px;
+        font-size: calc(11 * var(--fsu));
         text-align: center;
         color: var(--text);
       }
@@ -3846,14 +3888,14 @@
       #solo-hand {
         position: absolute;
         right: 0;
-        bottom: max(10px, var(--stage-safe-bottom));
+        bottom: max(calc(10 * var(--hu)), var(--stage-safe-bottom));
         left: 0;
         z-index: 12;
         display: none;
         flex-direction: column;
         align-items: center;
         pointer-events: none;
-        perspective: 1000px;
+        perspective: calc(1000 * var(--hu));
       }
 
       #hud.is-solo #solo-hand.is-active {
@@ -3872,7 +3914,7 @@
         height: calc(30 * var(--hu));
         padding: 0 calc(10 * var(--hu));
         color: transparent;
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         line-height: calc(30 * var(--hu));
         text-align: center;
         pointer-events: none;
@@ -3899,7 +3941,7 @@
         margin-bottom: calc(4 * var(--hu));
         padding: 0 calc(10 * var(--hu));
         color: var(--text-dim);
-        font-size: calc(11 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         pointer-events: auto;
       }
 
@@ -3949,7 +3991,7 @@
         margin-top: calc(4 * var(--hu));
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.04em;
         line-height: calc(22 * var(--hu));
@@ -3971,7 +4013,7 @@
         border: calc(2 * var(--hu)) solid var(--outline);
         border-radius: calc(8 * var(--hu));
         background: #172535 url('%BASE_URL%cards/Back.png') center / cover no-repeat;
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+        box-shadow: inset 0 0 0 calc(1 * var(--hu)) rgba(0, 0, 0, 0.25);
       }
 
       .hand-draw-pile-card.is-bottom {
@@ -4025,35 +4067,23 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 128px;
-        height: 98px;
+        width: calc(128 * var(--hu));
+        height: calc(98 * var(--hu));
         padding: 0;
         overflow: hidden;
         /* 卡通兵种卡：粗描边 + 底部实色厚度；默认混编为绿色。
            渐变走 --fm-bg，hover 时直接复用，避免被全局 button:hover 的白色遮罩冲掉。 */
         --fm-bg: linear-gradient(180deg, #57a142, #2d7926);
-        border: 3px solid var(--outline);
-        border-radius: 16px;
-        background: var(--fm-bg);
-        box-shadow:
-          inset 0 -4px 0 rgba(0, 0, 0, 0.16),
-          0 5px 0 rgba(20, 33, 61, 0.6);
-        color: #fff;
-        font-size: 12px;
-        line-height: 1.2;
-        cursor: grab;
-      }
-
-      /* 局内手牌栏按设计单位缩放；卡组页预览仍用上方固定 128×98。 */
-      #solo-hand .formation-option {
-        width: calc(128 * var(--hu));
-        height: calc(98 * var(--hu));
-        border-width: var(--stroke-w);
+        border: var(--stroke-w) solid var(--outline);
         border-radius: calc(16 * var(--hu));
+        background: var(--fm-bg);
         box-shadow:
           inset 0 calc(-4 * var(--hu)) 0 rgba(0, 0, 0, 0.16),
           0 calc(5 * var(--hu)) 0 rgba(20, 33, 61, 0.6);
-        font-size: calc(12 * var(--hu));
+        color: #fff;
+        font-size: calc(12 * var(--fsu));
+        line-height: 1.2;
+        cursor: grab;
       }
 
       /* hover 只做轻微提亮；显式写回 --fm-bg，压过全局 button:hover 的半透明白底。 */
@@ -4102,65 +4132,44 @@
       /* 单兵种卡组角标：叠在缩略图右下，不抢拖拽。 */
       .formation-tag {
         position: absolute;
-        right: 5px;
-        bottom: 4px;
+        right: calc(5 * var(--hu));
+        bottom: calc(4 * var(--hu));
         z-index: 1;
-        padding: 1px 5px;
-        border: 2px solid var(--outline);
-        border-radius: 6px;
+        padding: calc(1 * var(--hu)) calc(5 * var(--hu));
+        border: calc(2 * var(--hu)) solid var(--outline);
+        border-radius: calc(6 * var(--hu));
         background: rgba(20, 33, 61, 0.85);
         color: #fff;
         font-family: var(--font-display);
-        font-size: 11px;
+        font-size: calc(11 * var(--fsu));
         font-weight: 400;
         line-height: 1.2;
         pointer-events: none;
       }
 
-      #solo-hand .formation-tag {
-        right: calc(5 * var(--hu));
-        bottom: calc(4 * var(--hu));
-        padding: calc(1 * var(--hu)) calc(5 * var(--hu));
-        border-radius: calc(4 * var(--hu));
-        font-size: calc(11 * var(--hu));
-      }
-
       /* 引信炸弹：小爆炸底图叠在缩略图右下，红色伤害数字居中，不抢拖拽。 */
       .formation-bomb-damage {
         position: absolute;
-        right: 2px;
-        bottom: 2px;
+        right: calc(2 * var(--hu));
+        bottom: calc(2 * var(--hu));
         z-index: 2;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 52px;
-        height: 40px;
+        width: calc(52 * var(--hu));
+        height: calc(40 * var(--hu));
         background: url('%BASE_URL%ui/bomb-damage-burst.png') center / contain no-repeat;
         color: #e31c1c;
-        font-size: 16px;
+        font-size: calc(16 * var(--fsu));
         font-weight: 800;
         line-height: 1;
         letter-spacing: -0.04em;
-        text-shadow:
-          -1px -1px 0 #fff8c8,
-          1px -1px 0 #fff8c8,
-          -1px 1px 0 #fff8c8,
-          1px 1px 0 #fff8c8;
-        pointer-events: none;
-      }
-
-      #solo-hand .formation-bomb-damage {
-        right: calc(2 * var(--hu));
-        bottom: calc(2 * var(--hu));
-        width: calc(52 * var(--hu));
-        height: calc(40 * var(--hu));
-        font-size: calc(16 * var(--hu));
         text-shadow:
           calc(-1 * var(--hu)) calc(-1 * var(--hu)) 0 #fff8c8,
           calc(1 * var(--hu)) calc(-1 * var(--hu)) 0 #fff8c8,
           calc(-1 * var(--hu)) calc(1 * var(--hu)) 0 #fff8c8,
           calc(1 * var(--hu)) calc(1 * var(--hu)) 0 #fff8c8;
+        pointer-events: none;
       }
 
       #btn-select-best {
@@ -4171,7 +4180,7 @@
         border-radius: calc(14 * var(--hu));
         --btn-bg: var(--btn-primary-bg);
         --btn-shadow: var(--btn-primary-shadow);
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
       }
 
       #btn-select-best:disabled {
@@ -4256,10 +4265,10 @@
       /* 卡通箭头：亮黄圆点虚线 + 深色描边（四向 drop-shadow 模拟外描边） */
       #hand-arrow {
         filter:
-          drop-shadow(2px 0 0 var(--outline))
-          drop-shadow(-2px 0 0 var(--outline))
-          drop-shadow(0 2px 0 var(--outline))
-          drop-shadow(0 -2px 0 var(--outline));
+          drop-shadow(calc(2 * var(--hu)) 0 0 var(--outline))
+          drop-shadow(calc(-2 * var(--hu)) 0 0 var(--outline))
+          drop-shadow(0 calc(2 * var(--hu)) 0 var(--outline))
+          drop-shadow(0 calc(-2 * var(--hu)) 0 var(--outline));
       }
 
       #hand-arrow-path {
@@ -4346,22 +4355,22 @@
       /* 临时选中：只用描边，不用 filter，避免影响正式选中的拉高 transform。 */
       .playing-card.is-preview {
         box-shadow:
-          inset 0 0 0 2px var(--outline),
-          0 0 0 4px var(--gold),
-          0 16px 28px rgba(0, 0, 0, 0.4);
+          inset 0 0 0 calc(2 * var(--hu)) var(--outline),
+          0 0 0 calc(4 * var(--hu)) var(--gold),
+          0 calc(16 * var(--hu)) calc(28 * var(--hu)) rgba(0, 0, 0, 0.4);
       }
 
       /* 正式选中：始终拉高；预览取消模式下按下时也不落回，等松开再提交。 */
       .playing-card.is-selected {
         --card-lift: -33.333%;
-        box-shadow: 0 16px 28px rgba(0, 0, 0, 0.48);
+        box-shadow: 0 calc(16 * var(--hu)) calc(28 * var(--hu)) rgba(0, 0, 0, 0.48);
       }
 
       .playing-card.is-selected.is-preview {
         box-shadow:
-          inset 0 0 0 2px var(--outline),
-          0 0 0 4px var(--gold),
-          0 16px 28px rgba(0, 0, 0, 0.4);
+          inset 0 0 0 calc(2 * var(--hu)) var(--outline),
+          0 0 0 calc(4 * var(--hu)) var(--gold),
+          0 calc(16 * var(--hu)) calc(28 * var(--hu)) rgba(0, 0, 0, 0.4);
       }
 
       .playing-card-inner,
@@ -4405,7 +4414,8 @@
       .playing-card.is-playing {
         pointer-events: none;
         opacity: 0;
-        transform: translateY(-48vh) rotate(8deg) scale(0.72);
+        /* 飞出屏幕的距离按舞台单位给：舞台高约 1280hu，-800hu 足以完全离场 */
+        transform: translateY(calc(-800 * var(--hu))) rotate(8deg) scale(0.72);
         filter: brightness(1.35) saturate(1.2);
         transition-duration: 340ms;
       }
@@ -4418,7 +4428,7 @@
         }
         62% {
           opacity: 1;
-          transform: translateY(var(--deal-hover-y, -24px)) rotate(-2deg) scale(1.03);
+          transform: translateY(var(--deal-hover-y, calc(-24 * var(--hu)))) rotate(-2deg) scale(1.03);
           animation-timing-function: cubic-bezier(0.24, 0.7, 0.3, 1);
         }
         100% {
@@ -4447,11 +4457,11 @@
           transform: translateY(var(--card-lift, 0px)) rotate(calc((var(--card-index) - var(--fan-center)) * 0.35deg));
         }
         35% {
-          transform: translateY(calc(var(--card-lift, 0px) - 6px))
+          transform: translateY(calc(var(--card-lift, 0px) - calc(6 * var(--hu))))
             rotate(calc((var(--card-index) - var(--fan-center)) * 0.35deg - 1.6deg));
         }
         70% {
-          transform: translateY(calc(var(--card-lift, 0px) - 4px))
+          transform: translateY(calc(var(--card-lift, 0px) - calc(4 * var(--hu))))
             rotate(calc((var(--card-index) - var(--fan-center)) * 0.35deg + 1.2deg));
         }
       }
@@ -4508,7 +4518,7 @@
         margin: 0;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(34 * var(--hu));
+        font-size: calc(34 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         text-align: center;
@@ -4526,7 +4536,7 @@
       .deck-footer button {
         min-height: calc(36 * var(--hu));
         padding: calc(7 * var(--hu)) calc(16 * var(--hu));
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         flex-shrink: 0;
       }
 
@@ -4538,7 +4548,7 @@
         align-items: center;
         justify-self: start;
         gap: calc(6 * var(--hu));
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
       }
 
       /* 开发服专用入口：右上角一排方形图标钮，不跟返回键抢左列 */
@@ -4560,7 +4570,7 @@
           inset 0 calc(-3 * var(--hu)) 0 rgba(0, 0, 0, 0.14),
           0 calc(3 * var(--hu)) 0 var(--btn-secondary-shadow);
         color: #fff;
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         cursor: pointer;
       }
 
@@ -4574,7 +4584,7 @@
         min-width: 0;
         margin: 0;
         color: #fff;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         line-height: 1.55;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -4633,7 +4643,7 @@
         box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.35);
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         line-height: 1.15;
         text-align: center;
         /* 窄列里「数字牌 2～10」这类长名字允许折行，不撑破列宽 */
@@ -4670,7 +4680,7 @@
         padding-top: calc(8 * var(--hu));
         border-top: calc(2 * var(--hu)) dashed rgba(20, 33, 61, 0.35);
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
       }
 
@@ -4722,7 +4732,7 @@
         align-items: center;
         gap: calc(8 * var(--hu));
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 700;
       }
 
@@ -4778,7 +4788,7 @@
         background: var(--card-bg);
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 400;
         white-space: nowrap;
       }
@@ -4826,7 +4836,7 @@
       .deck-tier-hint {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         line-height: 1.5;
       }
 
@@ -4843,10 +4853,10 @@
       .special-tiers-shell {
         display: flex;
         flex-direction: column;
-        height: 100%;
+        height: var(--page-h);
         min-height: 0;
         margin: 0 auto;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         overflow: hidden;
       }
 
@@ -4864,14 +4874,15 @@
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       .special-tiers-header h1 {
         margin: 0;
         color: #fff;
         font-family: var(--font-display);
-        font-size: clamp(22px, 3.3vh, 34px);
+        /* 与卡组页/牌型页标题同族，走设计单位而非视口高度 */
+        font-size: calc(34 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         text-align: center;
@@ -4881,7 +4892,7 @@
       .special-tiers-toolbar {
         margin: 0;
         color: #fff;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         line-height: 1.55;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -4891,7 +4902,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       /* 竖屏舞台放不下左右分栏：档位卡在上，编辑+预览在下纵向排 */
@@ -4900,7 +4911,7 @@
         min-height: 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       #special-tiers-table {
@@ -4915,14 +4926,14 @@
         min-height: 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       #special-tiers-editor {
         flex: 0 0 auto;
         display: grid;
-        gap: 6px;
-        padding: 10px;
+        gap: calc(6 * var(--hu));
+        padding: calc(10 * var(--hu));
         border: var(--stroke-w) solid var(--outline);
         border-radius: calc(16 * var(--hu));
         background: var(--cream);
@@ -4934,14 +4945,14 @@
 
       .special-tiers-detail .deck-preview-panel {
         flex: 1 1 0;
-        min-height: 180px;
+        min-height: calc(180 * var(--hu));
       }
 
       #special-tiers-status {
         flex: 1;
-        min-width: 160px;
+        min-width: calc(160 * var(--hu));
         color: #fff;
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
       }
@@ -4952,10 +4963,10 @@
 
       /* 站位下拉：白底深字粗描边，浅色面板上展开项才读得清 */
       .deck-row select {
-        flex: 1 1 88px;
-        min-width: 88px;
+        flex: 1 1 calc(88 * var(--hu));
+        min-width: calc(88 * var(--hu));
         box-sizing: border-box;
-        padding: 5px 8px;
+        padding: calc(5 * var(--hu)) calc(8 * var(--hu));
         border: calc(2 * var(--hu)) solid var(--outline);
         border-radius: calc(8 * var(--hu));
         background: var(--card-bg-hover);
@@ -4979,8 +4990,8 @@
 
       .deck-rows {
         display: grid;
-        gap: 7px;
-        padding-top: 4px;
+        gap: calc(7 * var(--hu));
+        padding-top: calc(4 * var(--hu));
       }
 
       /* 分区标题：奶油底上用深墨 + 卡通字，替代原来的浅灰粗体 */
@@ -4990,7 +5001,7 @@
         gap: calc(7 * var(--hu));
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.02em;
       }
@@ -5008,23 +5019,23 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 5px;
-        padding: 7px;
+        gap: calc(5 * var(--hu));
+        padding: calc(7 * var(--hu));
         border-radius: calc(10 * var(--hu));
         background: rgba(20, 33, 61, 0.07);
       }
 
       .deck-row-label {
-        width: 42px;
+        width: calc(42 * var(--hu));
         color: var(--ink-soft);
-        font-size: 11px;
+        font-size: calc(11 * var(--fsu));
         font-weight: 700;
       }
 
       .deck-mini-button,
       .deck-icon-button,
       .deck-danger-button {
-        padding: 5px 8px;
+        padding: calc(5 * var(--hu)) calc(8 * var(--hu));
       }
 
       /* 小号卡通按钮：重置/删除/加单位共用，避免默认深灰方角 */
@@ -5081,7 +5092,7 @@
       .deck-preview-panel {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         min-height: 0;
       }
 
@@ -5090,7 +5101,7 @@
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
       }
 
       .deck-preview-header .deck-section-title {
@@ -5100,7 +5111,7 @@
 
       .deck-preview-tabs {
         display: inline-flex;
-        gap: 4px;
+        gap: calc(4 * var(--hu));
       }
 
       /* 页签沿用胶囊样式，选中态金色，与大厅主按钮同一视觉语言 */
@@ -5113,7 +5124,7 @@
         box-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.3);
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 400;
         cursor: pointer;
       }
@@ -5172,8 +5183,8 @@
         flex-wrap: wrap;
         align-items: center;
         justify-content: center;
-        gap: 12px;
-        padding: 12px;
+        gap: calc(12 * var(--hu));
+        padding: calc(12 * var(--hu));
         pointer-events: none;
       }
 
@@ -5191,7 +5202,7 @@
         flex: 1;
         min-width: 0;
         color: #fff;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
       }
@@ -5212,7 +5223,7 @@
 
       .codex-shell {
         gap: calc(20 * var(--hu));
-        height: 100svh;
+        height: var(--page-h);
         overflow: hidden;
       }
 
@@ -5238,7 +5249,7 @@
 
       .codex-header h1 {
         margin: 0;
-        font-size: calc(36 * var(--hu));
+        font-size: calc(36 * var(--fsu));
         text-align: center;
       }
 
@@ -5268,7 +5279,7 @@
         padding: calc(7 * var(--hu)) calc(14 * var(--hu));
         border-radius: calc(12 * var(--hu));
         --press-depth: calc(4 * var(--hu));
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         cursor: pointer;
       }
 
@@ -5280,7 +5291,7 @@
       .codex-toolbar-copy {
         margin: 0;
         color: #fff;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 700;
         line-height: 1.6;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -5298,7 +5309,7 @@
         box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.35);
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
       }
 
       /* 压过全局 button:hover 的半透明底，否则白卡片悬停会变透明 */
@@ -5449,7 +5460,7 @@
         overflow: hidden;
         color: inherit;
         font-family: var(--font-display);
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -5537,7 +5548,7 @@
       .codex-detail-category {
         margin: 0 0 calc(4 * var(--hu));
         color: var(--green-deep);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
         letter-spacing: 0.12em;
       }
@@ -5546,21 +5557,21 @@
         margin: 0;
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(30 * var(--hu));
+        font-size: calc(30 * var(--fsu));
         font-weight: 400;
       }
 
       .codex-detail-summary {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         line-height: 1.6;
       }
 
       .codex-stats {
         display: flex;
         flex-direction: column;
-        gap: max(1px, calc(1 * var(--hu)));
+        gap: calc(1 * var(--hu));
         margin: 0;
         overflow: hidden;
         border: calc(2 * var(--hu)) solid var(--outline);
@@ -5585,7 +5596,7 @@
 
       .codex-stats dt {
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
       }
 
@@ -5600,7 +5611,7 @@
         min-width: calc(36 * var(--hu));
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(15 * var(--fsu));
         font-variant-numeric: tabular-nums;
         text-align: right;
         line-height: 1;
@@ -5641,20 +5652,20 @@
       .codex-skill span {
         margin-bottom: calc(4 * var(--hu));
         color: var(--green-deep);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
       }
 
       .codex-skill strong {
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(17 * var(--fsu));
         font-weight: 400;
       }
 
       .codex-skill p {
         margin: calc(5 * var(--hu)) 0 0;
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         line-height: 1.55;
       }
 
@@ -5665,14 +5676,14 @@
 
       .codex-hands > span {
         color: var(--green-deep);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 800;
       }
 
       .codex-hands-empty {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         line-height: 1.55;
       }
 
@@ -5682,7 +5693,7 @@
       }
 
       .codex-hand-name {
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 650;
       }
 
@@ -5737,7 +5748,7 @@
         margin: 0;
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(30 * var(--hu));
+        font-size: calc(30 * var(--fsu));
         font-weight: 400;
         letter-spacing: 0.04em;
         text-align: center;
@@ -5763,7 +5774,7 @@
         box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.35);
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         font-weight: 400;
         cursor: pointer;
       }
@@ -5881,12 +5892,12 @@
         align-items: center;
         gap: calc(8 * var(--hu));
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 700;
       }
 
       .hand-odds-field input[type='range'] {
-        width: min(180px, 36vw);
+        width: calc(180 * var(--hu));
       }
 
       .hand-odds-field strong {
@@ -5899,13 +5910,13 @@
       .hand-odds-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         margin-left: auto;
       }
 
       .hand-odds-status {
         color: #fff;
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
         line-height: 1.5;
         text-shadow: 0 calc(2 * var(--hu)) 0 rgba(20, 33, 61, 0.45);
@@ -5916,7 +5927,7 @@
         margin: 0;
         flex-basis: 100%;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         line-height: 1.5;
       }
 
@@ -5942,14 +5953,14 @@
       .hand-mix-groups {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         flex-basis: 100%;
       }
 
       .hand-mix-group {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         min-width: 0;
       }
 
@@ -5960,14 +5971,15 @@
       .hand-mix-list {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        min-height: 34px;
+        gap: calc(6 * var(--hu));
+        /* 至少留一行高度，避免空列表把下方内容顶得跳动 */
+        min-height: calc(34 * var(--hu));
       }
 
       .hand-mix-row {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
       }
 
       .hand-mix-row select {
@@ -5980,20 +5992,20 @@
       }
 
       .hand-mix-row .hand-mix-remove {
-        min-width: 34px;
-        padding: 7px 8px;
+        min-width: calc(34 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(8 * var(--hu));
       }
 
       .hand-mix-frames {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
       }
 
       .hand-mix-frame {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         min-width: 0;
       }
 
@@ -6003,8 +6015,9 @@
 
       .hand-mix-frame-canvas {
         width: 100%;
-        height: min(42vh, 360px);
-        min-height: 200px;
+        /* 画布高度锁定为设计单位，随舞台缩放而不是跟视口高度变形 */
+        height: calc(360 * var(--hu));
+        min-height: calc(200 * var(--hu));
         border: calc(2 * var(--hu)) solid var(--outline);
         border-radius: calc(12 * var(--hu));
         overflow: hidden;
@@ -6021,7 +6034,7 @@
       .hand-mix-frame-meta {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
       }
 
       .hand-mix-frame-meta .hand-odds-legend-note {
@@ -6031,16 +6044,16 @@
       .hand-mix-hp-bars {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
       }
 
       .hand-mix-hp-row {
         display: grid;
         grid-template-columns: 1.2em 1fr 4.2em;
         align-items: center;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
       }
 
@@ -6080,7 +6093,7 @@
       .hand-mix-frame-actions {
         display: flex;
         justify-content: flex-end;
-        margin-top: 12px;
+        margin-top: calc(12 * var(--hu));
       }
 
       .hand-mix-replay {
@@ -6090,7 +6103,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 16px;
+        padding: calc(16 * var(--hu));
       }
 
       .hand-mix-replay.is-hidden {
@@ -6106,12 +6119,12 @@
       .hand-mix-replay-dialog {
         position: relative;
         z-index: 1;
-        width: min(960px, 100%);
-        max-height: min(92vh, 860px);
+        width: min(calc(960 * var(--hu)), 100%);
+        max-height: min(calc(860 * var(--hu)), 100%);
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        padding: 14px;
+        gap: calc(10 * var(--hu));
+        padding: calc(14 * var(--hu));
         overflow: auto;
         border: var(--stroke-w) solid var(--outline);
         border-radius: calc(16 * var(--hu));
@@ -6126,14 +6139,14 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       .hand-mix-replay-header h2 {
         margin: 0;
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(20 * var(--hu));
+        font-size: calc(20 * var(--fsu));
         font-weight: 400;
       }
 
@@ -6141,26 +6154,27 @@
       .hand-mix-replay-hud {
         margin: 0;
         color: var(--ink-soft);
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         font-weight: 700;
       }
 
       .hand-mix-replay-hud {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: calc(8 * var(--hu));
       }
 
       .hand-mix-replay-hud-top {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px 16px;
+        gap: calc(8 * var(--hu)) calc(16 * var(--hu));
       }
 
       .hand-mix-replay-canvas {
         width: 100%;
-        height: min(52vh, 420px);
-        min-height: 220px;
+        /* 高度锁定设计单位，回放弹窗在不同分辨率下画面比例一致 */
+        height: calc(420 * var(--hu));
+        min-height: calc(220 * var(--hu));
         border: calc(2 * var(--hu)) solid var(--outline);
         border-radius: calc(12 * var(--hu));
         overflow: hidden;
@@ -6177,12 +6191,12 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
       }
 
       .hand-mix-replay-controls input[type='range'] {
-        flex: 1 1 180px;
-        min-width: 120px;
+        flex: 1 1 calc(180 * var(--hu));
+        min-width: calc(120 * var(--hu));
       }
 
       /* 先按上一版左右两列排：窄舞台下由媒体查询折成单列 */
@@ -6203,14 +6217,14 @@
       .hand-odds-balance-body {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: calc(16 * var(--hu));
       }
 
       .balance-report-section h3 {
-        margin: 0 0 8px;
+        margin: 0 0 calc(8 * var(--hu));
         color: var(--ink);
         font-family: var(--font-display);
-        font-size: calc(16 * var(--hu));
+        font-size: calc(16 * var(--fsu));
         font-weight: 400;
       }
 
@@ -6223,13 +6237,13 @@
       .balance-report-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: calc(13 * var(--hu));
+        font-size: calc(13 * var(--fsu));
       }
 
       .balance-report-table th,
       .balance-report-table td {
-        padding: 5px 8px;
-        border-bottom: 1px solid rgba(20, 33, 61, 0.14);
+        padding: calc(5 * var(--hu)) calc(8 * var(--hu));
+        border-bottom: calc(1 * var(--hu)) solid rgba(20, 33, 61, 0.14);
         text-align: left;
       }
 
@@ -6240,10 +6254,10 @@
       }
 
       .hand-odds-section-title {
-        margin: 0 0 10px;
+        margin: 0 0 calc(10 * var(--hu));
         color: var(--ink-soft);
         font-family: var(--font-display);
-        font-size: calc(14 * var(--hu));
+        font-size: calc(14 * var(--fsu));
         font-weight: 400;
       }
 
@@ -6254,8 +6268,8 @@
 
       .hand-odds-table th,
       .hand-odds-table td {
-        padding: 7px 8px;
-        border-bottom: 1px solid rgba(20, 33, 61, 0.14);
+        padding: calc(7 * var(--hu)) calc(8 * var(--hu));
+        border-bottom: calc(1 * var(--hu)) solid rgba(20, 33, 61, 0.14);
         text-align: left;
       }
 
@@ -6274,7 +6288,7 @@
         display: block;
         width: 100%;
         height: auto;
-        max-height: 360px;
+        max-height: calc(360 * var(--hu));
       }
 
       /* 浅奶油底上的网格与刻度：改用深墨半透明，白线会完全消失 */
@@ -6286,42 +6300,42 @@
       .hand-odds-axis-label,
       .hand-odds-tick-label {
         fill: rgba(60, 78, 105, 0.9);
-        font-size: 11px;
+        font-size: calc(11 * var(--fsu));
         font-weight: 700;
       }
 
       .hand-odds-legend {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px 12px;
-        margin-top: 10px;
+        gap: calc(8 * var(--hu)) calc(12 * var(--hu));
+        margin-top: calc(10 * var(--hu));
       }
 
       .hand-odds-legend-item {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: calc(6 * var(--hu));
         color: var(--ink);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
         font-weight: 700;
       }
 
       .hand-odds-legend-item i {
         display: inline-block;
-        width: 10px;
-        height: 10px;
-        border: 1px solid rgba(20, 33, 61, 0.45);
-        border-radius: 2px;
+        width: calc(10 * var(--hu));
+        height: calc(10 * var(--hu));
+        border: calc(1 * var(--hu)) solid rgba(20, 33, 61, 0.45);
+        border-radius: calc(2 * var(--hu));
       }
 
       .hand-odds-legend-note {
         flex-basis: 100%;
-        margin: 4px 0 0;
+        margin: calc(4 * var(--hu)) 0 0;
         color: var(--ink-soft);
-        font-size: calc(12 * var(--hu));
+        font-size: calc(12 * var(--fsu));
       }
 
-      /* 开发工具页：铺满视口，不跟大厅 9:16/--hu 窄屏舞台缩放 */
+      /* 开发工具页：与其它页面共用 9:16 舞台与 --hu 设计单位，跨分辨率布局一致 */
       #unit-stats {
         position: fixed;
         inset: 0;
@@ -6341,13 +6355,14 @@
         position: relative;
         display: flex;
         flex-direction: column;
-        width: 100%;
+        /* 与其它页面共用 9:16 舞台宽度，宽屏时居中并露出外场底板 */
+        width: var(--stage-w);
         max-width: none;
-        height: 100%;
-        min-height: 100%;
-        margin: 0;
-        padding: 16px 20px 12px;
-        gap: 12px;
+        height: var(--page-h);
+        min-height: 0;
+        margin: 0 auto;
+        padding: calc(16 * var(--hu)) calc(20 * var(--hu)) calc(12 * var(--hu));
+        gap: calc(12 * var(--hu));
         overflow: hidden;
         box-shadow: none;
         background: transparent;
@@ -6362,19 +6377,19 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         flex-shrink: 0;
       }
 
       .unit-stats-header h1 {
         margin: 0;
-        font-size: 22px;
+        font-size: calc(22 * var(--fsu));
       }
 
       .unit-stats-back,
       .unit-stats-footer button {
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
         background: rgba(28, 42, 57, 0.78);
         color: var(--text);
         font: inherit;
@@ -6383,8 +6398,8 @@
 
       .unit-stats-back,
       .unit-stats-footer button {
-        min-height: 34px;
-        padding: 7px 12px;
+        min-height: calc(34 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
       }
 
       .unit-stats-panel {
@@ -6396,8 +6411,8 @@
       .unit-stats-table-wrap {
         overflow: auto;
         max-height: 100%;
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(10 * var(--hu));
         background: rgba(18, 28, 40, 0.72);
       }
 
@@ -6411,8 +6426,8 @@
 
       .unit-stats-table th,
       .unit-stats-table td {
-        padding: 8px 10px;
-        border-bottom: 1px solid rgba(144, 166, 187, 0.14);
+        padding: calc(8 * var(--hu)) calc(10 * var(--hu));
+        border-bottom: calc(1 * var(--hu)) solid rgba(144, 166, 187, 0.14);
         text-align: left;
         vertical-align: middle;
         white-space: nowrap;
@@ -6427,19 +6442,19 @@
         z-index: 1;
       }
 
-      /* 列随屏宽分配；控件下限 88，宽屏可继续拉长 */
+      /* 列随舞台宽度分配；控件下限 88hu，宽屏可继续拉长 */
       .unit-stats-table input,
       .unit-stats-table select {
         width: 100%;
-        min-width: 88px;
+        min-width: calc(88 * var(--hu));
         box-sizing: border-box;
         font: inherit;
         font-variant-numeric: tabular-nums;
         color: var(--text);
         background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
-        padding: 5px 8px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(6 * var(--hu));
+        padding: calc(5 * var(--hu)) calc(8 * var(--hu));
       }
 
       /* 系统下拉多为白底，选项勿继承页面浅色字，否则未选中项几乎看不见 */
@@ -6456,9 +6471,9 @@
 
       .unit-stats-table th[data-field='name'],
       .unit-stats-table td.unit-stats-name {
-        width: 220px;
-        min-width: 220px;
-        max-width: 220px;
+        width: calc(220 * var(--hu));
+        min-width: calc(220 * var(--hu));
+        max-width: calc(220 * var(--hu));
         box-sizing: border-box;
       }
 
@@ -6471,9 +6486,9 @@
 
       .unit-stats-table th[data-field='tag'],
       .unit-stats-table td.unit-stats-tag {
-        width: 88px;
-        min-width: 88px;
-        max-width: 88px;
+        width: calc(88 * var(--hu));
+        min-width: calc(88 * var(--hu));
+        max-width: calc(88 * var(--hu));
         box-sizing: border-box;
       }
 
@@ -6484,14 +6499,14 @@
         box-sizing: border-box;
       }
 
-      /* 半径 / 体型列固定 100 */
+      /* 半径 / 体型列固定 100hu */
       .unit-stats-table th[data-field='radius'],
       .unit-stats-table td[data-field='radius'],
       .unit-stats-table th[data-field='bodyScale'],
       .unit-stats-table td[data-field='bodyScale'] {
-        width: 100px;
-        min-width: 100px;
-        max-width: 100px;
+        width: calc(100 * var(--hu));
+        min-width: calc(100 * var(--hu));
+        max-width: calc(100 * var(--hu));
         box-sizing: border-box;
       }
 
@@ -6504,29 +6519,29 @@
         max-width: 100%;
       }
 
-      /* 前摇列控件固定 88；左右多留内边距，避免与邻列挤在一起 */
+      /* 前摇列控件固定 88hu；左右多留内边距，避免与邻列挤在一起 */
       .unit-stats-table th[data-field='attackWindup'],
       .unit-stats-table td[data-field='attackWindup'] {
-        width: 112px;
-        max-width: 112px;
-        padding-left: 16px;
-        padding-right: 16px;
+        width: calc(112 * var(--hu));
+        max-width: calc(112 * var(--hu));
+        padding-left: calc(16 * var(--hu));
+        padding-right: calc(16 * var(--hu));
         box-sizing: content-box;
       }
 
       .unit-stats-table td[data-field='attackWindup'] .unit-stats-value,
       .unit-stats-table td[data-field='attackWindup'] input {
-        width: 88px;
-        min-width: 88px;
-        max-width: 88px;
+        width: calc(88 * var(--hu));
+        min-width: calc(88 * var(--hu));
+        max-width: calc(88 * var(--hu));
       }
 
       /* 爆炸范围列：落点范围弹可编辑，其它兵种显示破折号 */
       .unit-stats-table th[data-field='aoeRadius'],
       .unit-stats-table td[data-field='aoeRadius'] {
-        width: 100px;
-        min-width: 100px;
-        max-width: 100px;
+        width: calc(100 * var(--hu));
+        min-width: calc(100 * var(--hu));
+        max-width: calc(100 * var(--hu));
         box-sizing: border-box;
       }
 
@@ -6539,15 +6554,15 @@
 
       .unit-stats-value {
         display: grid;
-        gap: 4px;
+        gap: calc(4 * var(--hu));
         width: 100%;
-        min-width: 88px;
+        min-width: calc(88 * var(--hu));
       }
 
       .unit-stats-mini-bar {
         width: 100%;
-        min-width: 72px;
-        height: 4px;
+        min-width: calc(72 * var(--hu));
+        height: calc(4 * var(--hu));
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.08);
         overflow: hidden;
@@ -6570,24 +6585,24 @@
 
       .unit-stats-more-fields {
         display: grid;
-        gap: 6px;
-        margin-top: 8px;
-        min-width: 160px;
+        gap: calc(6 * var(--hu));
+        margin-top: calc(8 * var(--hu));
+        min-width: calc(160 * var(--hu));
       }
 
       .unit-stats-more-row {
         display: grid;
-        grid-template-columns: 64px 1fr;
-        gap: 6px;
+        grid-template-columns: calc(64 * var(--hu)) 1fr;
+        gap: calc(6 * var(--hu));
         align-items: center;
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
       }
 
       .unit-stats-skill-group {
-        margin-top: 4px;
+        margin-top: calc(4 * var(--hu));
         color: var(--text);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
         font-weight: 600;
       }
 
@@ -6599,17 +6614,17 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
         flex-shrink: 0;
-        padding: 8px 0 0;
+        padding: calc(8 * var(--hu)) 0 0;
         background: transparent;
       }
 
       #unit-stats-status {
         flex: 1;
-        min-width: 160px;
+        min-width: calc(160 * var(--hu));
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
       }
 
       #unit-stats-status[data-tone='ok'] {
@@ -6640,27 +6655,27 @@
       #scene-config.is-overlay .scene-config-shell {
         align-items: flex-end;
         background: transparent;
-        padding: 12px 12px 12px 0;
+        padding: calc(12 * var(--hu)) calc(12 * var(--hu)) calc(12 * var(--hu)) 0;
         pointer-events: none;
       }
 
       #scene-config.is-overlay .scene-config-header,
       #scene-config.is-overlay .scene-config-footer,
       #scene-config.is-overlay #scene-config-form {
-        width: min(380px, 100%);
+        width: min(calc(380 * var(--hu)), 100%);
         pointer-events: auto;
         background: rgba(10, 16, 24, 0.92);
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(10 * var(--hu));
       }
 
       #scene-config.is-overlay .scene-config-header,
       #scene-config.is-overlay .scene-config-footer {
-        padding: 10px 12px;
+        padding: calc(10 * var(--hu)) calc(12 * var(--hu));
       }
 
       #scene-config.is-overlay .scene-config-body {
-        width: min(380px, 100%);
+        width: min(calc(380 * var(--hu)), 100%);
         grid-template-columns: 1fr;
         grid-template-rows: minmax(0, 1fr);
       }
@@ -6672,18 +6687,26 @@
       .scene-config-shell {
         display: flex;
         flex-direction: column;
-        width: 100%;
-        height: 100%;
-        padding: 16px 20px 12px;
-        gap: 12px;
+        /* 与其它页面共用 9:16 舞台宽度，宽屏时居中并露出外场底板 */
+        width: var(--stage-w);
+        height: var(--page-h);
+        margin: 0 auto;
+        padding: calc(16 * var(--hu)) calc(20 * var(--hu)) calc(12 * var(--hu));
+        gap: calc(12 * var(--hu));
         overflow: hidden;
+      }
+
+      #scene-config.is-overlay .scene-config-shell {
+        /* overlay 模式横向铺满视口，由页面自身右侧贴边，不再居中 */
+        width: 100%;
+        margin: 0;
       }
 
       .scene-config-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        gap: calc(12 * var(--hu));
         flex-shrink: 0;
       }
 
@@ -6694,7 +6717,7 @@
       .scene-config-mode button {
         padding: calc(6 * var(--hu)) calc(10 * var(--hu));
         border-radius: calc(8 * var(--hu));
-        border: 1px solid rgba(153, 207, 237, 0.28);
+        border: calc(1 * var(--hu)) solid rgba(153, 207, 237, 0.28);
         background: rgba(12, 24, 36, 0.72);
         color: #c5d7e6;
       }
@@ -6704,33 +6727,33 @@
       }
       .scene-config-header h1 {
         margin: 0;
-        font-size: 22px;
+        font-size: calc(22 * var(--fsu));
       }
 
       .scene-config-header button,
       .scene-config-footer button {
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(8 * var(--hu));
         background: rgba(28, 42, 57, 0.78);
         color: var(--text);
         font: inherit;
         cursor: pointer;
-        min-height: 34px;
-        padding: 7px 12px;
+        min-height: calc(34 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(12 * var(--hu));
       }
 
       .scene-config-body {
         flex: 1;
         min-height: 0;
         display: grid;
-        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
-        gap: 16px;
+        grid-template-columns: minmax(0, 1.4fr) minmax(calc(280 * var(--hu)), 0.8fr);
+        gap: calc(16 * var(--hu));
       }
 
       #scene-config-preview {
         min-height: 0;
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(10 * var(--hu));
         overflow: hidden;
         background: #0d1117;
       }
@@ -6744,19 +6767,19 @@
       #scene-config-form {
         min-height: 0;
         overflow: auto;
-        padding: 12px 14px;
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
+        padding: calc(12 * var(--hu)) calc(14 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(10 * var(--hu));
         background: rgba(16, 24, 34, 0.72);
       }
 
       .scene-config-group {
-        margin: 0 0 16px;
+        margin: 0 0 calc(16 * var(--hu));
       }
 
       .scene-config-group h2 {
-        margin: 0 0 8px;
-        font-size: 13px;
+        margin: 0 0 calc(8 * var(--hu));
+        font-size: calc(13 * var(--fsu));
         color: var(--text-dim);
         font-weight: 600;
       }
@@ -6764,34 +6787,34 @@
       .scene-config-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px 12px;
-        margin-bottom: 8px;
+        gap: calc(10 * var(--hu)) calc(12 * var(--hu));
+        margin-bottom: calc(8 * var(--hu));
       }
 
       .scene-config-row label {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: calc(4 * var(--hu));
         color: var(--text-dim);
-        font-size: 12px;
-        min-width: 110px;
+        font-size: calc(12 * var(--fsu));
+        min-width: calc(110 * var(--hu));
         flex: 1;
       }
 
       .scene-config-row input,
       .scene-config-row select {
-        min-height: 30px;
-        padding: 4px 8px;
-        border: 1px solid var(--panel-border);
-        border-radius: 6px;
+        min-height: calc(30 * var(--hu));
+        padding: calc(4 * var(--hu)) calc(8 * var(--hu));
+        border: calc(1 * var(--hu)) solid var(--panel-border);
+        border-radius: calc(6 * var(--hu));
         background: rgba(10, 16, 24, 0.9);
         color: var(--text);
         font: inherit;
       }
 
       .scene-config-row input[type='color'] {
-        padding: 2px;
-        min-height: 34px;
+        padding: calc(2 * var(--hu));
+        min-height: calc(34 * var(--hu));
       }
 
       .scene-config-row input:disabled {
@@ -6805,9 +6828,9 @@
       }
 
       .scene-config-check input[type='checkbox'] {
-        width: 16px;
-        height: 16px;
-        min-height: 16px;
+        width: calc(16 * var(--hu));
+        height: calc(16 * var(--hu));
+        min-height: calc(16 * var(--hu));
         padding: 0;
       }
 
@@ -6815,15 +6838,15 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
+        gap: calc(10 * var(--hu));
         flex-shrink: 0;
       }
 
       #scene-config-status {
         flex: 1;
-        min-width: 160px;
+        min-width: calc(160 * var(--hu));
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: calc(12 * var(--fsu));
       }
 
       #scene-config-status[data-tone='ok'] {
@@ -6834,10 +6857,15 @@
         color: var(--red);
       }
 
-      @media (max-width: 900px) {
+      /*
+       * 场景配置的分栏比例锁定在设计单位里（见 .scene-config-body），
+       * 不再按窗口宽度切单栏：同宽高比下任何分辨率都保持左右两栏。
+       * 只有真正的窄屏档（手机竖屏）才折成一栏，见下方 max-width:580px。
+       */
+      @media (max-width: 580px) {
         .scene-config-body {
           grid-template-columns: 1fr;
-          grid-template-rows: minmax(220px, 1fr) minmax(0, 1fr);
+          grid-template-rows: minmax(calc(220 * var(--hu)), 1fr) minmax(0, 1fr);
         }
       }
 
@@ -6847,11 +6875,12 @@
         }
 
         .hand-mix-replay-dialog {
-          padding: 10px;
+          padding: calc(10 * var(--hu));
         }
 
+        /* 窄屏回放画布按设计单位收一档，避免弹窗纵向顶到边缘 */
         .hand-mix-replay-canvas {
-          height: min(42vh, 320px);
+          height: calc(320 * var(--hu));
         }
       }
 
@@ -6877,7 +6906,7 @@
 
         .deck-content {
           grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          grid-template-rows: auto auto minmax(240px, 1.2fr) auto;
+          grid-template-rows: auto auto minmax(calc(240 * var(--hu)), 1.2fr) auto;
           gap: calc(6 * var(--hu));
         }
 
@@ -6896,7 +6925,7 @@
         }
 
         .deck-preview-panel {
-          min-height: clamp(200px, 34vh, 320px);
+          min-height: calc(240 * var(--hu));
         }
       }
     </style>
