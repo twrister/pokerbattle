@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { checkBasicAuth, writeUnauthorized } from './basicAuth.js';
 import { buildDashboardStatus, type ServiceDescriptor } from './dashboardStatus.js';
 import { DeployRunner, workspaceReady } from './deployRunner.js';
-import { clearGamePlayers, fetchGameFeedback } from './gameStatus.js';
+import { clearGamePlayers, fetchGameFeedback, fetchGameMetrics } from './gameStatus.js';
 import { readGameMeta } from './gameMeta.js';
 import { parseDeployRequest, readWorkspaceVersion, resolveDashboardVersion } from './releaseInfo.js';
 import { listLanIPv4, writeLanIpsJson } from './lanIps.js';
@@ -137,6 +137,17 @@ async function handleApi(
     writeJson(res, 200, {
       ok: result.reachable,
       feedback: result.feedback,
+      message: result.error,
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/metrics') {
+    // 与 /api/feedback 同风格：失败也回 200 + ok:false，避免前端轮询刷红
+    const result = await fetchGameMetrics(runtime.resolveGameBaseUrl());
+    writeJson(res, 200, {
+      ok: result.reachable,
+      metrics: result.metrics,
       message: result.error,
     });
     return;

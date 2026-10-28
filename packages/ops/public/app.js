@@ -1,4 +1,16 @@
+import {
+  buildLineSeries,
+  formatCount,
+  formatDurationMs,
+  pickTicks,
+} from './chart.js';
+
 const POLL_MS = 2000;
+/** 运营数据与 2 秒主轮询解耦：数据是分钟级采样，30 秒刷新足够。 */
+const METRICS_POLL_MS = 30_000;
+/** SVG 内部坐标系宽度；实际宽度由 CSS 拉伸，坐标不需要跟随窗口变化。 */
+const CHART_VIEW_WIDTH = 720;
+const CHART_VIEW_HEIGHT = 180;
 
 const els = {
   processState: document.getElementById('process-state'),
@@ -35,6 +47,22 @@ const els = {
   subtitle: document.getElementById('ops-subtitle'),
   entryHint: document.getElementById('entry-hint'),
   trustBanner: document.querySelector('.trust-banner'),
+  metricsHint: document.getElementById('metrics-hint'),
+  metricsKpis: document.getElementById('metrics-kpis'),
+  kpiDau: document.getElementById('kpi-dau'),
+  kpiPeak: document.getElementById('kpi-peak'),
+  kpiMatches: document.getElementById('kpi-matches'),
+  kpiDuration: document.getElementById('kpi-duration'),
+  kpiNewPlayers: document.getElementById('kpi-new-players'),
+  kpiTotalPlayers: document.getElementById('kpi-total-players'),
+  compositionLobby: document.getElementById('composition-lobby'),
+  compositionSolo: document.getElementById('composition-solo'),
+  compositionRoom: document.getElementById('composition-room'),
+  compositionAnonymous: document.getElementById('composition-anonymous'),
+  dauChart: document.getElementById('dau-chart'),
+  hourlyChart: document.getElementById('hourly-chart'),
+  hourlyRangeTabs: document.getElementById('hourly-range-tabs'),
+  dailyTbody: document.getElementById('daily-tbody'),
 };
 
 let busy = false;
@@ -56,6 +84,12 @@ let showClearActions = false;
 let holdMessageUntil = 0;
 /** 最近一次状态里的下一版本号，勾选变化时用来刷新预览。 */
 let latestDeployNextVersion = null;
+/** 运营数据轮询定时器，与 2 秒主轮询分开。 */
+let metricsTimer = null;
+/** 最近一次成功的运营载荷；切换区间时用它重绘，不重复请求。 */
+let latestMetrics = null;
+/** 小时图当前区间：24h 或 7d。 */
+let hourlyRange = '7d';
 
 /** 相对当前页面目录解析 API/静态资源，兼容 /poker-battle-ops/ 子路径。 */
 function resolveAppUrl(rel) {
@@ -335,9 +369,289 @@ function renderFeedback(rows, error) {
     .join('');
 }
 
+/** ===== 运营数据面板 ===== */
+
+/** 拉取运营时序数据；失败只写提示，保留上一次图形避免闪屏。 */
+async function refreshMetrics() {
+  try {
+    const response = await fetch(resolveAppUrl('api/metrics'), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (response.status === 401) throw new Error('需要登录');
+    if (response.status === 404) {
+      throw new Error('运维站版本过旧，请重启 pnpm ops 后再看运营数据');
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (data?.ok !== true || !data.metrics) {
+      renderMetricsError(data?.message || '游戏服不可达，运营数据暂不可用');
+      return;
+    }
+    latestMetrics = data.metrics;
+    renderMetrics(latestMetrics);
+  } catch (error) {
+    renderMetricsError(error instanceof Error ? error.message : '运营数据刷新失败');
+  }
+}
+
+/** 游戏服不可达或旧版本：提示原因，不清空已有图形。 */
+function renderMetricsError(message) {
+  if (els.metricsHint) {
+    els.metricsHint.textContent = latestMetrics
+      ? `${message} · 显示上次数据`
+      : message;
+  }
+  if (!latestMetrics) {
+    renderMetricsEmpty(message);
+  }
+}
+
+/** 从未成功加载过时的占位。 */
+function renderMetricsEmpty(message) {
+  for (const box of [els.dauChart, els.hourlyChart]) {
+    if (box) box.innerHTML = `<div class="chart-empty">${escapeHtml(message)}</div>`;
+  }
+  if (els.dailyTbody) {
+    els.dailyTbody.innerHTML = `<tr><td colspan="6" class="empty">${escapeHtml(message)}</td></tr>`;
+  }
+}
+
+/** 渲染整块运营数据。 */
+function renderMetrics(metrics) {
+  renderMetricsKpis(metrics);
+  renderOnlineComposition(metrics.current);
+  renderDauChart(metrics.daily);
+  renderHourlyChart(metrics.hourly, hourlyRange);
+  renderDailyTable(metrics.daily);
+
+  if (els.metricsHint) {
+    const sampled = metrics.current?.sampledAt
+      ? ` · 采样于 ${formatClock(metrics.current.sampledAt)}`
+      : '';
+    els.metricsHint.textContent = `更新于 ${formatClock(Date.now())} · 时区 ${
+      metrics.timeZone || '—'
+    }${sampled}`;
+  }
+}
+
+/** 顶部 KPI 与在线构成。 */
+function renderMetricsKpis(metrics) {
+  const today = metrics.today ?? {};
+  const totals = metrics.totals ?? {};
+  setText(els.kpiDau, formatCount(Number(today.dau) || 0));
+  setText(els.kpiPeak, formatCount(Number(today.peakOnline) || 0));
+  setText(els.kpiMatches, formatCount(Number(today.matches) || 0));
+  setText(els.kpiDuration, formatDurationMs(today.avgMatchDurationMs ?? null));
+  setText(els.kpiNewPlayers, formatCount(Number(totals.newPlayersToday) || 0));
+  setText(els.kpiTotalPlayers, formatCount(Number(totals.totalPlayers) || 0));
+}
+
+/** 在线构成：大厅 / 单机 / 房间 / 匿名连接。 */
+function renderOnlineComposition(current) {
+  const data = current ?? {};
+  setText(els.compositionLobby, formatCount(Number(data.lobby) || 0));
+  setText(els.compositionSolo, formatCount(Number(data.solo) || 0));
+  setText(els.compositionRoom, formatCount(Number(data.room) || 0));
+  setText(els.compositionAnonymous, formatCount(Number(data.anonymousConnections) || 0));
+}
+
+/** DAU 折线：近 30 天，单条蓝色实线。 */
+function renderDauChart(daily) {
+  if (!els.dauChart) return;
+  const rows = Array.isArray(daily) ? daily : [];
+  const points = rows.map((row) => ({
+    label: row.label || row.day,
+    value: Number(row.dau) || 0,
+  }));
+  const series = buildLineSeries(points, { width: CHART_VIEW_WIDTH, height: CHART_VIEW_HEIGHT });
+  if (!series) {
+    els.dauChart.innerHTML = '<div class="chart-empty">暂无 DAU 数据</div>';
+    return;
+  }
+  els.dauChart.innerHTML = buildChartSvg({
+    series,
+    labels: points.map((point) => point.label),
+    lines: [{ path: series.linePath, className: 'primary' }],
+    showArea: true,
+  });
+}
+
+/**
+ * 小时在线折线：均值实线 + 峰值虚线。
+ * 24h 只取最近 24 个整点，7d 取全部（168 个）。缺桶由 buildLineSeries 断线。
+ */
+function renderHourlyChart(hourly, range) {
+  if (!els.hourlyChart) return;
+  const rows = Array.isArray(hourly) ? hourly : [];
+  const filtered =
+    range === '24h' ? rows.filter((row) => row.hourStart >= Date.now() - 24 * 3_600_000) : rows;
+  const points = filtered.map((row) => ({
+    label: row.label || '',
+    value: Number(row.avgOnline) || 0,
+  }));
+  const peakPoints = filtered.map((row) => ({
+    label: row.label || '',
+    value: Number(row.peakOnline) || 0,
+  }));
+
+  const avgSeries = buildLineSeries(points, { width: CHART_VIEW_WIDTH, height: CHART_VIEW_HEIGHT });
+  const peakSeries = buildLineSeries(peakPoints, {
+    width: CHART_VIEW_WIDTH,
+    height: CHART_VIEW_HEIGHT,
+  });
+  if (!avgSeries) {
+    els.hourlyChart.innerHTML = `<div class="chart-empty">${
+      range === '24h' ? '近 24 小时暂无采样数据' : '近 7 天暂无采样数据'
+    }</div>`;
+    return;
+  }
+
+  const lines = [
+    { path: avgSeries.linePath, className: 'primary' },
+    ...(peakSeries ? [{ path: peakSeries.linePath, className: 'secondary' }] : []),
+  ];
+  els.hourlyChart.innerHTML = buildChartSvg({
+    series: avgSeries,
+    labels: filtered.map((row) => row.label || ''),
+    lines,
+    showArea: range === '7d',
+    legend: [
+      { className: 'primary', label: '均值' },
+      ...(peakSeries ? [{ className: 'secondary', label: '峰值' }] : []),
+    ],
+  });
+}
+
+/**
+ * 拼一张 SVG。所有数值都走 setAttribute / 模板里的数字，标签走 escapeHtml，
+ * 因此这里不做 innerHTML 拼接以外的处理。
+ */
+function buildChartSvg({ series, labels, lines, showArea, legend }) {
+  const width = CHART_VIEW_WIDTH;
+  const height = CHART_VIEW_HEIGHT;
+  const padBottom = 22;
+  const tickIndexes = pickTicks(labels.length, Math.max(3, Math.floor(width / 90)));
+
+  const grid = series.yTicks
+    .map(
+      (tick) =>
+        `<line class="chart-grid-line" x1="34" y1="${round2(tick.y)}" x2="${
+          width - 10
+        }" y2="${round2(tick.y)}" />`,
+    )
+    .join('');
+  const yLabels = series.yTicks
+    .map(
+      (tick) =>
+        `<text class="chart-axis-text" x="30" y="${round2(tick.y + 3)}" text-anchor="end">${escapeHtml(
+          formatCount(tick.value),
+        )}</text>`,
+    )
+    .join('');
+
+  const xLabels = tickIndexes
+    .map((index) => {
+      const point = series.points.find((entry) => entry.index === index);
+      const x = point
+        ? point.x
+        : 34 + ((width - 44) * index) / Math.max(1, labels.length - 1);
+      // 首尾标签贴边，避免被 viewBox 裁掉
+      const isFirst = index === 0;
+      const isLast = index === labels.length - 1;
+      const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
+      const dx = isFirst ? -2 : isLast ? 2 : 0;
+      return `<text class="chart-axis-text" x="${round2(x + dx)}" y="${
+        height - 6
+      }" text-anchor="${anchor}">${escapeHtml(labels[index] ?? '')}</text>`;
+    })
+    .join('');
+
+  const area = showArea && series.areaPath
+    ? `<path class="chart-area" d="${series.areaPath}" />`
+    : '';
+  const paths = lines
+    .map((line) => `<path class="chart-line ${line.className}" d="${line.path}" />`)
+    .join('');
+  // 单点或极少点时补圆点，避免看起来是空白
+  const dots =
+    series.points.length <= 2
+      ? series.points
+          .map(
+            (point) =>
+              `<circle class="chart-dot" cx="${round2(point.x)}" cy="${round2(point.y)}" r="3" />`,
+          )
+          .join('')
+      : '';
+  const legendHtml = Array.isArray(legend) && legend.length
+    ? `<div class="chart-legend-inline">${legend
+        .map(
+          (item) =>
+            `<span class="swatch ${item.className}"></span><span>${escapeHtml(item.label)}</span>`,
+        )
+        .join('')}</div>`
+    : '';
+
+  return `${legendHtml}<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img">${grid}${area}${paths}${dots}${yLabels}${xLabels}</svg>`;
+}
+
+/**
+ * 近 7 日概览表：倒序展示，最近一天在最上面。
+ * 无任何数据的历史日期加 no-data 类，和真实的 0 区分开。
+ */
+function renderDailyTable(daily) {
+  if (!els.dailyTbody) return;
+  const rows = Array.isArray(daily) ? daily.slice(-7).reverse() : [];
+  if (rows.length === 0) {
+    els.dailyTbody.innerHTML = '<tr><td colspan="6" class="empty">暂无运营数据</td></tr>';
+    return;
+  }
+  els.dailyTbody.innerHTML = rows
+    .map((row) => {
+      const empty =
+        !row.dau && !row.peakOnline && !row.matches && !row.newPlayers;
+      return `<tr class="${empty ? 'no-data' : ''}">
+        <td>${escapeHtml(row.label || row.day)}</td>
+        <td>${formatCount(Number(row.dau) || 0)}</td>
+        <td>${formatCount(Number(row.peakOnline) || 0)}</td>
+        <td>${formatCount(Number(row.matches) || 0)}</td>
+        <td>${escapeHtml(formatDurationMs(row.avgMatchDurationMs ?? null))}</td>
+        <td>${formatCount(Number(row.newPlayers) || 0)}</td>
+      </tr>`;
+    })
+    .join('');
+}
+
+/** 切换小时图区间，直接用缓存重绘，不额外请求。 */
+function setHourlyRange(range) {
+  if (range !== '24h' && range !== '7d') return;
+  hourlyRange = range;
+  for (const button of els.hourlyRangeTabs?.querySelectorAll('[data-range]') ?? []) {
+    button.classList.toggle('active', button.getAttribute('data-range') === range);
+  }
+  if (latestMetrics) renderHourlyChart(latestMetrics.hourly, hourlyRange);
+}
+
+function setText(el, text) {
+  if (el) el.textContent = text;
+}
+
+/** 只显示时分秒，运营数据都是当天的相对时间。 */
+function formatClock(ms) {
+  if (!ms) return '—';
+  try {
+    return new Date(ms).toLocaleTimeString();
+  } catch {
+    return '—';
+  }
+}
+
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+
 /** 渲染全部玩家；场次/胜率来自服务端历史，位置来自大厅、单机、房间或离线。 */
-function renderPlayers(players) {
-  const rows = Array.isArray(players) ? players : [];
+function renderPlayers(players) {  const rows = Array.isArray(players) ? players : [];
   const onlineCount = rows.filter((player) => player.location && player.location !== 'offline').length;
   if (els.playerHint) {
     els.playerHint.textContent = rows.length
@@ -779,15 +1093,27 @@ els.serviceEntries.addEventListener('click', (event) => {
   void invokeControl(`api/services/${id}/${action}`, id);
 });
 
+els.hourlyRangeTabs?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const range = target.getAttribute('data-range');
+  if (range) setHourlyRange(range);
+});
+
 await refreshStatus();
 void refreshFeedback();
+void refreshMetrics();
 pollTimer = setInterval(() => {
   if (!busy || deployBusy) {
     void refreshStatus();
     void refreshFeedback();
   }
 }, POLL_MS);
+metricsTimer = setInterval(() => {
+  void refreshMetrics();
+}, METRICS_POLL_MS);
 
 window.addEventListener('beforeunload', () => {
   if (pollTimer) clearInterval(pollTimer);
+  if (metricsTimer) clearInterval(metricsTimer);
 });
