@@ -1876,9 +1876,42 @@
         text-decoration: line-through;
       }
 
-      /* 战役选关页：按章节分组，关卡卡片显示完成标记与锁定态 */
+      /*
+       * 战役选关页：卡通大地图。草地/山体/松树/河流全用 CSS 渐变与 SVG 绘制，
+       * 关卡沿沙土小路自下而上排布；节点坐标用 720 设计宽单位（--x/--y），
+       * 乘以 --mu（= 地图实际宽 / 720）定位，与 SVG viewBox 天然对齐。
+       */
+      #campaign .lobby-shell {
+        height: 100svh;
+        min-height: 0;
+        padding: 0;
+        background: #6cbf4c;
+      }
+
+      #campaign .lobby-shell::before,
+      #campaign .lobby-shell::after {
+        display: none;
+      }
+
+      /* 标题栏悬浮在地图上方，顶部压一层暗色渐变保证白字可读 */
       #campaign .online-page-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 5;
         grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        margin: 0;
+        padding:
+          max(env(safe-area-inset-top), calc(28 * var(--hu)))
+          calc(28 * var(--hu))
+          calc(36 * var(--hu));
+        background: linear-gradient(180deg, rgba(20, 33, 61, 0.6) 0%, rgba(20, 33, 61, 0.25) 60%, rgba(20, 33, 61, 0) 100%);
+        pointer-events: none;
+      }
+
+      #campaign .online-page-header > * {
+        pointer-events: auto;
       }
 
       #campaign .online-page-back {
@@ -1886,42 +1919,257 @@
       }
 
       #campaign-list {
-        display: grid;
-        gap: calc(8 * var(--hu));
+        display: flex;
+        flex-direction: column;
         flex: 1;
-        align-content: start;
-        overflow: auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        container-type: inline-size;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        touch-action: none;
+        cursor: grab;
       }
 
-      .campaign-stage {
-        display: grid;
-        grid-template-columns: calc(40 * var(--hu)) minmax(0, 1fr) auto;
-        align-items: center;
-        gap: calc(10 * var(--hu));
+      #campaign-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      #campaign-list.is-dragging {
+        cursor: grabbing;
+      }
+
+      /* 地图画布：关卡少时贴底，第 1 关始终在视口下方 */
+      .campaign-map {
+        --mu: calc(100cqw / 720);
+        position: relative;
+        flex: none;
         width: 100%;
-        padding: calc(10 * var(--hu)) calc(14 * var(--hu));
-        border: 0;
-        border-radius: calc(14 * var(--hu));
-        text-align: left;
-        cursor: pointer;
+        height: calc(var(--map-h) * var(--mu));
+        margin-top: auto;
+        overflow: hidden;
+        background:
+          radial-gradient(circle, rgba(36, 110, 30, 0.22) 0 calc(3 * var(--mu)), transparent calc(4 * var(--mu))) 0 0 / calc(58 * var(--mu)) calc(52 * var(--mu)),
+          radial-gradient(circle, rgba(255, 255, 255, 0.14) 0 calc(2 * var(--mu)), transparent calc(3 * var(--mu))) calc(29 * var(--mu)) calc(26 * var(--mu)) / calc(58 * var(--mu)) calc(52 * var(--mu)),
+          radial-gradient(ellipse 45% 18% at 28% 30%, rgba(170, 230, 110, 0.4), transparent 70%) 0 0 / 100% calc(700 * var(--mu)),
+          radial-gradient(ellipse 40% 16% at 76% 72%, rgba(170, 230, 110, 0.35), transparent 70%) 0 0 / 100% calc(700 * var(--mu)),
+          linear-gradient(180deg, #5fae45 0%, #78c957 18%, #7fce5c 100%);
       }
 
-      .campaign-stage:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
+      .campaign-river,
+      .campaign-road,
+      .campaign-deco-layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .campaign-river path,
+      .campaign-road path {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .campaign-river-bank {
+        stroke: #3d8fb8;
+        stroke-width: 92;
+      }
+
+      .campaign-river-water {
+        stroke: #63c8ea;
+        stroke-width: 70;
+      }
+
+      /* 沙土路：深色路肩 + 浅色路面；锁定段压暗并改成点状虚线 */
+      .campaign-road-edge.is-open {
+        stroke: #a06a36;
+        stroke-width: 48;
+      }
+
+      .campaign-road-surface.is-open {
+        stroke: #ecd08f;
+        stroke-width: 34;
+      }
+
+      .campaign-road-edge.is-locked {
+        stroke: rgba(70, 90, 50, 0.28);
+        stroke-width: 34;
+      }
+
+      .campaign-road-surface.is-locked {
+        stroke: rgba(240, 226, 186, 0.8);
+        stroke-width: 12;
+        stroke-dasharray: 1 24;
+      }
+
+      /* 装饰物：外层只负责定位与投影，形状画在伪元素上（clip-path 会裁掉自身投影） */
+      .campaign-deco {
+        position: absolute;
+        left: calc(var(--x) * var(--mu));
+        top: calc(var(--y) * var(--mu));
+        transform: translate(-50%, -100%) scale(var(--s));
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 calc(5 * var(--mu)) 0 rgba(20, 60, 20, 0.28));
+      }
+
+      .campaign-deco::before,
+      .campaign-deco::after {
+        content: '';
+        position: absolute;
+      }
+
+      .campaign-deco.is-mountain {
+        width: calc(200 * var(--mu));
+        height: calc(150 * var(--mu));
+      }
+
+      .campaign-deco.is-mountain::before {
+        inset: 0;
+        background: linear-gradient(90deg, #a9b6c2 0 50%, #808e9d 50% 100%);
+        clip-path: polygon(50% 0, 64% 22%, 72% 18%, 100% 100%, 0 100%, 30% 30%, 38% 24%);
+      }
+
+      .campaign-deco.is-mountain::after {
+        inset: 0;
+        background: linear-gradient(90deg, #ffffff 0 50%, #dfe8f0 50% 100%);
+        clip-path: polygon(50% 0, 64% 22%, 58% 28%, 52% 22%, 45% 30%, 38% 24%);
+      }
+
+      .campaign-deco.is-pine {
+        width: calc(76 * var(--mu));
+        height: calc(118 * var(--mu));
+      }
+
+      .campaign-deco.is-pine::before {
+        inset: 0 0 12% 0;
+        background: linear-gradient(90deg, #3f9a3a 0 50%, #2e7f2e 50% 100%);
+        clip-path: polygon(50% 0, 76% 32%, 64% 32%, 88% 62%, 74% 62%, 100% 96%, 0 96%, 26% 62%, 12% 62%, 36% 32%, 24% 32%);
+      }
+
+      .campaign-deco.is-pine::after {
+        left: 42%;
+        right: 42%;
+        bottom: 0;
+        height: 16%;
+        border-radius: calc(2 * var(--mu));
+        background: #7a4a24;
+      }
+
+      .campaign-deco.is-bush {
+        width: calc(96 * var(--mu));
+        height: calc(52 * var(--mu));
+        background:
+          radial-gradient(circle at 26% 64%, #4daa3c 0 30%, transparent 31%),
+          radial-gradient(circle at 74% 66%, #45a036 0 28%, transparent 29%),
+          radial-gradient(circle at 50% 46%, #5fc04a 0 38%, transparent 39%);
+      }
+
+      /* 关卡节点：城堡底座落在 (--x, --y)，木牌挂在城堡下方 */
+      .campaign-stage {
+        --castle-h: 132;
+        position: absolute;
+        left: calc(var(--x) * var(--mu));
+        top: calc((var(--y) - var(--castle-h)) * var(--mu));
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: #fff;
+        font-family: var(--font-display);
+        transform: translateX(-50%);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .campaign-stage.is-boss {
+        --castle-h: 176;
+      }
+
+      .campaign-stage:focus-visible {
+        outline: none;
+      }
+
+      .campaign-stage:focus-visible .campaign-stage-plate {
+        outline: calc(3 * var(--mu)) solid #fff;
+        outline-offset: calc(2 * var(--mu));
+      }
+
+      /* 城堡脚下的投影 */
+      .campaign-stage::before {
+        content: '';
+        position: absolute;
+        top: calc((var(--castle-h) - 22) * var(--mu));
+        left: 50%;
+        width: calc(var(--castle-h) * 0.95 * var(--mu));
+        height: calc(36 * var(--mu));
+        border-radius: 50%;
+        z-index: -1;
+        background: radial-gradient(ellipse, rgba(30, 50, 20, 0.45), rgba(30, 50, 20, 0) 70%);
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+
+      .campaign-stage-castle {
+        position: relative;
+        display: block;
+        height: calc(var(--castle-h) * var(--mu));
+        width: auto;
+        pointer-events: none;
+        transition: transform 0.12s, filter 0.12s;
+        filter: drop-shadow(0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.35));
+      }
+
+      .campaign-stage:hover:not(:disabled) .campaign-stage-castle {
+        filter: drop-shadow(0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.35)) brightness(1.08);
+        transform: scale(1.04);
+      }
+
+      .campaign-stage:active:not(:disabled) .campaign-stage-castle,
+      .campaign-stage:active:not(:disabled) .campaign-stage-plate {
+        transform: translateY(calc(3 * var(--mu)));
+      }
+
+      /* 木牌：序号圆章 + 标题 + 地图名 */
+      .campaign-stage-plate {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: calc(8 * var(--mu));
+        margin-top: calc(-6 * var(--mu));
+        padding: calc(5 * var(--mu)) calc(16 * var(--mu)) calc(5 * var(--mu)) calc(6 * var(--mu));
+        border: calc(3 * var(--mu)) solid #4a2a12;
+        border-radius: calc(14 * var(--mu));
+        background:
+          repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 calc(10 * var(--mu)), rgba(90, 50, 20, 0.14) calc(10 * var(--mu)) calc(12 * var(--mu))),
+          linear-gradient(180deg, #d4985a 0%, #b9773f 100%);
+        box-shadow:
+          inset 0 calc(2 * var(--mu)) 0 rgba(255, 230, 190, 0.45),
+          0 calc(5 * var(--mu)) 0 #6b3d1b,
+          0 calc(8 * var(--mu)) calc(10 * var(--mu)) rgba(20, 40, 20, 0.3);
+        white-space: nowrap;
+        transition: transform 0.12s;
       }
 
       .campaign-stage-index {
+        position: relative;
         display: grid;
+        flex: none;
         place-items: center;
-        width: calc(36 * var(--hu));
-        height: calc(36 * var(--hu));
-        border: calc(2 * var(--hu)) solid var(--outline);
+        width: calc(40 * var(--mu));
+        height: calc(40 * var(--mu));
+        border: calc(3 * var(--mu)) solid var(--outline);
         border-radius: 50%;
-        background: #8fa3bf;
+        background: linear-gradient(180deg, #58a9e6, #2670b8);
         color: #fff;
-        font-family: var(--font-display);
-        font-size: calc(15 * var(--hu));
+        font-size: calc(20 * var(--mu));
+        text-shadow: var(--text-outline);
       }
 
       .campaign-stage.is-cleared .campaign-stage-index {
@@ -1929,26 +2177,175 @@
       }
 
       .campaign-stage-title {
-        font-size: calc(16 * var(--hu));
-        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: calc(8 * var(--mu));
+        font-size: calc(21 * var(--mu));
+        letter-spacing: 0.02em;
+        text-shadow: var(--text-outline);
       }
 
       /* 战役地图名小标签，跟在关卡标题后面 */
       .campaign-stage-arena {
-        margin-left: calc(8 * var(--hu));
-        padding: calc(1 * var(--hu)) calc(8 * var(--hu));
-        border-radius: calc(10 * var(--hu));
+        padding: calc(1 * var(--mu)) calc(9 * var(--mu));
+        border: calc(2 * var(--mu)) solid var(--outline);
+        border-radius: 999px;
         background: #5c7cfa;
-        color: #fff;
-        font-size: calc(12 * var(--hu));
-        vertical-align: middle;
+        font-size: calc(14 * var(--mu));
+        text-shadow: none;
       }
 
+      /* 完成徽章：文字留给读屏，视觉上是城堡右上角的蓝底对勾 */
       .campaign-stage-status {
-        color: #2f9e44;
-        font-size: calc(15 * var(--hu));
-        font-weight: 700;
-        white-space: nowrap;
+        position: absolute;
+        top: calc(var(--castle-h) * 0.12 * var(--mu));
+        left: calc(50% + var(--castle-h) * 0.24 * var(--mu));
+        width: calc(44 * var(--mu));
+        height: calc(44 * var(--mu));
+        overflow: hidden;
+        border: calc(3 * var(--mu)) solid var(--outline);
+        border-radius: 50%;
+        background: linear-gradient(180deg, #58a9e6, #2670b8);
+        box-shadow: 0 calc(3 * var(--mu)) 0 #1c5fa6;
+        color: transparent;
+        font-size: 0;
+      }
+
+      .campaign-stage-status:empty {
+        display: none;
+      }
+
+      .campaign-stage-status::before {
+        content: '';
+        position: absolute;
+        left: 30%;
+        top: 16%;
+        width: 26%;
+        height: 46%;
+        border-right: calc(5 * var(--mu)) solid #fff;
+        border-bottom: calc(5 * var(--mu)) solid #fff;
+        transform: rotate(45deg);
+      }
+
+      /* 当前关：脚下橙色光圈向外扩散，城堡轻轻上下浮动 */
+      .campaign-stage.is-current::after {
+        content: '';
+        position: absolute;
+        top: calc((var(--castle-h) - 50) * var(--mu));
+        left: 50%;
+        z-index: -1;
+        width: calc(170 * var(--mu));
+        height: calc(64 * var(--mu));
+        border: calc(5 * var(--mu)) solid #ffa62b;
+        border-radius: 50%;
+        box-shadow: 0 0 calc(14 * var(--mu)) rgba(255, 166, 43, 0.9);
+        transform: translateX(-50%);
+        animation: campaign-current-pulse 1.4s ease-out infinite;
+        pointer-events: none;
+      }
+
+      /* 脚下投影换成常亮的橙色光斑，脉冲圈在其上扩散 */
+      .campaign-stage.is-current::before {
+        top: calc((var(--castle-h) - 44) * var(--mu));
+        width: calc(170 * var(--mu));
+        height: calc(56 * var(--mu));
+        background: radial-gradient(ellipse, rgba(255, 196, 70, 0.95) 0%, rgba(255, 150, 30, 0.6) 45%, rgba(255, 150, 30, 0) 72%);
+      }
+
+      .campaign-stage.is-current .campaign-stage-castle {
+        animation: campaign-current-float 1.6s ease-in-out infinite;
+      }
+
+      .campaign-stage.is-current .campaign-stage-plate {
+        border-color: #7a3c00;
+        background:
+          repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 calc(10 * var(--mu)), rgba(120, 50, 0, 0.14) calc(10 * var(--mu)) calc(12 * var(--mu))),
+          linear-gradient(180deg, #ffb54a 0%, #f08a12 100%);
+        box-shadow:
+          inset 0 calc(2 * var(--mu)) 0 rgba(255, 240, 200, 0.5),
+          0 calc(5 * var(--mu)) 0 #a45400,
+          0 0 calc(16 * var(--mu)) rgba(255, 180, 60, 0.75);
+      }
+
+      @keyframes campaign-current-pulse {
+        0% {
+          opacity: 1;
+          transform: translateX(-50%) scale(0.7);
+        }
+        100% {
+          opacity: 0;
+          transform: translateX(-50%) scale(1.25);
+        }
+      }
+
+      @keyframes campaign-current-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(calc(-8 * var(--mu)));
+        }
+      }
+
+      /* 锁定：城堡去色、木牌发灰，序号位画成锁形徽章 */
+      .campaign-stage.is-locked {
+        cursor: not-allowed;
+      }
+
+      .campaign-stage.is-locked .campaign-stage-castle {
+        filter: grayscale(1) brightness(0.82) drop-shadow(0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.25));
+        opacity: 0.78;
+      }
+
+      .campaign-stage.is-locked .campaign-stage-plate {
+        border-color: #3e4654;
+        background: linear-gradient(180deg, #9aa3af 0%, #7a8391 100%);
+        box-shadow:
+          inset 0 calc(2 * var(--mu)) 0 rgba(255, 255, 255, 0.3),
+          0 calc(5 * var(--mu)) 0 #4c5361;
+        opacity: 0.9;
+      }
+
+      .campaign-stage.is-locked .campaign-stage-index {
+        background: linear-gradient(180deg, #6b7686, #4c5566);
+        color: transparent;
+        font-size: 0;
+        text-shadow: none;
+      }
+
+      .campaign-stage.is-locked .campaign-stage-index::before,
+      .campaign-stage.is-locked .campaign-stage-index::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      /* 锁梁 */
+      .campaign-stage.is-locked .campaign-stage-index::before {
+        top: 18%;
+        width: 32%;
+        height: 30%;
+        border: calc(3 * var(--mu)) solid #fff;
+        border-bottom: 0;
+        border-radius: calc(8 * var(--mu)) calc(8 * var(--mu)) 0 0;
+      }
+
+      /* 锁身 */
+      .campaign-stage.is-locked .campaign-stage-index::after {
+        top: 44%;
+        width: 48%;
+        height: 36%;
+        border-radius: calc(3 * var(--mu));
+        background: #fff;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .campaign-stage.is-current::after,
+        .campaign-stage.is-current .campaign-stage-castle {
+          animation: none;
+        }
       }
 
       #replay-list-items {
