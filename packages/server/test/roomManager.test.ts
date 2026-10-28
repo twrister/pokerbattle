@@ -768,6 +768,62 @@ describe('MatchRoom 观战', () => {
   });
 });
 
+describe('MatchRoom 运营对局统计', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('自然打满一局后回调 onMatchEnd，带时长与模式', () => {
+    vi.useFakeTimers();
+    const events: Array<{ durationMs: number; winner: unknown; matchMode: string }> = [];
+    const room = new MatchRoom({
+      roomId: '501',
+      roomName: '统计房',
+      onMatchEnd: (result) => events.push({ ...result }),
+    });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+    expect(events).toHaveLength(0);
+
+    // 双方都不出牌，必然走到结算阶段比血量；420 秒是当前配置的一整局
+    vi.advanceTimersByTime(430_000);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.matchMode).toBe('1v1');
+    expect(events[0]?.durationMs).toBeGreaterThanOrEqual(420_000);
+    // 结算后回到 waiting，可以再开一局
+    expect(room.toOpsSnapshot().phase).toBe('waiting');
+    room.dispose();
+  });
+
+  it('断线超时关房不回调 onMatchEnd', () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const room = new MatchRoom({
+      roomId: '502',
+      roomName: '断线房',
+      onMatchEnd: () => {
+        calls += 1;
+      },
+    });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    room.handleJoin(b as never, 'B');
+    hostStart(a);
+
+    a.close();
+    b.close();
+    vi.advanceTimersByTime(10_000);
+
+    expect(calls).toBe(0);
+    room.dispose();
+  });
+});
+
 describe('2v2 房间', () => {
   it('创建 2v2 后可入四席，点空席换队，满员才能开局', () => {
     const manager = new RoomManager();

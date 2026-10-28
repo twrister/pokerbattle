@@ -17,8 +17,15 @@ import type { OpsRoomSnapshot, OpsRoomSummary } from './opsTypes.js';
 import { normalizePlayerId, type OnlinePresence, type PlayerStatsStore } from './playerStatsStore.js';
 import { MatchRoom, type RejoinProbe } from './room.js';
 
+/** 运营数据只用到「记一局」这一个能力，抽成接口避免 RoomManager 依赖具体实现。 */
+export interface MatchMetricsSink {
+  recordMatchEnd(durationMs: number): void;
+}
+
 export interface RoomManagerOptions {
   playerStats?: PlayerStatsStore;
+  /** 可选的运营数据仓库；缺省时对局统计整条链路不启用。 */
+  metrics?: MatchMetricsSink;
 }
 
 export interface RoomActionResult {
@@ -36,9 +43,11 @@ export interface RoomActionResult {
 export class RoomManager {
   private readonly rooms = new Map<string, MatchRoom>();
   private readonly playerStats?: PlayerStatsStore;
+  private readonly metrics?: MatchMetricsSink;
 
   constructor(options: RoomManagerOptions = {}) {
     this.playerStats = options.playerStats;
+    this.metrics = options.metrics;
   }
 
   /** 当前存活房间数，便于运维日志。 */
@@ -270,6 +279,8 @@ export class RoomManager {
       },
       onPlayerJoin: (playerId, name) => this.playerStats?.upsertPlayer(playerId, name),
       onDecisiveMatch: (sides) => this.playerStats?.recordDecisiveSides(sides),
+      // 运营数据：只要有结算结果就记一局（含平局），断线关房不计
+      onMatchEnd: (result) => this.metrics?.recordMatchEnd(result.durationMs),
     });
     this.rooms.set(roomId, room);
     return room;

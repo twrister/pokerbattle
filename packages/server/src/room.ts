@@ -79,6 +79,16 @@ export interface MatchRoomOptions {
   onPlayerJoin?: (playerId: string, name: string) => void;
   /** 对局分出胜负且入座双方都有 playerId 时记账（1v1 / 2v2）。 */
   onDecisiveMatch?: (sides: DecisiveMatchSides) => void;
+  /** 任一局走到结算（含平局）时回调，供运营数据统计对局数与时长。 */
+  onMatchEnd?: (result: MatchEndInfo) => void;
+}
+
+/** 一局结束的统计信息；断线关房不计入，口径为「有结算结果的局」。 */
+export interface MatchEndInfo {
+  /** 从开局到结算的真实耗时。 */
+  durationMs: number;
+  winner: Faction | null;
+  matchMode: MatchMode;
 }
 
 /**
@@ -91,6 +101,7 @@ export class MatchRoom {
   private readonly onDispose?: (roomId: string) => void;
   private readonly onPlayerJoin?: (playerId: string, name: string) => void;
   private readonly onDecisiveMatch?: (sides: DecisiveMatchSides) => void;
+  private readonly onMatchEnd?: (result: MatchEndInfo) => void;
   private seats: Array<Seat | null>;
   private matchMode: MatchMode;
   /** 快速匹配房：满员后不等人点开始，延迟一拍自动开局。 */
@@ -115,6 +126,8 @@ export class MatchRoom {
   private readonly createdAt = Date.now();
   /** 最近一次席位/消息活跃时间，用于判断僵尸房。 */
   private lastActiveAt = Date.now();
+  /** 本局真实开局时刻，供运营数据统计平均对局时长。 */
+  private matchStartedAt = 0;
   /** tick → 已接受的指令列表（按入座顺序追加，保证确定性）。 */
   private readonly scheduled = new Map<number, Command[]>();
   private readonly serverHashes = new Map<number, number>();
@@ -127,6 +140,7 @@ export class MatchRoom {
     this.onDispose = options.onDispose;
     this.onPlayerJoin = options.onPlayerJoin;
     this.onDecisiveMatch = options.onDecisiveMatch;
+    this.onMatchEnd = options.onMatchEnd;
     this.matchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
     this.quickMatch = options.quickMatch === true;
     this.seats = emptySeats(this.matchMode);
@@ -411,6 +425,7 @@ export class MatchRoom {
     this.match = new MatchState(this.seed, this.matchMode);
     this.match.seedStartingCastles();
     this.serverTick = 0;
+    this.matchStartedAt = Date.now();
     this.scheduled.clear();
     this.serverHashes.clear();
     this.frameHistory.clear();
@@ -446,6 +461,7 @@ export class MatchRoom {
         reason: this.match.result.reason,
       });
       this.recordDecisiveMatchIfNeeded();
+      this.reportMatchEnd(this.match.result.winner);
       this.resetToWaiting();
       return;
     }
@@ -601,6 +617,7 @@ export class MatchRoom {
     this.match = null;
     this.serverTick = 0;
     this.seed = 0;
+    this.matchStartedAt = 0;
     this.scheduled.clear();
     this.serverHashes.clear();
     this.frameHistory.clear();
@@ -1024,6 +1041,17 @@ export class MatchRoom {
     const sides = resolveDecisiveMatch(this.seats, winner);
     if (!sides) return;
     this.onDecisiveMatch?.(sides);
+  }
+
+  /**
+   * 上报一局结束（含平局），供运营数据统计对局数与平均时长。
+   * 断线超时关房不走这里，口径为「有结算结果的局」。
+   */
+  private reportMatchEnd(winner: Faction | null): void {
+    if (!this.onMatchEnd) return;
+    const durationMs = this.matchStartedAt > 0 ? Math.max(0, Date.now() - this.matchStartedAt) : 0;
+    this.matchStartedAt = 0;
+    this.onMatchEnd({ durationMs, winner, matchMode: this.matchMode });
   }
 
   /** 将私有状态映射为运维阶段枚举。 */

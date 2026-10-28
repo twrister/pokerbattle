@@ -94,3 +94,69 @@ export interface OpsServerStatus {
   /** 全部历史玩家（含离线），与 /ops/players 同源，避免运维站再拉一次。 */
   players: OpsPlayerRecord[];
 }
+
+/** 小时桶：只保留有采样的整点，缺桶表示进程未运行。 */
+export interface OpsHourlyPoint {
+  /** 按 timeZone 对齐的整点毫秒值，用作排序与区间过滤。 */
+  hourStart: number;
+  /** 服务端按 METRICS_TZ 预生成的轴标签，如 `10-28 14:00`。 */
+  label: string;
+  /** 该小时内全部采样的平均在线人数。 */
+  avgOnline: number;
+  /** 该小时内的在线人数峰值。 */
+  peakOnline: number;
+}
+
+/** 日桶：窗口内无数据的日子补 0，便于表格对齐。 */
+export interface OpsDailyPoint {
+  /** `YYYY-MM-DD`，按 timeZone 切分。 */
+  day: string;
+  /** 轴标签，如 `10-28`。 */
+  label: string;
+  /** 按设备 ID 去重的日活。 */
+  dau: number;
+  peakOnline: number;
+  matches: number;
+  /** 无对局时为 null，避免除零。 */
+  avgMatchDurationMs: number | null;
+  /** 当日首次出现的玩家数，由玩家档案首见时间派生。 */
+  newPlayers: number;
+}
+
+/** 游戏服运营时序只读接口载荷；运维站只代理展示，不二次聚合。 */
+export interface OpsMetricsPayload {
+  ok: true;
+  generatedAt: number;
+  /** 日/小时边界所用时区，供页面标注口径。 */
+  timeZone: string;
+  sampleIntervalMs: number;
+  hourlyRetentionHours: number;
+  dailyRetentionDays: number;
+  /** 最近一次采样（60 秒一跳），用于在线构成展示。 */
+  current: {
+    onlineDevices: number;
+    anonymousConnections: number;
+    connections: number;
+    lobby: number;
+    solo: number;
+    room: number;
+    sampledAt: number | null;
+  };
+  today: {
+    day: string;
+    dau: number;
+    peakOnline: number;
+    matches: number;
+    avgMatchDurationMs: number | null;
+  };
+  totals: {
+    totalPlayers: number;
+    /** 仅统计保留窗口（近 30 天）内的对局数。 */
+    totalMatches: number;
+    newPlayersToday: number;
+  };
+  /** 固定 30 天，升序，无数据补 0。 */
+  daily: OpsDailyPoint[];
+  /** 近 7 天有采样的整点，升序；缺桶由前端断线处理。 */
+  hourly: OpsHourlyPoint[];
+}

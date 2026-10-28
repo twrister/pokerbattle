@@ -32,5 +32,27 @@ describe('WsPlayerRegistry', () => {
     const registry = new WsPlayerRegistry();
     registry.bind(new FakeWebSocket() as never, '', '匿名');
     expect(registry.list()).toEqual([]);
+    expect(registry.snapshot()).toEqual({ devices: 0, boundConnections: 0 });
+  });
+
+  it('snapshot 统计设备数与已绑定连接数，匿名连接不进快照', () => {
+    const registry = new WsPlayerRegistry();
+    const lobby = new FakeWebSocket() as never;
+    const room = new FakeWebSocket() as never;
+    const anonymous = new FakeWebSocket() as never;
+
+    expect(registry.snapshot()).toEqual({ devices: 0, boundConnections: 0 });
+
+    registry.bind(lobby, 'device-aaa', '甲');
+    registry.bind(room, 'device-aaa', '甲');
+    registry.bind(anonymous, '', '匿名');
+    // 两个连接同一设备 → 1 台设备、2 条绑定连接
+    expect(registry.snapshot()).toEqual({ devices: 1, boundConnections: 2 });
+
+    registry.unbind(room);
+    expect(registry.snapshot()).toEqual({ devices: 1, boundConnections: 1 });
+
+    registry.unbind(lobby);
+    expect(registry.snapshot()).toEqual({ devices: 0, boundConnections: 0 });
   });
 });

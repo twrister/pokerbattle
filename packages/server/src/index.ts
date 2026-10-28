@@ -3,9 +3,15 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { OpsFeedbackStatus, OpsPlayersStatus, OpsServerStatus } from './opsTypes.js';
+import type {
+  OpsFeedbackStatus,
+  OpsMetricsPayload,
+  OpsPlayersStatus,
+  OpsServerStatus,
+} from './opsTypes.js';
 import { FeedbackStore } from './feedbackStore.js';
 import { LobbyPresence } from './lobbyPresence.js';
+import { MetricsStore, type OnlineSample } from './metricsStore.js';
 import { listAllOpsPlayers, normalizePlayerId, PlayerStatsStore } from './playerStatsStore.js';
 import { RoomManager, sendRoomError } from './roomManager.js';
 import { WsPlayerRegistry } from './wsPlayerRegistry.js';
@@ -28,9 +34,16 @@ const playerStats = new PlayerStatsStore({ filePath: PLAYER_STATS_PATH });
 const FEEDBACK_PATH =
   process.env.FEEDBACK_PATH || path.resolve(process.cwd(), 'data', 'feedback.json');
 const feedback = new FeedbackStore({ filePath: FEEDBACK_PATH });
+/** 运营时序数据落盘；发布只覆盖 dist，data/ 会保留，历史趋势不随重启丢失。 */
+const METRICS_PATH =
+  process.env.METRICS_PATH || path.resolve(process.cwd(), 'data', 'metrics.json');
+const metrics = new MetricsStore({
+  filePath: METRICS_PATH,
+  timeZone: process.env.METRICS_TZ,
+});
 
 /** 本地联机：多房间并行，支持快速匹配与自定义房号，以及短时断线重连。 */
-const rooms = new RoomManager({ playerStats });
+const rooms = new RoomManager({ playerStats, metrics });
 /** 未入联机房的大厅 presence，与房间席位分开计数。 */
 const lobby = new LobbyPresence();
 /** 已建立 WS 且上报了设备 ID 的玩家，运维站按此列表。 */
@@ -59,6 +72,10 @@ const httpServer = http.createServer((req, res) => {
   }
   if (isRead && pathname === '/ops/feedback') {
     writeJson(res, 200, buildOpsFeedback());
+    return;
+  }
+  if (isRead && pathname === '/ops/metrics') {
+    writeJson(res, 200, buildOpsMetrics());
     return;
   }
   if (method === 'POST' && pathname === '/feedback') {
@@ -196,6 +213,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`[pb-server] ops status: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/ops/status`);
   console.log(`[pb-server] player stats: ${PLAYER_STATS_PATH}`);
   console.log(`[pb-server] feedback: ${FEEDBACK_PATH}`);
+  console.log(`[pb-server] metrics: ${METRICS_PATH} (tz=${metrics.effectiveTimeZone})`);
   const lanIps = listLanIPv4();
   if (lanIps.length === 0) {
     console.log('[pb-server] 未检测到局域网 IPv4；本机请用 http://localhost:9080/');
@@ -208,15 +226,47 @@ httpServer.listen(PORT, HOST, () => {
   }
 });
 
+/**
+ * 运营数据采样：每分钟一次，进程存活即采集，与运维页是否打开无关。
+ * 启动时立即采一次，避免刚起的进程在首页显示空数据。
+ */
+const metricsTimer = setInterval(() => {
+  metrics.recordSample(collectOnlineSample());
+}, metrics.sampleIntervalMs);
+// 定时器不能拖住进程退出（SIGINT 时进程应立即结束）
+metricsTimer.unref();
+metrics.recordSample(collectOnlineSample());
+
+/** 汇总当前在线构成：设备数、匿名连接、大厅/单机/房间分布。 */
+function collectOnlineSample(): OnlineSample {
+  const snapshot = connectedPlayers.snapshot();
+  const lobbyEntries = lobby.listOnline();
+  const soloConnections = lobbyEntries.filter((entry) => entry.activity === 'solo').length;
+  const connections = wss.clients.size;
+  return {
+    devices: snapshot.devices,
+    // 未上报设备 ID 的连接：大厅与房间都可能有
+    anonymous: Math.max(0, connections - snapshot.boundConnections),
+    connections,
+    lobby: Math.max(0, lobbyEntries.length - soloConnections),
+    solo: soloConnections,
+    room: rooms.summarizeOps().connectedPlayers,
+  };
+}
+
 process.on('SIGINT', () => {
+  clearInterval(metricsTimer);
   rooms.dispose();
+  metrics.dispose();
   wss.close();
   httpServer.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  clearInterval(metricsTimer);
   rooms.dispose();
+  metrics.dispose();
   wss.close();
   httpServer.close();
   process.exit(0);
@@ -229,6 +279,8 @@ function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined,
   const displayName = name ?? 'player';
   connectedPlayers.bind(ws, id, displayName);
   playerStats.upsertPlayer(id, displayName);
+  // 入厅/入座即算当日活跃；同一设备当天重复进入只计 1 次
+  metrics.notePlayerActive(id);
 }
 
 /** 组装排行榜回包：前 50 名 + 查询者本人（未入榜也带真实名次）。 */
@@ -303,6 +355,39 @@ function isNginxProxied(req: http.IncomingMessage): boolean {
 /** 组装运维反馈载荷，按时间倒序。 */
 function buildOpsFeedback(): OpsFeedbackStatus {
   return { ok: true, feedback: feedback.list() };
+}
+
+/**
+ * 组装运营数据载荷。
+ * DAU/在线来自 MetricsStore，新增玩家由玩家档案的 firstSeenAt 按同一时区派生，
+ * 因此「清空玩家档案」会让新增玩家归零，但不会影响已采集的时序数据。
+ */
+function buildOpsMetrics(): OpsMetricsPayload {
+  const players = playerStats.listPlayers();
+  return metrics.buildPayload({
+    newPlayersByDay: countNewPlayersByDay(players),
+    totalPlayers: players.length,
+  });
+}
+
+/**
+ * 按 MetricsStore 的时区把 firstSeenAt 归到日，得到每日新增玩家数。
+ * 复用同一 formatter 口径，避免运维机与服务器时区不一致时数字对不上。
+ */
+function countNewPlayersByDay(players: readonly { firstSeenAt: number }[]): Map<string, number> {
+  const byDay = new Map<string, number>();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: metrics.effectiveTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  for (const player of players) {
+    if (!Number.isFinite(player.firstSeenAt) || player.firstSeenAt <= 0) continue;
+    const day = formatter.format(new Date(player.firstSeenAt));
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
+  }
+  return byDay;
 }
 
 /** 玩家提交意见；公网必须可达，因此不拦 nginx 反代。 */
