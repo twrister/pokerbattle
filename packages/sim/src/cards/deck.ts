@@ -221,6 +221,14 @@ export class PokerDeck {
     return this.drawFromAvailable();
   }
 
+  /**
+   * 把牌直接塞进牌堆（不发到手上），供关卡预置「只能靠卡包抽到」的牌。
+   * 不洗牌、等待与冷却都从 0 起：这些牌和其他牌等权，抽到顺序由之后的抽取自然决定。
+   */
+  addToPile(cards: readonly PlayingCard[]): void {
+    for (const card of cards) this.pile.push({ card, waitDraws: 0, cooldown: 0 });
+  }
+
   /** 连续补牌但不突破手牌上限。 */
   drawMany(count: number): PlayingCard[] {
     const drawn: PlayingCard[] = [];

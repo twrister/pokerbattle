@@ -48,25 +48,27 @@ const baseDef: StageDef = {
 };
 
 describe('战役关卡数据', () => {
-  it('7 关连续编号不分章节，id 唯一，前三关沿用旧 id', () => {
+  it('8 关连续编号不分章节，id 唯一，前三关沿用旧 id', () => {
     const ids = CAMPAIGN_STAGES.map((stage) => stage.id);
-    expect(ids).toEqual(['c1_1', 'c1_2', 'c1_3', 's4', 's5', 's6', 's7']);
-    expect(CAMPAIGN_STAGES.map((stage) => stage.index)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ids).toEqual(['c1_1', 'c1_2', 'c1_3', 's4', 's5', 's6', 's7', 's8']);
+    expect(CAMPAIGN_STAGES.map((stage) => stage.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(new Set(ids).size).toBe(ids.length);
     expect(getStageById('c1_2')?.title).toBe('凑出炸弹');
     expect(getStageById('c1_3')?.title).toBe('万能牌');
     expect(getNextStage('c1_1')?.id).toBe('c1_2');
     expect(getNextStage('c1_3')?.id).toBe('s4');
-    expect(getNextStage('s7')).toBeUndefined();
+    expect(getNextStage('s7')?.id).toBe('s8');
+    expect(getNextStage('s8')).toBeUndefined();
   });
 
-  it('后四关分别用上三张战役地图', () => {
+  it('后四关分别用上三张战役地图，第 8 关回到对战默认图', () => {
     expect(['s4', 's5', 's6', 's7'].map((id) => getStageById(id)?.arena)).toEqual([
       'fortress',
       'jungle',
       'island',
       'fortress',
     ]);
+    expect(getStageById('s8')?.arena).toBeUndefined();
   });
 
   it('1-1 通关条件：打出任意兵种 + 摧毁敌方箭塔，文案不带进度数字', () => {

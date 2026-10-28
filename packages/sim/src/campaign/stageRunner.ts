@@ -50,10 +50,12 @@ export class StageRunner {
   private applyRulesAndDeck(): void {
     const { def, match } = this;
     if (def.rules) match.applyRules(matchRulesWithOverrides(def.rules));
-    // 固定手牌优先：整副牌就是这 N 张，开局全部发到手上
+    // 固定手牌优先：整副牌就是这 N 张，开局全部发到手上；packHand 的牌只留在牌堆里
     if (def.fixedHand?.length) {
-      const cards = cardsForFixedHand(def.fixedHand);
-      match.setSlotDeckCards(Faction.Blue, cards, cards.length);
+      const used = new Set<string>();
+      const hand = cardsForHand(def.fixedHand, used);
+      const reserve = def.packHand?.length ? cardsForHand(def.packHand, used) : [];
+      match.setSlotDeckCards(Faction.Blue, hand, hand.length, reserve);
       return;
     }
     if (def.playerRanks || def.playerJokers === false) {
@@ -114,14 +116,14 @@ function scaledHp(maxHp: Fx, ratio: number): Fx {
 }
 
 /**
- * 按关卡固定手牌点数挑出具体牌。
+ * 按关卡给定的点数挑出具体牌。
  * 花色按「手牌位置」在剩余同点数牌里轮换挑选，结果只由关卡数据决定，每次开局完全一致；
  * 点数写错或超过四种花色时直接跳过，避免关卡数据笔误把整局卡死。
  * 点数写 "WILD" 表示要一张万能牌：牌面始终按含万能牌构建，因此会按顺序取到 wild-1、wild-2。
+ * used 用来跨手牌/卡包预留牌去重，保证同一张实体牌不会出现在两处。
  */
-function cardsForFixedHand(ranks: readonly string[]): PlayingCard[] {
+function cardsForHand(ranks: readonly string[], used: Set<string>): PlayingCard[] {
   const cards = createPokerCards({ wildCards: true });
-  const used = new Set<string>();
   const picked: PlayingCard[] = [];
   ranks.forEach((rank, position) => {
     const candidates = cards.filter((item) => item.rank === rank && !used.has(item.id));

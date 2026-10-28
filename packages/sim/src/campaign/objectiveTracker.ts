@@ -167,6 +167,9 @@ export class ObjectiveTracker {
         return match.getPlayedFormationCount(this.playerSlot) > 0;
       case 'clear_enemy_units':
         return !hasLivingMobileUnit(match, Faction.Red);
+      case 'claim_castle_pack':
+        // 半血保护卡包只在该席主堡跌破半血后掉落，领取即达成
+        return match.getCastlePackState(this.playerSlot) === 'claimed';
       case 'destroy_unit':
         return this.seenTypes.has(objective.typeId) && countLivingEnemyType(match, objective.typeId) === 0;
       // 限制类目标：没被违反就算满足（违反时 update 已经先判失败）
@@ -206,11 +209,16 @@ function hasLivingMobileUnit(match: MatchState, faction: Faction): boolean {
 /**
  * 玩家是否已经彻底没牌可打：手上空，且之后不会再补到牌。
  * 关掉周期补牌时唯一来源是手上的牌；开着则还要看牌堆是否已被抽空。
+ * 半血保护卡包还没领且主堡仍活着，也算还有牌在路上（卡包关靠它翻盘）。
  */
 function isOutOfCards(match: MatchState, slot: number): boolean {
   const deck = match.decks[slot];
   if (!deck) return true;
   if (deck.hand.length > 0) return false;
+  // 卡包还没领、主堡还活着、牌堆里也还有牌：之后领包就能补到，不能提前判「没牌打」
+  const packStillPayable =
+    match.getCastlePackState(slot) !== 'claimed' && match.getSlotCastleHp(slot) > 0 && deck.availableCount > 0;
+  if (packStillPayable) return false;
   return !match.isPeriodicDrawEnabled() || deck.availableCount === 0;
 }
 
@@ -256,5 +264,7 @@ function describeObjective(objective: StageObjective): string {
       return `主堡血量保持 ${Math.round(objective.ratio * 100)}% 以上`;
     case 'forbid_category':
       return `不能使用${HAND_CATEGORY_NAMES[objective.category]}`;
+    case 'claim_castle_pack':
+      return '主堡跌破半血后领取卡包';
   }
 }

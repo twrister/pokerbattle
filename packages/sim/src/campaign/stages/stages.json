@@ -533,5 +533,65 @@
         "kind": "destroy_towers"
       }
     ]
+  },
+  {
+    "id": "s8",
+    "index": 8,
+    "title": "绝境卡包",
+    "seed": 1205,
+    "durationSeconds": 45,
+    "playerCastleHpRatio": 0.6,
+    "rules": {
+      "wildCardsEnabled": false,
+      "initialHandSize": 2,
+      "normalHandLimit": 9
+    },
+    "fixedHand": [
+      "3",
+      "4"
+    ],
+    "packHand": [
+      "8",
+      "8",
+      "8",
+      "8",
+      "K"
+    ],
+    "periodicDraw": false,
+    "enemy": {
+      "kind": "script",
+      "steps": [
+        {
+          "atSeconds": 1,
+          "typeId": "melee_grunt",
+          "count": 4,
+          "x": 9,
+          "y": 19
+        },
+        {
+          "atSeconds": 2,
+          "typeId": "melee_cavalry",
+          "count": 2,
+          "x": 9,
+          "y": 19
+        },
+        {
+          "atSeconds": 18,
+          "typeId": "melee_guard",
+          "count": 6,
+          "x": 9,
+          "y": 22
+        }
+      ]
+    },
+    "objectives": [
+      {
+        "kind": "claim_castle_pack"
+      },
+      {
+        "kind": "survive_seconds",
+        "seconds": 45
+      }
+    ]
   }
 ]

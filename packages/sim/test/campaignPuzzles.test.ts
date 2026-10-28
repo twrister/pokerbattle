@@ -4,6 +4,7 @@ import {
   MatchState,
   StageRunner,
   TICK_RATE,
+  claimCastlePackCommand,
   detectHandCategories,
   fromFloat,
   getFormationsFor,
@@ -24,17 +25,26 @@ interface Play {
 /**
  * 无头跑一关：按时间表出牌，直到关卡结果落定或超时。
  * 阵型不在可选列表里直接抛错，避免关卡数据改坏后测试静默通过。
+ * claimAt 给定时，从该秒起每帧尝试领取保护卡包，直到领到为止（卡包要等主堡跌破半血才掉）。
  */
-function playStage(stageId: string, plays: Play[], seconds = 130): StageOutcome | null {
+function playStage(stageId: string, plays: Play[], seconds = 130, claimAt?: number): StageOutcome | null {
   const def = getStageById(stageId)!;
   const match = new MatchState(def.seed);
   match.seedStartingCastles();
   const runner = new StageRunner(def, match);
   const queue = [...plays];
+  let claimed = claimAt === undefined;
   for (let tick = 0; tick < seconds * TICK_RATE; tick += 1) {
     const commands = [];
     const enemy = runner.decide(match);
     if (enemy) commands.push(enemy);
+    if (!claimed && claimAt !== undefined && tick >= claimAt * TICK_RATE) {
+      const claim = claimCastlePackCommand(Faction.Blue);
+      if (match.validate(claim)) {
+        commands.push(claim);
+        claimed = true;
+      }
+    }
     while (queue[0] && queue[0].at * TICK_RATE <= tick) {
       const play = queue.shift()!;
       const hand = [...match.decks[Faction.Blue]!.hand];
@@ -139,6 +149,91 @@ describe('第 7 关：先拔投弹车（要塞）', () => {
       { at: 1, ranks: ['5', '5'], formation: 'pair_grunt', x: 4, y: 12 },
     ]);
     expect(outcome?.status).toBe('fail');
+  });
+});
+
+describe('第 8 关：绝境卡包（默认图）', () => {
+  it('主堡跌破半血后领包，攒出的炸弹炸掉第二波，守满 45 秒', () => {
+    const outcome = playStage(
+      's8',
+      [{ at: 28, ranks: ['8', '8', '8', '8'], formation: 'bomb_giant_bomb', x: 9, y: 4.5 }],
+      60,
+      10,
+    );
+    expect(outcome?.status).toBe('success');
+    expect(outcome?.seconds).toBe(45);
+  });
+
+  it('不领卡包就补不到牌，第一波之后必破', () => {
+    const outcome = playStage('s8', [], 60);
+    expect(outcome?.status).toBe('fail');
+    expect(outcome!.seconds).toBeLessThan(45);
+  });
+
+  it('领了卡包却不出牌，同样守不住', () => {
+    const outcome = playStage('s8', [], 60, 10);
+    expect(outcome?.status).toBe('fail');
+    expect(outcome!.seconds).toBeLessThan(45);
+  });
+
+  it('炸弹扔得太晚，第二波已破家', () => {
+    const outcome = playStage(
+      's8',
+      [{ at: 40, ranks: ['8', '8', '8', '8'], formation: 'bomb_giant_bomb', x: 9, y: 4.5 }],
+      60,
+      10,
+    );
+    expect(outcome?.status).toBe('fail');
+  });
+
+  it('开局主堡残血 60%，卡包在跌破半血前点不动', () => {
+    const def = getStageById('s8')!;
+    const match = new MatchState(def.seed);
+    match.seedStartingCastles();
+    const runner = new StageRunner(def, match);
+    const claim = claimCastlePackCommand(Faction.Blue);
+    expect(match.getCastleHp(Faction.Blue)).toBe(match.getCastleMaxHp(Faction.Blue) * 0.6);
+    expect(match.getCastlePackState(Faction.Blue)).toBe('none');
+    expect(match.validate(claim)).toBe(false);
+    expect(runner.tracker.getProgress(match).map((item) => item.text)).toEqual([
+      '主堡跌破半血后领取卡包',
+      '守住基地 45 秒',
+    ]);
+  });
+
+  it('手牌只有 3、4，卡包里的 8888K 只进牌堆、不发到手上', () => {
+    const def = getStageById('s8')!;
+    const match = new MatchState(def.seed);
+    match.seedStartingCastles();
+    new StageRunner(def, match);
+    const deck = match.decks[Faction.Blue]!;
+    expect(deck.hand.map((card) => card.rank)).toEqual(['4', '3']);
+    // 牌堆正好是卡包预留的 5 张，周期补牌已关闭，只有领包才会抽到
+    expect(deck.availableCount).toBe(5);
+    expect(match.isPeriodicDrawEnabled()).toBe(false);
+  });
+
+  it('开局把 3、4 都打光也不算「没牌可打」：卡包还在路上', () => {
+    const def = getStageById('s8')!;
+    const match = new MatchState(def.seed);
+    match.seedStartingCastles();
+    const runner = new StageRunner(def, match);
+    const hand = [...match.decks[Faction.Blue]!.hand];
+    for (const card of hand) {
+      const formation = getFormationsFor(detectHandCategories([card]), [card])[0]!;
+      match.step([
+        playFormationCommand(Faction.Blue, formation.id, [card.id], fromFloat(9), fromFloat(10)),
+      ]);
+      runner.update();
+    }
+    expect(match.decks[Faction.Blue]!.hand).toHaveLength(0);
+    for (let i = 0; i < TICK_RATE * 3; i += 1) {
+      const command = runner.decide(match);
+      match.step(command ? [command] : []);
+      runner.update();
+    }
+    // 牌堆里还压着卡包的 5 张，只是要等主堡跌破半血，不能提前判负
+    expect(runner.tracker.getStatus()).toBe('pending');
   });
 });
 

@@ -222,13 +222,20 @@ export class MatchState {
    * 把指定席位的牌堆换成给定牌面并重发起手牌（限定牌池用，教学/残局关）。
    * 仅开局前可用；已开打则忽略，保证确定性。
    * handSize 缺省沿用规则里的起手张数，固定手牌关直接传发牌张数。
+   * reserve 是只进牌堆、不进手牌的牌（卡包关的教学奖励牌），必须在发牌之后追加。
    */
-  setSlotDeckCards(slot: number, cards: readonly PlayingCard[], handSize?: number): void {
+  setSlotDeckCards(
+    slot: number,
+    cards: readonly PlayingCard[],
+    handSize?: number,
+    reserve: readonly PlayingCard[] = [],
+  ): void {
     if (this.world.tick !== 0 || this.result) return;
     const deck = this.decks[slot];
     if (!deck) return;
     deck.reset(cards);
     deck.drawMany(handSize ?? this.initialHandSize);
+    deck.addToPile(reserve);
     this.nextDrawTicks[slot] = this.normalDrawIntervalTicks;
     this.pendingDraw[slot] = false;
   }

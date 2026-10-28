@@ -26,7 +26,9 @@ export type StageObjective =
   /** 限制条件：己方主堡血量始终不低于该比例（0~1），跌破即失败。 */
   | { kind: 'base_hp_above'; ratio: number }
   /** 限制条件：禁止打出某牌型，打出即失败。 */
-  | { kind: 'forbid_category'; category: HandCategory };
+  | { kind: 'forbid_category'; category: HandCategory }
+  /** 领取半血保护卡包（主堡跌破半血后点击卡包）。 */
+  | { kind: 'claim_castle_pack' };
 
 /** 敌方行为：无行动、固定脚本或沿用人机。 */
 export type StageEnemy =
@@ -88,6 +90,12 @@ export interface StageDef {
    * 写 "WILD" 表示要一张万能牌，最多两张（全牌堆只有两张），超出部分会被忽略。
    */
   fixedHand?: string[];
+  /**
+   * 卡包预留牌（按点数写，如 ["8","8","8","8","K"]）。
+   * 这些牌只进牌堆、不发到手上，只有领取半血保护卡包时才会被抽到；
+   * 用来让「领包补 5 张」变成可预期的教学奖励。与 fixedHand 同点时跳过重复牌。
+   */
+  packHand?: string[];
   /**
    * 是否播种双方主堡，缺省 true。
    * false 用于「无基地」关卡：对局不会自动收局，通关全看关卡目标。
