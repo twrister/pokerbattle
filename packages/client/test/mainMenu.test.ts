@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIRST_PLAY_RENAME_PROMPTED_KEY } from '../src/account/firstPlayRename.js';
 import { defaultDisplayName } from '../src/account/id.js';
 import type { PlayerProfile } from '../src/account/types.js';
+import { PATCH_NOTES } from '../src/data/patchNotes.js';
 import { createMainMenu } from '../src/ui/mainMenu.js';
 
 const envState = vi.hoisted(() => ({ isDev: true }));
@@ -508,8 +509,9 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-patch-notes')!.click();
     expect(dialog.classList.contains('is-hidden')).toBe(false);
+    // 取运行时列表的最新一条，避免每次发公告都要改测试
     expect(document.querySelector<HTMLInputElement>('.patch-note-version-input')?.value).toBe(
-      '0.1.5',
+      PATCH_NOTES[0]!.version,
     );
 
     document.querySelector<HTMLButtonElement>('[data-patch-notes-close]')!.click();
