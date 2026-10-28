@@ -61,7 +61,7 @@ describe('SoloBotController', () => {
 
   it('出牌后遵守思考冷却，不会连续每帧操作', () => {
     const match = createMatch();
-    fillHandNearLimit(match, Faction.Red);
+    fillHand(match, Faction.Red, match.getMaxHandSize());
     const bot = new SoloBotController('hard', 5);
     const command = bot.decide(match);
     expect(command).not.toBeNull();
@@ -87,25 +87,29 @@ describe('SoloBotController', () => {
 
   it('压力小时打出阻碍凑大牌的废牌，而不是最强组合', () => {
     const match = createMatch();
-    setHand(match, Faction.Red, dumpHandIds());
+    setHand(match, Faction.Red, fullDumpHandIds());
     const command = new SoloBotController('hard', 11).decide(match);
 
     expect(command?.kind).toBe(CommandKind.PlayFormation);
     if (command?.kind !== CommandKind.PlayFormation) throw new Error('期望出牌指令');
     expect(command.cardIds).toHaveLength(1);
-    expect(['9-spades', '3-clubs', 'K-diamonds']).toContain(command.cardIds[0]);
+    expect(['9-spades', '3-clubs', 'K-diamonds', 'J-clubs', 'Q-clubs']).toContain(command.cardIds[0]);
   });
 
   it('半场有敌军时会放置箭塔防守', () => {
     const match = createMatch();
     const castle = requireCastle(match, Faction.Red);
-    match.world.spawnUnit(
-      Faction.Blue,
-      'melee_grunt',
-      castle.pos.x,
-      fromFloat(toFloat(castle.pos.y) - 8),
-    );
-    setHand(match, Faction.Red, ['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', '5-clubs']);
+    // 两个近战压境，防守缺口大小刚好让一座箭塔够用
+    for (let index = 0; index < 2; index += 1) {
+      match.world.spawnUnit(
+        Faction.Blue,
+        'melee_grunt',
+        fromFloat(toFloat(castle.pos.x) - 0.5 + index),
+        fromFloat(toFloat(castle.pos.y) - 8),
+      );
+    }
+    // 10-J-Q-K 顺子可展开为 3 档特殊牌（箭塔/小巨人）；被压制时应出箭塔
+    setHand(match, Faction.Red, ['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds']);
 
     const command = new SoloBotController('hard', 21).decide(match);
 
@@ -113,6 +117,57 @@ describe('SoloBotController', () => {
     if (command?.kind !== CommandKind.PlayFormation) throw new Error('期望出牌指令');
     expect(command.formationId).toContain('building_tower');
     expect(isDeployAnchorInsideHalfCourt(toFloat(command.x), toFloat(command.y), Faction.Red)).toBe(true);
+  });
+
+  it('困难档空场时手牌离上限还差 2 张继续囤牌', () => {
+    const match = createMatch();
+    fillHand(match, Faction.Red, match.getMaxHandSize() - 2);
+
+    expect(new SoloBotController('hard', 3).decide(match)).toBeNull();
+  });
+
+  it('困难档半场只有一个小兵且已有箭塔时不动用手牌', () => {
+    const match = createMatch();
+    const castle = requireCastle(match, Faction.Red);
+    match.world.spawnUnit(Faction.Red, 'building_tower', castle.pos.x, fromFloat(toFloat(castle.pos.y) - 4));
+    match.world.spawnUnit(Faction.Blue, 'melee_grunt', castle.pos.x, fromFloat(toFloat(castle.pos.y) - 9));
+    setHand(match, Faction.Red, ['10-spades', 'J-hearts', 'Q-clubs', 'K-diamonds', '5-clubs', '2-hearts']);
+
+    expect(new SoloBotController('hard', 21).decide(match)).toBeNull();
+  });
+
+  it('困难档手握大牌型且接近满手时打出五张牌组', () => {
+    const match = createMatch();
+    setHand(match, Faction.Red, [
+      '2-hearts', '5-hearts', '7-hearts', '9-hearts', 'J-hearts', '3-clubs', 'K-spades', '8-diamonds',
+    ]);
+
+    const command = new SoloBotController('hard', 8).decide(match);
+
+    expect(command?.kind).toBe(CommandKind.PlayFormation);
+    if (command?.kind !== CommandKind.PlayFormation) throw new Error('期望出牌指令');
+    expect(command.cardIds.length).toBe(5);
+  });
+
+  it('困难档爆兵后连击间隔明显短于普通出牌冷却', () => {
+    const match = createMatch();
+    setHand(match, Faction.Red, [
+      '2-hearts', '5-hearts', '7-hearts', '9-hearts', 'J-hearts', '3-clubs', 'K-spades', '8-diamonds',
+    ]);
+    const bot = new SoloBotController('hard', 8);
+    const first = bot.decide(match);
+    expect(first).not.toBeNull();
+    match.step([first!]);
+
+    // 普通冷却至少 14 帧；连击冷却应在 12 帧内恢复
+    let ticks = 0;
+    let next = bot.decide(match);
+    while (!next && ticks < 14) {
+      match.step();
+      ticks += 1;
+      next = bot.decide(match);
+    }
+    expect(next).not.toBeNull();
   });
 
   it('敌军贴己方基地时把兵放到敌军堆附近', () => {
@@ -148,7 +203,10 @@ describe('SoloBotController', () => {
         fromFloat(toFloat(castle.pos.y) - 5),
       );
     }
-    setHand(match, Faction.Red, ['5-hearts']);
+    // 满手且全是对子/三条骨架，只能打组合
+    setHand(match, Faction.Red, [
+      '5-hearts', '5-clubs', '5-spades', '7-hearts', '7-clubs', '9-hearts', '9-clubs', 'J-hearts', 'J-clubs',
+    ]);
 
     const command = new SoloBotController('hard', 44).decide(match);
 
@@ -173,6 +231,19 @@ function requireCastle(match: MatchState, faction: Faction) {
 /** 4 张同花骨架 + 3 张杂色，方便断言清废牌。 */
 function dumpHandIds(): string[] {
   return ['2-hearts', '4-hearts', '6-hearts', '8-hearts', '9-spades', '3-clubs', 'K-diamonds'];
+}
+
+/** 4 张同花骨架 + 5 张杂牌，凑满默认手牌上限 9。 */
+function fullDumpHandIds(): string[] {
+  return [...dumpHandIds(), 'J-clubs', 'Q-clubs'];
+}
+
+/** 把手牌补到指定张数，用于构造满手局面。 */
+function fillHand(match: MatchState, faction: Faction, size: number): void {
+  while (match.decks[faction].hand.length < size) {
+    if (!match.decks[faction].draw()) break;
+  }
+  expect(match.decks[faction].hand).toHaveLength(size);
 }
 
 function setHand(match: MatchState, faction: Faction, cardIds: readonly string[]): void {

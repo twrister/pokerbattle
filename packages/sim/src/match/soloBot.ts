@@ -22,7 +22,7 @@ import {
 } from '../config/halfCourt.js';
 import { snapBuildingCenter } from '../nav/buildingGrid.js';
 import { isArcherTowerId, isBuildingConfig, UNIT_CONFIGS, type UnitTypeId } from '../config/units.js';
-import { Faction } from '../entity/unit.js';
+import { Faction, opposingFaction } from '../entity/unit.js';
 import { fromFloat, toFloat } from '../math/fixed.js';
 import { Rng } from '../math/rng.js';
 import type { MatchState } from './matchState.js';
@@ -64,6 +64,17 @@ interface Situation {
   latePhase: boolean;
   wasteCardIds: ReadonlySet<string>;
   attackers: Point[];
+  /** 以下为困难档专用：补牌节奏、对手手牌、攻防价值与最强牌型。 */
+  handLimit: number;
+  ticksUntilDraw: number;
+  pendingDraw: boolean;
+  oppHandSize: number;
+  /** 己方半场内敌军价值（越靠近主堡权重越高）。 */
+  threatValue: number;
+  /** 己方半场内兵力与箭塔提供的防守价值。 */
+  defenseValue: number;
+  /** 手牌中最强牌型的强度（HAND_CATEGORY_STRENGTH_ORDER 反序，越大越强）。 */
+  bestStrength: number;
 }
 
 interface ScoreContext {
@@ -78,6 +89,19 @@ const HARD_THINK_TICKS = 28;
 const CASTLE_THREAT_RANGE = 6;
 /** 已有箭塔达到该数后不再鼓励连铺。 */
 const MAX_PREFERRED_TOWERS = 2;
+/** 一座箭塔折算的防守价值，与 unitValue 同量纲。 */
+const TOWER_DEFENSE_VALUE = unitValue('building_tower');
+/** 困难档：来犯价值超过己方防守价值的该倍数才动用手牌防守。 */
+const HARD_DEFEND_RATIO = 1.2;
+/** 困难档爆兵连击手数（含首手）。 */
+const HARD_BURST_HANDS = 4;
+/** 爆兵到手牌只剩这么多张时收手，留点底牌防守。 */
+const BURST_KEEP_CARDS = 2;
+/** 手里有该强度及以上的牌型（五张顺子起）就值得集中出一波。 */
+const BIG_HAND_STRENGTH = HAND_CATEGORY_STRENGTH_ORDER.length
+  - HAND_CATEGORY_STRENGTH_ORDER.indexOf('straight5');
+/** 对手手牌不超过该值视为刚交完牌，是反打窗口。 */
+const OPP_LOW_HAND = 3;
 
 const STRAIGHT_VALUE: Readonly<Record<CardRank, number>> = {
   A: 14,
@@ -104,6 +128,8 @@ export class SoloBotController {
   private nextThinkTick = 0;
   /** 爆兵连击剩余手数；基地转危或规模散掉时清零。 */
   private waveBurstLeft = 0;
+  /** 困难档本波爆兵锁定的进攻路（桥口 x）；null 表示未开波。 */
+  private waveLaneX: number | null = null;
 
   constructor(
     readonly difficulty: SoloDifficulty,
@@ -117,6 +143,7 @@ export class SoloBotController {
   reset(): void {
     this.nextThinkTick = 0;
     this.waveBurstLeft = 0;
+    this.waveLaneX = null;
   }
 
   /**
@@ -132,10 +159,17 @@ export class SoloBotController {
 
     const hand = match.decks[this.faction].hand;
     const situation = this.readSituation(match, hand);
-    const intent = this.chooseIntent(situation);
-    if (intent !== 'wave') this.waveBurstLeft = 0;
+    const intent = this.difficulty === 'hard' ? this.chooseHardIntent(situation) : this.chooseIntent(situation);
+    if (intent !== 'wave') {
+      this.waveBurstLeft = 0;
+      this.waveLaneX = null;
+    }
     // 囤牌期间不进冷却，方便下一帧立刻转入防守
     if (intent === 'hoard') return null;
+    // 新一波开始时锁定一路，后续连击都压在同一侧桥口
+    if (this.difficulty === 'hard' && intent === 'wave' && this.waveBurstLeft <= 0) {
+      this.waveLaneX = this.pickWaveLane(match);
+    }
 
     const candidates = this.collectCandidates(match, hand, { situation, intent });
     const pool = intent === 'wave' ? this.preferComboCandidates(candidates) : candidates;
@@ -183,6 +217,8 @@ export class SoloBotController {
     let backCount = 0;
     let towerCount = 0;
     let castleThreatened = false;
+    let threatValue = 0;
+    let defenseValue = 0;
 
     for (const unit of match.world.units) {
       if (unit.dead) continue;
@@ -192,15 +228,22 @@ export class SoloBotController {
         if (unit.typeId === 'building_base' || isFuseBombTypeId(unit.typeId)) continue;
         if (isArcherTowerId(unit.typeId)) {
           towerCount += 1;
+          defenseValue += TOWER_DEFENSE_VALUE;
           continue;
         }
         if (isBuildingConfig(unit.config)) continue;
         ownArmy += 1;
+        if (y >= minY && y <= maxY) defenseValue += unitValue(unit.typeId);
         if (isFrontlineType(unit.typeId)) frontCount += 1;
         else backCount += 1;
         continue;
       }
       const inHalf = y >= minY && y <= maxY;
+      if (inHalf && !isBuildingConfig(unit.config) && !isFuseBombTypeId(unit.typeId)) {
+        // 越靠近主堡越危险：最远端权重 1，贴堡权重 2
+        const closeness = castle ? Math.max(0, 1 - Math.hypot(x - castle.x, y - castle.y) / (maxY - minY)) : 0;
+        threatValue += unitValue(unit.typeId) * (1 + closeness);
+      }
       if (inHalf) enemiesInHalf += 1;
       if (castle && Math.hypot(x - castle.x, y - castle.y) <= CASTLE_THREAT_RANGE + 2) {
         approachingEnemies += 1;
@@ -231,6 +274,13 @@ export class SoloBotController {
       latePhase: match.phase === 'final' || match.phase === 'settlement',
       wasteCardIds: findWasteCardIds(hand),
       attackers,
+      handLimit,
+      ticksUntilDraw: match.getTicksUntilDraw(this.faction),
+      pendingDraw: match.hasPendingDraw(this.faction),
+      oppHandSize: match.decks[opposingFaction(this.faction)]?.hand.length ?? 0,
+      threatValue,
+      defenseValue,
+      bestStrength: this.difficulty === 'hard' ? bestHandStrength(hand) : 0,
     };
   }
 
@@ -259,6 +309,54 @@ export class SoloBotController {
     }
     if (situation.handSize < hoardUntil) return 'hoard';
     return hasWaste ? 'dump' : 'wave';
+  }
+
+  /**
+   * 困难档意图：平时囤牌，只在三种情况出手——
+   * 来犯价值压过己方防守（用最少的牌防）、攒出大牌或抓到反打窗口（集中爆兵）、
+   * 手牌即将满而浪费抽牌（清废牌）。
+   */
+  private chooseHardIntent(situation: Situation): BotIntent {
+    const hasWaste = situation.wasteCardIds.size > 0;
+    const underThreat = situation.threatValue > situation.defenseValue * HARD_DEFEND_RATIO;
+
+    // castleThreatened 会把“远处锁定主堡”的敌军也算上，这里改看真正逼近基地的敌军；
+    // 己方兵力/箭塔压得住就不急着交牌，基地血量见低才无条件救
+    const baseInDanger = situation.approachingEnemies > 0
+      && (underThreat || situation.castleHpRatio < 0.4);
+    if (baseInDanger && situation.handSize >= 2) return 'emergency';
+    if (underThreat && situation.handSize >= 2) return 'defend';
+    if (underThreat) return 'hoard';
+
+    // 连击中：只要手牌还没见底就继续压同一路
+    if (this.waveBurstLeft > 0 && situation.handSize > BURST_KEEP_CARDS) return 'wave';
+
+    const overflow = situation.handSize >= situation.handLimit
+      || (situation.handSize >= situation.handLimit - 1 && situation.ticksUntilDraw <= HARD_THINK_TICKS);
+    const bigHand = situation.bestStrength >= BIG_HAND_STRENGTH
+      && situation.handSize >= situation.handLimit - 2;
+    const counterWindow = situation.oppHandSize <= OPP_LOW_HAND && situation.handSize >= 6;
+    const allIn = situation.latePhase && situation.handSize >= 3;
+    if (bigHand || counterWindow || allIn) return 'wave';
+    if (overflow) return hasWaste ? 'dump' : 'wave';
+    return 'hoard';
+  }
+
+  /** 选敌方单位更少的一路桥口作为本波主攻方向。 */
+  private pickWaveLane(match: MatchState): number {
+    const lanes = ARENA_BRIDGES.map((bridge) => (bridge.minX + bridge.maxX) / 2);
+    if (lanes.length === 0) return toFloat(ARENA_WIDTH) / 2;
+    let best = lanes[0]!;
+    let bestCount = Infinity;
+    for (const laneX of lanes) {
+      const count = match.world.units.filter((unit) => !unit.dead && unit.faction !== this.faction
+        && Math.abs(toFloat(unit.pos.x) - laneX) <= 4).length;
+      if (count < bestCount) {
+        best = laneX;
+        bestCount = count;
+      }
+    }
+    return best;
   }
 
   /** dump 只枚举 1～2 张，避免清废牌时扫出大牌型。 */
@@ -327,7 +425,12 @@ export class SoloBotController {
     const midY = safe.y;
     const preferY = intent === 'wave' ? frontY : intent === 'defend' ? backY : midY;
     const ys = this.difficulty === 'easy' ? [preferY] : [preferY, midY];
-    const xs = this.difficulty === 'easy' ? [safe.x] : [width * 0.28, safe.x, width * 0.72];
+    const lane = this.waveLaneX;
+    const xs = this.difficulty === 'easy'
+      ? [safe.x]
+      : intent === 'wave' && lane !== null
+        ? [lane - 1.5, lane, lane + 1.5]
+        : [width * 0.28, safe.x, width * 0.72];
     return uniquePoints(xs.flatMap((x) => ys.filter((y) =>
       isDeployAnchorInsideHalfCourt(x, y, this.faction),
     ).map((y) => ({ x, y }))));
@@ -429,16 +532,55 @@ export class SoloBotController {
     const placement = this.placementScore(y, intent);
     const noise = this.rng.nextInt(this.difficulty === 'easy' ? 12 : 4);
 
-    if (intent === 'emergency') {
-      return packScore + unitScore * 0.5 + roleScore * 0.4 + towerScore * 0.2 + noise;
-    }
     if (intent === 'dump') {
       return dumpScore + categoryScore + placement + noise;
+    }
+    if (this.difficulty === 'hard') {
+      // 急救时额外贴着敌堆出
+      const pack = intent === 'emergency' ? packScore : 0;
+      return pack + this.scoreHard(cards, formation, { x, placement, roleScore, towerScore, noise }, context);
+    }
+    if (intent === 'emergency') {
+      return packScore + unitScore * 0.5 + roleScore * 0.4 + towerScore * 0.2 + noise;
     }
     if (intent === 'defend') {
       return towerScore + roleScore + unitScore + placement + categoryScore + noise;
     }
     return roleScore + unitScore + placement + categoryScore + towerScore * 0.3 + noise;
+  }
+
+  /**
+   * 困难档打分：防守/急救按缺口“刚好够用”，爆兵重牌型并偏好多张。
+   * 大牌留给爆兵，小威胁只用便宜牌和废牌挡。
+   */
+  private scoreHard(
+    cards: readonly PlayingCard[],
+    formation: CardFormation,
+    parts: { x: number; placement: number; roleScore: number; towerScore: number; noise: number },
+    context: ScoreContext,
+  ): number {
+    const { situation, intent } = context;
+    const { placement, roleScore, towerScore, noise } = parts;
+    const category = detectHandCategories(cards)[0];
+    const strength = category ? categoryStrength(category) : 0;
+    const value = formationValue(formation);
+
+    if (intent === 'defend' || intent === 'emergency') {
+      const gap = Math.max(1, situation.threatValue - situation.defenseValue);
+      // 箭塔不会走位送死、持续输出，防守时按 2 倍兵力价值看待
+      const defendValue = towerScore !== 0 ? value * 2 : value;
+      // 兵力不够压住缺口就扣分，远超缺口也扣分：便宜够用最优
+      const shortfall = Math.max(0, gap * 1.5 - defendValue) * 3;
+      const overkill = Math.max(0, defendValue - gap * 3) * 0.5;
+      const wastePlayed = cards.filter((card) => situation.wasteCardIds.has(card.id)).length;
+      const coreCost = (cards.length - wastePlayed) * 5;
+      return towerScore + roleScore * 0.5 + placement + wastePlayed * 6 - coreCost
+        - shortfall - overkill - strength * 2 + noise;
+    }
+    // wave：牌型权重大，多张组合加成，落点越靠近锁定路越好
+    const laneBonus = this.waveLaneX === null ? 0 : Math.max(0, 8 - Math.abs(parts.x - this.waveLaneX) * 2);
+    return strength * 6 + value * 0.4 + cards.length * 3 + roleScore * 0.5
+      + placement + laneBonus + towerScore * 0.3 + noise;
   }
 
   /** 防守靠主堡，爆兵靠河，清废牌走半场中段。 */
@@ -455,9 +597,11 @@ export class SoloBotController {
   private wait(match: MatchState, played: boolean, intent: BotIntent): void {
     let base = this.difficulty === 'easy' ? EASY_THINK_TICKS : HARD_THINK_TICKS;
     if (played && intent === 'wave') {
-      if (this.waveBurstLeft <= 0) this.waveBurstLeft = this.difficulty === 'easy' ? 1 : 2;
+      const hard = this.difficulty === 'hard';
+      if (this.waveBurstLeft <= 0) this.waveBurstLeft = hard ? HARD_BURST_HANDS : 1;
       this.waveBurstLeft -= 1;
-      base = Math.floor(base / 2);
+      // 困难档连击间隔压到 1/3，让一波兵几乎同时压上
+      base = Math.floor(base / (hard ? 3 : 2));
     }
     const pressure = match.decks[this.faction].hand.length >= match.getMaxHandSizeForSlot(this.faction) - 1
       ? Math.floor(base / 3)
@@ -591,6 +735,28 @@ function isFrontlineType(typeId: UnitTypeId): boolean {
   if (isBuildingConfig(config) || isFuseBombTypeId(typeId)) return false;
   if (config.charge) return true;
   return config.attack.kind === 'melee' || config.attack.kind === 'melee_aoe';
+}
+
+/** 阵型提供的防守/兵力价值：箭塔按固定值折算，其余建筑与炸弹不计。 */
+function formationValue(formation: CardFormation): number {
+  const buildingId = getFormationBuildingTypeId(formation);
+  if (buildingId && isArcherTowerId(buildingId)) return TOWER_DEFENSE_VALUE;
+  return formation.slots.reduce((sum, slot) => {
+    if (isBuildingConfig(UNIT_CONFIGS[slot.typeId]) || isFuseBombTypeId(slot.typeId)) return sum;
+    return sum + unitValue(slot.typeId);
+  }, 0);
+}
+
+/** 扫描手牌所有 2～5 张组合，返回能组出的最强牌型强度。 */
+function bestHandStrength(hand: readonly PlayingCard[]): number {
+  let best = 0;
+  for (let size = 2; size <= Math.min(5, hand.length); size += 1) {
+    forEachCombination(hand, size, (cards) => {
+      const category = detectHandCategories(cards)[0];
+      if (category) best = Math.max(best, categoryStrength(category));
+    });
+  }
+  return best;
 }
 
 function categoryStrength(category: string): number {
