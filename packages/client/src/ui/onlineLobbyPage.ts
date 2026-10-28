@@ -77,7 +77,7 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       return;
     }
 
-    for (const room of rooms) {
+    for (const room of sortRoomsForList(rooms)) {
       const cardState = roomCardState(room);
       const card = document.createElement('div');
       card.className = `online-room-card is-${cardState}`;
@@ -100,6 +100,13 @@ export function createOnlineLobbyPage(options: OnlineLobbyPageOptions): OnlineLo
       name.className = 'online-room-card-name';
       name.textContent = room.roomName;
       title.append(id, name);
+      // 匹配房打个系统标记，和玩家手建的房区分开
+      if (room.quickMatch) {
+        const tag = document.createElement('span');
+        tag.className = 'online-room-card-tag';
+        tag.textContent = '匹配';
+        title.append(tag);
+      }
 
       const info = document.createElement('div');
       info.className = 'online-room-card-info';
@@ -283,6 +290,15 @@ function showDialog(dialog: HTMLElement): void {
 function hideDialog(dialog: HTMLElement): void {
   dialog.classList.add('is-hidden');
   dialog.setAttribute('aria-hidden', 'true');
+}
+
+/**
+ * 列表排序：可加入/等待中的房间优先，对局中的沉到后面。
+ * 用稳定排序保留服务端原始顺序，避免每 4 秒刷新时卡片乱跳。
+ */
+function sortRoomsForList(rooms: RoomListEntry[]): RoomListEntry[] {
+  const weight = (room: RoomListEntry): number => (room.phase === 'playing' ? 1 : 0);
+  return [...rooms].sort((left, right) => weight(left) - weight(right));
 }
 
 /** 房间卡片状态：等待、已满、对局中，决定边框色与操作按钮。 */

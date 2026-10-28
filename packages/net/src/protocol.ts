@@ -32,6 +32,9 @@ export function normalizeRoomName(raw: string): string | null {
 /** 加入方式：快速匹配 / 加入已有房 / 创建新房。 */
 export type JoinMode = 'quick' | 'room' | 'create';
 
+/** 快速匹配凑满人数后到自动开局的等待毫秒数，前后端展示口径一致。 */
+export const QUICK_MATCH_START_DELAY_MS = 1_000;
+
 /** 房间阶段：等待开局 / 对局中。结算后立刻回到 waiting。 */
 export type RoomPhase = 'waiting' | 'playing';
 
@@ -44,6 +47,8 @@ export interface RoomListEntry {
   phase: RoomPhase;
   spectatorCount: number;
   matchMode?: MatchMode;
+  /** 快速匹配自动创建的房间；客户端据此在列表里打标记。 */
+  quickMatch?: boolean;
 }
 
 /** C→S：加入房间。 */
@@ -239,6 +244,8 @@ export interface WelcomeMessage {
   opponentName: string;
   matchMode?: MatchMode;
   members?: RoomMember[];
+  /** 本房由快速匹配创建。 */
+  quickMatch?: boolean;
 }
 
 /** S→C：全部存活房间列表（含对局中）。 */
@@ -284,6 +291,8 @@ export interface RoomStateMessage {
   members: RoomMember[];
   matchMode?: MatchMode;
   maxPlayers?: number;
+  /** 本房由快速匹配创建。 */
+  quickMatch?: boolean;
 }
 
 /** S→C：重连探测结果；alive=false 表示房间已关、已结算或席位已释放。 */

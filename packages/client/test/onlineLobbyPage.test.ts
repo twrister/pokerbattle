@@ -98,6 +98,43 @@ describe('联机大厅页', () => {
     page.dispose();
   });
 
+  it('对局中的房间排在等待房间之后，匹配房带标记', async () => {
+    const page = createOnlineLobbyPage({
+      onBack: vi.fn(),
+      onJoinRoom: vi.fn(),
+      onSpectateRoom: vi.fn(),
+      getDefaultRoomName: () => '测试的房间',
+      listRooms: vi.fn(async () => [
+        {
+          roomId: '091',
+          roomName: '正在打',
+          playerCount: 2,
+          maxPlayers: 2,
+          phase: 'playing' as const,
+          spectatorCount: 0,
+        },
+        {
+          roomId: '092',
+          roomName: '快速匹配',
+          playerCount: 1,
+          maxPlayers: 2,
+          phase: 'waiting' as const,
+          spectatorCount: 0,
+          quickMatch: true,
+        },
+      ]),
+    });
+    page.show();
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('.online-room-card')).toHaveLength(2);
+    });
+    const cards = Array.from(document.querySelectorAll('.online-room-card'));
+    expect(cards.map((card) => card.getAttribute('data-room-id'))).toEqual(['092', '091']);
+    expect(cards[0]?.querySelector('.online-room-card-tag')?.textContent).toBe('匹配');
+    expect(cards[1]?.querySelector('.online-room-card-tag')).toBeNull();
+    page.dispose();
+  });
+
   it('创建与加入弹窗分别提交房间名和房号', () => {
     const onJoinRoom = vi.fn();
     const page = createOnlineLobbyPage({

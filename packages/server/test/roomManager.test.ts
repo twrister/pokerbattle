@@ -201,6 +201,83 @@ describe('RoomManager 多房间', () => {
     manager.dispose();
   });
 
+  it('快速匹配不填手动创建的房间', () => {
+    const manager = new RoomManager();
+    const host = new FakeWebSocket();
+    manager.join(host as never, {
+      type: 'join',
+      mode: 'create',
+      roomId: '',
+      name: '房主',
+      roomName: '手建房间',
+    });
+    const createdId = welcomeRoom(host);
+
+    const matcher = new FakeWebSocket();
+    manager.join(matcher as never, { type: 'join', mode: 'quick', roomId: '', name: '匹配者' });
+
+    const quickId = welcomeRoom(matcher);
+    expect(quickId).not.toBe(createdId);
+    expect(latestWelcome(matcher).quickMatch).toBe(true);
+    expect(latestWelcome(host).quickMatch).toBeFalsy();
+    manager.dispose();
+  });
+
+  it('匹配房满员后延迟 1 秒自动开局，中途离开则取消', () => {
+    vi.useFakeTimers();
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    const c = new FakeWebSocket();
+
+    manager.join(a as never, { type: 'join', mode: 'quick', roomId: '', name: 'A' });
+    manager.join(b as never, { type: 'join', mode: 'quick', roomId: '', name: 'B' });
+    expect(a.messages().some((m) => m.type === 'start')).toBe(false);
+
+    vi.advanceTimersByTime(999);
+    expect(a.messages().some((m) => m.type === 'start')).toBe(false);
+
+    vi.advanceTimersByTime(1);
+    expect(a.messages().some((m) => m.type === 'start')).toBe(true);
+    expect(b.messages().some((m) => m.type === 'start')).toBe(true);
+
+    // 第三个人不会挤进已经开局的匹配房，而是另开一房
+    manager.join(c as never, { type: 'join', mode: 'quick', roomId: '', name: 'C' });
+    expect(welcomeRoom(c)).not.toBe(welcomeRoom(a));
+    manager.dispose();
+  });
+
+  it('匹配房开局前有人离开会取消自动开局', () => {
+    vi.useFakeTimers();
+    const manager = new RoomManager();
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    manager.join(a as never, { type: 'join', mode: 'quick', roomId: '', name: 'A' });
+    manager.join(b as never, { type: 'join', mode: 'quick', roomId: '', name: 'B' });
+
+    b.close();
+    vi.advanceTimersByTime(5_000);
+    expect(a.messages().some((m) => m.type === 'start')).toBe(false);
+    expect(manager.size).toBe(1);
+    manager.dispose();
+  });
+
+  it('匹配房开过一局后不再接收新的匹配玩家', () => {
+    vi.useFakeTimers();
+    const room = new MatchRoom({ roomId: '401', roomName: '快速匹配', quickMatch: true });
+    const a = new FakeWebSocket();
+    const b = new FakeWebSocket();
+    room.handleJoin(a as never, 'A');
+    expect(room.isQuickOpen).toBe(true);
+    room.handleJoin(b as never, 'B');
+
+    vi.advanceTimersByTime(1_000);
+    expect(room.toOpsSnapshot().phase).toBe('playing');
+    expect(room.toListEntry().quickMatch).toBe(true);
+    expect(room.isQuickOpen).toBe(false);
+    room.dispose();
+  });
+
   it('等待者离开后空房会被回收', () => {
     const manager = new RoomManager();
     const a = new FakeWebSocket();

@@ -16,9 +16,9 @@ import { NetSimLoop } from './netLoop.js';
 /** 服务端因同席位被新连接接管而关闭旧连接时使用的关闭码。 */
 const RECONNECT_TAKEOVER_CODE = 4003;
 
-/** 创建、加入或接回已有房间；rejoin 用于局外冷启动接回原席位。 */
+/** 创建、加入、快速匹配或接回已有房间；rejoin 用于局外冷启动接回原席位。 */
 export interface RoomJoinRequest {
-  mode: 'create' | 'room';
+  mode: 'create' | 'room' | 'quick';
   roomId?: string;
   roomName?: string;
   matchMode?: MatchMode;
@@ -33,6 +33,8 @@ export interface RoomSession {
   isHost: boolean;
   opponentName: string;
   matchMode: MatchMode;
+  /** 本房由快速匹配创建：结算后应直接回主界面而不是房间页。 */
+  quickMatch: boolean;
   /** 房主请求开局；服务端校验未通过时走 onStatus。 */
   sendStartMatch(): void;
   /** 非房主切换准备状态。 */
@@ -52,7 +54,7 @@ export interface ConnectRoomOptions {
   name?: string;
   /** 设备档案 ID，供服务端按设备记账；缺省则服务端跳过该席。 */
   playerId?: string;
-  mode?: 'create' | 'room';
+  mode?: 'create' | 'room' | 'quick';
   roomId?: string;
   roomName?: string;
   matchMode?: MatchMode;
@@ -90,7 +92,8 @@ export interface RoomConnecting {
  */
 export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnecting {
   const status = options.onStatus ?? (() => {});
-  const mode = options.mode === 'room' ? 'room' : 'create';
+  const mode: 'create' | 'room' | 'quick' =
+    options.mode === 'room' ? 'room' : options.mode === 'quick' ? 'quick' : 'create';
   /** 首次连接就用 rejoin：局外冷启动接回原席位。 */
   const intent: 'join' | 'rejoin' = options.intent === 'rejoin' ? 'rejoin' : 'join';
   const joinRoomId = options.roomId ?? '';
@@ -140,6 +143,8 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
     let roomName = '';
     let opponentName = '';
     let matchMode: MatchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
+    /** 本地按 quick 发起时就先认定是匹配房，避免 welcome 前上层判错归宿。 */
+    let quickMatch = mode === 'quick';
     /** 冷启动接回时令牌来自局外存档，先用它占位，等 welcome 带回新值再覆盖。 */
     let reconnectToken = options.rejoinToken?.trim() ?? '';
     let reconnectDeadline = 0;
@@ -198,6 +203,9 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
       },
       get opponentName() {
         return opponentName;
+      },
+      get quickMatch() {
+        return quickMatch;
       },
       sendStartMatch() {
         if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
@@ -275,6 +283,7 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
         if (message.matchMode === '2v2' || message.matchMode === '1v1') {
           matchMode = message.matchMode;
         }
+        if (message.quickMatch === true) quickMatch = true;
         const peer = message.members.find((member) => member.seat !== seat);
         opponentName = peer?.name ?? '';
         lastRoomState = message;
@@ -305,7 +314,9 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
 
       ws.addEventListener('open', () => {
         if (kind === 'join' && intent === 'join') {
-          if (mode === 'create') {
+          if (mode === 'quick') {
+            status('已连接，正在匹配对手…');
+          } else if (mode === 'create') {
             status('已连接，正在创建房间…');
           } else {
             status(`已连接，正在加入房间 ${joinRoomId}…`);
@@ -407,6 +418,7 @@ export function connectRoomSession(options: ConnectRoomOptions = {}): RoomConnec
           if (typeof message.opponentName === 'string') {
             opponentName = message.opponentName;
           }
+          if (message.quickMatch === true) quickMatch = true;
           const hostMember = message.members?.find((member) => member.isHost);
           if (hostMember) hostSeat = hostMember.seat;
           finishJoin();

@@ -121,6 +121,7 @@ import { createReplayControls } from './ui/replayControls.js';
 import { createReplayListPage } from './ui/replayListPage.js';
 import { createOnlineLobbyPage } from './ui/onlineLobbyPage.js';
 import { createOnlineRoomPage } from './ui/onlineRoomPage.js';
+import { createQuickMatchDialog } from './ui/quickMatchDialog.js';
 import { createReconnectBanner } from './ui/reconnectBanner.js';
 import { createScreenController, type AppScreen, type ScreenController } from './ui/screenController.js';
 import { createSceneConfigPage } from './ui/sceneConfigPage.js';
@@ -216,6 +217,13 @@ let appUnloading = false;
  * 先记下意图，等 activeRoomSession 落好再跳对局屏。
  */
 let versusScreenPending = false;
+/**
+ * 当前对局来自快速匹配：没有可回的房间页，
+ * 结算与异常退出都按单机口径回主界面。
+ */
+let quickMatchActive = false;
+/** 正在等待匹配结果（尚未开局），用于离开主菜单时作废这次匹配。 */
+let quickMatchPending = false;
 
 /** 未入房页面里，只有单机对局单独标成 solo。 */
 function lobbyActivityForScreen(screen: AppScreen | null): 'lobby' | 'solo' {
@@ -270,6 +278,7 @@ const mainMenu = createMainMenu({
   },
   onOpenCampaign: () => screens.show('campaign'),
   onOpenOnline: () => screens.show('online'),
+  onQuickMatch: () => beginQuickMatch(),
   onOpenDeckConfig: () => screens.show('deck-config'),
   onOpenCodex: () => screens.show('codex'),
   onOpenLeaderboard: () => screens.show('leaderboard'),
@@ -321,6 +330,8 @@ const battleDamagePanel = createBattleDamagePanel();
 const battleAnnounce = createBattleAnnounce();
 const spectatorHands = createSpectatorHands();
 const versusExitConfirm = createVersusExitConfirm();
+/** 快速匹配等待弹窗；只在主菜单阶段短暂展示。 */
+const quickMatchDialog = createQuickMatchDialog();
 const battleResult = createBattleResult(() => {
   if (replaySessionActive || pendingReplay) {
     screens.show('replay-list');
@@ -331,6 +342,12 @@ const battleResult = createBattleResult(() => {
     return;
   }
   if (activeRoomSession) {
+    // 快速匹配局没有「房间」可回，按单机口径直接回主界面
+    if (quickMatchActive || activeRoomSession.quickMatch) {
+      disposeRoomSession();
+      screens.show('menu');
+      return;
+    }
     keepRoomSession = true;
     screens.show('room');
     return;
@@ -514,6 +531,46 @@ function beginJoinRoom(request: RoomJoinRequest): void {
 }
 
 /**
+ * 异常离开对局后的落点：匹配局没有房间页，直接回主界面；
+ * 其余情况回联机大厅，并顺带展示离开原因。
+ */
+function leaveToLobby(quickMatch: boolean, message: string): void {
+  if (quickMatch) {
+    screens.show('menu');
+    return;
+  }
+  onlineLobbyPage.showError(message);
+  screens.show('online');
+}
+
+/**
+ * 快速匹配：入房后停在主菜单并显示等待弹窗，
+ * 由服务端凑满人数自动开局，不需要玩家再点开始。
+ */
+function beginQuickMatch(): void {
+  // 重复点快速匹配时先清掉上一次的候选连接，避免两个连接争同一局
+  cancelQuickMatch();
+  quickMatchPending = true;
+  quickMatchDialog.show(cancelQuickMatch);
+  startRoomSession({ mode: 'quick' }, false);
+}
+
+/**
+ * 取消匹配：断开候选连接并收起等待弹窗。
+ * 玩家主动取消与切屏离开共用这一条路径，避免残留连接被自动开局拉走。
+ */
+function cancelQuickMatch(): void {
+  if (!quickMatchPending) return;
+  quickMatchPending = false;
+  quickMatchDialog.hide();
+  cancelJoiningRoom();
+  disposeRoomSession();
+  // 取消后仍停在主菜单，重新登记大厅 presence，否则运维站会以为人已离线
+  ensureAppLobbyPresence(lobbyActivityForScreen(screens.current));
+}
+
+
+/**
  * 接回局外那局：凭本机存档的令牌直接 rejoin，
  * 成功即进对局屏，失败则清凭据并回大厅提示。
  */
@@ -533,7 +590,9 @@ function startRoomSession(
 ): void {
   cancelJoiningRoom();
   stopAppLobbyPresence();
-  if (!coldRejoin) {
+  /** 快速匹配没有房间页，状态与错误都就近显示在等待弹窗上。 */
+  const quickMode = request.mode === 'quick';
+  if (!coldRejoin && !quickMode) {
     onlineLobbyPage.showError(
       request.mode === 'create' ? '正在创建房间…' : `正在加入房间 ${request.roomId ?? ''}…`,
     );
@@ -549,6 +608,7 @@ function startRoomSession(
     ...(coldRejoin ? { intent: 'rejoin' as const, rejoinToken } : {}),
     onStatus: (text) => {
       if (coldRejoin) rejoinDialog?.setBusy(text);
+      else if (quickMode) quickMatchDialog.setStatus(text);
       else if (screens.current === 'online') onlineLobbyPage.showError(text);
       else onlineRoomPage.showStatus(text);
     },
@@ -561,6 +621,9 @@ function startRoomSession(
     onMatchStart: (loop, faction, opponentName) => {
       pendingMatch = { loop, faction, opponentName };
       keepRoomSession = true;
+      // 匹配成功即收起等待弹窗并结束「等待中」状态，否则切到对局屏会把自己取消掉
+      quickMatchPending = false;
+      quickMatchDialog.hide();
       rejoinDialog?.hide();
       // 会话引用还没落好时先挂起，由 startRoomSession 的 then 补跳，避免 enterVersus 误判无会话
       if (!activeRoomSession) {
@@ -597,23 +660,26 @@ function startRoomSession(
       versusPeerLeft = true;
       keepRoomSession = false;
       rejoinTickets.clear();
+      const wasQuick = quickMatchActive || quickMode;
+      quickMatchActive = false;
       disposeRoomSession();
-      onlineLobbyPage.showError('对手已离开');
-      screens.show('online');
+      leaveToLobby(wasQuick, '对手已离开');
     },
     onDisconnected: (reason) => {
       keepRoomSession = false;
+      const wasQuick = quickMatchActive || quickMode;
+      quickMatchActive = false;
       disposeRoomSession();
-      onlineLobbyPage.showError(reason);
-      screens.show('online');
+      leaveToLobby(wasQuick, reason);
     },
     onReconnectFailed: (reason) => {
       keepRoomSession = false;
       // 席位窗口已关，凭据自然作废
       rejoinTickets.clear();
+      const wasQuick = quickMatchActive || quickMode;
+      quickMatchActive = false;
       disposeRoomSession();
-      onlineLobbyPage.showError(reason);
-      screens.show('online');
+      leaveToLobby(wasQuick, reason);
     },
   });
   joiningRoom = connecting;
@@ -631,6 +697,8 @@ function startRoomSession(
         screens.show('versus', { remount: screens.current === 'versus' });
         return;
       }
+      // 匹配房入座后仍停在主菜单等自动开局，不跳没有意义的房间页
+      if (quickMode) return;
       if (!coldRejoin) screens.show('room');
     })
     .catch((error: unknown) => {
@@ -638,6 +706,14 @@ function startRoomSession(
       joiningRoom = null;
       versusScreenPending = false;
       const message = error instanceof Error ? error.message : String(error);
+      // 匹配失败：收起等待弹窗，让玩家留在主界面看到原因
+      if (quickMode) {
+        quickMatchPending = false;
+        quickMatchDialog.hide();
+        ensureAppLobbyPresence('lobby');
+        mainMenu.showStatus(message);
+        return;
+      }
       if (coldRejoin) {
         // 令牌已失效（房间结束/席位被占），丢掉存档并让玩家留在大厅
         rejoinTickets.clear();
@@ -1503,7 +1579,13 @@ function enterVersus(): () => void {
   const match = pendingMatch;
   pendingMatch = null;
   if (!match || !activeRoomSession) {
-    queueMicrotask(() => screens.show(activeRoomSession ? 'room' : 'online'));
+    // 匹配局没有房间页，拿不到会话就退回主界面
+    const fallback: AppScreen = quickMatchActive
+      ? 'menu'
+      : activeRoomSession
+        ? 'room'
+        : 'online';
+    queueMicrotask(() => screens.show(fallback));
     return () => {};
   }
 
@@ -1514,8 +1596,11 @@ function enterVersus(): () => void {
   let replaySaved = false;
   const peerLeft = versusPeerLeft;
   versusPeerLeft = false;
+  // 本局是否匹配局：决定结算/中途离开后回主界面还是回房间
+  const quickMatch = activeRoomSession.quickMatch;
+  quickMatchActive = quickMatch;
   reconnectBanner = createReconnectBanner(hud);
-  battleResult.setReturnLabel('返回房间');
+  battleResult.setReturnLabel(quickMatch ? '返回主界面' : '返回房间');
 
   const recordVersusResult = (result: MatchResult, faction: Faction, context?: ReplaySideContext): void => {
     if (battleRecorded) return;
@@ -1569,6 +1654,7 @@ function enterVersus(): () => void {
       disposeRoomSession(!appUnloading);
     }
     keepRoomSession = false;
+    quickMatchActive = false;
   };
 }
 
@@ -1890,7 +1976,8 @@ function runVersusSession(
     sceneConfigPage.hide();
     versusExitConfirm.hide();
     keepRoomSession = false;
-    screens.show('online');
+    // 匹配局没有房间页可回，与单机一致回主界面
+    screens.show(quickMatchActive ? 'menu' : 'online');
   };
   /** 对局未结束时先确认，避免误点返回直接记失败。 */
   const requestLeave = (): void => {
@@ -2271,6 +2358,8 @@ function enterSolo(): () => void {
 
 function enterOnline(): () => void {
   syncLobbyPresenceForScreen('online');
+  // 从匹配等待切到房间列表时，等待弹窗必须先收掉，否则会盖住大厅
+  quickMatchDialog.hide();
   onlineLobbyPage.show();
   // 进大厅顺手查一次：若还有未结束的局，弹窗让玩家自己决定回不回去
   checkPendingRejoin();
@@ -2313,6 +2402,8 @@ screens = createScreenController({
     return () => {
       mainMenu.hide();
       rejoinDialog?.hide();
+      // 离开主菜单即作废等待中的匹配，避免它在别的页面里突然开局
+      cancelQuickMatch();
     };
   },
   online: () => enterOnline(),
@@ -2408,6 +2499,7 @@ function disposeApp(): void {
   disposeSpectateSession();
   spectatorHands.dispose();
   onlineLobbyPage.dispose();
+  quickMatchDialog.dispose();
   leaderboardPage.dispose();
   campaignPage.dispose();
   replayListPage.dispose();

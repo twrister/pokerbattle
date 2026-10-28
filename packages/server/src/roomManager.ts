@@ -178,10 +178,13 @@ export class RoomManager {
     this.rooms.clear();
   }
 
-  /** 快速匹配优先填入已有未开局房间，避免无谓新建。 */
+  /**
+   * 快速匹配：只填进还能吸收匹配玩家的匹配房，凑不满就新建一个。
+   * 手动创建/加入的房间不参与匹配，避免野生房被系统塞人；满员后房间内部会自动开局。
+   */
   private joinQuick(ws: WebSocket, name: string, playerId: string | null): RoomActionResult {
     for (const room of this.rooms.values()) {
-      if (!room.canJoin) continue;
+      if (!room.isQuickOpen) continue;
       if (room.handleJoin(ws, name, playerId)) {
         return { ok: true, room };
       }
@@ -190,7 +193,7 @@ export class RoomManager {
     if (!roomId) {
       return fail('room_full', '房间号已满，请稍后再试');
     }
-    const room = this.createRoom(roomId, defaultRoomName(name));
+    const room = this.createRoom(roomId, QUICK_MATCH_ROOM_NAME, '1v1', true);
     if (!room.handleJoin(ws, name, playerId)) {
       room.dispose();
       return fail('room_full', '暂时无法加入匹配');
@@ -249,11 +252,18 @@ export class RoomManager {
   }
 
   /** 创建房间并登记；dispose 时从注册表移除，防止泄漏。 */
-  private createRoom(roomId: string, roomName: string, matchMode: '1v1' | '2v2' = '1v1'): MatchRoom {
+  private createRoom(
+    roomId: string,
+    roomName: string,
+    matchMode: '1v1' | '2v2' = '1v1',
+    /** 匹配房满员后自动开局，并出现在大厅的匹配标记里。 */
+    quickMatch = false,
+  ): MatchRoom {
     const room = new MatchRoom({
       roomId,
       roomName,
       matchMode,
+      quickMatch,
       onDispose: (id) => {
         const current = this.rooms.get(id);
         if (current === room) this.rooms.delete(id);
@@ -287,6 +297,9 @@ function fail(code: RoomErrorCode, message: string): RoomActionResult {
     error: { type: 'error', code, message },
   };
 }
+
+/** 快速匹配房固定展示名，便于玩家在列表里认出系统开的房。 */
+const QUICK_MATCH_ROOM_NAME = '快速匹配';
 
 /** 默认房间名：玩家名 + 「的房间」。 */
 function defaultRoomName(playerName: string): string {

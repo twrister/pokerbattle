@@ -22,8 +22,10 @@ export interface MainMenuOptions {
   onStartSoloDebug: () => void;
   /** 进入战役选关页。 */
   onOpenCampaign: () => void;
-  /** 进入独立联机大厅页。 */
+  /** 进入独立联机大厅页（游戏房间）。 */
   onOpenOnline: () => void;
+  /** 直接发起快速匹配，成功后由编排层自动进入对局。 */
+  onQuickMatch: () => void;
   onOpenDeckConfig: () => void;
   onOpenCodex: () => void;
   /** 进入积分排行榜页。 */
@@ -45,6 +47,8 @@ export interface MainMenuHandle {
   hide(): void;
   /** 档案变更后刷新名字/胜点展示。 */
   refreshProfile(): void;
+  /** 在大厅底部提示一行文字，例如快速匹配失败原因。 */
+  showStatus(message: string): void;
   dispose(): void;
 }
 
@@ -62,6 +66,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const soloDebugButton = required<HTMLButtonElement>('#btn-solo-debug', root);
   const soloCampaignButton = required<HTMLButtonElement>('#btn-solo-campaign', root);
   const soloDialog = required<HTMLElement>('#mode-solo-dialog', root);
+  const onlineDialog = required<HTMLElement>('#mode-online-dialog', root);
+  const quickMatchButton = required<HTMLButtonElement>('#btn-online-quick', root);
+  const onlineRoomsButton = required<HTMLButtonElement>('#btn-online-rooms', root);
   const renameDialog = required<HTMLElement>('#rename-dialog', root);
   const renamePanel = required<HTMLElement>('.mode-dialog-panel', renameDialog);
   const renameTitle = required<HTMLElement>('#rename-title', renameDialog);
@@ -91,6 +98,9 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   const closeButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-mode-close]'),
   );
+  const onlineCloseButtons = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('[data-mode-online-close]'),
+  );
   const renameCloseButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-rename-close]'),
   );
@@ -105,6 +115,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   /** 关闭所有模式弹层，回到纯大厅态。 */
   const closeModeDialogs = (): void => {
     hideDialog(soloDialog);
+    hideDialog(onlineDialog);
     patchNotes.close();
     settings.close();
     feedback.collapse();
@@ -220,10 +231,24 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
     showDialog(soloDialog);
   };
 
+  /** 联机二级弹窗：快速匹配与游戏房间只在这里分叉，避免主按钮直接跳页。 */
+  const openOnlineDialog = (): void => {
+    hideRenameDialogInstant();
+    closeModeDialogs();
+    showDialog(onlineDialog);
+  };
+
+  /** 游戏房间：收起弹窗后进现有大厅页。 */
   const openOnlinePage = (): void => {
     hideRenameDialogInstant();
     closeModeDialogs();
     options.onOpenOnline();
+  };
+
+  /** 快速匹配：收起弹窗后交给编排层连服务端，等待弹窗由编排层负责。 */
+  const startQuickMatch = (): void => {
+    closeModeDialogs();
+    options.onQuickMatch();
   };
 
   /** 从玩家卡片展开改名弹层；首次开局引导换标题。 */
@@ -266,7 +291,7 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   const requestSoloDialog = (): void => requestPlayDialog(openSoloDialog);
-  const requestOnlinePage = (): void => requestPlayDialog(openOnlinePage);
+  const requestOnlineDialog = (): void => requestPlayDialog(openOnlineDialog);
 
   /** 沙盒仅开发服可进；正式服入口已用 CSS 隐藏。 */
   const startSandbox = (): void => {
@@ -334,7 +359,12 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
   };
 
   soloButton.addEventListener('click', requestSoloDialog);
-  matchButton.addEventListener('click', requestOnlinePage);
+  matchButton.addEventListener('click', requestOnlineDialog);
+  quickMatchButton.addEventListener('click', startQuickMatch);
+  onlineRoomsButton.addEventListener('click', openOnlinePage);
+  for (const button of onlineCloseButtons) {
+    button.addEventListener('click', handleModeClose);
+  }
   sandboxButton.addEventListener('click', startSandbox);
   deckButton.addEventListener('click', openDeckConfig);
   codexButton.addEventListener('click', openCodex);
@@ -377,9 +407,18 @@ export function createMainMenu(options: MainMenuOptions): MainMenuHandle {
       hideRenameDialogInstant();
     },
     refreshProfile,
+    showStatus(message) {
+      status.textContent = message;
+      status.classList.toggle('is-visible', Boolean(message));
+    },
     dispose() {
       soloButton.removeEventListener('click', requestSoloDialog);
-      matchButton.removeEventListener('click', requestOnlinePage);
+      matchButton.removeEventListener('click', requestOnlineDialog);
+      quickMatchButton.removeEventListener('click', startQuickMatch);
+      onlineRoomsButton.removeEventListener('click', openOnlinePage);
+      for (const button of onlineCloseButtons) {
+        button.removeEventListener('click', handleModeClose);
+      }
       sandboxButton.removeEventListener('click', startSandbox);
       deckButton.removeEventListener('click', openDeckConfig);
       codexButton.removeEventListener('click', openCodex);

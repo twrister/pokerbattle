@@ -44,6 +44,7 @@ function menuOptions(overrides: Partial<Parameters<typeof createMainMenu>[0]> = 
     onStartSoloDebug: vi.fn(),
     onOpenCampaign: vi.fn(),
     onOpenOnline: vi.fn(),
+    onQuickMatch: vi.fn(),
     onOpenDeckConfig: vi.fn(),
     onOpenCodex: vi.fn(),
     onOpenLeaderboard: vi.fn(),
@@ -90,6 +91,11 @@ function mountMainMenuDom(): void {
       <div id="lobby-version"></div>
       <div id="mode-solo-dialog" class="is-hidden" aria-hidden="true">
         <button data-mode-close></button>
+      </div>
+      <div id="mode-online-dialog" class="is-hidden" aria-hidden="true">
+        <button data-mode-online-close></button>
+        <button id="btn-online-quick" type="button"></button>
+        <button id="btn-online-rooms" type="button"></button>
       </div>
       <div id="rename-dialog" class="is-hidden" aria-hidden="true">
         <button data-rename-close></button>
@@ -258,12 +264,30 @@ describe('大厅玩家档案展示', () => {
     expect(onStartSandbox).not.toHaveBeenCalled();
   });
 
-  it('点击多人联机进入独立大厅页', () => {
+  it('点击多人联机先出二选一弹窗，游戏房间才进大厅页', () => {
     const onOpenOnline = vi.fn();
     createMainMenu(menuOptions({ onOpenOnline }));
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    const dialog = document.querySelector('#mode-online-dialog');
+    expect(dialog?.classList.contains('is-hidden')).toBe(false);
+    expect(onOpenOnline).not.toHaveBeenCalled();
+
+    document.querySelector<HTMLButtonElement>('#btn-online-rooms')!.click();
     expect(onOpenOnline).toHaveBeenCalledTimes(1);
+    expect(dialog?.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('二选一弹窗点快速匹配直接发起匹配，不进大厅页', () => {
+    const onOpenOnline = vi.fn();
+    const onQuickMatch = vi.fn();
+    createMainMenu(menuOptions({ onOpenOnline, onQuickMatch }));
+
+    document.querySelector<HTMLButtonElement>('#btn-match')!.click();
+    document.querySelector<HTMLButtonElement>('#btn-online-quick')!.click();
+    expect(onQuickMatch).toHaveBeenCalledTimes(1);
+    expect(onOpenOnline).not.toHaveBeenCalled();
+    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(true);
   });
 
   it('开发服点击卡组进入阵型页', () => {
@@ -327,12 +351,11 @@ describe('大厅玩家档案展示', () => {
     expect(document.querySelector('#rename-title')?.textContent).toBe('请先设置玩家名称');
   });
 
-  it('默认名取消改名后再点开局不再主动弹，直接进联机页', () => {
+  it('默认名取消改名后再点开局不再主动弹，直接出联机方式弹窗', () => {
     const profile = buildProfile({
       displayName: defaultDisplayName('device-ui'),
     });
-    const onOpenOnline = vi.fn();
-    createMainMenu(menuOptions({ getProfile: () => profile, onOpenOnline }));
+    createMainMenu(menuOptions({ getProfile: () => profile }));
 
     document.querySelector<HTMLButtonElement>('#btn-solo')!.click();
     document.querySelector<HTMLButtonElement>('#btn-rename-cancel')!.click();
@@ -340,7 +363,7 @@ describe('大厅玩家档案展示', () => {
 
     document.querySelector<HTMLButtonElement>('#btn-match')!.click();
     expect(document.querySelector('#rename-dialog')?.classList.contains('is-hidden')).toBe(true);
-    expect(onOpenOnline).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('#mode-online-dialog')?.classList.contains('is-hidden')).toBe(false);
   });
 
   it('本会话已主动提示过则默认名点单机直接打开模式弹窗', () => {

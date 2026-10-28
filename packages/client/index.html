@@ -1440,6 +1440,36 @@
         letter-spacing: 0.06em;
       }
 
+      /* 快速匹配弹窗：居中文案 + 底部取消，等待期不遮挡鼠标 */
+      .quick-match-body {
+        display: grid;
+        gap: calc(8 * var(--hu));
+        justify-items: center;
+        padding: calc(6 * var(--hu)) 0;
+        text-align: center;
+      }
+
+      .quick-match-status {
+        margin: 0;
+        font-size: calc(22 * var(--hu));
+        letter-spacing: 0.04em;
+      }
+
+      .quick-match-hint {
+        margin: 0;
+        color: rgba(20, 33, 61, 0.66);
+        font-size: calc(16 * var(--hu));
+      }
+
+      .quick-match-cancel {
+        width: 100%;
+        padding: calc(14 * var(--hu)) calc(12 * var(--hu));
+        border-radius: calc(14 * var(--hu));
+        --press-depth: calc(6 * var(--hu));
+        font-size: calc(20 * var(--hu));
+        letter-spacing: 0.04em;
+      }
+
       .online-page-header {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1483,9 +1513,10 @@
         min-height: 0;
       }
 
+      /* 房间列表固定单列：卡片宽随 9:16 舞台走，双列会在窄舞台上挤成两条信息 */
       #online-lobby-list {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: var(--space-2);
         flex: 1;
         align-content: start;
@@ -1609,6 +1640,20 @@
         white-space: nowrap;
         font-size: calc(15 * var(--hu));
         font-weight: 700;
+      }
+
+      /* 匹配房标记：小圆角标签，不挤压房间名的省略号 */
+      .online-room-card-tag {
+        flex: 0 0 auto;
+        padding: calc(1 * var(--hu)) calc(6 * var(--hu));
+        border: var(--stroke-w) solid var(--outline);
+        border-radius: calc(6 * var(--hu));
+        background: #f2c14e;
+        color: var(--ink);
+        font-size: calc(11 * var(--hu));
+        font-weight: 700;
+        line-height: 1.4;
+        white-space: nowrap;
       }
 
       .online-room-card-count {
@@ -2043,9 +2088,10 @@
         align-content: start;
       }
 
+      /* 房间页两队固定左右并列：窄屏也不折行，宽度不足时靠 --hu 整体等比缩小 */
       .online-room-teams {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: var(--space-2);
       }
 
@@ -2345,13 +2391,6 @@
         .online-room-member {
           min-height: calc(72 * var(--hu));
           padding: var(--space-2);
-        }
-      }
-
-      @media (max-width: 420px) {
-        #online-lobby-list,
-        .online-room-teams {
-          grid-template-columns: 1fr;
         }
       }
 
@@ -7003,6 +7042,41 @@
                 <small>从教学关开始，逐关闯关</small>
               </button>
             </div>
+          </div>
+        </div>
+
+        <div id="mode-online-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="mode-online-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="关闭联机方式选择" data-mode-online-close></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="mode-online-title" class="mode-dialog-title">多人联机</h2>
+              <button class="mode-dialog-close" type="button" aria-label="关闭" data-mode-online-close><span class="ui-icon icon-cross" aria-hidden="true"></span></button>
+            </header>
+            <div class="mode-dialog-options">
+              <button id="btn-online-quick" class="mode-option mode-option-ready" type="button">
+                快速匹配
+                <small>自动寻找对手，凑满即开局</small>
+              </button>
+              <button id="btn-online-rooms" class="mode-option mode-option-ready" type="button">
+                游戏房间
+                <small>创建或加入指定房间</small>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="quick-match-dialog" class="mode-dialog is-hidden" aria-hidden="true" role="dialog" aria-labelledby="quick-match-title">
+          <button class="mode-dialog-backdrop" type="button" aria-label="取消匹配" data-quick-match-cancel></button>
+          <div class="mode-dialog-panel">
+            <header class="mode-dialog-header">
+              <h2 id="quick-match-title" class="mode-dialog-title">快速匹配</h2>
+              <button class="mode-dialog-close" type="button" aria-label="取消匹配" data-quick-match-cancel><span class="ui-icon icon-cross" aria-hidden="true"></span></button>
+            </header>
+            <div class="quick-match-body">
+              <p id="quick-match-status" class="quick-match-status" role="status" aria-live="polite">正在寻找对手…</p>
+              <p class="quick-match-hint">凑满两名玩家后自动开局</p>
+            </div>
+            <button id="btn-quick-match-cancel" class="cartoon-btn quick-match-cancel" type="button">取消匹配</button>
           </div>
         </div>
 

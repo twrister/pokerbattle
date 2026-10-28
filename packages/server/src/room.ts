@@ -2,6 +2,7 @@ import {
   BOTH_OFFLINE_CLOSE_MS,
   DEFAULT_INPUT_DELAY,
   HASH_INTERVAL_TICKS,
+  QUICK_MATCH_START_DELAY_MS,
   RECONNECT_TIMEOUT_MS,
   encodeMessage,
   type ClientMessage,
@@ -70,6 +71,8 @@ export interface MatchRoomOptions {
   roomName: string;
   /** 创建时的对局模式；缺省 1v1。 */
   matchMode?: MatchMode;
+  /** 是否由快速匹配创建；满员后自动开局。 */
+  quickMatch?: boolean;
   /** 房间变空或对局因超时结束并清场后回调，供管理器回收。 */
   onDispose?: (roomId: string) => void;
   /** 入座且带有 playerId 时登记昵称。 */
@@ -90,6 +93,12 @@ export class MatchRoom {
   private readonly onDecisiveMatch?: (sides: DecisiveMatchSides) => void;
   private seats: Array<Seat | null>;
   private matchMode: MatchMode;
+  /** 快速匹配房：满员后不等人点开始，延迟一拍自动开局。 */
+  private readonly quickMatch: boolean;
+  /** 匹配房是否已自动开过局；开过就不再吸纳新的匹配玩家。 */
+  private matchPlayed = false;
+  /** 快速匹配满员后的自动开局定时器。 */
+  private autoStartTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly spectators: Spectator[] = [];
   /** 房主席位；创建者 / 先入座者为房主，离开后交给剩余席。 */
   private hostSeat = 0;
@@ -119,6 +128,7 @@ export class MatchRoom {
     this.onPlayerJoin = options.onPlayerJoin;
     this.onDecisiveMatch = options.onDecisiveMatch;
     this.matchMode = options.matchMode === '2v2' ? '2v2' : '1v1';
+    this.quickMatch = options.quickMatch === true;
     this.seats = emptySeats(this.matchMode);
   }
 
@@ -130,6 +140,14 @@ export class MatchRoom {
   /** 未开局且仍有空座时可加入。 */
   get canJoin(): boolean {
     return !this.disposed && !this.started && this.seats.some((seat) => seat === null);
+  }
+
+  /**
+   * 是否还能接收快速匹配玩家：匹配房、还没打过一局、且未开局。
+   * 打过的匹配房即使还剩残席也不算，避免把新人塞进上一局遗留的房间。
+   */
+  get isQuickOpen(): boolean {
+    return this.quickMatch && !this.matchPlayed && this.canJoin;
   }
 
   /** 对局进行中才允许观战。 */
@@ -167,6 +185,7 @@ export class MatchRoom {
       phase: this.started ? 'playing' : 'waiting',
       spectatorCount: this.spectatorCount,
       matchMode: this.matchMode,
+      quickMatch: this.quickMatch,
     };
   }
 
@@ -241,7 +260,33 @@ export class MatchRoom {
 
     this.sendWelcome(seat, 0);
     this.broadcastRoomState();
+    // 匹配房凑满即自动开局；给玩家留出看到对手进房的 1 秒缓冲
+    this.tryScheduleAutoStart();
     return true;
+  }
+
+  /**
+   * 匹配房满员时挂一个延迟开局定时器。
+   * 已有定时器或还有空席则不动，避免重复计时把等待时间越拖越长。
+   */
+  private tryScheduleAutoStart(): void {
+    if (!this.quickMatch || this.disposed || this.started || this.autoStartTimer) return;
+    if (this.seats.some((seat) => seat === null)) return;
+    this.autoStartTimer = setTimeout(() => {
+      this.autoStartTimer = null;
+      this.cancelAutoStart();
+      if (this.disposed || this.started) return;
+      // 到点前可能有人掉线腾出座位，重新校验一次
+      if (this.seats.some((seat) => !seat || !seat.connected)) return;
+      this.beginMatch();
+    }, QUICK_MATCH_START_DELAY_MS);
+  }
+
+  /** 取消待执行的自动开局（有人离开、换房模式或房间销毁时调用）。 */
+  private cancelAutoStart(): void {
+    if (!this.autoStartTimer) return;
+    clearTimeout(this.autoStartTimer);
+    this.autoStartTimer = null;
   }
 
   /** 重连前按令牌取席位身份，供 WS 在线表按设备 ID 登记。 */
@@ -337,6 +382,7 @@ export class MatchRoom {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelAutoStart();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.clearBothOfflineTimer();
@@ -355,8 +401,11 @@ export class MatchRoom {
   }
 
   private beginMatch(): void {
+    this.cancelAutoStart();
     this.started = true;
     this.ended = false;
+    // 只要真正开过局，这个匹配房就不再接收新的匹配玩家
+    this.matchPlayed = true;
     this.seed = (Date.now() ^ (Math.random() * 0x7fffffff)) | 0;
     if (this.seed === 0) this.seed = 0x9e3779b9;
     this.match = new MatchState(this.seed, this.matchMode);
@@ -496,6 +545,9 @@ export class MatchRoom {
     }
     this.matchMode = nextMode;
     this.broadcastRoomState();
+    // 模式变化会改变席位数，按新席位重新判断是否该自动开局
+    this.cancelAutoStart();
+    this.tryScheduleAutoStart();
   }
 
   /** 未开局时换到空席，房主身份跟人走。 */
@@ -606,6 +658,8 @@ export class MatchRoom {
     if (!this.started || this.ended) {
       this.clearDisconnectTimer(seat);
       this.seats[seatIndex] = null;
+      // 座位腾出来了，等待中的自动开局必须作废，否则会少人开局
+      this.cancelAutoStart();
       this.promoteHostAfterLeave(seatIndex);
       if (this.isEmpty) {
         this.dispose();
@@ -837,6 +891,7 @@ export class MatchRoom {
       members: this.listMembers(),
       matchMode: this.matchMode,
       maxPlayers: this.maxPlayers(),
+      quickMatch: this.quickMatch,
     };
   }
 
@@ -856,6 +911,7 @@ export class MatchRoom {
       opponentName: opponent?.name ?? '',
       matchMode: this.matchMode,
       members: this.listMembers(),
+      quickMatch: this.quickMatch,
     });
   }
 
