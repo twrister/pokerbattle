@@ -72,6 +72,90 @@
         <div id="deploy-state" class="message" hidden></div>
       </section>
 
+      <section class="panel metrics-panel">
+        <div class="section-head">
+          <h2>运营数据</h2>
+          <div class="section-actions">
+            <span id="metrics-hint" class="hint">加载运营数据…</span>
+            <div id="hourly-range-tabs" class="range-tabs" role="group" aria-label="在线人数区间">
+              <button type="button" data-range="24h">24 小时</button>
+              <button type="button" data-range="7d" class="active">7 天</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="metrics-kpis" class="metrics kpi-row">
+          <article class="metric">
+            <div class="label">今日 DAU</div>
+            <div id="kpi-dau" class="value">—</div>
+          </article>
+          <article class="metric">
+            <div class="label">今日峰值在线</div>
+            <div id="kpi-peak" class="value">—</div>
+          </article>
+          <article class="metric">
+            <div class="label">今日对局数</div>
+            <div id="kpi-matches" class="value">—</div>
+          </article>
+          <article class="metric">
+            <div class="label">今日平均时长</div>
+            <div id="kpi-duration" class="value">—</div>
+          </article>
+          <article class="metric">
+            <div class="label">今日新增玩家</div>
+            <div id="kpi-new-players" class="value">—</div>
+          </article>
+          <article class="metric">
+            <div class="label">累计玩家</div>
+            <div id="kpi-total-players" class="value">—</div>
+          </article>
+        </div>
+
+        <div id="online-composition" class="composition">
+          <span class="hint">在线构成</span>
+          <span class="composition-item">大厅 <strong id="composition-lobby">—</strong></span>
+          <span class="composition-item">单机 <strong id="composition-solo">—</strong></span>
+          <span class="composition-item">房间 <strong id="composition-room">—</strong></span>
+          <span class="composition-item">匿名连接 <strong id="composition-anonymous">—</strong></span>
+        </div>
+
+        <div class="chart-block">
+          <div class="chart-legend">
+            <h3>DAU（近 30 天）</h3>
+            <span class="hint">按设备 ID 去重</span>
+          </div>
+          <div id="dau-chart" class="chart-box">加载运营数据…</div>
+        </div>
+
+        <div class="chart-block">
+          <div class="chart-legend">
+            <h3>在线人数（按小时）</h3>
+            <span class="hint">均值 / 峰值 · 保留 7 天</span>
+          </div>
+          <div id="hourly-chart" class="chart-box">加载运营数据…</div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="daily-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>DAU</th>
+                <th>峰值在线</th>
+                <th>对局数</th>
+                <th>平均时长</th>
+                <th>新增玩家</th>
+              </tr>
+            </thead>
+            <tbody id="daily-tbody">
+              <tr>
+                <td colspan="6" class="empty">加载运营数据…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="metrics">
         <article class="metric">
           <div class="label">在线玩家数</div>
