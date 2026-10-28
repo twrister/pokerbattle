@@ -11,6 +11,7 @@ function mountDom(): void {
         <button class="mode-dialog-close" type="button" data-settings-close>×</button>
         <button id="btn-settings-mute" type="button" role="switch" aria-checked="true">
           <span class="settings-row-label">音效</span>
+          <span id="settings-mute-hint"></span>
         </button>
         <button id="btn-settings-sfx-config" type="button">
           <span class="settings-row-label">音效调整</span>
