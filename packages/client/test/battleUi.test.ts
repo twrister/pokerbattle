@@ -35,6 +35,10 @@ describe('对局 HUD 与结算弹窗', () => {
         </div>
         <span id="battle-phase-label"></span>
         <span id="battle-timer-label"></span><strong id="battle-timer"></strong>
+        <div id="battle-wave-bar">
+          <div class="battle-wave-track" id="battle-wave-track"><div id="battle-wave-fill"></div><div id="battle-wave-flag"></div></div>
+          <span id="battle-wave-enemies"></span>
+        </div>
         <span id="battle-spectators" class="is-hidden">观战 0</span>
         <span id="battle-catchup" class="is-hidden">正在追帧…</span>
         <div id="battle-castle-ally" class="is-hidden">
@@ -324,6 +328,36 @@ describe('对局 HUD 与结算弹窗', () => {
 
     expect(match.phase).toBe('double_speed');
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('倍速阶段');
+  });
+
+  it('无限防守隐藏双方信息，只留波次与出兵进度', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const hud = createBattleHud();
+    hud.setContext({ localFaction: Faction.Blue, localName: 'A', opponentName: 'B' });
+    hud.setEndlessMode({ wave: 6, boss: true });
+
+    expect(document.querySelector('#battle-hud')?.classList.contains('is-endless')).toBe(true);
+    expect(document.querySelector('#battle-wave-bar')?.classList.contains('is-boss')).toBe(true);
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('第 6 波（Boss）');
+
+    hud.updateEndlessProgress({ ratio: 0.5, spawnDone: false, remaining: 7 });
+    expect(document.querySelector<HTMLElement>('#battle-wave-fill')?.style.width).toBe('50%');
+    expect(document.querySelector('#battle-wave-enemies')?.textContent).toBe('剩余敌人 7');
+    expect(document.querySelector('#battle-wave-track')?.classList.contains('is-done')).toBe(false);
+
+    hud.updateEndlessProgress({ ratio: 1, spawnDone: true, remaining: 2 });
+    expect(document.querySelector<HTMLElement>('#battle-wave-fill')?.style.width).toBe('100%');
+    expect(document.querySelector('#battle-wave-track')?.classList.contains('is-done')).toBe(true);
+
+    // 无限模式不再刷阶段名与倒计时
+    hud.update(match);
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('第 6 波（Boss）');
+
+    hud.setEndlessMode(null);
+    hud.update(match);
+    expect(document.querySelector('#battle-hud')?.classList.contains('is-endless')).toBe(false);
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
   });
 
   it('按本地阵营展示胜负结果', () => {

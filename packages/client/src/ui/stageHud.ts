@@ -1,6 +1,6 @@
 export interface StageHudHandle {
-  /** 开局展示目标卡片。 */
-  start(): void;
+  /** 开局展示目标卡片；title 缺省为「通关条件」，无限防守写「第 N 波」。 */
+  start(title?: string): void;
   /** 每帧刷新目标进度。 */
   update(progress: ReadonlyArray<{ text: string; done: boolean }>): void;
   hide(): void;
@@ -13,12 +13,14 @@ export interface StageHudHandle {
 export function createStageHud(): StageHudHandle {
   const hud = required<HTMLElement>('#stage-hud');
   const objectives = required<HTMLUListElement>('#stage-hud-objectives');
+  const titleEl = required<HTMLElement>('#stage-hud-title');
 
   let lastObjectiveSignature = '';
 
   return {
-    start() {
+    start(title = '通关条件') {
       lastObjectiveSignature = '';
+      titleEl.textContent = title;
       hud.classList.remove('is-hidden');
     },
     update(progress) {

@@ -11,6 +11,15 @@ export interface CampaignPageOptions {
   getProgress: () => CampaignProgress;
   /** 是否忽略进度解锁全部关卡；开发服开启，便于直接验证任意关卡。 */
   unlockAllStages?: boolean;
+  /** 无限防守入口；提供时在最后一关之后追加一个节点，最后一关通关后解锁。 */
+  endless?: CampaignEndlessEntry;
+}
+
+/** 战役地图末尾的无限防守节点。 */
+export interface CampaignEndlessEntry {
+  /** 历史最佳波数；没有记录为 null。 */
+  getBestWave: () => number | null;
+  onStart: () => void;
 }
 
 export interface CampaignPageHandle {
@@ -75,7 +84,7 @@ export function buildRoadPath(points: readonly MapPoint[]): string {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** 战役选关页：卡通大地图，关卡沿蜿蜒小路自下而上排布，锁定关卡禁用，已通关显示完成标记。 */
+/** 战役选关页：扁平地图，关卡沿蜿蜒小路自下而上排布，锁定关卡禁用，已通关显示完成标记。 */
 export function createCampaignPage(options: CampaignPageOptions): CampaignPageHandle {
   const root = required<HTMLElement>('#campaign');
   const backButton = required<HTMLButtonElement>('#btn-campaign-back', root);
@@ -97,8 +106,13 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     const cleared = stages.map((stage) => Boolean(progress.stages[stage.id]));
     // 当前关：第一个已解锁但未通关的关卡；全部通关则没有
     const currentIndex = stages.findIndex((_, index) => unlocked[index] && !cleared[index]);
-    const lastUnlocked = unlocked.lastIndexOf(true);
-    const { points, height } = layoutStageNodes(stages.length);
+    const endless = options.endless;
+    // 无限防守跟在最后一关后面：最后一关通关（或开发服全解锁）才开放
+    const endlessUnlocked = Boolean(endless)
+      && (options.unlockAllStages === true || (cleared.length > 0 && cleared[cleared.length - 1] === true));
+    const nodeCount = stages.length + (endless ? 1 : 0);
+    const lastUnlocked = endlessUnlocked ? stages.length : unlocked.lastIndexOf(true);
+    const { points, height } = layoutStageNodes(nodeCount);
 
     const map = document.createElement('div');
     map.className = 'campaign-map';
@@ -109,13 +123,13 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
         unlocked: unlocked[index]!,
         cleared: cleared[index]!,
         current: index === currentIndex,
-        boss: stages.length > 1 && index === stages.length - 1,
+        // 有无限防守节点时，大城堡留给它
+        boss: !endless && stages.length > 1 && index === stages.length - 1,
       }),
     );
-    // 叠放顺序：河流 → 山体树木 → 小路 → 关卡节点
+    if (endless) buttons.push(createEndlessButton(endless, points[stages.length]!, endlessUnlocked));
+    // 叠放顺序：小路 → 关卡节点
     map.append(
-      createRiverSvg(height),
-      createDecorations(points, height),
       createRoadSvg(points, height, lastUnlocked),
       ...buttons,
     );
@@ -194,6 +208,48 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     return button;
   };
 
+  /** 无限防守节点：复用关卡节点样式的大城堡，木牌写最佳波数；没有 stageId。 */
+  const createEndlessButton = (
+    entry: CampaignEndlessEntry,
+    point: MapPoint,
+    unlocked: boolean,
+  ): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'campaign-stage campaign-endless is-boss';
+    button.disabled = !unlocked;
+    button.classList.toggle('is-locked', !unlocked);
+    button.setAttribute('role', 'listitem');
+    button.style.setProperty('--x', String(point.x));
+    button.style.setProperty('--y', String(point.y));
+
+    const castle = document.createElement('img');
+    castle.className = 'campaign-stage-castle';
+    castle.src = 'buildings/base.png';
+    castle.alt = '';
+    castle.draggable = false;
+    castle.setAttribute('aria-hidden', 'true');
+
+    const plate = document.createElement('span');
+    plate.className = 'campaign-stage-plate';
+    const index = document.createElement('span');
+    index.className = 'campaign-stage-index';
+    index.textContent = unlocked ? '∞' : '锁';
+    const title = document.createElement('span');
+    title.className = 'campaign-stage-title';
+    title.textContent = '无限防守';
+    const best = entry.getBestWave();
+    const sub = document.createElement('span');
+    sub.className = 'campaign-stage-arena';
+    sub.textContent = best ? `最佳 ${best} 波` : '守住一波又一波';
+    title.append(sub);
+    plate.append(index, title);
+
+    button.append(castle, plate);
+    button.addEventListener('click', () => entry.onStart());
+    return button;
+  };
+
   backButton.addEventListener('click', options.onBack);
 
   return {
@@ -215,7 +271,7 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
 }
 
 /**
- * 沙土小路：从地图底边进入第 1 关，再依次连到最后一关。
+ * 路径：从地图底边进入第 1 关，再依次连到最后一关。
  * 拆成「已解锁段」（到最后一个已解锁关为止）和「锁定段」两组，分别着色。
  */
 function createRoadSvg(points: readonly MapPoint[], height: number, lastUnlocked: number): SVGSVGElement {
@@ -233,13 +289,10 @@ function createRoadSvg(points: readonly MapPoint[], height: number, lastUnlocked
   const addRoad = (pointsOnRoad: readonly MapPoint[], variant: 'open' | 'locked'): void => {
     const d = buildRoadPath(pointsOnRoad);
     if (!d) return;
-    // 两层描边：深色路肩在下，沙土路面在上
-    for (const layer of ['edge', 'surface']) {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', d);
-      path.setAttribute('class', `campaign-road-${layer} is-${variant}`);
-      svg.append(path);
-    }
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', `campaign-road-surface is-${variant}`);
+    svg.append(path);
   };
   addRoad(lockedRoute, 'locked');
   addRoad(unlockedRoute, 'open');
@@ -254,83 +307,6 @@ function createMapSvg(className: string, height: number): SVGSVGElement {
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('aria-hidden', 'true');
   return svg;
-}
-
-/**
- * 横穿地图的蜿蜒河流（纯装饰）：关卡多时每隔约 5 关一条，落在两关之间，避免压住城堡。
- * 两层描边：深色河岸在下，水面在上。
- */
-function createRiverSvg(height: number): SVGSVGElement {
-  const svg = createMapSvg('campaign-river', height);
-  const rows = Math.max(1, Math.round((height - TOP_PADDING - BOTTOM_PADDING) / ROW_HEIGHT));
-  for (let row = 2; row <= rows; row += 5) {
-    // 第 row 关与 row+1 关之间的纵向中点（y 自底向上）
-    const y = height - BOTTOM_PADDING - (row - 0.5) * ROW_HEIGHT;
-    const d = `M -40 ${y + 30} C 140 ${y - 40} 260 ${y + 60} 380 ${y + 8} S 620 ${y - 50} 760 ${y + 20}`;
-    for (const layer of ['bank', 'water']) {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', d);
-      path.setAttribute('class', `campaign-river-${layer}`);
-      svg.append(path);
-    }
-  }
-  return svg;
-}
-
-/** 装饰物种类：山、松树丛、灌木。 */
-type DecoKind = 'mountain' | 'pine' | 'bush';
-
-/**
- * 在每关节点的空侧摆放山体与树木，顶部再加一排远山；
- * 用关卡序号做确定性伪随机，同一份数据每次打开地图都长得一样。
- */
-function createDecorations(points: readonly MapPoint[], height: number): HTMLElement {
-  const layer = document.createElement('div');
-  layer.className = 'campaign-deco-layer';
-  layer.setAttribute('aria-hidden', 'true');
-
-  const add = (kind: DecoKind, x: number, y: number, scale: number): void => {
-    const deco = document.createElement('span');
-    deco.className = `campaign-deco is-${kind}`;
-    deco.style.setProperty('--x', String(Math.round(x)));
-    deco.style.setProperty('--y', String(Math.round(y)));
-    deco.style.setProperty('--s', scale.toFixed(2));
-    layer.append(deco);
-  };
-
-  // 顶部远山：横向铺满，压住地图上沿
-  for (let i = 0; i < 5; i += 1) {
-    add('mountain', 40 + i * 160, 250 - (i % 2) * 30, 1.3 - (i % 2) * 0.25);
-  }
-
-  points.forEach((point, index) => {
-    const rand = (salt: number): number => pseudoRandom(index * 7 + salt);
-    // 节点偏左就往右边摆，偏右就往左边摆，居中时两侧边缘各摆一点
-    const sides = point.x < 340 ? [1] : point.x > 380 ? [-1] : [-1, 1];
-    for (const side of sides) {
-      // 贴着地图左右边缘摆，给中间的小路和木牌留出空地
-      const edgeX = side > 0 ? 640 + rand(1) * 50 : 80 - rand(1) * 50;
-      if (index % 3 === 1) {
-        add('mountain', edgeX, point.y - 10 + rand(2) * 30, 0.75 + rand(3) * 0.3);
-      } else {
-        add('pine', edgeX, point.y - 20 + rand(2) * 30, 0.85 + rand(3) * 0.3);
-        add('pine', edgeX - side * 40, point.y + 60 + rand(4) * 20, 0.7 + rand(5) * 0.25);
-      }
-      add('bush', edgeX - side * 30, point.y - 120 + rand(6) * 20, 0.6 + rand(7) * 0.3);
-    }
-  });
-
-  // 底部入口两旁的树林
-  add('pine', 80, height - 40, 1);
-  add('pine', 640, height - 60, 1.1);
-  add('bush', 560, height - 20, 0.9);
-  return layer;
-}
-
-/** 0~1 的确定性伪随机，只用于装饰物错落摆放。 */
-function pseudoRandom(seed: number): number {
-  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  return value - Math.floor(value);
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

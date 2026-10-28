@@ -50,6 +50,7 @@ export class StageRunner {
   private applyRulesAndDeck(): void {
     const { def, match } = this;
     if (def.rules) match.applyRules(matchRulesWithOverrides(def.rules));
+    if (def.wildCount !== undefined) match.setWildCardCount(def.wildCount);
     // 固定手牌优先：整副牌就是这 N 张，开局全部发到手上；packHand 的牌只留在牌堆里
     if (def.fixedHand?.length) {
       const used = new Set<string>();
@@ -83,6 +84,7 @@ export class StageRunner {
   private applyStageSwitches(): void {
     this.match.setPeriodicDrawEnabled(this.def.periodicDraw !== false);
     if (this.def.castles === false) this.match.clearStartingCastles();
+    else if (this.def.enemyCastles === false) this.match.clearFactionCastles(Faction.Red);
   }
 
   /** 按关卡写双方主堡开局血量（残血守家、一刀斩）。 */

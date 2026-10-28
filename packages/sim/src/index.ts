@@ -202,7 +202,9 @@ export {
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
   MAX_HAND_SIZE,
+  MAX_WILD_CARDS,
   PokerDeck,
+  wildCardIds,
   RETURN_MIN_DEPTH,
   WILD_CARD_IDS,
   WILD_CARD_RANK,
@@ -328,6 +330,7 @@ export {
 export {
   ObjectiveTracker,
   STAGE_FAIL_REASON_TEXT,
+  countLivingMobileUnits,
   type ObjectiveProgress,
   type StageFailReason,
   type StageOutcome,
@@ -336,6 +339,46 @@ export { ScriptedEnemy } from './campaign/scriptedEnemy.js';
 export { CAMPAIGN_STAGE_SECONDS, StageRunner } from './campaign/stageRunner.js';
 export { CAMPAIGN_STAGES, getNextStage, getStageById } from './campaign/stages.js';
 export { matchRulesWithOverrides } from './config/matchRules.js';
+export {
+  ENDLESS_WAVE_SECONDS,
+  ENDLESS_WAVE_SECONDS_MIN,
+  ENDLESS_WAVE_SECONDS_MAX,
+  applyEndlessConfigDraft,
+  captureEndlessConfigAsDefault,
+  clampEndlessWaveSeconds,
+  defaultEndlessWaveSeconds,
+  dumpDefaultEndlessConfigDraft,
+  dumpEndlessConfigDraft,
+  resetEndlessConfigToDefault,
+  restoreEndlessConfigFromFile,
+  sanitizeEndlessConfigDraft,
+  validateEndlessConfigDraft,
+  type EndlessConfigDraft,
+} from './config/endlessConfig.js';
+export {
+  ENDLESS_BOSS_EVERY,
+  ENDLESS_MIN_DRAW_INTERVAL,
+  advanceWave,
+  createRun,
+  isBossWave,
+  sanitizeRun,
+  type EndlessRunState,
+} from './campaign/endless/endlessRun.js';
+export {
+  BOONS,
+  applyBoon,
+  getBoonById,
+  rollBoonChoices,
+  type BoonDef,
+  type BoonRarity,
+} from './campaign/endless/boons.js';
+export {
+  buildWaveStage,
+  buildWaveSteps,
+  endlessWaveSpawnProgress,
+  waveSpec,
+  type WaveSpec,
+} from './campaign/endless/waveGenerator.js';
 
 export { type Attributes } from './stats/attributes.js';
 export { BUFF_STATS, type Buff, BuffOp, type BuffStat, recomputeStats } from './stats/buff.js';

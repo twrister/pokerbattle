@@ -167,6 +167,12 @@ export class ObjectiveTracker {
         return match.getPlayedFormationCount(this.playerSlot) > 0;
       case 'clear_enemy_units':
         return !hasLivingMobileUnit(match, Faction.Red);
+      case 'clear_wave':
+        // 出兵未放完就还有后续敌人，必须等窗口结束再判全灭
+        return (
+          match.world.tick >= objective.spawnEndSeconds * TICK_RATE
+          && !hasLivingMobileUnit(match, Faction.Red)
+        );
       case 'claim_castle_pack':
         // 半血保护卡包只在该席主堡跌破半血后掉落，领取即达成
         return match.getCastlePackState(this.playerSlot) === 'claimed';
@@ -204,6 +210,17 @@ function hasLivingMobileUnit(match: MatchState, faction: Faction): boolean {
     return true;
   }
   return false;
+}
+
+/** 某阵营存活的可移动单位数量；建筑不计，无限防守的进度条用它显示剩余敌人。 */
+export function countLivingMobileUnits(match: MatchState, faction: Faction): number {
+  let count = 0;
+  for (const unit of match.world.units) {
+    if (unit.dead || unit.faction !== faction) continue;
+    if (isBuildingConfig(unit.config)) continue;
+    count += 1;
+  }
+  return count;
 }
 
 /**
@@ -256,6 +273,8 @@ function describeObjective(objective: StageObjective): string {
       return '打出任意兵种';
     case 'clear_enemy_units':
       return '清光敌方部队';
+    case 'clear_wave':
+      return '消灭全部敌人';
     case 'destroy_unit':
       return `击毁${objective.label}`;
     case 'max_plays':

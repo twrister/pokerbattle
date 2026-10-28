@@ -3,6 +3,18 @@ import {
   Faction,
   opposingFaction,
   CAMPAIGN_STAGES,
+  advanceWave,
+  applyBoon,
+  applyEndlessConfigDraft,
+  buildWaveStage,
+  countLivingMobileUnits,
+  createRun,
+  defaultEndlessWaveSeconds,
+  endlessWaveSpawnProgress,
+  isBossWave,
+  sanitizeRun,
+  rollBoonChoices,
+  type EndlessRunState,
   getNextStage,
   getStageById,
   SoloBotController,
@@ -106,7 +118,10 @@ import { createBattleDamagePanel } from './ui/battleDamagePanel.js';
 import { createBattleResult } from './ui/battleResult.js';
 import { createCampaignProgressStore } from './campaign/progress.js';
 import { createCampaignPage } from './ui/campaignPage.js';
+import { createEndlessProgressStore } from './campaign/endlessProgress.js';
+import { createBoonPickPanel } from './ui/boonPickPanel.js';
 import { createStageHud } from './ui/stageHud.js';
+import { createEndlessStatsPanel } from './ui/endlessStatsPanel.js';
 import { shouldShowHandGuide } from './ui/handGuide.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
 import { createRejoinDialog } from './ui/rejoinDialog.js';
@@ -180,6 +195,10 @@ let selectedSoloDebugSpawn = false;
 let selectedStage: StageDef | null = null;
 /** 战役进度（本地存储）。 */
 const campaignProgress = createCampaignProgressStore();
+/** 无限防守存档（进行中的挑战 + 最佳成绩）。 */
+const endlessProgress = createEndlessProgressStore();
+/** 正在进行的无限防守挑战；非 null 时 selectedStage 是由它生成的波次关卡。 */
+let endlessRun: EndlessRunState | null = null;
 /** 房间会话跨 room/versus 复用；切屏时靠 keepRoomSession 避免误关 WS。 */
 let activeRoomSession: RoomSession | null = null;
 let joiningRoom: RoomConnecting | null = null;
@@ -355,17 +374,21 @@ const battleResult = createBattleResult(() => {
   // 战役局结算后回选关页；用后清空，防止下次普通人机误读
   if (selectedStage) {
     selectedStage = null;
+    endlessRun = null;
     screens.show('campaign');
     return;
   }
   screens.show('menu');
 });
 const stageHud = createStageHud();
+/** 无限防守的「本局叠加」面板，替代战役目标卡片。 */
+const endlessStats = createEndlessStatsPanel();
 const campaignPage = createCampaignPage({
   onBack: () => screens.show('menu'),
   onStartStage: (stageId) => {
     const stage = getStageById(stageId);
     if (!stage) return;
+    endlessRun = null;
     selectedStage = stage;
     selectedSoloDifficulty = 'hard';
     selectedSoloDebugSpawn = false;
@@ -375,7 +398,12 @@ const campaignPage = createCampaignPage({
   getProgress: () => campaignProgress.load(),
   // 开发服默认解锁全部战役，方便直接验证任意关卡
   unlockAllStages: IS_DEV_SERVER,
+  endless: {
+    getBestWave: () => endlessProgress.load().best?.bestWave ?? null,
+    onStart: () => openEndlessEntry(),
+  },
 });
+const boonPickPanel = createBoonPickPanel();
 const leaderboardPage = createLeaderboardPage({
   onBack: () => screens.show('menu'),
   loadLeaderboard: () => ensureAppLobbyPresence().listLeaderboard(),
@@ -855,9 +883,17 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleAnnounce.reset();
     // 战役只有一段常规阶段，常规阶段末尾也读 10 秒
     if (stageDef) {
-      battleAnnounce.setCountdownSeconds('normal', 10);
-      // 无基地关卡没有城堡可拆，去掉默认的「摧毁对方城堡」开场播报
-      if (stageDef.castles === false) battleAnnounce.setEnterText('normal', '');
+      // 无限防守没有时限：不读秒，开场只提示守住基地
+      if (isEndlessStage(stageDef)) {
+        battleAnnounce.setCountdownSeconds('normal', 0);
+        battleAnnounce.setEnterText('normal', '守住基地');
+      } else {
+        battleAnnounce.setCountdownSeconds('normal', 10);
+        // 无基地关卡没有城堡可拆，去掉默认的「摧毁对方城堡」开场播报
+        if (stageDef.castles === false) battleAnnounce.setEnterText('normal', '');
+        // 无限防守敌方没有主堡，开场改成守家提示
+        else if (stageDef.enemyCastles === false) battleAnnounce.setEnterText('normal', '守住基地');
+      }
     }
     battleHud.setContext({
       localFaction: Faction.Blue,
@@ -906,8 +942,35 @@ function enterBattleSession(mode: BattleMode): () => void {
     : soloBot
       ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
       : () => {};
+  /** 无限防守：顶部只显示波次与出兵进度，左侧显示本局叠加。 */
+  const endlessWaveInfo = stageDef && isEndlessStage(stageDef) && endlessRun
+    ? { wave: endlessRun.wave, boss: isBossWave(endlessRun.wave) }
+    : null;
+  /** 出兵结束时刻（秒），进度条推到它就满格；没有清场目标时为 0。 */
+  const endlessSpawnEndSeconds = stageDef
+    ? (stageDef.objectives.find((objective) => objective.kind === 'clear_wave')?.spawnEndSeconds ?? 0)
+    : 0;
+  battleHud.setEndlessMode(endlessWaveInfo);
+  /** 按当前 tick 刷新出兵进度与剩余敌人数。 */
+  const syncEndlessProgress = (): void => {
+    const match = loop.match;
+    if (!endlessWaveInfo || !match) return;
+    const elapsedSeconds = match.world.tick / TICK_RATE;
+    battleHud.updateEndlessProgress({
+      ratio: endlessWaveSpawnProgress(endlessSpawnEndSeconds, elapsedSeconds),
+      spawnDone: elapsedSeconds >= endlessSpawnEndSeconds,
+      remaining: countLivingMobileUnits(match, Faction.Red),
+    });
+  };
   if (stageDef) {
-    stageHud.start();
+    // 无限防守用「本局叠加」替代目标卡片，其余关卡仍看通关条件
+    if (endlessWaveInfo && endlessRun) {
+      stageHud.hide();
+      endlessStats.show(endlessRun);
+    } else {
+      endlessStats.hide();
+      stageHud.start();
+    }
     // 战役地图在 StageRunner 里才换上，场景要按新河桥/障碍重建一次
     if (stageDef.arena) sceneContext.rebuildArena();
     // 套完关卡规则与预置单位后重拍首帧快照
@@ -1293,7 +1356,13 @@ function enterBattleSession(mode: BattleMode): () => void {
     if (stageDef && loop.match) {
       // 重开必须重新套关卡规则/牌池/预置单位，并换新的目标判定器与脚本敌人
       stageRunner = new StageRunner(stageDef, loop.match);
-      stageHud.start();
+      if (endlessWaveInfo && endlessRun) {
+        stageHud.hide();
+        endlessStats.show(endlessRun);
+      } else {
+        endlessStats.hide();
+        stageHud.start();
+      }
       // 无基地关卡会在这里拆掉刚播种的主堡，必须重拍快照否则会闪一帧基地
       loop.curr = takeSnapshot(loop.world, loop.curr);
       loop.prev = takeSnapshot(loop.world, loop.prev);
@@ -1379,6 +1448,17 @@ function enterBattleSession(mode: BattleMode): () => void {
               onChange: (rules) => {
                 soloMatchRulesView = rules;
                 applyMatchRulesView(loop.match!, rules);
+              },
+            },
+            soloEndlessWaveSeconds: {
+              // 续玩时以挑战存档里的窗口为准，避免面板显示与当前波次不一致
+              initial: endlessRun?.waveSeconds ?? defaultEndlessWaveSeconds(),
+              // 无限关的出兵窗口跟着挑战存档走：改完同步进当前挑战，下一波生效
+              onChange: (seconds) => {
+                applyEndlessConfigDraft({ waveSeconds: seconds });
+                if (!endlessRun) return;
+                endlessRun = sanitizeRun({ ...endlessRun, waveSeconds: seconds });
+                endlessProgress.saveRun(endlessRun);
               },
             },
           }
@@ -1507,7 +1587,9 @@ function enterBattleSession(mode: BattleMode): () => void {
       battleAnnounce.tick(loop.match!);
       if (stageDef && stageRunner) {
         stageRunner.update();
-        stageHud.update(stageRunner.tracker.getProgress(loop.match!));
+        // 无限防守没有目标卡片，改刷顶部波次进度与剩余敌人数
+        if (endlessWaveInfo) syncEndlessProgress();
+        else stageHud.update(stageRunner.tracker.getProgress(loop.match!));
         const outcome = stageRunner.tracker.getOutcome();
         if (outcome && !resultShown) {
           // 先记下结果并开始计时，让最后一击的弹道与死亡动画演完再弹结算
@@ -1521,7 +1603,11 @@ function enterBattleSession(mode: BattleMode): () => void {
             resultShown = true;
             // 目标落定后冻结对局，避免结算面板出现后战场还在继续打
             loop.paused = true;
-            showStageResult(stageDef, pendingStageOutcome);
+            if (endlessRun && isEndlessStage(stageDef)) {
+              showEndlessWaveResult(endlessRun, pendingStageOutcome, loop.match!.getCastleHpRatio(Faction.Blue));
+            } else {
+              showStageResult(stageDef, pendingStageOutcome);
+            }
           }
         }
       } else if (loop.match!.result && !resultShown) {
@@ -1551,6 +1637,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     battleAnnounce.reset();
     battleResult.hide();
     stageHud.hide();
+    endlessStats.hide();
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-solo-debug');
     container.classList.remove('is-solo');
@@ -2592,6 +2679,86 @@ function showStageResult(def: StageDef, outcome: StageOutcome): void {
       selectedStage = def;
       screens.show('solo', { remount: true });
     },
+  });
+}
+
+/** 是否无限防守生成的波次关卡（id 以 endless_ 开头）。 */
+function isEndlessStage(def: StageDef): boolean {
+  return def.id.startsWith('endless_');
+}
+
+/** 按挑战状态生成当前波次并进入单机对局。 */
+function startEndlessWave(run: EndlessRunState): void {
+  endlessRun = run;
+  selectedStage = buildWaveStage(run);
+  selectedSoloDifficulty = 'hard';
+  selectedSoloDebugSpawn = false;
+  screens.show('solo', { remount: true });
+}
+
+/** 新开一次挑战：随机种子建档并立即存盘，中途退出也能续玩第 1 波。 */
+function startNewEndlessRun(): void {
+  const run = createRun(createBattleSeed());
+  endlessProgress.saveRun(run);
+  startEndlessWave(run);
+}
+
+/** 战役页点无限防守：有进行中的挑战先问继续还是重来。 */
+function openEndlessEntry(): void {
+  const saved = endlessProgress.load().run;
+  if (!saved) {
+    startNewEndlessRun();
+    return;
+  }
+  boonPickPanel.showEntry(
+    saved,
+    () => startEndlessWave(saved),
+    () => startNewEndlessRun(),
+    () => {},
+  );
+}
+
+/**
+ * 一波结束：守住则推进波次并弹三选一，选完存档开下一波；
+ * 主堡陷落则结束挑战、刷新最佳并展示结算。
+ */
+function showEndlessWaveResult(run: EndlessRunState, outcome: StageOutcome, hpRatio: number): void {
+  battleResult.setReturnLabel('返回战役');
+  // 弹层出现时收起局内叠加，避免两张卡片叠在左上角
+  endlessStats.hide();
+  if (outcome.status === 'success') {
+    sfx.play('result_win');
+    // 清场流没有固定波长，累计时长记本波实际用时
+    const advanced = advanceWave(run, hpRatio, outcome.seconds);
+    // Boss 波之后只给稀有强化
+    const choices = rollBoonChoices(advanced, isBossWave(run.wave));
+    const proceed = (next: EndlessRunState): void => {
+      endlessProgress.saveRun(next);
+      startEndlessWave(next);
+    };
+    if (choices.length === 0) {
+      proceed(advanced);
+      return;
+    }
+    boonPickPanel.showChoices(advanced, run.wave, choices, (boonId) => proceed(applyBoon(advanced, boonId)));
+    return;
+  }
+  const clearedWaves = run.wave - 1;
+  // run 记的是本波开局（即上一波守住时）的残血，正好作为同波数的比较依据
+  const improved = endlessProgress.finishRun(run, clearedWaves);
+  try {
+    playerProfile.recordStageChallenge({ stageId: 'endless', outcome: clearedWaves > 0 ? 'cleared' : 'failed' });
+    mainMenu.refreshProfile();
+  } catch (error) {
+    console.error('[account] 无限防守记录写入失败', error);
+  }
+  battleResult.showStage({
+    cleared: false,
+    seconds: outcome.seconds,
+    failText: `守住 ${clearedWaves} 波${improved ? '，刷新最佳纪录！' : ''}`,
+    hasNext: false,
+    onNext: () => {},
+    onRetry: () => startNewEndlessRun(),
   });
 }
 

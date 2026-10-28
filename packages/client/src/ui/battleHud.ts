@@ -23,6 +23,13 @@ export interface BattleHudHandle {
    * 战役里存在没有主堡的关卡，此时血条只有 0 / 0，必须整块收起。
    */
   setCastleBarsVisible(visible: boolean): void;
+  /**
+   * 切换无限防守模式：隐藏双方血条与对手手牌，中间只显示波次与出兵进度条。
+   * wave 为空表示退出该模式，恢复常规对局显示。
+   */
+  setEndlessMode(wave: { wave: number; boss: boolean } | null): void;
+  /** 每帧刷新出兵进度与剩余敌人数；无限模式下由调用方传入。 */
+  updateEndlessProgress(progress: { ratio: number; spawnDone: boolean; remaining: number }): void;
   /** 观战人数；0 人时隐藏。 */
   setSpectatorCount(count: number): void;
   /** 观战追帧提示。 */
@@ -80,6 +87,10 @@ export function createBattleHud(): BattleHudHandle {
   const phaseLabel = requiredElement<HTMLElement>('#battle-phase-label');
   const timerLabel = requiredElement<HTMLElement>('#battle-timer-label');
   const timer = requiredElement<HTMLElement>('#battle-timer');
+  const waveBar = requiredElement<HTMLElement>('#battle-wave-bar');
+  const waveTrack = requiredElement<HTMLElement>('#battle-wave-track');
+  const waveFill = requiredElement<HTMLElement>('#battle-wave-fill');
+  const waveEnemies = requiredElement<HTMLElement>('#battle-wave-enemies');
   const oppHand = requiredElement<HTMLElement>('#battle-opp-hand');
   const spectators = requiredElement<HTMLElement>('#battle-spectators');
   const catchup = requiredElement<HTMLElement>('#battle-catchup');
@@ -106,6 +117,12 @@ export function createBattleHud(): BattleHudHandle {
   const oppCastle: CastleHudCache = emptyCastleCache();
   const selfTeamCache: TeamTotalCache = emptyTeamCache();
   const oppTeamCache: TeamTotalCache = emptyTeamCache();
+  /** 无限模式下的波次信息；null 表示常规对局。 */
+  let endlessWave: { wave: number; boss: boolean } | null = null;
+  let lastWaveText = '';
+  let lastWaveFill = '';
+  let lastWaveEnemies = '';
+  let lastWaveDone = false;
 
   return {
     show: () => root.classList.remove('is-hidden'),
@@ -119,6 +136,53 @@ export function createBattleHud(): BattleHudHandle {
       timer.classList.remove('is-warning');
       spectators.classList.add('is-hidden');
       catchup.classList.add('is-hidden');
+      // 离开对局时清掉无限模式，避免下一场联机/回放还留着波次与进度条
+      endlessWave = null;
+      root.classList.remove('is-endless');
+      waveBar.classList.remove('is-boss');
+    },
+    setEndlessMode(wave) {
+      endlessWave = wave;
+      // 切换模式时强制下一次 update 重绘中栏，否则脏检查会留着旧文案
+      lastTick = -1;
+      lastDeadlineTick = -1;
+      lastPhase = '';
+      root.classList.toggle('is-endless', wave !== null);
+      waveBar.classList.toggle('is-boss', wave?.boss === true);
+      // 中栏文案在两种模式间切换，缓存必须清空，否则 writeText 会认为没变
+      lastPhaseText = '';
+      if (!wave) {
+        lastWaveText = '';
+        lastWaveFill = '';
+        lastWaveEnemies = '';
+        lastWaveDone = false;
+        return;
+      }
+      writeText(
+        phaseLabel,
+        `第 ${wave.wave} 波${wave.boss ? '（Boss）' : ''}`,
+        (value) => {
+          lastWaveText = value;
+        },
+        lastWaveText,
+      );
+    },
+    updateEndlessProgress(progress) {
+      if (!endlessWave) return;
+      const ratio = Math.min(1, Math.max(0, progress.ratio));
+      const width = `${Math.round(ratio * 100)}%`;
+      if (width !== lastWaveFill) {
+        lastWaveFill = width;
+        waveFill.style.width = width;
+      }
+      if (progress.spawnDone !== lastWaveDone) {
+        lastWaveDone = progress.spawnDone;
+        waveTrack.classList.toggle('is-done', progress.spawnDone);
+      }
+      const enemies = `剩余敌人 ${Math.max(0, progress.remaining | 0)}`;
+      writeText(waveEnemies, enemies, (value) => {
+        lastWaveEnemies = value;
+      }, lastWaveEnemies);
     },
     setSpectatorCount(count) {
       const n = Math.max(0, count | 0);
@@ -149,6 +213,9 @@ export function createBattleHud(): BattleHudHandle {
       lastTick = tick;
       lastDeadlineTick = deadline;
       lastPhase = match.phase;
+
+      // 无限防守不显示双方信息：波次与出兵进度由 setEndlessMode / updateEndlessProgress 维护
+      if (endlessWave) return;
 
       const local = context.localFaction;
       const localSlot = context.localSlot ?? local;
@@ -191,6 +258,9 @@ export function createBattleHud(): BattleHudHandle {
       root.classList.toggle('is-2v2', showTeamTotal);
       syncTeamTotal(selfTeamTotal, selfTeamHp, selfTeamBar, local, showTeamTotal, match, selfTeamCache);
       syncTeamTotal(oppTeamTotal, oppTeamHp, oppTeamBar, opp, showTeamTotal, match, oppTeamCache);
+
+      // 无限防守隐藏了双方血条与对手手牌：波次与出兵进度由 setEndlessMode / updateEndlessProgress 维护
+      if (endlessWave) return;
 
       const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
       writeText(phaseLabel, phaseText, (value) => {

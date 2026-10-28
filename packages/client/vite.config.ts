@@ -24,6 +24,8 @@ const arena2v2JsonPath = path.resolve(clientDir, '../sim/src/config/arena2v2.jso
 const patchNotesJsonPath = path.resolve(clientDir, 'src/data/patchNotes.json');
 /** monorepo 内对局节奏配置的唯一落盘路径 */
 const matchRulesJsonPath = path.resolve(clientDir, '../sim/src/config/matchRules.json');
+/** monorepo 内无限防守出兵窗口配置的唯一落盘路径 */
+const endlessJsonPath = path.resolve(clientDir, '../sim/src/config/endless.json');
 
 /** 开发服务器：GET 读盘最新 units.json，POST 覆盖写回。 */
 function unitConfigWritePlugin(): Plugin {
@@ -326,6 +328,63 @@ function matchRulesWritePlugin(): Plugin {
   };
 }
 
+/** 开发服务器：GET 读盘最新 endless.json，POST 覆盖写回。 */
+function endlessConfigWritePlugin(): Plugin {
+  return {
+    name: 'pb-endless-config-write',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__pb/endless-config') {
+          next();
+          return;
+        }
+        if (req.method === 'GET') {
+          try {
+            const text = fs.readFileSync(endlessJsonPath, 'utf8');
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              sendJson(res, 500, { error: 'endless.json is not valid JSON' });
+              return;
+            }
+            sendJson(res, 200, parsed);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          }
+          return;
+        }
+        if (req.method !== 'POST') {
+          next();
+          return;
+        }
+        readRequestBody(req)
+          .then((raw) => {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              sendJson(res, 400, { error: 'invalid JSON' });
+              return;
+            }
+            const validationError = validateEndlessConfigBody(parsed);
+            if (validationError) {
+              sendJson(res, 400, { error: validationError });
+              return;
+            }
+            fs.writeFileSync(endlessJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            sendJson(res, 500, { error: message });
+          });
+      });
+    },
+  };
+}
+
 /** 写盘前做结构校验，避免把残缺场景配置写进 arena.json。 */
 function validateArenaConfigBody(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
@@ -383,6 +442,26 @@ function validateMatchRulesBody(value: unknown): string | undefined {
   // 万能牌开关允许缺省（旧文件），存在则必须是布尔值
   if (rec.wildCardsEnabled !== undefined && typeof rec.wildCardsEnabled !== 'boolean') {
     return 'wildCardsEnabled must be a boolean';
+  }
+  return undefined;
+}
+
+/**
+ * 写盘前确认出兵窗口合法。
+ * 这里手写一份区间而不是复用 sim 的校验：vite 配置加载器不认 endlessConfig 里的 JSON 导入。
+ */
+const ENDLESS_WAVE_SECONDS_MIN = 30;
+const ENDLESS_WAVE_SECONDS_MAX = 600;
+
+function validateEndlessConfigBody(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
+  const rec = value as Record<string, unknown>;
+  const seconds = rec.waveSeconds;
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return 'waveSeconds must be a finite number';
+  }
+  if (seconds < ENDLESS_WAVE_SECONDS_MIN || seconds > ENDLESS_WAVE_SECONDS_MAX) {
+    return `waveSeconds must be between ${ENDLESS_WAVE_SECONDS_MIN} and ${ENDLESS_WAVE_SECONDS_MAX}`;
   }
   return undefined;
 }
@@ -489,6 +568,7 @@ export default defineConfig({
     arenaConfigWritePlugin(),
     patchNotesWritePlugin(),
     matchRulesWritePlugin(),
+    endlessConfigWritePlugin(),
     sfxWritePlugin(),
   ],
   // 开发服：host: true 监听所有网卡，局域网可访问；开放配置写回等调试能力

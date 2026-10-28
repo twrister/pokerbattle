@@ -155,9 +155,9 @@ describe('战役选关页', () => {
     expect(ys[1]!).toBeGreaterThan(ys[2]!);
     expect(Number(map.style.getPropertyValue('--map-h'))).toBeGreaterThan(ys[0]!);
 
-    // 已解锁段与锁定段各一组路肩 + 路面
-    expect(map.querySelectorAll('svg.campaign-road path.is-open')).toHaveLength(2);
-    expect(map.querySelectorAll('svg.campaign-road path.is-locked')).toHaveLength(2);
+    // 已解锁段与锁定段各一条路径
+    expect(map.querySelectorAll('svg.campaign-road path.is-open')).toHaveLength(1);
+    expect(map.querySelectorAll('svg.campaign-road path.is-locked')).toHaveLength(1);
     expect(map.querySelector('svg.campaign-road path')!.getAttribute('d')).toMatch(/^M /);
   });
 
@@ -172,6 +172,31 @@ describe('战役选关页', () => {
     page.dispose();
     document.querySelector<HTMLButtonElement>('#btn-campaign-back')!.click();
     expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('无限防守节点跟在最后一关之后，最后一关通关才解锁', () => {
+    const onStart = vi.fn();
+    let progress = emptyProgress();
+    const page = createCampaignPage({
+      onBack: vi.fn(),
+      onStartStage: vi.fn(),
+      getStages: () => stages,
+      getProgress: () => progress,
+      endless: { getBestWave: () => 7, onStart },
+    });
+    page.show();
+    let endless = document.querySelector<HTMLButtonElement>('.campaign-endless')!;
+    expect(endless.disabled).toBe(true);
+    // 大城堡让给无限防守节点
+    expect(document.querySelectorAll('.campaign-stage.is-boss')).toHaveLength(1);
+
+    for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
+    page.show();
+    endless = document.querySelector<HTMLButtonElement>('.campaign-endless')!;
+    expect(endless.disabled).toBe(false);
+    expect(endless.textContent).toContain('最佳 7 波');
+    endless.click();
+    expect(onStart).toHaveBeenCalledTimes(1);
   });
 });
 

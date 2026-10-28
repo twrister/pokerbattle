@@ -30,6 +30,14 @@ export type CardRank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10
 export const WILD_CARD_RANK = 'WILD';
 /** 开启万能牌时追加的固定 id；回放与出牌指令靠它还原牌面。 */
 export const WILD_CARD_IDS: readonly string[] = ['wild-1', 'wild-2'];
+/** 单副牌最多可追加的万能牌张数（无限防守强化可叠到这里）。 */
+export const MAX_WILD_CARDS = 4;
+
+/** 前 count 张万能牌的稳定 id：wild-1..wild-N，夹到 0～MAX_WILD_CARDS。 */
+export function wildCardIds(count: number): string[] {
+  const clamped = Math.max(0, Math.min(MAX_WILD_CARDS, Math.floor(count)));
+  return Array.from({ length: clamped }, (_, index) => `wild-${index + 1}`);
+}
 
 /** 纯逻辑牌面；贴图路径由客户端按 rank/suit 推导，避免 sim 依赖资源。 */
 export interface PlayingCard {
@@ -49,8 +57,10 @@ export function isWildCard(card: PlayingCard): boolean {
 
 /** 建牌堆选项；默认维持 54 张，只有对局开关打开时才追加万能牌。 */
 export interface PokerDeckOptions {
-  /** 是否在 54 张基础上追加 2 张万能牌。 */
+  /** 是否在 54 张基础上追加万能牌（缺省 2 张）。 */
   wildCards?: boolean;
+  /** 开启万能牌时追加的张数，缺省 2，最多 MAX_WILD_CARDS。 */
+  wildCount?: number;
 }
 
 /** 堆中一张牌的等待与冷却，仅牌堆内部使用。 */
@@ -121,13 +131,13 @@ export function createPokerCards(options: PokerDeckOptions = {}): PlayingCard[] 
       label: '大王',
     },
   );
-  if (options.wildCards) cards.push(...createWildCards());
+  if (options.wildCards) cards.push(...createWildCards(options.wildCount ?? WILD_CARD_IDS.length));
   return cards;
 }
 
-/** 万能牌固定两张，id 稳定以支持出牌指令与回放还原。 */
-function createWildCards(): PlayingCard[] {
-  return WILD_CARD_IDS.map((id) => ({
+/** 生成 count 张万能牌，id 稳定以支持出牌指令与回放还原。 */
+function createWildCards(count: number): PlayingCard[] {
+  return wildCardIds(count).map((id) => ({
     id,
     rank: WILD_CARD_RANK,
     label: '万能牌',
@@ -145,7 +155,7 @@ export function getPokerCardById(cardId: string): PlayingCard | undefined {
  * 始终收录万能牌：开关关闭时它们不会进牌堆，但历史指令/回放仍需要一个牌面。
  */
 const STANDARD_DECK_BY_ID = new Map(
-  createPokerCards({ wildCards: true }).map((card) => [card.id, card]),
+  createPokerCards({ wildCards: true, wildCount: MAX_WILD_CARDS }).map((card) => [card.id, card]),
 );
 
 /** 按牌力从大到小排序，同点数以黑桃、红桃、梅花、方片稳定排列。 */

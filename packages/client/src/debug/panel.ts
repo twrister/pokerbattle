@@ -17,6 +17,11 @@ import {
   type MatchRulesView,
 } from './matchRulesView.js';
 import { saveRuntimeDefaults } from './runtimeDefaults.js';
+import {
+  clampEndlessWaveSeconds,
+  persistEndlessConfigToFile,
+  sanitizeEndlessConfigView,
+} from './endlessConfigView.js';
 
 /** 可切换的倍速档位 */
 const SPEED_STEPS = [1, 2, 4, 0.25, 0.5];
@@ -72,6 +77,11 @@ export interface PanelOptions {
   soloMatchRules?: {
     initial?: MatchRulesView;
     onChange: (rules: MatchRulesView) => void;
+  };
+  /** 无限防守出兵窗口；传入后可在运行时调整，下一波生效。 */
+  soloEndlessWaveSeconds?: {
+    initial: number;
+    onChange: (seconds: number) => void;
   };
 }
 
@@ -142,6 +152,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
   const doubleSpeedHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-double');
   const finalHandLimitInput = required<HTMLInputElement>('#solo-hand-limit-final');
   const wildCardsEnabledInput = required<HTMLInputElement>('#solo-wild-cards-enabled');
+  const endlessWaveSecondsInput = required<HTMLInputElement>('#solo-endless-wave-seconds');
   const matchRuleInputs = [
     initialHandSizeInput,
     normalPhaseDurationInput,
@@ -347,6 +358,20 @@ export function createPanel(options: PanelOptions): PanelHandle {
     });
   };
 
+  /** 读取无限防守出兵窗口；非法返回 null，避免半成品写进运行时。 */
+  const readEndlessWaveSeconds = (): number | null => {
+    const seconds = Number(endlessWaveSecondsInput.value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    return clampEndlessWaveSeconds(seconds);
+  };
+
+  /** 校验数字框后再写回运行时，下一波生效。 */
+  const onEndlessWaveSecondsInput = (): void => {
+    const seconds = readEndlessWaveSeconds();
+    if (seconds === null) return;
+    options.soloEndlessWaveSeconds?.onChange(seconds);
+  };
+
   /** 校验数字框后再写回当前局，避免编辑中的空值把计时器改成无效状态。 */
   const onMatchRulesInput = (): void => {
     const rules = readMatchRules();
@@ -354,7 +379,7 @@ export function createPanel(options: PanelOptions): PanelHandle {
     options.soloMatchRules?.onChange(rules);
   };
 
-  /** 镜头仍写 localStorage；对局节奏走开发服写回 matchRules.json。 */
+  /** 镜头仍写 localStorage；对局节奏与无限出兵窗口走开发服写回 JSON。 */
   const onSaveDefaults = (): void => {
     const cameraAngle = Number(cameraAngleInput.value);
     const viewBottomExtra = Number(bottomExtraInput.value);
@@ -364,13 +389,20 @@ export function createPanel(options: PanelOptions): PanelHandle {
     const matchRules = options.soloMatchRules ? readMatchRules() : undefined;
     // 节奏控件半成品时不落盘，避免把非法时长写成默认
     if (options.soloMatchRules && !matchRules) return;
+    const waveSeconds = options.soloEndlessWaveSeconds ? readEndlessWaveSeconds() : undefined;
+    if (options.soloEndlessWaveSeconds && waveSeconds === null) return;
     saveRuntimeDefaults({ cameraAngle, viewBottomExtra });
-    if (!matchRules) {
+    if (!matchRules && waveSeconds === undefined) {
       flashSaveDefaults('已保存');
       return;
     }
-    void persistMatchRulesToFile(matchRules).then((result) => {
-      flashSaveDefaults(result.ok ? '已写回' : '未写回');
+    const writes: Array<Promise<{ ok: boolean }>> = [];
+    if (matchRules) writes.push(persistMatchRulesToFile(matchRules));
+    if (waveSeconds != null) {
+      writes.push(persistEndlessConfigToFile(sanitizeEndlessConfigView({ waveSeconds })));
+    }
+    void Promise.all(writes).then((results) => {
+      flashSaveDefaults(results.every((result) => result.ok) ? '已写回' : '未写回');
     });
   };
 
@@ -429,7 +461,16 @@ export function createPanel(options: PanelOptions): PanelHandle {
       // 复选框在部分浏览器只派发 change，单独挂一次保证勾选立刻生效
       wildCardsEnabledInput.addEventListener('change', onMatchRulesInput);
     }
-    if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
+    if (options.soloEndlessWaveSeconds) {
+      endlessWaveSecondsInput.value = String(options.soloEndlessWaveSeconds.initial);
+      endlessWaveSecondsInput.addEventListener('input', onEndlessWaveSecondsInput);
+    }
+    if (
+      options.soloCameraAngle
+      || options.soloViewBottomExtra
+      || options.soloMatchRules
+      || options.soloEndlessWaveSeconds
+    ) {
       saveDefaultsButton.addEventListener('click', onSaveDefaults);
     }
   }
@@ -508,7 +549,15 @@ export function createPanel(options: PanelOptions): PanelHandle {
           }
           wildCardsEnabledInput.removeEventListener('change', onMatchRulesInput);
         }
-        if (options.soloCameraAngle || options.soloViewBottomExtra || options.soloMatchRules) {
+        if (options.soloEndlessWaveSeconds) {
+          endlessWaveSecondsInput.removeEventListener('input', onEndlessWaveSecondsInput);
+        }
+        if (
+          options.soloCameraAngle
+          || options.soloViewBottomExtra
+          || options.soloMatchRules
+          || options.soloEndlessWaveSeconds
+        ) {
           saveDefaultsButton.removeEventListener('click', onSaveDefaults);
         }
         window.clearTimeout(saveDefaultsTimer);

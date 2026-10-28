@@ -19,6 +19,12 @@ export type StageObjective =
   | { kind: 'play_any' }
   /** 清光敌方全部可移动单位（建筑不算）。 */
   | { kind: 'clear_enemy_units' }
+  /**
+   * 清掉这一波：出兵窗口结束且敌方不再有可移动单位。
+   * 无限防守用它替代「撑满时长」，一波打完才进下一波。
+   * spawnEndSeconds 是敌方脚本最后一次出兵的时间点（秒）。
+   */
+  | { kind: 'clear_wave'; spawnEndSeconds: number }
   /** 限制条件：整局出牌不超过 N 手，第 N+1 手打出即失败。 */
   | { kind: 'max_plays'; count: number }
   /** 击杀指定兵种：场上该兵种的敌方单位全部阵亡（开局就没有视为未达成）。 */
@@ -101,6 +107,13 @@ export interface StageDef {
    * false 用于「无基地」关卡：对局不会自动收局，通关全看关卡目标。
    */
   castles?: boolean;
+  /**
+   * 是否保留敌方主堡，缺省 true。
+   * false 用于无限防守：敌方只进攻不守家，己方主堡照常参与陷落判定。
+   */
+  enemyCastles?: boolean;
+  /** 玩家牌堆万能牌张数（需 rules.wildCardsEnabled 为 true），缺省 2。 */
+  wildCount?: number;
   /**
    * 是否周期性补牌，缺省 true。
    * false 时整局只发开局那一手牌，教学关借此强制玩家用固定手牌解题。

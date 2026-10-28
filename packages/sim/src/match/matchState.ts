@@ -6,7 +6,9 @@ import {
   HAND_LIMIT_FINAL,
   HAND_LIMIT_NORMAL,
   INITIAL_HAND_SIZE,
+  MAX_WILD_CARDS,
   PokerDeck,
+  WILD_CARD_IDS,
   type PlayingCard,
 } from '../cards/deck.js';
 import { detectHandCategories } from '../cards/handCategory.js';
@@ -145,6 +147,8 @@ export class MatchState {
   private readonly pendingDraw: boolean[];
   /** 本局牌堆是否含万能牌；重开时据此重建牌面。 */
   private wildCardsEnabled = false;
+  /** 开启万能牌时的张数；默认 2，无限防守强化可加到 MAX_WILD_CARDS。 */
+  private wildCardCount = WILD_CARD_IDS.length;
   /**
    * 是否允许周期补牌，缺省 true。
    * 教学关关掉后只发开局手牌，重开（clear）必须保持关闭，故不做复位。
@@ -183,7 +187,21 @@ export class MatchState {
 
   /** 按本局开关生成牌面；万能牌开启时为 56 张。 */
   private createDeckCards(): PlayingCard[] {
-    return createPokerCards({ wildCards: this.wildCardsEnabled });
+    return createPokerCards({ wildCards: this.wildCardsEnabled, wildCount: this.wildCardCount });
+  }
+
+  /**
+   * 设置万能牌张数（无限防守强化用，缺省 2）。
+   * 与 setWildCardsEnabled 一样只在未开打时重洗重发，保证确定性。
+   */
+  setWildCardCount(count: number): void {
+    const next = Math.max(0, Math.min(MAX_WILD_CARDS, Math.floor(count)));
+    if (this.wildCardCount === next) return;
+    this.wildCardCount = next;
+    if (this.world.tick !== 0 || this.result) return;
+    const cards = this.createDeckCards();
+    for (const slot of allSlots(this.mode)) this.decks[slot]!.reset(cards);
+    this.dealStartingHands();
   }
 
   /**
@@ -271,7 +289,20 @@ export class MatchState {
    * 既不判胜负也不切阶段，通关完全交给关卡目标。
    */
   clearStartingCastles(): void {
-    for (const slot of allSlots(this.mode)) {
+    this.clearCastlesOf(allSlots(this.mode));
+  }
+
+  /**
+   * 只拆掉某一方的主堡（无限防守：敌方只进攻、不守家）。
+   * 该方视为「没有主堡」而非「主堡陷落」，对局照常由另一方主堡与时间收局。
+   */
+  clearFactionCastles(faction: Faction): void {
+    this.clearCastlesOf(teamSlots(faction, this.mode));
+  }
+
+  /** 拆掉给定席位的主堡并清席位记录，最后统一清尸释放占格。 */
+  private clearCastlesOf(slots: readonly number[]): void {
+    for (const slot of slots) {
       const castle = this.findSlotCastle(slot);
       if (castle) {
         castle.hp = 0;
@@ -421,6 +452,7 @@ export class MatchState {
     h = mix(h, this.finalHandLimit);
     // 万能牌开关决定牌堆张数，两端读不同配置时必须能立刻对账出差异
     h = mix(h, this.wildCardsEnabled ? 1 : 0);
+    h = mix(h, this.wildCardCount);
     // 补牌开关决定手牌是否还会增长，同样影响两端一致性
     h = mix(h, this.periodicDrawEnabled ? 1 : 0);
     return h >>> 0;
@@ -527,6 +559,12 @@ export class MatchState {
       total += this.getSlotCastleMaxHp(slot);
     }
     return total;
+  }
+
+  /** 队伍主堡剩余血量比例（0~1）；没有主堡时为 0，供无限防守继承残血。 */
+  getCastleHpRatio(faction: Faction): number {
+    const max = this.getCastleMaxHp(faction);
+    return max > 0 ? Math.max(0, this.getCastleHp(faction)) / max : 0;
   }
 
   /** 主堡保护触发线（显示血量），按该席主堡最大生命的一半计算。 */
@@ -681,8 +719,9 @@ export class MatchState {
   private updateMatchState(): void {
     // 沙盒/确定性测试可复用 MatchState 而不播种主堡，此时不启用对局结算。
     if (this.castleIds.every((id) => id === null)) return;
-    const blueAlive = this.teamHasLivingCastle(Faction.Blue);
-    const redAlive = this.teamHasLivingCastle(Faction.Red);
+    // 被 clearFactionCastles 拆掉主堡的一方不参与「陷落」判定
+    const blueAlive = !this.teamHasSeededCastle(Faction.Blue) || this.teamHasLivingCastle(Faction.Blue);
+    const redAlive = !this.teamHasSeededCastle(Faction.Red) || this.teamHasLivingCastle(Faction.Red);
     if (!blueAlive || !redAlive) {
       if (!blueAlive && !redAlive) {
         this.finish(null, 'simultaneous_destroyed');
@@ -877,6 +916,11 @@ export class MatchState {
     if (this.phase === 'final') return 3;
     if (this.phase === 'settlement') return 4;
     return 5;
+  }
+
+  /** 该队是否播种过主堡；被整队拆除（无限防守敌方）时为 false。 */
+  private teamHasSeededCastle(faction: Faction): boolean {
+    return teamSlots(faction, this.mode).some((slot) => this.castleIds[slot] != null);
   }
 
   /**
