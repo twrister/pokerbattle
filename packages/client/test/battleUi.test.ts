@@ -152,7 +152,8 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-self-hp')?.textContent).toBe('5000 / 5000');
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
     expect(document.querySelector('#battle-timer-label')?.textContent).toBe('剩余时间：');
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('8:00');
+    // 默认节奏 120+120+120 秒三段发牌，HUD 倒计时指向停发牌结算起点
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('6:00');
     expect(document.querySelector('#battle-opp-hand')?.textContent).toBe(
       `${match.decks[Faction.Red].hand.length} / ${match.getMaxHandSizeForSlot(Faction.Red)}`,
     );
@@ -213,7 +214,7 @@ describe('对局 HUD 与结算弹窗', () => {
       opponentName: 'B',
     });
     hud.update(match);
-    expect(document.querySelector('#battle-timer')?.textContent).toBe('8:00');
+    expect(document.querySelector('#battle-timer')?.textContent).toBe('6:00');
 
     match.setPhaseDurations({
       normalTicks: TICK_RATE * 30,

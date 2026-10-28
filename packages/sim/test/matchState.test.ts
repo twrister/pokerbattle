@@ -49,11 +49,11 @@ describe('MatchState.clear', () => {
 });
 
 describe('MatchState 对局规则', () => {
-  it('默认时间线为 2+3+3 分钟发牌再加 1 分钟结算', () => {
+  it('默认时间线为 2+2+2 分钟发牌再加 1 分钟结算', () => {
     expect(DOUBLE_SPEED_START_TICKS).toBe(TICK_RATE * 120);
-    expect(FINAL_START_TICKS).toBe(TICK_RATE * 300);
-    expect(SETTLEMENT_START_TICKS).toBe(TICK_RATE * 480);
-    expect(MATCH_END_TICKS).toBe(TICK_RATE * 540);
+    expect(FINAL_START_TICKS).toBe(TICK_RATE * 240);
+    expect(SETTLEMENT_START_TICKS).toBe(TICK_RATE * 360);
+    expect(MATCH_END_TICKS).toBe(TICK_RATE * 420);
   });
 
   it('切阶段继承下一张牌倒计时，且不在倍速结束时结算', () => {
@@ -257,7 +257,7 @@ describe('MatchState 对局规则', () => {
     expect(match.hasPendingDraw(Faction.Blue)).toBe(false);
   });
 
-  it('决胜期全员空手且无法改写胜负时提前结束', () => {
+  it('决胜期全员空手且场上无兵时截断决胜剩余并进入结算', () => {
     const match = createMatch();
     shortenPhases(match);
     stepTo(match, 60);
@@ -266,6 +266,11 @@ describe('MatchState 对局规则', () => {
     emptyHands(match);
     match.step();
 
+    // 截断只跳过决胜剩余，结算仍要完整走一遍
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+
+    stepTo(match, 91);
     expect(match.phase).toBe('ended');
     expect(match.result).toMatchObject({ winner: null, reason: 'time_limit' });
   });
@@ -292,19 +297,32 @@ describe('MatchState 对局规则', () => {
     expect(match.phase).toBe('final');
   });
 
-  it('结算期落后方空手且场上伤害不够追平时提前按血量结束', () => {
+  it('结算阶段必须走满配置时长，不会因落后方空手被跳过', () => {
     const match = createMatch();
     shortenPhases(match);
+    // 落后方手牌打空、场上没有可移动单位，是最容易触发提前收局的组合
     castle(match, Faction.Red).hp -= 1;
     stepTo(match, 60);
+    expect(match.phase).toBe('final');
+
+    // 决胜期空手会截断决胜剩余，结算从这一点开始，之后必须走满 30 tick
     emptyHands(match);
     match.step();
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+    const enteredAt = match.world.tick;
 
+    // 结算期内持续空转也不允许中途收局
+    for (let i = 0; i < 29; i += 1) match.step();
+    expect(match.phase).toBe('settlement');
+    expect(match.result).toBeNull();
+    expect(match.world.tick).toBe(enteredAt + 29);
+
+    match.step();
     expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
-    expect(match.getTicksUntilDraw()).toBe(0);
   });
 
-  it('结算期仍有手牌时即使血量落后也不提前结束', () => {
+  it('结算期全程停发，读条保持 0', () => {
     const match = createMatch();
     shortenPhases(match);
     castle(match, Faction.Red).hp -= 1;
@@ -313,48 +331,10 @@ describe('MatchState 对局规则', () => {
     expect(match.phase).toBe('settlement');
     expect(match.result).toBeNull();
     expect(match.decks[Faction.Red].hand.length).toBeGreaterThan(0);
+    expect(match.getTicksUntilDraw()).toBe(0);
+    expect(match.hasPendingDraw(Faction.Red)).toBe(false);
 
     stepTo(match, 100);
-    expect(match.phase).toBe('settlement');
-    expect(match.result).toBeNull();
-  });
-
-  it('结算期落后方场上伤害上限仍够追平时不提前结束', () => {
-    const match = createMatch();
-    shortenPhases(match);
-    stepTo(match, 90);
-    expect(match.phase).toBe('settlement');
-
-    emptyHands(match);
-    castle(match, Faction.Red).hp -= fromFloat(50);
-    match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
-    match.step();
-
-    expect(match.phase).toBe('settlement');
-    expect(match.result).toBeNull();
-  });
-
-  it('结算期落后方场上伤害上限不够追平时提前结束', () => {
-    const match = createMatch();
-    shortenPhases(match);
-    stepTo(match, 90);
-    emptyHands(match);
-    castle(match, Faction.Red).hp -= fromFloat(2000);
-    match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(9), fromFloat(10));
-    match.step();
-
-    expect(match.result).toMatchObject({ winner: Faction.Blue, reason: 'time_limit' });
-  });
-
-  it('结算期有待领保护包时不提前结束', () => {
-    const match = createMatch();
-    shortenPhases(match);
-    castle(match, Faction.Red).hp -= fromFloat(2000);
-    stepTo(match, 90);
-    emptyHands(match);
-    expect(match.debugDropCastlePack(Faction.Red)).toBe(true);
-    match.step();
-
     expect(match.phase).toBe('settlement');
     expect(match.result).toBeNull();
   });

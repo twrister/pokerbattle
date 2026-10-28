@@ -86,11 +86,12 @@ const DRAFT_KEYS = [
   'finalHandLimit',
 ] as const satisfies ReadonlyArray<keyof MatchRulesDraft>;
 
+/** 文件快照不可用时回落；须与 matchRules.json 保持同一套节奏，避免两处漂移。 */
 const fallbackDraft: MatchRulesDraft = {
   initialHandSize: INITIAL_HAND_SIZE,
   normalPhaseSeconds: 120,
-  doubleSpeedPhaseSeconds: 180,
-  finalPhaseSeconds: 180,
+  doubleSpeedPhaseSeconds: 120,
+  finalPhaseSeconds: 120,
   settlementPhaseSeconds: 60,
   finalUnitTimeScale: DEFAULT_FINAL_UNIT_TIME_SCALE,
   normalDrawIntervalSeconds: 5,
