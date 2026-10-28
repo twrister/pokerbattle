@@ -74,6 +74,58 @@ export interface GameServerStatus {
   players?: OpsPlayerRecord[];
 }
 
+/** 游戏服运营时序接口 /ops/metrics 中的小时点。 */
+export interface OpsHourlyPoint {
+  hourStart: number;
+  label: string;
+  avgOnline: number;
+  peakOnline: number;
+}
+
+/** 游戏服运营时序接口 /ops/metrics 中的日点。 */
+export interface OpsDailyPoint {
+  day: string;
+  label: string;
+  dau: number;
+  peakOnline: number;
+  matches: number;
+  avgMatchDurationMs: number | null;
+  newPlayers: number;
+}
+
+/** 游戏服 /ops/metrics 成功响应，字段与 @pb/server opsTypes 对齐。 */
+export interface OpsMetricsPayload {
+  ok: true;
+  generatedAt: number;
+  timeZone: string;
+  sampleIntervalMs: number;
+  hourlyRetentionHours: number;
+  dailyRetentionDays: number;
+  current: {
+    onlineDevices: number;
+    anonymousConnections: number;
+    connections: number;
+    lobby: number;
+    solo: number;
+    room: number;
+    sampledAt: number | null;
+  };
+  today: {
+    day: string;
+    dau: number;
+    peakOnline: number;
+    matches: number;
+    avgMatchDurationMs: number | null;
+  };
+  totals: {
+    totalPlayers: number;
+    totalMatches: number;
+    newPlayersToday: number;
+  };
+  daily: OpsDailyPoint[];
+  hourly: OpsHourlyPoint[];
+}
+
 /** 运维托管的游戏服进程状态。 */
 export type ManagedProcessState =
   | 'stopped'

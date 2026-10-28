@@ -1,4 +1,11 @@
-import type { GameServerStatus, OpsFeedbackRecord, OpsPlayerRecord } from './types.js';
+import type {
+  GameServerStatus,
+  OpsDailyPoint,
+  OpsFeedbackRecord,
+  OpsHourlyPoint,
+  OpsMetricsPayload,
+  OpsPlayerRecord,
+} from './types.js';
 
 export interface FetchGameStatusResult {
   reachable: boolean;
@@ -23,6 +30,12 @@ export interface ClearGamePlayersResult {
   cleared: number;
   playerId?: string;
   status: number;
+  error: string | null;
+}
+
+export interface FetchGameMetricsResult {
+  reachable: boolean;
+  metrics: OpsMetricsPayload | null;
   error: string | null;
 }
 
@@ -154,6 +167,58 @@ export async function fetchGameFeedback(
 }
 
 /**
+ * 拉取运营时序数据；旧游戏服没有该接口时给出明确可操作的提示。
+ * 与 /api/feedback 同风格：失败也归一化为 reachable=false，不抛到 HTTP 层。
+ */
+export async function fetchGameMetrics(
+  baseUrl: string,
+  timeoutMs = 3000,
+): Promise<FetchGameMetricsResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/ops/metrics`, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (response.status === 404) {
+      return {
+        reachable: false,
+        metrics: null,
+        error: '游戏服版本较旧，未提供运营数据接口（重启游戏服后可用）',
+      };
+    }
+    if (!response.ok) {
+      return {
+        reachable: false,
+        metrics: null,
+        error: `游戏服运营数据接口返回 HTTP ${response.status}`,
+      };
+    }
+    const data = (await response.json()) as Partial<OpsMetricsPayload> | null;
+    if (!data || data.ok !== true) {
+      return { reachable: false, metrics: null, error: '游戏服运营数据载荷无效' };
+    }
+    const metrics = sanitizeMetrics(data);
+    if (!metrics) {
+      return { reachable: false, metrics: null, error: '游戏服运营数据载荷无效' };
+    }
+    return { reachable: true, metrics, error: null };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === 'AbortError'
+          ? '拉取游戏服运营数据超时'
+          : error.message
+        : '拉取游戏服运营数据失败';
+    return { reachable: false, metrics: null, error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * 转发清空玩家档案；不传 playerId 则清全部。
  * 游戏服不可达或超时归一化为 502，不抛到 HTTP 层。
  */
@@ -268,4 +333,105 @@ function sanitizeFeedback(rows: unknown[]): OpsFeedbackRecord[] {
 function sanitizeLocation(value: unknown): OpsPlayerRecord['location'] {
   if (value === 'room' || value === 'offline' || value === 'solo') return value;
   return 'lobby';
+}
+
+/**
+ * 逐层清洗运营载荷：坏行丢弃、非有限数归 0、数组排序。
+ * 单条坏数据不该让整页图表空白，因此这里不整包失败。
+ */
+function sanitizeMetrics(raw: Partial<OpsMetricsPayload>): OpsMetricsPayload | null {
+  const daily = Array.isArray(raw.daily)
+    ? raw.daily
+        .map(sanitizeDailyPoint)
+        .filter((point): point is OpsDailyPoint => point !== null)
+        .sort((a, b) => a.day.localeCompare(b.day))
+    : [];
+  const hourly = Array.isArray(raw.hourly)
+    ? raw.hourly
+        .map(sanitizeHourlyPoint)
+        .filter((point): point is OpsHourlyPoint => point !== null)
+        .sort((a, b) => a.hourStart - b.hourStart)
+    : [];
+  const current: Record<string, unknown> = isRecord(raw.current) ? raw.current : {};
+  const today: Record<string, unknown> = isRecord(raw.today) ? raw.today : {};
+  const totals: Record<string, unknown> = isRecord(raw.totals) ? raw.totals : {};
+
+  return {
+    ok: true,
+    generatedAt: readNumber(raw.generatedAt),
+    timeZone: typeof raw.timeZone === 'string' && raw.timeZone.trim() ? raw.timeZone : 'Asia/Shanghai',
+    sampleIntervalMs: readNumber(raw.sampleIntervalMs),
+    hourlyRetentionHours: readNumber(raw.hourlyRetentionHours),
+    dailyRetentionDays: readNumber(raw.dailyRetentionDays),
+    current: {
+      onlineDevices: readNumber(current.onlineDevices),
+      anonymousConnections: readNumber(current.anonymousConnections),
+      connections: readNumber(current.connections),
+      lobby: readNumber(current.lobby),
+      solo: readNumber(current.solo),
+      room: readNumber(current.room),
+      sampledAt: readNullableNumber(current.sampledAt),
+    },
+    today: {
+      day: readString(today.day),
+      dau: readNumber(today.dau),
+      peakOnline: readNumber(today.peakOnline),
+      matches: readNumber(today.matches),
+      avgMatchDurationMs: readNullableNumber(today.avgMatchDurationMs),
+    },
+    totals: {
+      totalPlayers: readNumber(totals.totalPlayers),
+      totalMatches: readNumber(totals.totalMatches),
+      newPlayersToday: readNumber(totals.newPlayersToday),
+    },
+    daily,
+    hourly,
+  };
+}
+
+function sanitizeDailyPoint(row: unknown): OpsDailyPoint | null {
+  if (!isRecord(row)) return null;
+  const day = typeof row.day === 'string' ? row.day.trim() : '';
+  if (!day) return null;
+  return {
+    day,
+    label: typeof row.label === 'string' && row.label.trim() ? row.label : day.slice(5),
+    dau: readNumber(row.dau),
+    peakOnline: readNumber(row.peakOnline),
+    matches: readNumber(row.matches),
+    avgMatchDurationMs: readNullableNumber(row.avgMatchDurationMs),
+    newPlayers: readNumber(row.newPlayers),
+  };
+}
+
+function sanitizeHourlyPoint(row: unknown): OpsHourlyPoint | null {
+  if (!isRecord(row)) return null;
+  const hourStart = readNumber(row.hourStart);
+  if (hourStart <= 0) return null;
+  return {
+    hourStart,
+    label: typeof row.label === 'string' ? row.label : '',
+    avgOnline: readNumber(row.avgOnline),
+    peakOnline: readNumber(row.peakOnline),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** 非有限数/负数一律归 0，避免 NaN 传到 SVG 坐标里。 */
+function readNumber(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
+  return value;
+}
+
+/** 允许 null 的数值字段（无对局的平均时长、未采样的时间戳）。 */
+function readNullableNumber(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return value;
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
