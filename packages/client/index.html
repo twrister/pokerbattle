@@ -1889,14 +1889,6 @@
         overflow: auto;
       }
 
-      .campaign-chapter {
-        margin: calc(10 * var(--hu)) 0 calc(2 * var(--hu));
-        color: #fff;
-        font-family: var(--font-display);
-        font-size: calc(17 * var(--fsu));
-        text-shadow: var(--text-outline);
-      }
-
       .campaign-stage {
         display: grid;
         grid-template-columns: calc(40 * var(--hu)) minmax(0, 1fr) auto;
@@ -1935,6 +1927,17 @@
       .campaign-stage-title {
         font-size: calc(16 * var(--fsu));
         font-weight: 700;
+      }
+
+      /* 战役地图名小标签，跟在关卡标题后面 */
+      .campaign-stage-arena {
+        margin-left: calc(8 * var(--hu));
+        padding: calc(1 * var(--hu)) calc(8 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+        background: #5c7cfa;
+        color: #fff;
+        font-size: calc(12 * var(--fsu));
+        vertical-align: middle;
       }
 
       .campaign-stage-status {

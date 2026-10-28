@@ -17,6 +17,7 @@ import {
   resolveActiveBridges,
   UNIT_CONFIGS,
   type ArenaBasePos,
+  type ArenaObstacle,
   type ArenaCameraMode,
   type ArenaColorsDraft,
   type ArenaConfigDraft,
@@ -132,6 +133,8 @@ export interface ArenaVisualLayout {
   colors: ArenaColorsDraft;
   /** 配置页预览用的单边基地；对局场景不传，避免和真实单位叠两层。 */
   bases?: readonly ArenaBasePos[];
+  /** 战役地图障碍（全场 sim 坐标）；对战地图为空。 */
+  obstacles?: readonly ArenaObstacle[];
 }
 
 /** 把 CSS #rrggbb 转成 Three 整数色。 */
@@ -153,6 +156,7 @@ export function arenaVisualFromDraft(
     bridges: resolveActiveBridges(draft),
     colors: draft.colors,
     bases: options.showBases ? draft.bases : undefined,
+    obstacles: draft.obstacles,
   };
 }
 
@@ -1092,7 +1096,82 @@ function createArenaTerrain(layout: ArenaVisualLayout): THREE.Group {
   for (const bridge of layout.bridges) {
     terrain.add(createBridge(layout, river, bridge, deckMaterial, railMaterial));
   }
+  if (layout.obstacles?.length) terrain.add(createArenaObstacles(layout, layout.obstacles));
   return terrain;
+}
+
+/** 障碍外观配色：岩石灰、水潭用河水色、城墙砖色。 */
+const OBSTACLE_ROCK_COLOR = 0x9a9488;
+const OBSTACLE_WALL_COLOR = 0xb08968;
+/** 岩石与城墙高出地面的高度。 */
+const OBSTACLE_ROCK_HEIGHT = 0.7;
+const OBSTACLE_WALL_HEIGHT = 1.1;
+
+/**
+ * 战役地图障碍：岩石堆成圆角块，城墙做成带垛口的砖墙，水潭下沉成小池子。
+ * 只做外观，阻挡逻辑在 sim 的 Nav 里；全部关掉射线，不影响点击放兵。
+ */
+function createArenaObstacles(layout: ArenaVisualLayout, obstacles: readonly ArenaObstacle[]): THREE.Group {
+  const group = new THREE.Group();
+  const rock = createToonMaterial(OBSTACLE_ROCK_COLOR, 0.9);
+  const wall = createToonMaterial(OBSTACLE_WALL_COLOR, 0.85);
+  const water = createToonMaterial(hexColorToNumber(layout.colors.river), 0.35);
+  for (const obstacle of obstacles) {
+    const width = obstacle.maxX - obstacle.minX;
+    const depth = obstacle.maxY - obstacle.minY;
+    const centerX = (obstacle.minX + obstacle.maxX) / 2 - layout.width / 2;
+    const centerZ = layoutToSceneZ(layout, (obstacle.minY + obstacle.maxY) / 2);
+    let mesh: THREE.Object3D;
+    if (obstacle.kind === 'water') {
+      // 水面略低于地面，看起来像挖下去的池塘
+      const pool = createVolumeBox(width, ARENA_RIVER_THICKNESS, depth, water, -ARENA_RIVER_DROP * 0.6);
+      pool.castShadow = false;
+      mesh = pool;
+    } else if (obstacle.kind === 'wall') {
+      mesh = createWallMesh(width, depth, wall);
+    } else {
+      const box = new THREE.Mesh(
+        new RoundedBoxGeometry(width * 0.92, OBSTACLE_ROCK_HEIGHT, depth * 0.92, 3, 0.25),
+        rock,
+      );
+      box.position.y = OBSTACLE_ROCK_HEIGHT / 2;
+      box.castShadow = true;
+      box.receiveShadow = true;
+      mesh = addOutline(box, 0.04);
+    }
+    mesh.position.x += centerX;
+    mesh.position.z += centerZ;
+    mesh.traverse((child) => {
+      child.raycast = () => {};
+    });
+    group.add(mesh);
+  }
+  return group;
+}
+
+/** 城墙：一条墙身 + 顶上一排垛口。 */
+function createWallMesh(width: number, depth: number, material: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new RoundedBoxGeometry(width, OBSTACLE_WALL_HEIGHT, depth, 2, 0.08), material);
+  body.position.y = OBSTACLE_WALL_HEIGHT / 2;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(addOutline(body, 0.03));
+  const alongX = width >= depth;
+  const length = alongX ? width : depth;
+  const count = Math.max(1, Math.floor(length / 0.8));
+  const step = length / count;
+  for (let i = 0; i < count; i++) {
+    const merlon = new THREE.Mesh(
+      new RoundedBoxGeometry(alongX ? step * 0.55 : depth, 0.3, alongX ? depth : step * 0.55, 2, 0.05),
+      material,
+    );
+    const offset = -length / 2 + (i + 0.5) * step;
+    merlon.position.set(alongX ? offset : 0, OBSTACLE_WALL_HEIGHT + 0.15, alongX ? 0 : offset);
+    merlon.castShadow = true;
+    group.add(merlon);
+  }
+  return group;
 }
 
 /** 河道两岸：沙色斜坡条 + 水面浪花条，都在河道带内，不占可走格子。 */

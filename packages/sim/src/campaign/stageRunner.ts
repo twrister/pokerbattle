@@ -3,7 +3,7 @@ import type { Command } from '../commands.js';
 import { matchRulesWithOverrides } from '../config/matchRules.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { Faction } from '../entity/unit.js';
-import { fromFloat } from '../math/fixed.js';
+import { type Fx, fromFloat } from '../math/fixed.js';
 import type { MatchState } from '../match/matchState.js';
 import { SoloBotController } from '../match/soloBot.js';
 import { ObjectiveTracker } from './objectiveTracker.js';
@@ -25,11 +25,14 @@ export class StageRunner {
     readonly def: StageDef,
     private readonly match: MatchState,
   ) {
+    // 地图最先换：后面的预放单位、建筑落点都要按新地形校验
+    if (def.arena) match.setCampaignArena(def.arena);
     this.applyRulesAndDeck();
     this.applyCampaignTimeline();
     this.applyStageSwitches();
+    this.applyCastleHp();
     this.placePresetUnits();
-    this.tracker = new ObjectiveTracker(def, Faction.Blue, TICK_RATE * CAMPAIGN_STAGE_SECONDS);
+    this.tracker = new ObjectiveTracker(def, Faction.Blue, TICK_RATE * stageDurationSeconds(def));
     this.enemy = createEnemy(def);
   }
 
@@ -64,7 +67,7 @@ export class StageRunner {
    */
   private applyCampaignTimeline(): void {
     this.match.setPhaseDurations({
-      normalTicks: TICK_RATE * CAMPAIGN_STAGE_SECONDS,
+      normalTicks: TICK_RATE * stageDurationSeconds(this.def),
       doubleSpeedTicks: 0,
       finalTicks: 0,
       settlementTicks: 0,
@@ -80,19 +83,39 @@ export class StageRunner {
     if (this.def.castles === false) this.match.clearStartingCastles();
   }
 
-  /** 放置开局预置单位；建筑走 spawnBuilding 以同步占格。 */
+  /** 按关卡写双方主堡开局血量（残血守家、一刀斩）。 */
+  private applyCastleHp(): void {
+    const { def, match } = this;
+    if (def.playerCastleHpRatio !== undefined) match.setCastleHpRatio(Faction.Blue, def.playerCastleHpRatio);
+    if (def.enemyCastleHpRatio !== undefined) match.setCastleHpRatio(Faction.Red, def.enemyCastleHpRatio);
+  }
+
+  /** 放置开局预置单位；建筑走 spawnBuilding 以同步占格，残血与驻守在生成后写入。 */
   private placePresetUnits(): void {
     const world = this.match.world;
-    for (const unit of this.def.preset ?? []) {
-      const faction = unit.faction === 0 ? Faction.Blue : Faction.Red;
-      world.spawnUnit(faction, unit.typeId, fromFloat(unit.x), fromFloat(unit.y));
+    for (const preset of this.def.preset ?? []) {
+      const faction = preset.faction === 0 ? Faction.Blue : Faction.Red;
+      const unit = world.spawnUnit(faction, preset.typeId, fromFloat(preset.x), fromFloat(preset.y));
+      if (preset.hpRatio !== undefined) unit.hp = scaledHp(unit.config.maxHp, preset.hpRatio);
+      if (preset.hold) unit.hold = true;
     }
   }
 }
 
+/** 关卡时长（秒）：没写时用战役统一时长。 */
+export function stageDurationSeconds(def: Pick<StageDef, 'durationSeconds'>): number {
+  return def.durationSeconds && def.durationSeconds > 0 ? def.durationSeconds : CAMPAIGN_STAGE_SECONDS;
+}
+
+/** 按比例折算血量（定点数），至少留 1 点，避免开局就判死。 */
+function scaledHp(maxHp: Fx, ratio: number): Fx {
+  const clamped = Math.min(1, Math.max(0, ratio));
+  return Math.max(1, Math.round(maxHp * clamped));
+}
+
 /**
  * 按关卡固定手牌点数挑出具体牌。
- * 同点数按黑桃、红桃、梅花、方片的固定顺序取不同花色，保证每次开局完全一致；
+ * 花色按「手牌位置」在剩余同点数牌里轮换挑选，结果只由关卡数据决定，每次开局完全一致；
  * 点数写错或超过四种花色时直接跳过，避免关卡数据笔误把整局卡死。
  * 点数写 "WILD" 表示要一张万能牌：牌面始终按含万能牌构建，因此会按顺序取到 wild-1、wild-2。
  */
@@ -100,12 +123,14 @@ function cardsForFixedHand(ranks: readonly string[]): PlayingCard[] {
   const cards = createPokerCards({ wildCards: true });
   const used = new Set<string>();
   const picked: PlayingCard[] = [];
-  for (const rank of ranks) {
-    const card = cards.find((item) => item.rank === rank && !used.has(item.id));
-    if (!card) continue;
+  ranks.forEach((rank, position) => {
+    const candidates = cards.filter((item) => item.rank === rank && !used.has(item.id));
+    // 按位置轮换起始花色：连续点数不会全落在同一花色，避免顺子意外变成同花顺
+    const card = candidates[position % Math.max(1, candidates.length)];
+    if (!card) return;
     used.add(card.id);
     picked.push(card);
-  }
+  });
   return picked;
 }
 

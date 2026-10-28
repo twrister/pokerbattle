@@ -4,10 +4,14 @@ import { buildingCellRange, snapBuildingCenter } from '../nav/buildingGrid.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, setArenaSize } from './arena.js';
 import {
   ARENA_RIVER_MAX_Y,
+  ARENA_OBSTACLES,
   ARENA_RIVER_MIN_Y,
+  setArenaObstacles,
   setArenaTerrain,
   type ArenaBridge,
+  type ArenaObstacle,
 } from './arenaTerrain.js';
+import { CAMPAIGN_ARENA_PRESETS, type CampaignArenaId } from './campaignArenas.js';
 import { UNIT_CONFIGS } from './units.js';
 import rawArenaConfig from './arena.json';
 import rawArena2v2Config from './arena2v2.json';
@@ -57,6 +61,8 @@ export interface ArenaConfigDraft {
   bases: ArenaBasePos[];
   camera: ArenaCameraDraft;
   colors: ArenaColorsDraft;
+  /** 地图障碍（全场坐标，半开矩形）；对战地图不写，战役地图用来挡路。 */
+  obstacles?: ArenaObstacle[];
 }
 
 /** 由单边宽高展开全场：宽共用，高 = 两边半场 + 河道。 */
@@ -117,6 +123,24 @@ export function currentArenaPreset(): MatchMode {
 /** 把指定模式的已保存预设写入运行时场地/河桥/镜头。 */
 export function applyArenaPreset(mode: MatchMode): void {
   applyArenaConfigDraft(defaultDrafts[mode], mode);
+}
+
+/**
+ * 套用战役命名地图：以 1v1 默认图为底，覆盖尺寸、河桥、障碍与配色。
+ * 只改运行时布局，不写回默认草稿；下一局 applyArenaPreset 会恢复对战地图。
+ */
+export function applyCampaignArena(id: CampaignArenaId): void {
+  const base = defaultDrafts['1v1'];
+  const preset = CAMPAIGN_ARENA_PRESETS[id];
+  applyArenaConfigDraft(
+    {
+      ...cloneArenaConfigDraft(base),
+      ...preset,
+      camera: { ...base.camera, ...preset.camera },
+      colors: { ...base.colors, ...preset.colors },
+    },
+    '1v1',
+  );
 }
 
 /** 导出场景草稿：省略 mode 时读当前运行时；指定另一模式则读该套缓存/预设。 */
@@ -213,6 +237,7 @@ function dumpLiveDraft(): ArenaConfigDraft {
     bases: runtimeLayout.bases.map((base) => ({ ...base })),
     camera: { ...runtimeVisual.camera },
     colors: { ...runtimeVisual.colors },
+    ...(ARENA_OBSTACLES.length > 0 ? { obstacles: ARENA_OBSTACLES.map((rect) => ({ ...rect })) } : {}),
   };
 }
 
@@ -220,6 +245,7 @@ function applyArenaLayout(draft: ArenaConfigDraft): void {
   const full = arenaFullSize(draft);
   setArenaSize(full.width, full.height);
   setArenaTerrain(draft.height, draft.height + draft.riverWidth, resolveActiveBridges(draft));
+  setArenaObstacles(draft.obstacles ?? []);
   runtimeLayout = {
     bridges: draft.bridges.map((bridge) => ({ ...bridge })),
     bridge3Enabled: draft.bridge3Enabled,
@@ -332,6 +358,7 @@ function cloneArenaConfigDraft(draft: ArenaConfigDraft): ArenaConfigDraft {
       offsetY: isFiniteNumber(draft.camera.offsetY) ? draft.camera.offsetY : 0,
     },
     colors: { ...draft.colors },
+    ...(draft.obstacles?.length ? { obstacles: draft.obstacles.map((rect) => ({ ...rect })) } : {}),
   };
 }
 

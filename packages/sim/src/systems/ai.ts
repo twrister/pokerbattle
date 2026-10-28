@@ -99,6 +99,10 @@ export function updateAi(world: World): void {
     } else if (unit.state === UnitState.Attack ? inExit : inEnter) {
       unit.state = UnitState.Attack;
       clearPath(unit);
+    } else if (unit.hold) {
+      // 驻守单位够不着就原地等，不追击、不冲锋
+      unit.state = UnitState.Idle;
+      clearPath(unit);
     } else if (tryStartCharge(unit, target, gapSq)) {
       copy(desiredFacing, unit.chargeDir);
     } else {

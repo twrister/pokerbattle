@@ -40,7 +40,6 @@ function run(match: MatchState, runner: StageRunner, ticks: number): void {
 
 const baseDef: StageDef = {
   id: 't',
-  chapter: 1,
   index: 1,
   title: 't',
   seed: 7,
@@ -49,15 +48,25 @@ const baseDef: StageDef = {
 };
 
 describe('战役关卡数据', () => {
-  it('第 1 章 3 关可加载，id 唯一且顺序连续', () => {
+  it('7 关连续编号不分章节，id 唯一，前三关沿用旧 id', () => {
     const ids = CAMPAIGN_STAGES.map((stage) => stage.id);
-    expect(ids).toEqual(['c1_1', 'c1_2', 'c1_3']);
+    expect(ids).toEqual(['c1_1', 'c1_2', 'c1_3', 's4', 's5', 's6', 's7']);
+    expect(CAMPAIGN_STAGES.map((stage) => stage.index)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(new Set(ids).size).toBe(ids.length);
     expect(getStageById('c1_2')?.title).toBe('凑出炸弹');
     expect(getStageById('c1_3')?.title).toBe('万能牌');
     expect(getNextStage('c1_1')?.id).toBe('c1_2');
-    expect(getNextStage('c1_2')?.id).toBe('c1_3');
-    expect(getNextStage('c1_3')).toBeUndefined();
+    expect(getNextStage('c1_3')?.id).toBe('s4');
+    expect(getNextStage('s7')).toBeUndefined();
+  });
+
+  it('后四关分别用上三张战役地图', () => {
+    expect(['s4', 's5', 's6', 's7'].map((id) => getStageById(id)?.arena)).toEqual([
+      'fortress',
+      'jungle',
+      'island',
+      'fortress',
+    ]);
   });
 
   it('1-1 通关条件：打出任意兵种 + 摧毁敌方箭塔，文案不带进度数字', () => {
@@ -161,7 +170,7 @@ describe('ObjectiveTracker', () => {
   });
 });
 
-describe('第 1 章试玩（无头仿真）', () => {
+describe('前三关试玩（无头仿真）', () => {
   /** 用当前手牌里指定的一张牌打出最弱的合法阵型；返回是否打出。 */
   function playOneCard(match: MatchState, card: PlayingCard): boolean {
     // 传牌面进去才会按点数/花色过滤，否则可能选中一条不匹配该牌的阵型
@@ -347,12 +356,14 @@ describe('第 1 章试玩（无头仿真）', () => {
     expect(runner.tracker.getStatus()).toBe('fail');
   });
 
-  it('战役固定 120 秒单段常规阶段，时间到直接按血量收局', () => {
+  it('战役单段常规阶段：缺省 120 秒，关卡可覆盖时长，时间到直接按血量收局', () => {
     for (const def of CAMPAIGN_STAGES) {
       const { match } = createStageMatch(def);
-      expect(match.getHudDeadlineTick()).toBe(TICK_RATE * CAMPAIGN_STAGE_SECONDS);
-      expect(match.getPhaseDeadlineTick()).toBe(TICK_RATE * CAMPAIGN_STAGE_SECONDS);
+      const seconds = def.durationSeconds ?? CAMPAIGN_STAGE_SECONDS;
+      expect(match.getHudDeadlineTick()).toBe(TICK_RATE * seconds);
+      expect(match.getPhaseDeadlineTick()).toBe(TICK_RATE * seconds);
     }
+    expect(getStageById('s5')?.durationSeconds).toBe(30);
     // 前两关拆掉了主堡、不会自动收局，这里用一座主堡的临时关验证纯时间到收局
     const { match, runner } = createStageMatch({
       ...baseDef,

@@ -2,6 +2,7 @@ import { type Fx, fromFloat, min, ONE, toFloat } from './math/fixed.js';
 import { lengthOf } from './math/vec2.js';
 import { Rng } from './math/rng.js';
 import { ARENA_HEIGHT, ARENA_WIDTH, NAV_CELL_SIZE, clampToArena } from './config/arena.js';
+import { ARENA_OBSTACLES } from './config/arenaTerrain.js';
 import {
   MAX_UNIT_RADIUS,
   type UnitTypeId,
@@ -209,6 +210,8 @@ export class World {
     if (!isBuildingConfig(config)) return false;
     const rect = buildingCellRange(toFloat(centerX), toFloat(centerY), config.footprint);
     if (!isBuildingRectInsideArena(rect, this.buildingCols, this.buildingRows)) return false;
+    // 地图障碍（岩石/水潭/城墙）上不能盖建筑；沙盒没写地形时 Nav 无障碍，跳过
+    if (this.nav.hasObstacles && overlapsArenaObstacle(rect)) return false;
     for (let gy = rect.minY; gy < rect.maxY; gy++) {
       for (let gx = rect.minX; gx < rect.maxX; gx++) {
         if (this.buildingCells[gy * this.buildingCols + gx] !== 0) return false;
@@ -242,6 +245,13 @@ export class World {
     this.unitsById.set(unit.id, unit);
     this.markUnitGridDirty();
     return unit;
+  }
+
+  /** 重写地形后把存活建筑的寻路阻挡补回 Nav；占格表不变。 */
+  reapplyBuildingBlocking(): void {
+    for (const unit of this.units) {
+      if (!unit.dead && isBuildingConfig(unit.config)) this.setBuildingOccupation(unit, true);
+    }
   }
 
   /** 建筑死亡或清空时解除占地与寻路阻挡 */
@@ -677,6 +687,7 @@ export class World {
       h = mix(h, unit.summonWindupLeft);
       h = mix(h, unit.detonateWindupLeft);
       h = mix(h, unit.detonated ? 1 : 0);
+      h = mix(h, unit.hold ? 1 : 0);
       h = mix(h, unit.castFxLeft);
       h = mix(h, unit.hitFxLeft);
       h = mix(h, unit.aoeHitFxLeft);
@@ -746,6 +757,13 @@ function buildingAabb(building: Unit): { minX: Fx; minY: Fx; maxX: Fx; maxY: Fx 
 }
 
 /** FNV-1a，逐字节混入一个 32 位整数 */
+/** 建筑占格矩形是否压到任一地图障碍（半开区间相交）。 */
+function overlapsArenaObstacle(rect: { minX: number; minY: number; maxX: number; maxY: number }): boolean {
+  return ARENA_OBSTACLES.some(
+    (o) => rect.minX < o.maxX && rect.maxX > o.minX && rect.minY < o.maxY && rect.maxY > o.minY,
+  );
+}
+
 function mix(hash: number, value: number): number {
   let h = hash;
   for (let shift = 0; shift < 32; shift += 8) {

@@ -1,6 +1,7 @@
 import type { HandCategory } from '../config/handCategories.js';
 import type { MatchRulesDraft } from '../config/matchRules.js';
 import type { UnitTypeId } from '../config/units.js';
+import type { CampaignArenaId } from '../config/campaignArenas.js';
 
 /** 关卡目标：全部满足即通关，任一失败条件触发即失败。 */
 export type StageObjective =
@@ -17,7 +18,15 @@ export type StageObjective =
   /** 打出任意一手牌（不分牌型，第一手出兵即达成）。 */
   | { kind: 'play_any' }
   /** 清光敌方全部可移动单位（建筑不算）。 */
-  | { kind: 'clear_enemy_units' };
+  | { kind: 'clear_enemy_units' }
+  /** 限制条件：整局出牌不超过 N 手，第 N+1 手打出即失败。 */
+  | { kind: 'max_plays'; count: number }
+  /** 击杀指定兵种：场上该兵种的敌方单位全部阵亡（开局就没有视为未达成）。 */
+  | { kind: 'destroy_unit'; typeId: UnitTypeId; label: string }
+  /** 限制条件：己方主堡血量始终不低于该比例（0~1），跌破即失败。 */
+  | { kind: 'base_hp_above'; ratio: number }
+  /** 限制条件：禁止打出某牌型，打出即失败。 */
+  | { kind: 'forbid_category'; category: HandCategory };
 
 /** 敌方行为：无行动、固定脚本或沿用人机。 */
 export type StageEnemy =
@@ -47,16 +56,25 @@ export interface StagePresetUnit {
   typeId: UnitTypeId;
   x: number;
   y: number;
+  /** 开局血量比例（0~1），缺省满血；用来摆残血塔、残血兵。 */
+  hpRatio?: number;
+  /** 驻守：原地不动，只打射程内的目标；用来摆敌方防线。 */
+  hold?: boolean;
 }
 
 /** 一个战役关卡的全部数据；纯数据，可直接写成 JSON。 */
 export interface StageDef {
   id: string;
-  /** 章节序号，从 1 开始。 */
-  chapter: number;
-  /** 章内序号，从 1 开始。 */
+  /** 关卡序号，从 1 开始，全战役连续编号（不分章节）。 */
   index: number;
   title: string;
+  /** 战役地图（海岛/丛林/要塞），缺省为对战默认图。 */
+  arena?: CampaignArenaId;
+  /** 关卡时长（秒），缺省 CAMPAIGN_STAGE_SECONDS；时间到目标未达成判失败。 */
+  durationSeconds?: number;
+  /** 双方主堡开局血量比例（0~1），缺省满血。 */
+  playerCastleHpRatio?: number;
+  enemyCastleHpRatio?: number;
   /** 覆盖默认对局规则的字段，未写的沿用运行时默认。 */
   rules?: Partial<MatchRulesDraft>;
   /** 玩家牌堆限定：只保留这些点数的牌，缺省为整副牌。 */

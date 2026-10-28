@@ -211,12 +211,12 @@ describe('手牌弱引导', () => {
 });
 
 describe('弱引导启用范围', () => {
-  it('战役第 1 章只在教学关提示（1-1、1-2、1-3），后续章节不提示', () => {
-    expect(shouldShowHandGuide({ chapter: 1, index: 1 }, stats())).toBe(true);
-    expect(shouldShowHandGuide({ chapter: 1, index: 2 }, stats())).toBe(true);
-    expect(shouldShowHandGuide({ chapter: 1, index: 3 }, stats())).toBe(true);
-    expect(shouldShowHandGuide({ chapter: 1, index: 4 }, stats())).toBe(false);
-    expect(shouldShowHandGuide({ chapter: 2, index: 1 }, stats())).toBe(false);
+  it('战役只在前三关教学关提示，第 4 关起的残局不提示', () => {
+    expect(shouldShowHandGuide({ index: 1 }, stats())).toBe(true);
+    expect(shouldShowHandGuide({ index: 2 }, stats())).toBe(true);
+    expect(shouldShowHandGuide({ index: 3 }, stats())).toBe(true);
+    expect(shouldShowHandGuide({ index: 4 }, stats())).toBe(false);
+    expect(shouldShowHandGuide({ index: 7 }, stats())).toBe(false);
   });
 
   it('普通人机只在完全没有战绩时提示', () => {

@@ -23,6 +23,23 @@ export interface ArenaRect {
 /** 与 ARENA_BRIDGES 同步的河道阻挡矩形缓存，避免每 tick 重算。 */
 const riverBlockedRectCache: ArenaRect[] = [];
 
+/** 障碍外观：岩石、水潭、城墙；只影响客户端渲染，寻路一律视为不可走。 */
+export type ArenaObstacleKind = 'rock' | 'water' | 'wall';
+
+/** 地图障碍：阻挡矩形 + 外观。 */
+export interface ArenaObstacle extends ArenaRect {
+  kind: ArenaObstacleKind;
+}
+
+/** 地图障碍（岩石、城墙等），世界坐标半开区间；战役地图预设写入。 */
+export const ARENA_OBSTACLES: ArenaObstacle[] = [];
+
+/** 覆盖运行时障碍列表；原地替换以保持引用稳定。 */
+export function setArenaObstacles(rects: readonly ArenaObstacle[]): void {
+  ARENA_OBSTACLES.splice(0, ARENA_OBSTACLES.length, ...rects.map((rect) => ({ ...rect })));
+  rebuildRiverBlockedRects();
+}
+
 /** 跨河桥面；apply 时原地替换内容以保持引用稳定。桥三关闭时这里只有前两座。 */
 export const ARENA_BRIDGES: ArenaBridge[] = [
   { minX: 3, maxX: 5 },
@@ -60,6 +77,8 @@ export function riverBlockedRects(): readonly ArenaRect[] {
 /** 按当前河宽与桥列表重建阻挡矩形；桥按 minX 排序以免中间空隙算错。 */
 function rebuildRiverBlockedRects(): void {
   riverBlockedRectCache.length = 0;
+  // 障碍和河道一样只写 Nav 格，地面单位被挤进去时同样要靠这组矩形推出来
+  for (const rect of ARENA_OBSTACLES) riverBlockedRectCache.push({ ...rect });
   if (ARENA_RIVER_MAX_Y <= ARENA_RIVER_MIN_Y) return;
 
   const width = toFloat(ARENA_WIDTH);
@@ -101,6 +120,16 @@ export function applyArenaTerrain(nav: NavGrid): void {
       fromFloat(bridge.maxX),
       fromFloat(ARENA_RIVER_MAX_Y),
       false,
+    );
+  }
+
+  // 障碍最后写入：压在桥面上的障碍也要生效
+  for (const rect of ARENA_OBSTACLES) {
+    nav.setBlockedWorldRectExclusive(
+      fromFloat(rect.minX),
+      fromFloat(rect.minY),
+      fromFloat(rect.maxX),
+      fromFloat(rect.maxY),
     );
   }
 }

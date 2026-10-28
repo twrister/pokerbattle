@@ -11,12 +11,22 @@ export {
   applyArenaTerrain,
   centeredRiverRange,
   riverBlockedRects,
+  ARENA_OBSTACLES,
   type ArenaBridge,
+  type ArenaObstacle,
+  type ArenaObstacleKind,
   type ArenaRect,
 } from './config/arenaTerrain.js';
 export {
+  CAMPAIGN_ARENA_PRESETS,
+  isCampaignArenaId,
+  type CampaignArenaId,
+  type CampaignArenaPreset,
+} from './config/campaignArenas.js';
+export {
   applyArenaConfigDraft,
   applyArenaPreset,
+  applyCampaignArena,
   arenaFullSize,
   captureArenaConfigAsDefault,
   currentArenaPreset,
@@ -317,7 +327,9 @@ export {
 } from './campaign/stageDef.js';
 export {
   ObjectiveTracker,
+  STAGE_FAIL_REASON_TEXT,
   type ObjectiveProgress,
+  type StageFailReason,
   type StageOutcome,
 } from './campaign/objectiveTracker.js';
 export { ScriptedEnemy } from './campaign/scriptedEnemy.js';

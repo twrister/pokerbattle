@@ -10,6 +10,8 @@ export function updateTowerDecay(world: World): void {
   for (const unit of world.units) {
     if (unit.dead || unit.hp <= 0) continue;
     if (!isArcherTowerId(unit.config.id)) continue;
+    // 战役驻守塔是关卡固定防线，不随时间自塌，否则拖时间就能过关
+    if (unit.hold) continue;
     unit.hp -= TOWER_HP_DECAY_PER_TICK;
   }
 }

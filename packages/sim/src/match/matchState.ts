@@ -22,7 +22,14 @@ import {
   isBuildingOnlyFormation,
   resolveCardFormation,
 } from '../config/cardFormations.js';
-import { applyArenaPreset, dumpArenaConfigDraft, mirrorBaseY, resolveSideBasePositions } from '../config/arenaConfig.js';
+import {
+  applyArenaPreset,
+  applyCampaignArena,
+  dumpArenaConfigDraft,
+  mirrorBaseY,
+  resolveSideBasePositions,
+} from '../config/arenaConfig.js';
+import type { CampaignArenaId } from '../config/campaignArenas.js';
 import { applyArenaTerrain } from '../config/arenaTerrain.js';
 import type { HandCategory } from '../config/handCategories.js';
 import { isBuildingInsideHalfCourt, normalizeDeployAnchor } from '../config/halfCourt.js';
@@ -147,6 +154,8 @@ export class MatchState {
   private periodicDrawEnabled = true;
   /** 各席本局累计打出的牌型次数；clear 时清零。 */
   private readonly playedCategoryCounts: Array<Map<HandCategory, number>> = [];
+  /** 战役命名地图；null 表示用对战默认图。 */
+  private campaignArena: CampaignArenaId | null = null;
 
   constructor(seed = 1, mode: MatchMode = '1v1') {
     this.mode = mode;
@@ -270,6 +279,43 @@ export class MatchState {
     this.world.removeDeadUnits();
   }
 
+  /**
+   * 换成战役命名地图（海岛/丛林/要塞）。
+   * 只换河桥与障碍、不改场地尺寸，因此可在播种主堡后调用；重开（clear）会沿用这张图。
+   */
+  setCampaignArena(id: CampaignArenaId | null): void {
+    this.campaignArena = id;
+    this.applyArenaLayout();
+    // 旧河桥已写进 Nav：整张清掉重写地形，再把已放下的建筑（主堡）补回阻挡
+    this.world.nav.clearBlocked();
+    applyArenaTerrain(this.world.nav);
+    this.world.reapplyBuildingBlocking();
+  }
+
+  /** 本局使用的战役地图；对战地图为 null。 */
+  getCampaignArena(): CampaignArenaId | null {
+    return this.campaignArena;
+  }
+
+  /** 按本局地图写运行时布局：战役地图优先，否则用模式默认图。 */
+  private applyArenaLayout(): void {
+    if (this.campaignArena) applyCampaignArena(this.campaignArena);
+    else applyArenaPreset(this.mode);
+  }
+
+  /**
+   * 把某方主堡血量设成最大值的给定比例（战役残血开局用）。
+   * 仅开局前可用，至少留 1 点血，避免开局就被判陷落。
+   */
+  setCastleHpRatio(faction: Faction, ratio: number): void {
+    if (this.world.tick !== 0 || this.result) return;
+    const clamped = Math.min(1, Math.max(0, ratio));
+    for (const slot of teamSlots(faction, this.mode)) {
+      const castle = this.findSlotCastle(slot);
+      if (castle) castle.hp = Math.max(1, Math.round(castle.config.maxHp * clamped));
+    }
+  }
+
   /** 记一次出牌的牌型；阵型模板未知时忽略。 */
   private recordPlayedCategory(slot: number, formationId: string): void {
     const category = findFormationById(formationId)?.category;
@@ -377,7 +423,7 @@ export class MatchState {
 
   /** 清空战场与牌堆，回到开局发牌状态。 */
   clear(): void {
-    applyArenaPreset(this.mode);
+    this.applyArenaLayout();
     this.world.clear();
     applyArenaTerrain(this.world.nav);
     // 原地 reset，保留 decks 引用：单机 HandPanel 创建时绑的是同一对象

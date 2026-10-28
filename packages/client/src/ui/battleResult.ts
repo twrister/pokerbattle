@@ -26,6 +26,8 @@ export interface StageResultInfo {
   cleared: boolean;
   /** 通关用时，秒。 */
   seconds: number;
+  /** 失败原因说明（如「出牌次数超过限制」）；缺省显示「未达成目标」。 */
+  failText?: string;
   /** 有下一关时才显示「下一关」按钮。 */
   hasNext: boolean;
   onNext: () => void;
@@ -103,7 +105,7 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
     nextButton.classList.toggle('is-hidden', !info || !info.cleared || !info.hasNext);
     retryButton.classList.toggle('is-hidden', !info || info.cleared);
     if (info) {
-      stageLine.textContent = info.cleared ? `用时 ${Math.round(info.seconds)} 秒` : '未达成目标';
+      stageLine.textContent = info.cleared ? `用时 ${Math.round(info.seconds)} 秒` : info.failText ?? '未达成目标';
     }
   };
 

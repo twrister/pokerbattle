@@ -114,6 +114,8 @@ export interface Unit {
   statsDirty: boolean;
   /** 国王振奋光环是否生效；由技能系统写入，快照只读此标记 */
   inspired: boolean;
+  /** 驻守：不 Seek/冲锋，只打射程内目标；战役关卡预放的敌方防线用。 */
+  hold: boolean;
 
   /** A* 产出的剩余路点，pathIndex 指向当前要走的那个 */
   readonly path: Vec2[];
@@ -174,6 +176,7 @@ export function createUnit(
     buffs: [],
     statsDirty: false,
     inspired: false,
+    hold: false,
     path: [],
     pathIndex: 0,
     repathIn: 0,

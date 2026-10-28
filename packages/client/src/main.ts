@@ -6,6 +6,7 @@ import {
   getNextStage,
   getStageById,
   SoloBotController,
+  STAGE_FAIL_REASON_TEXT,
   StageRunner,
   teammateSlot,
   teamSlots,
@@ -355,6 +356,8 @@ const campaignPage = createCampaignPage({
   },
   getStages: () => CAMPAIGN_STAGES,
   getProgress: () => campaignProgress.load(),
+  // 开发服默认解锁全部战役，方便直接验证任意关卡
+  unlockAllStages: IS_DEV_SERVER,
 });
 const leaderboardPage = createLeaderboardPage({
   onBack: () => screens.show('menu'),
@@ -829,6 +832,8 @@ function enterBattleSession(mode: BattleMode): () => void {
       : () => {};
   if (stageDef) {
     stageHud.start();
+    // 战役地图在 StageRunner 里才换上，场景要按新河桥/障碍重建一次
+    if (stageDef.arena) sceneContext.rebuildArena();
     // 套完关卡规则与预置单位后重拍首帧快照
     loop.curr = takeSnapshot(loop.world, loop.curr);
     loop.prev = takeSnapshot(loop.world, loop.prev);
@@ -2483,6 +2488,8 @@ function showStageResult(def: StageDef, outcome: StageOutcome): void {
   battleResult.showStage({
     cleared,
     seconds: outcome.seconds,
+    // 残局关输法很多（超手数、用了禁用牌型、超时），直接告诉玩家输在哪
+    failText: outcome.reason ? STAGE_FAIL_REASON_TEXT[outcome.reason] : undefined,
     hasNext: Boolean(next),
     onNext: () => {
       if (!next) return;
