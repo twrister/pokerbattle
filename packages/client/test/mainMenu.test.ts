@@ -132,7 +132,6 @@ function mountMainMenuDom(): void {
         <div class="mode-dialog-panel">
           <button id="btn-settings-mute" type="button" role="switch" aria-checked="true">
             <span class="settings-row-label">音效</span>
-            <span id="settings-mute-hint"></span>
           </button>
         </div>
       </div>

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StageDef } from '@pb/sim';
 import { emptyProgress, recordStageClear } from '../src/campaign/progress.js';
-import { createCampaignPage } from '../src/ui/campaignPage.js';
+import { buildRoadPath, createCampaignPage, layoutStageNodes } from '../src/ui/campaignPage.js';
 
 /** 构造最小关卡，只填页面会读到的字段。 */
 function stage(id: string, index: number, arena?: StageDef['arena']): StageDef {
@@ -97,5 +97,43 @@ describe('战役选关页', () => {
 
     buttons[2]!.click();
     expect(onStartStage).toHaveBeenCalledWith('c');
+  });
+
+  it('地图化布局：第 1 关在最下方，当前关高亮，最后一关为大城堡，带小路路径', () => {
+    const progress = recordStageClear(emptyProgress(), { stageId: 'a', seconds: 30 });
+    const page = createCampaignPage({
+      onBack: vi.fn(),
+      onStartStage: vi.fn(),
+      getStages: () => stages,
+      getProgress: () => progress,
+    });
+    page.show();
+
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('.campaign-stage')];
+    const ys = buttons.map((button) => Number(button.style.getPropertyValue('--y')));
+    expect(ys[0]).toBeGreaterThan(ys[1]!);
+    expect(ys[1]).toBeGreaterThan(ys[2]!);
+    expect(buttons.map((button) => button.classList.contains('is-current'))).toEqual([false, true, false]);
+    expect(buttons[2]!.classList.contains('is-locked')).toBe(true);
+    expect(buttons[2]!.classList.contains('is-boss')).toBe(true);
+    expect(document.querySelector('.campaign-road-edge')?.getAttribute('d')).toMatch(/^M /);
+  });
+});
+
+describe('地图布局工具', () => {
+  it('layoutStageNodes 自下而上排布并给出总高', () => {
+    const { points, height } = layoutStageNodes(3);
+    expect(points).toHaveLength(3);
+    expect(points[0]!.y).toBeLessThan(height);
+    expect(points[2]!.y).toBeLessThan(points[0]!.y);
+  });
+
+  it('buildRoadPath 少于两点返回空串，否则每段一条贝塞尔', () => {
+    expect(buildRoadPath([{ x: 0, y: 0 }])).toBe('');
+    const d = buildRoadPath([
+      { x: 0, y: 100 },
+      { x: 50, y: 0 },
+    ]);
+    expect(d).toBe('M 0 100 C 0 50, 50 50, 50 0');
   });
 });

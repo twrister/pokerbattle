@@ -11,9 +11,6 @@ export interface SettingsDialogOptions {
   onOpenSfxConfig?: () => void;
 }
 
-const HINT_ON = '局内战斗与界面提示音';
-const HINT_OFF = '已静音，点击重新开启';
-
 /**
  * 大厅设置弹层。
  *
@@ -23,20 +20,18 @@ const HINT_OFF = '已静音，点击重新开启';
 export function createSettingsDialog(options: SettingsDialogOptions = {}): SettingsDialogHandle {
   const root = required<HTMLElement>('#settings-dialog');
   const muteRow = required<HTMLButtonElement>('#btn-settings-mute', root);
-  const muteHint = required<HTMLElement>('#settings-mute-hint', root);
   // 入口行是开发服专属的，单测与裁剪过的页面里可能不存在
   const sfxConfigRow = root.querySelector<HTMLButtonElement>('#btn-settings-sfx-config');
   const closeButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-settings-close]'),
   );
 
-  /** 按当前静音状态刷新开关外观与读屏文案。 */
+  /** 按当前静音状态刷新开关外观；静音态具体语义交给 aria-checked 表达。 */
   const sync = (): void => {
     const muted = sfx.isMuted();
     // aria-checked 语义是「音效是否开启」，所以与 muted 相反
     muteRow.setAttribute('aria-checked', String(!muted));
     muteRow.classList.toggle('is-muted', muted);
-    muteHint.textContent = muted ? HINT_OFF : HINT_ON;
   };
 
   /** 点行内任意位置都算切换；自身不叠加全局点击音。 */
