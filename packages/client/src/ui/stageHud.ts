@@ -7,7 +7,7 @@ export interface StageHudHandle {
 }
 
 /**
- * 战役局内目标卡片（左上角通关条件）。
+ * 战役局内目标卡片（右上角通关条件）。
  * 关卡不再有任何文字提示，教学只靠手牌弱引导的虚拟手指演示操作。
  */
 export function createStageHud(): StageHudHandle {

@@ -34,6 +34,11 @@ export interface BattleHudHandle {
   setSpectatorCount(count: number): void;
   /** 观战追帧提示。 */
   setCatchingUp(catchingUp: boolean): void;
+  /**
+   * 战役关顶部文案（关卡序号 + 关卡名）。
+   * 非空时常规阶段中栏改显它；null 退回归还阶段文案，联机/回放/观战都传 null。
+   */
+  setStageLabel(label: string | null): void;
   update(match: MatchState): void;
 }
 
@@ -119,6 +124,8 @@ export function createBattleHud(): BattleHudHandle {
   const oppTeamCache: TeamTotalCache = emptyTeamCache();
   /** 无限模式下的波次信息；null 表示常规对局。 */
   let endlessWave: { wave: number; boss: boolean } | null = null;
+  /** 战役关顶部文案；null 表示非战役局，中栏回落到阶段名。 */
+  let stageLabel: string | null = null;
   let lastWaveText = '';
   let lastWaveFill = '';
   let lastWaveEnemies = '';
@@ -139,6 +146,9 @@ export function createBattleHud(): BattleHudHandle {
       // 离开对局时清掉无限模式，避免下一场联机/回放还留着波次与进度条
       endlessWave = null;
       root.classList.remove('is-endless');
+      // 关卡标题同理：下一局可能是联机或普通人机，不能残留战役文案
+      stageLabel = null;
+      root.classList.remove('is-stage');
       waveBar.classList.remove('is-boss');
     },
     setEndlessMode(wave) {
@@ -195,8 +205,19 @@ export function createBattleHud(): BattleHudHandle {
     setCatchingUp(catchingUp) {
       catchup.classList.toggle('is-hidden', !catchingUp);
     },
+    setStageLabel(label) {
+      stageLabel = label;
+      root.classList.toggle('is-stage', label !== null);
+      // 文案可能变长变短，清脏检查缓存让下一帧一定重写中栏
+      lastPhaseText = '';
+      lastPhase = '';
+    },
     setContext(next) {
       context = next;
+      // 联机/回放/观战也走这里：先摘掉战役文案，避免串到别的对局
+      stageLabel = null;
+      root.classList.remove('is-stage');
+      lastPhaseText = '';
       root.classList.toggle('is-2v2', next.teammateSlot != null);
       writeText(selfName, next.localName || '玩家', (value) => {
         lastSelfName = value;
@@ -262,7 +283,9 @@ export function createBattleHud(): BattleHudHandle {
       // 无限防守隐藏了双方血条与对手手牌：波次与出兵进度由 setEndlessMode / updateEndlessProgress 维护
       if (endlessWave) return;
 
-      const phaseText = matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
+      const phaseText = stageLabel && (match.phase === 'normal' || match.phase === 'ended')
+        ? stageLabel
+        : matchPhaseLabel(match.phase) || matchPhaseLabel('normal');
       writeText(phaseLabel, phaseText, (value) => {
         lastPhaseText = value;
       }, lastPhaseText);

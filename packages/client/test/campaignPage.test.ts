@@ -66,6 +66,9 @@ describe('战役选关页', () => {
     expect(document.querySelector('.campaign-stage-goal')).toBeNull();
     // 已通关为金星，已解锁未通关为空星，锁定关不显示星星
     expect(buttons.map((button) => starState(button))).toEqual(['earned', 'empty', 'none']);
+    // 星星徽章挂在信息卡里（卡片最右端），不再是圆章的兄弟节点
+    expect(buttons[0]!.querySelector('.campaign-stage-plate > .campaign-stage-star')).not.toBeNull();
+    expect(buttons[1]!.querySelector('.campaign-stage-plate > .campaign-stage-star')).not.toBeNull();
     expect(buttons[0]!.classList.contains('is-cleared')).toBe(true);
     // 标题栏只显示星数总和
     expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 1');
@@ -200,6 +203,9 @@ describe('战役选关页', () => {
     // 终点大节点让给无限防守
     expect(document.querySelectorAll('.campaign-stage.is-boss')).toHaveLength(1);
     expect(endless.querySelector('.campaign-stage-title')!.textContent).toBe('无限防守');
+    // 未解锁不预告星数
+    expect(starState(endless)).toBe('none');
+    expect(endless.querySelector('.campaign-stage-plate > .campaign-stage-star')).toBeNull();
 
     for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
     page.show();
@@ -207,6 +213,42 @@ describe('战役选关页', () => {
     expect(endless.disabled).toBe(false);
     endless.click();
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('无限防守节点在卡片右端显示历史最佳波数折算的星数', () => {
+    let progress = emptyProgress();
+    for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
+    const page = createCampaignPage({
+      onBack: vi.fn(),
+      onStartStage: vi.fn(),
+      getStages: () => stages,
+      getProgress: () => progress,
+      endless: { getBestWave: () => 7, onStart: vi.fn() },
+    });
+    page.show();
+
+    const star = document.querySelector<HTMLElement>('.campaign-endless .campaign-stage-plate > .campaign-stage-star')!;
+    expect(star).not.toBeNull();
+    expect(star.textContent).toBe('★ 7');
+    expect(star.classList.contains('is-earned')).toBe(true);
+    expect(star.getAttribute('aria-label')).toBe('历史最佳 7 波，折合 7 星');
+  });
+
+  it('无限防守没有历史最佳时显示 0 星灰星', () => {
+    let progress = emptyProgress();
+    for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
+    const page = createCampaignPage({
+      onBack: vi.fn(),
+      onStartStage: vi.fn(),
+      getStages: () => stages,
+      getProgress: () => progress,
+      endless: { getBestWave: () => null, onStart: vi.fn() },
+    });
+    page.show();
+
+    const star = document.querySelector<HTMLElement>('.campaign-endless .campaign-stage-star')!;
+    expect(star.textContent).toBe('★ 0');
+    expect(star.classList.contains('is-earned')).toBe(false);
   });
 
   it('标题星数包含无限防守守住波数', () => {

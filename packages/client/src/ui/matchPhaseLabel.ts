@@ -17,3 +17,11 @@ export function matchPhaseLabel(phase: MatchPhase): string {
       return '';
   }
 }
+
+/**
+ * 战役顶部栏文案：关卡序号 + 关卡名，单行展示。
+ * 仅战役关使用，其它模式仍走 matchPhaseLabel。
+ */
+export function campaignStageLabel(index: number, title: string): string {
+  return `第 ${index} 关 · ${title}`;
+}

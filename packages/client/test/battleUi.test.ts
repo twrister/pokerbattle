@@ -365,6 +365,41 @@ describe('对局 HUD 与结算弹窗', () => {
     expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
   });
 
+  it('战役关顶部中栏显示关卡序号与关卡名，离开对局后回到阶段文案', () => {
+    const match = new MatchState(1);
+    match.seedStartingCastles();
+    const hud = createBattleHud();
+    hud.setContext({ localFaction: Faction.Blue, localName: 'A', opponentName: 'B' });
+    hud.setStageLabel('第 3 关 · 万能牌');
+    hud.update(match);
+
+    const root = document.querySelector('#battle-hud')!;
+    expect(root.classList.contains('is-stage')).toBe(true);
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('第 3 关 · 万能牌');
+
+    // 关卡文案只顶替常规阶段，倍速/决胜/结算仍按阶段名走
+    match.setPhaseDurations({
+      normalTicks: 2,
+      doubleSpeedTicks: TICK_RATE * 60,
+      finalTicks: TICK_RATE * 60,
+      settlementTicks: TICK_RATE * 60,
+    });
+    while (match.world.tick < 3) match.step();
+    hud.update(match);
+
+    expect(match.phase).toBe('double_speed');
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('倍速阶段');
+
+    // hide 清掉关卡文案与 is-stage，下一局（联机/普通人机）回到常规阶段
+    hud.hide();
+    const nextMatch = new MatchState(2);
+    nextMatch.seedStartingCastles();
+    hud.update(nextMatch);
+
+    expect(root.classList.contains('is-stage')).toBe(false);
+    expect(document.querySelector('#battle-phase-label')?.textContent).toBe('常规阶段');
+  });
+
   it('按本地阵营展示胜负结果', () => {
     const result = createBattleResult(() => {});
     result.show({ winner: Faction.Blue, reason: 'base_destroyed', endTick: 10 }, Faction.Red);

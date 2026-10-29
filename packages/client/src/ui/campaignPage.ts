@@ -150,13 +150,10 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     const nodeCount = stages.length + (endless ? 1 : 0);
     const lastUnlocked = endlessUnlocked ? stages.length : unlocked.lastIndexOf(true);
     const { points, height } = layoutStageNodes(nodeCount, fitHeight());
+    // 无限防守历史最佳波数：标题总星数与无尽节点星数共用，避免两处口径不一致
+    const bestWave = endless?.getBestWave() ?? null;
     // 标题只显示星星总数：关卡首通星 + 无限防守守住波数
-    renderStars(
-      totalCampaignStars(
-        countCampaignStars(progress, orderedIds),
-        endless?.getBestWave() ?? null,
-      ),
-    );
+    renderStars(totalCampaignStars(countCampaignStars(progress, orderedIds), bestWave));
 
     const map = document.createElement('div');
     map.className = 'campaign-map';
@@ -171,7 +168,7 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
         boss: !endless && stages.length > 1 && index === stages.length - 1,
       }),
     );
-    if (endless) buttons.push(createEndlessButton(endless, points[stages.length]!, endlessUnlocked));
+    if (endless) buttons.push(createEndlessButton(endless, points[stages.length]!, endlessUnlocked, bestWave));
     // 叠放顺序：小路 → 关卡节点
     map.append(
       createRoadSvg(points, height, lastUnlocked),
@@ -216,7 +213,7 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     list.scrollTop = list.scrollTop + offset - list.clientHeight / 2;
   };
 
-  /** 单关节点：圆形序号徽章钉在小路上，右侧奶油信息卡只写标题。 */
+  /** 单关节点：圆形序号徽章钉在小路上，右侧奶油信息卡写标题，星星在卡片最右端。 */
   const createStageButton = (
     stage: StageDef,
     point: MapPoint,
@@ -232,21 +229,27 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
 
     button.append(createNode(state.unlocked ? String(stage.index) : '锁'));
 
-    button.append(createPlate(stage.title));
-
-    // 星星徽章：已通关为金星，已解锁未通关为灰色空星预告，锁定关不显示
-    if (state.cleared) button.append(createStar(true));
-    else if (state.unlocked) button.append(createStar(false));
+    // 星星徽章放在信息卡最右端：已通关为金星，已解锁未通关为灰色空星预告，锁定关不显示
+    const star = state.cleared
+      ? createStar(true)
+      : state.unlocked
+        ? createStar(false)
+        : null;
+    button.append(createPlate(stage.title, star));
 
     button.addEventListener('click', () => options.onStartStage(stage.id));
     return button;
   };
 
-  /** 无限防守节点：复用关卡节点样式的大号终点节点，卡片写最佳波数；没有 stageId。 */
+  /**
+   * 无限防守节点：复用关卡节点样式的大号终点节点，卡片写最佳波数；没有 stageId。
+   * 卡片右端显示历史最佳波数折算的星数（每守住一波 1 星），与标题栏总星数同口径。
+   */
   const createEndlessButton = (
     entry: CampaignEndlessEntry,
     point: MapPoint,
     unlocked: boolean,
+    bestWave: number | null,
   ): HTMLButtonElement => {
     const button = createStageButtonShell(point);
     button.disabled = !unlocked;
@@ -255,7 +258,9 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
 
     button.append(createNode(unlocked ? '∞' : '锁'));
 
-    button.append(createPlate('无限防守'));
+    // 未解锁不预告星数；解锁后无记录按 0 星灰星展示
+    const wave = bestWave != null && Number.isFinite(bestWave) ? Math.max(0, Math.floor(bestWave)) : 0;
+    button.append(createPlate('无限防守', unlocked ? createStar(wave > 0, wave) : null));
 
     button.addEventListener('click', () => entry.onStart());
     return button;
@@ -301,8 +306,11 @@ function createNode(label: string): HTMLSpanElement {
   return node;
 }
 
-/** 奶油信息卡：只显示关卡标题。 */
-function createPlate(title: string): HTMLSpanElement {
+/**
+ * 奶油信息卡：左侧关卡标题，右侧星星徽章（星星由 CSS 推到卡片最右端）。
+ * @param star 星星元素；传 null 表示这张卡片不显示星星（如锁定关）
+ */
+function createPlate(title: string, star: HTMLSpanElement | null): HTMLSpanElement {
   const root = document.createElement('span');
   root.className = 'campaign-stage-plate';
 
@@ -311,16 +319,28 @@ function createPlate(title: string): HTMLSpanElement {
   titleEl.textContent = title;
 
   root.append(titleEl);
+  if (star) root.append(star);
   return root;
 }
 
-/** 星星徽章：钉在节点右上角，earned 为金星，否则为灰色空星；读屏文案说明是否已得星。 */
-function createStar(earned: boolean): HTMLSpanElement {
+/**
+ * 星星徽章：earned 为金星，否则为灰色空星。
+ * @param count 星数；省略时只画一颗星（战役关每关 1 星），传入时文案为「★ N」
+ *   用于无限防守这类按波数累计的场景
+ */
+function createStar(earned: boolean, count?: number): HTMLSpanElement {
   const star = document.createElement('span');
   star.className = 'campaign-stage-star';
   star.classList.toggle('is-earned', earned);
-  star.textContent = '★';
-  star.setAttribute('aria-label', earned ? '已获得 1 星' : '通关可得 1 星');
+  star.textContent = count === undefined ? '★' : `★ ${count}`;
+  star.setAttribute(
+    'aria-label',
+    count === undefined
+      ? earned ? '已获得 1 星' : '通关可得 1 星'
+      : earned
+        ? `历史最佳 ${count} 波，折合 ${count} 星`
+        : '尚无历史最佳波数',
+  );
   return star;
 }
 

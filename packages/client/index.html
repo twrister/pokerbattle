@@ -1986,11 +1986,15 @@
         display: none;
       }
 
-      /* 战役局内：目标卡片贴舞台左缘，纵向让开左上角的返回键/音效键按钮列。不拦截鼠标 */
+      /*
+       * 战役局内：目标卡片贴舞台右缘。
+       * 与无限防守的「本局叠加」共用右上角，但两者互斥显示（无限关只出叠加面板）。
+       * 纵向下移一整行，避开顶部中央的对局信息条（双方血条 / 阶段 / 倒计时）。不拦截鼠标
+       */
       #stage-hud {
         position: absolute;
         top: calc(max(calc(12 * var(--hu)), var(--stage-safe-top)) + calc(88 * var(--hu)));
-        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
+        right: max(calc(12 * var(--hu)), var(--stage-safe-right));
         z-index: 3;
         width: calc(210 * var(--hu));
         box-sizing: border-box;
@@ -2489,8 +2493,10 @@
         top: 50%;
         z-index: 1;
         display: flex;
-        flex-direction: column;
-        gap: calc(4 * var(--mu));
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(12 * var(--mu));
         width: calc(400 * var(--mu));
         padding: calc(14 * var(--mu)) calc(16 * var(--mu));
         border: calc(3 * var(--mu)) solid var(--outline);
@@ -2513,8 +2519,11 @@
         transform: translateY(calc(-50% - 1 * var(--mu)));
       }
 
+      /* 标题占据剩余宽度，过长时省略，不会把右端星星挤出卡片 */
       .campaign-stage-title {
         display: block;
+        flex: 1;
+        min-width: 0;
         overflow: hidden;
         color: var(--ink);
         font-size: calc(18 * var(--mu));
@@ -2523,17 +2532,16 @@
         white-space: nowrap;
       }
 
-      /* 星星徽章：圆章右上角，已得为描边金星，未得为半透明灰星 */
+      /* 星星徽章：卡片最右端，已得为描边金星，未得为半透明灰星 */
       .campaign-stage-star {
-        position: absolute;
-        top: calc(-10 * var(--mu));
-        right: calc(-10 * var(--mu));
-        z-index: 3;
+        flex: none;
         color: rgba(220, 230, 242, 0.75);
         font-family: var(--font-display);
-        font-size: calc(32 * var(--mu));
+        font-size: calc(22 * var(--mu));
+        font-variant-numeric: tabular-nums;
         line-height: 1;
-        -webkit-text-stroke: calc(2.5 * var(--mu)) var(--outline);
+        white-space: nowrap;
+        -webkit-text-stroke: calc(2 * var(--mu)) var(--outline);
         paint-order: stroke fill;
         pointer-events: none;
       }
@@ -3743,6 +3751,14 @@
         letter-spacing: 0.04em;
         text-shadow: 0 calc(1 * var(--hu)) 0 var(--outline);
         white-space: nowrap;
+      }
+
+      /* 战役关标题比阶段名长：略缩字号并省略超长部分，避免把两侧血条栏挤变形 */
+      #battle-hud.is-stage #battle-phase-label {
+        max-width: calc(180 * var(--hu));
+        overflow: hidden;
+        font-size: calc(13 * var(--hu));
+        text-overflow: ellipsis;
       }
 
       #battle-timer-label {

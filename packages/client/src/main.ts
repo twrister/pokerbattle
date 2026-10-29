@@ -117,6 +117,7 @@ import {
   TEAMMATE_DOWN_ANNOUNCE,
 } from './ui/battleAnnounce.js';
 import { createBattleHud } from './ui/battleHud.js';
+import { campaignStageLabel } from './ui/matchPhaseLabel.js';
 import { createBattleDamagePanel } from './ui/battleDamagePanel.js';
 import { createBattleResult } from './ui/battleResult.js';
 import {
@@ -977,6 +978,10 @@ function enterBattleSession(mode: BattleMode): () => void {
     ? (stageDef.objectives.find((objective) => objective.kind === 'clear_wave')?.spawnEndSeconds ?? 0)
     : 0;
   battleHud.setEndlessMode(endlessWaveInfo);
+  // 战役关顶部改显示关卡序号与关卡名；普通人机、联机、回放与无限防守保持阶段/波次文案
+  battleHud.setStageLabel(
+    stageDef && !endlessWaveInfo ? campaignStageLabel(stageDef.index, stageDef.title) : null,
+  );
   /** 按当前 tick 刷新出兵进度与剩余敌人数。 */
   const syncEndlessProgress = (): void => {
     const match = loop.match;
