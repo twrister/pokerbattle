@@ -17,9 +17,35 @@
     "preset": [
       {
         "faction": 1,
-        "typeId": "building_tower",
-        "x": 9,
-        "y": 24
+        "typeId": "melee_grunt",
+        "x": 8.4,
+        "y": 20.6,
+        "hold": true,
+        "hpRatio": 0.4
+      },
+      {
+        "faction": 1,
+        "typeId": "melee_grunt",
+        "x": 9.6,
+        "y": 20.6,
+        "hold": true,
+        "hpRatio": 0.4
+      },
+      {
+        "faction": 1,
+        "typeId": "ranged_archer",
+        "x": 8.4,
+        "y": 21.8,
+        "hold": true,
+        "hpRatio": 0.4
+      },
+      {
+        "faction": 1,
+        "typeId": "ranged_archer",
+        "x": 9.6,
+        "y": 21.8,
+        "hold": true,
+        "hpRatio": 0.4
       }
     ],
     "objectives": [
@@ -27,7 +53,7 @@
         "kind": "play_any"
       },
       {
-        "kind": "destroy_towers"
+        "kind": "clear_enemy_units"
       }
     ]
   },

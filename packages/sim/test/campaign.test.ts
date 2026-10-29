@@ -71,13 +71,13 @@ describe('战役关卡数据', () => {
     expect(getStageById('s8')?.arena).toBeUndefined();
   });
 
-  it('1-1 通关条件：打出任意兵种 + 摧毁敌方箭塔，文案不带进度数字', () => {
+  it('1-1 通关条件：打出任意兵种 + 清光敌方部队，文案不带进度数字', () => {
     const def = getStageById('c1_1')!;
-    expect(def.objectives).toEqual([{ kind: 'play_any' }, { kind: 'destroy_towers' }]);
+    expect(def.objectives).toEqual([{ kind: 'play_any' }, { kind: 'clear_enemy_units' }]);
     const { match, runner } = createStageMatch(def);
     expect(runner.tracker.getProgress(match).map((item) => item.text)).toEqual([
       '打出任意兵种',
-      '摧毁敌方箭塔',
+      '清光敌方部队',
     ]);
   });
 
@@ -207,26 +207,44 @@ describe('前三关试玩（无头仿真）', () => {
     expect(runner.tracker.getStatus()).toBe('pending');
   });
 
-  it('1-1：敌方区域中间只有一座初级箭塔，双方都没有主堡', () => {
+  it('1-1：敌方区域是 2 民兵 + 2 弓手驻守，双方都没有主堡', () => {
     const { match, runner } = createStageMatch(getStageById('c1_1')!);
-    const redBuildings = match.world.units.filter(
-      (unit) => unit.faction === Faction.Red && !unit.dead,
-    );
-    expect(redBuildings).toHaveLength(1);
-    const tower = redBuildings[0]!;
-    expect(tower.typeId).toBe('building_tower');
-    // 落在敌方半场正中间：横向居中、位于对方半场中部
-    expect(toFloat(tower.pos.x)).toBeCloseTo(toFloat(ARENA_WIDTH) / 2, 0);
-    expect(toFloat(tower.pos.y)).toBeGreaterThan(toFloat(ARENA_HEIGHT) / 2);
+    const redUnits = match.world.units.filter((unit) => unit.faction === Faction.Red && !unit.dead);
+    expect(redUnits).toHaveLength(4);
+    // 两个民兵在前、两个弓手在后，都是教学关的固定防线
+    expect(redUnits.filter((unit) => unit.typeId === 'melee_grunt')).toHaveLength(2);
+    expect(redUnits.filter((unit) => unit.typeId === 'ranged_archer')).toHaveLength(2);
+    for (const unit of redUnits) expect(unit.hold).toBe(true);
+    // 横向居中对称、全部落在敌方半场
+    const centerX = redUnits.reduce((sum, unit) => sum + toFloat(unit.pos.x), 0) / redUnits.length;
+    expect(centerX).toBeCloseTo(toFloat(ARENA_WIDTH) / 2, 1);
+    for (const unit of redUnits) {
+      expect(toFloat(unit.pos.y)).toBeGreaterThan(toFloat(ARENA_HEIGHT) / 2);
+    }
     // 双方主堡都被移除，对局不会自己收局，通关只看关卡目标
     expect(match.world.units.some((unit) => unit.typeId === 'building_base')).toBe(false);
     expect(match.result).toBeNull();
 
     const card = match.decks[Faction.Blue].hand[0]!;
     expect(playOneCard(match, card)).toBe(true);
-    tower.hp = 0;
-    tower.dead = true;
+    for (const unit of redUnits) {
+      unit.hp = 0;
+      unit.dead = true;
+    }
     run(match, runner, 2);
+    expect(runner.tracker.getStatus()).toBe('success');
+  });
+
+  it('1-1：持续出单牌能在时限内清场', () => {
+    // 防数值改动把关卡改死：只打单牌、不点选其他阵型，也要能收掉这 4 个驻守单位
+    const { match, runner } = createStageMatch(getStageById('c1_1')!);
+    const deadline = TICK_RATE * 100;
+    for (let tick = 0; tick < deadline && runner.tracker.getStatus() === 'pending'; tick += 1) {
+      const card = match.decks[Faction.Blue].hand[0];
+      // 有牌就补一手单牌；playOneCard 内部已经 step 过，没出成牌才空推进一帧
+      if (!card || !playOneCard(match, card)) match.step([]);
+      runner.update();
+    }
     expect(runner.tracker.getStatus()).toBe('success');
   });
 
