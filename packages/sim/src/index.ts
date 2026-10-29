@@ -331,6 +331,7 @@ export {
   ObjectiveTracker,
   STAGE_FAIL_REASON_TEXT,
   countLivingMobileUnits,
+  describeStageObjective,
   type ObjectiveProgress,
   type StageFailReason,
   type StageOutcome,
@@ -340,27 +341,41 @@ export { CAMPAIGN_STAGE_SECONDS, StageRunner } from './campaign/stageRunner.js';
 export { CAMPAIGN_STAGES, getNextStage, getStageById } from './campaign/stages.js';
 export { matchRulesWithOverrides } from './config/matchRules.js';
 export {
+  ENDLESS_UNIT_WEIGHT_MAX,
+  ENDLESS_UNIT_WEIGHT_MIN,
+  ENDLESS_WAVE_BUDGET_MAX,
+  ENDLESS_WAVE_BUDGET_MIN,
+  ENDLESS_WAVE_INTERVAL_MAX,
+  ENDLESS_WAVE_INTERVAL_MIN,
+  ENDLESS_WAVE_ROWS_MAX,
   ENDLESS_WAVE_SECONDS,
   ENDLESS_WAVE_SECONDS_MIN,
   ENDLESS_WAVE_SECONDS_MAX,
+  ENDLESS_WAVE_UNITS_MAX,
   applyEndlessConfigDraft,
+  applyEndlessWaveSeconds,
   captureEndlessConfigAsDefault,
   clampEndlessWaveSeconds,
   defaultEndlessWaveSeconds,
   dumpDefaultEndlessConfigDraft,
   dumpEndlessConfigDraft,
+  getEndlessWaveOverride,
   resetEndlessConfigToDefault,
   restoreEndlessConfigFromFile,
   sanitizeEndlessConfigDraft,
   validateEndlessConfigDraft,
   type EndlessConfigDraft,
+  type EndlessWaveDraft,
+  type EndlessWaveUnitDraft,
 } from './config/endlessConfig.js';
 export {
   ENDLESS_BOSS_EVERY,
+  ENDLESS_MAX_CARRIED_UNITS,
   ENDLESS_MIN_DRAW_INTERVAL,
   advanceWave,
   createRun,
   isBossWave,
+  sanitizeCarriedUnits,
   sanitizeRun,
   type EndlessRunState,
 } from './campaign/endless/endlessRun.js';
@@ -375,8 +390,13 @@ export {
 export {
   buildWaveStage,
   buildWaveSteps,
+  collectSurvivors,
+  endlessDefaultUnitCost,
+  endlessDefaultWaveUnits,
+  endlessWaveFormula,
   endlessWaveSpawnProgress,
   waveSpec,
+  waveWindowSeconds,
   type WaveSpec,
 } from './campaign/endless/waveGenerator.js';
 

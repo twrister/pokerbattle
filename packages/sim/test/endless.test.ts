@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   BOONS,
   ENDLESS_WAVE_SECONDS,
@@ -12,15 +12,24 @@ import {
   TICK_RATE,
   advanceWave,
   applyBoon,
+  applyEndlessConfigDraft,
   buildWaveStage,
   buildWaveSteps,
+  collectSurvivors,
   createPokerCards,
   createRun,
+  dumpEndlessConfigDraft,
+  fromFloat,
+  getEndlessWaveOverride,
   getPokerCardById,
   isWildCard,
   rollBoonChoices,
+  sanitizeEndlessConfigDraft,
   sanitizeRun,
+  toFloat,
+  validateEndlessConfigDraft,
   waveSpec,
+  waveWindowSeconds,
   type EndlessRunState,
   type StageDef,
 } from '../src/index.js';
@@ -154,8 +163,7 @@ describe('强化', () => {
   });
 });
 
-describe('无限防守对局判定', () => {
-  it('敌方没有主堡也不会立即收局，清完这一波判成功', () => {
+describe('无限防守对局判定', () => {  it('敌方没有主堡也不会立即收局，清完这一波判成功', () => {
     // 敌方不出兵，只验证结束判定：出兵窗口过后场上没敌人即清场
     const def: StageDef = {
       ...buildWaveStage(createRun(1)),
@@ -203,5 +211,186 @@ describe('无限防守对局判定', () => {
     run(match, runner, 3);
     expect(match.result?.winner).toBe(Faction.Red);
     expect(runner.tracker.getOutcome()?.status).toBe('fail');
+  });
+});
+
+describe('单位继承', () => {
+  it('撑过一波时记下存活单位，下一波原位置摆回场上', () => {
+    const survivors = [
+      { faction: 0 as const, typeId: 'melee_grunt' as const, x: 9, y: 6, hpRatio: 0.5 },
+      { faction: 0 as const, typeId: 'ranged_archer' as const, x: 5, y: 8, hpRatio: 1 },
+    ];
+    const next = advanceWave(createRun(1), 0.7, 30, survivors);
+    expect(next.carriedUnits).toHaveLength(2);
+
+    const def = buildWaveStage(next);
+    expect(def.preset).toHaveLength(2);
+    const { match } = createStageMatch(def);
+    const grunt = match.world.units.find((unit) => unit.typeId === 'melee_grunt' && unit.faction === Faction.Blue)!;
+    expect(toFloat(grunt.pos.x)).toBeCloseTo(9, 1);
+    // 残血按比例折算，至少留 1 点，不能开局就判死
+    expect(toFloat(grunt.hp)).toBeCloseTo(toFloat(grunt.config.maxHp) * 0.5, 0);
+  });
+
+  it('没有存活单位时下一波不带 preset', () => {
+    expect(advanceWave(createRun(1), 1, 30).carriedUnits).toEqual([]);
+    expect(buildWaveStage(advanceWave(createRun(1), 1, 30)).preset).toBeUndefined();
+  });
+
+  it('collectSurvivors 收集玩家方存活单位，主堡不继承、箭塔继承', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(1)));
+    match.world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(5));
+    match.world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(4), fromFloat(4));
+    match.world.spawnUnit(Faction.Red, 'melee_grunt', fromFloat(8), fromFloat(24));
+    const tower = match.world.spawnBuilding(Faction.Blue, 'building_tower', fromFloat(3), fromFloat(6))!;
+    tower.hp = Math.round(tower.config.maxHp * 0.5);
+    const survivors = collectSurvivors(match);
+    expect(survivors.map((unit) => unit.typeId).sort()).toEqual(['building_tower', 'melee_grunt', 'ranged_archer']);
+    expect(survivors.every((unit) => unit.faction === 0)).toBe(true);
+    // 塔按残血继承，下一波仍是半血
+    expect(survivors.find((unit) => unit.typeId === 'building_tower')?.hpRatio).toBeCloseTo(0.5, 2);
+    // 主堡每波重新播种，不参与继承
+    expect(survivors.some((unit) => unit.typeId === 'building_base')).toBe(false);
+  });
+
+  it('过河的单位不继承，己方半场的单位继承', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(1)));
+    match.world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(5));
+    match.world.spawnUnit(Faction.Blue, 'ranged_archer', fromFloat(8), fromFloat(22));
+    const survivors = collectSurvivors(match);
+    expect(survivors.map((unit) => unit.typeId)).toEqual(['melee_grunt']);
+  });
+
+  it('阵亡单位不继承', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(1)));
+    const unit = match.world.spawnUnit(Faction.Blue, 'melee_grunt', fromFloat(8), fromFloat(5));
+    unit.dead = true;
+    expect(collectSurvivors(match)).toEqual([]);
+  });
+
+  it('继承的箭塔在下一波开局保留残血与位置', () => {
+    const survivors = [
+      { faction: 0 as const, typeId: 'building_tower' as const, x: 4, y: 6, hpRatio: 0.4 },
+    ];
+    const next = advanceWave(createRun(1), 1, 30, survivors);
+    const { match } = createStageMatch(buildWaveStage(next));
+    const tower = match.world.units.find(
+      (unit) => unit.typeId === 'building_tower' && unit.faction === Faction.Blue,
+    )!;
+    expect(toFloat(tower.pos.x)).toBeCloseTo(4, 1);
+    expect(toFloat(tower.pos.y)).toBeCloseTo(6, 1);
+    expect(toFloat(tower.hp)).toBeCloseTo(toFloat(tower.config.maxHp) * 0.4, 0);
+  });
+
+  it('箭塔落点非法时跳过该预置单位，不抛错', () => {
+    const survivors = [
+      // 占格与主堡重叠：主堡每波都播在场地底边，这里直接压到它的位置上
+      { faction: 0 as const, typeId: 'building_tower' as const, x: 9, y: 2, hpRatio: 1 },
+    ];
+    const next = advanceWave(createRun(1), 1, 30, survivors);
+    let match: MatchState | undefined;
+    expect(() => {
+      match = createStageMatch(buildWaveStage(next)).match;
+    }).not.toThrow();
+    // 被主堡占格挡掉，场上一座箭塔都没有，主堡仍在
+    expect(match!.world.units.some((unit) => unit.typeId === 'building_tower')).toBe(false);
+    expect(match!.world.units.some((unit) => unit.typeId === 'building_base')).toBe(true);
+  });
+
+  it('读档时清洗非法继承单位并夹紧数量与血量', () => {
+    const dirty = {
+      ...createRun(1),
+      carriedUnits: [
+        { faction: 0, typeId: 'melee_grunt', x: 3, y: 4, hpRatio: 0.4 },
+        { faction: 0, typeId: 'not_a_unit', x: 3, y: 4 },
+        { faction: 0, typeId: 'melee_grunt', x: Number.NaN, y: 4 },
+        { faction: 0, typeId: 'building_tower', x: 4, y: 6, hpRatio: 0.3 },
+        { faction: 0, typeId: 'building_base', x: 9, y: 2 },
+        { faction: 0, typeId: 'dragon', x: 1, y: 2, hpRatio: 9 },
+      ],
+    } as unknown as EndlessRunState;
+    const units = sanitizeRun(dirty).carriedUnits;
+    // 箭塔优先排在前面，主堡被丢弃
+    expect(units.map((unit) => unit.typeId)).toEqual(['building_tower', 'melee_grunt', 'dragon']);
+    expect(units[0]!.hpRatio).toBeCloseTo(0.3, 2);
+    expect(units[2]!.hpRatio).toBe(1);
+  });
+
+  it('旧存档没有 carriedUnits 时按空阵容续玩', () => {
+    const legacy = { ...createRun(1) } as Partial<EndlessRunState>;
+    delete legacy.carriedUnits;
+    expect(sanitizeRun(legacy as EndlessRunState).carriedUnits).toEqual([]);
+  });
+});
+
+describe('每关参数覆盖', () => {
+  const original = dumpEndlessConfigDraft();
+
+  afterEach(() => {
+    // 每个用例跑完都把运行时配置还原，避免串味到其它 describe
+    applyEndlessConfigDraft({ waveSeconds: original.waveSeconds, waves: original.waves });
+  });
+
+  it('没配置时全部走公式', () => {
+    applyEndlessConfigDraft({ waveSeconds: 120, waves: [] });
+    expect(waveSpec(3).budget).toBeCloseTo(14 * 1.18 ** 2, 5);
+    expect(getEndlessWaveOverride(3)).toBeUndefined();
+  });
+
+  it('配置了预算与间隔就以覆盖值为准', () => {
+    applyEndlessConfigDraft({
+      waveSeconds: 120,
+      waves: [{ wave: 2, budget: 40, intervalSeconds: 9 }],
+    });
+    const spec = waveSpec(2);
+    expect(spec.budget).toBe(40);
+    expect(spec.intervalSeconds).toBe(9);
+    // 其它波继续走公式
+    expect(waveSpec(3).budget).not.toBe(40);
+  });
+
+  it('覆盖出兵窗口后，出兵点跟着新窗口收缩', () => {
+    applyEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 4, waveSeconds: 40 }] });
+    expect(waveWindowSeconds(4, 120)).toBe(40);
+    const steps = buildWaveSteps(7, 4, waveWindowSeconds(4, 120));
+    const latest = steps.reduce((end, step) => Math.max(end, step.atSeconds), 0);
+    expect(latest).toBeLessThanOrEqual(40);
+  });
+
+  it('覆盖兵种池后只出配置的兵种', () => {
+    applyEndlessConfigDraft({
+      waveSeconds: 120,
+      waves: [{ wave: 1, budget: 20, intervalSeconds: 6, units: [{ typeId: 'melee_guard', weight: 1 }] }],
+    });
+    const types = new Set(buildWaveSteps(5, 1, 120).map((step) => step.typeId));
+    expect([...types]).toEqual(['melee_guard']);
+  });
+
+  it('超出已配置波数继续走公式', () => {
+    applyEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 1, budget: 30 }] });
+    expect(waveSpec(1).budget).toBe(30);
+    expect(waveSpec(2).budget).toBeCloseTo(14 * 1.18, 5);
+  });
+
+  it('校验拦下非法覆盖项', () => {
+    expect(validateEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 0 }] })).toContain('wave');
+    expect(validateEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 1, budget: -1 }] })).toContain('budget');
+    expect(
+      validateEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 1, units: [{ typeId: 'nope', weight: 1 }] }] }),
+    ).toContain('未知兵种');
+    expect(validateEndlessConfigDraft({ waveSeconds: 120, waves: [{ wave: 1, units: [] }] })).toBeUndefined();
+  });
+
+  it('清洗覆盖项时按波号排序去重', () => {
+    const draft = sanitizeEndlessConfigDraft({
+      waveSeconds: 120,
+      waves: [
+        { wave: 3, budget: 20 },
+        { wave: 1, budget: 10 },
+        { wave: 3, budget: 99 },
+      ],
+    });
+    expect(draft.waves.map((wave) => wave.wave)).toEqual([1, 3]);
+    expect(draft.waves[1]!.budget).toBe(20);
   });
 });

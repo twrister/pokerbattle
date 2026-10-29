@@ -71,7 +71,7 @@ export class ObjectiveTracker {
   /** 逐目标进度，用于目标面板。 */
   getProgress(match: MatchState): ObjectiveProgress[] {
     return this.def.objectives.map((objective) => ({
-      text: describeObjective(objective) + this.progressSuffix(objective, match),
+      text: describeStageObjective(objective) + this.progressSuffix(objective, match),
       done: this.isDone(objective, match),
     }));
   }
@@ -254,8 +254,11 @@ function countEnemyTowers(match: MatchState): number {
   return count;
 }
 
-/** 目标面板文案：只列通关条件本身，不带进度数字。 */
-function describeObjective(objective: StageObjective): string {
+/**
+ * 目标文案：只列条件本身，不带进度数字。
+ * 选关页与局内目标面板共用，避免两处维护同一套中文说法。
+ */
+export function describeStageObjective(objective: StageObjective): string {
   switch (objective.kind) {
     case 'destroy_base':
       return '摧毁敌方基地';

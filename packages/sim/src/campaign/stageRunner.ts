@@ -1,6 +1,7 @@
 import { createPokerCards, type PlayingCard } from '../cards/deck.js';
 import type { Command } from '../commands.js';
 import { matchRulesWithOverrides } from '../config/matchRules.js';
+import { getUnitConfig, isBuildingConfig } from '../config/units.js';
 import { TICK_RATE } from '../config/tuning.js';
 import { Faction } from '../entity/unit.js';
 import { type Fx, fromFloat } from '../math/fixed.js';
@@ -99,7 +100,13 @@ export class StageRunner {
     const world = this.match.world;
     for (const preset of this.def.preset ?? []) {
       const faction = preset.faction === 0 ? Faction.Blue : Faction.Red;
-      const unit = world.spawnUnit(faction, preset.typeId, fromFloat(preset.x), fromFloat(preset.y));
+      const x = fromFloat(preset.x);
+      const y = fromFloat(preset.y);
+      // 无限关继承的箭塔可能压在已播种主堡或彼此重叠，落点非法时丢弃而不是抛错
+      const unit = isBuildingConfig(getUnitConfig(preset.typeId))
+        ? world.spawnBuilding(faction, preset.typeId, x, y)
+        : world.spawnUnit(faction, preset.typeId, x, y);
+      if (!unit) continue;
       if (preset.hpRatio !== undefined) unit.hp = scaledHp(unit.config.maxHp, preset.hpRatio);
       if (preset.hold) unit.hold = true;
     }

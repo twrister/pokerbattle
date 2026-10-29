@@ -1,10 +1,14 @@
 import { MAX_HAND_SIZE, MAX_WILD_CARDS } from '../../cards/deck.js';
 import { defaultEndlessWaveSeconds, clampEndlessWaveSeconds } from '../../config/endlessConfig.js';
+import { UNIT_CONFIGS, UNIT_TYPE_IDS, isBuildingConfig, isCastleId } from '../../config/units.js';
+import type { StagePresetUnit } from '../stageDef.js';
 
 /** 发牌间隔下限（秒），再快手牌会溢出、节奏失控。 */
 export const ENDLESS_MIN_DRAW_INTERVAL = 2;
 /** 每 N 波一个 Boss 波，通过后只给稀有强化。 */
 export const ENDLESS_BOSS_EVERY = 5;
+/** 继承到下一波的单位上限：再多会把玩家半场挤爆，也会让对局变成单边；建筑优先占位。 */
+export const ENDLESS_MAX_CARRIED_UNITS = 30;
 
 /**
  * 一次无限防守挑战（Run）的全部继承状态。
@@ -33,6 +37,8 @@ export interface EndlessRunState {
   boons: string[];
   /** 已撑过的累计秒数。 */
   totalSeconds: number;
+  /** 上一波结束时玩家场上的存活单位，原位置、原血量比例带入下一波开局。 */
+  carriedUnits: StagePresetUnit[];
 }
 
 /**
@@ -52,6 +58,7 @@ export function createRun(runSeed: number, waveSeconds: number = defaultEndlessW
     regenPerWave: 0,
     boons: [],
     totalSeconds: 0,
+    carriedUnits: [],
   };
 }
 
@@ -61,14 +68,16 @@ export function isBossWave(wave: number): boolean {
 }
 
 /**
- * 撑过一波：记下残血、累计时长并推进到下一波，同时结算每波回血。
+ * 撑过一波：记下残血与存活单位、累计时长并推进到下一波，同时结算每波回血。
  * remainingHpRatio 为本波结束时玩家主堡血量比例；
- * elapsedSeconds 为本波实际用时（清场流，时长不固定），缺省按窗口长度记。
+ * elapsedSeconds 为本波实际用时（清场流，时长不固定），缺省按窗口长度记；
+ * survivors 为本波结束时玩家场上的存活单位，不带则清空继承（调试/旧调用方）。
  */
 export function advanceWave(
   state: EndlessRunState,
   remainingHpRatio: number,
   elapsedSeconds: number = state.waveSeconds,
+  survivors: readonly StagePresetUnit[] = [],
 ): EndlessRunState {
   const healed = clamp01(remainingHpRatio) + state.regenPerWave;
   return {
@@ -76,6 +85,7 @@ export function advanceWave(
     wave: state.wave + 1,
     castleHpRatio: clamp01(healed),
     totalSeconds: state.totalSeconds + Math.max(0, elapsedSeconds),
+    carriedUnits: sanitizeCarriedUnits(survivors),
   };
 }
 
@@ -97,7 +107,40 @@ export function sanitizeRun(state: EndlessRunState): EndlessRunState {
     regenPerWave: Math.max(0, Math.min(1, state.regenPerWave)),
     boons: [...state.boons],
     totalSeconds: Math.max(0, state.totalSeconds),
+    carriedUnits: sanitizeCarriedUnits(state.carriedUnits),
   };
+}
+
+/**
+ * 清洗继承单位：丢掉未知兵种、非有限坐标与主堡，最多保留 ENDLESS_MAX_CARRIED_UNITS 个。
+ * 建筑（箭塔）优先入列，避免被可移动单位挤掉；血量比例缺失按满血处理，
+ * 避免旧存档读进来每波都是残血。
+ */
+export function sanitizeCarriedUnits(raw: unknown): StagePresetUnit[] {
+  if (!Array.isArray(raw)) return [];
+  const buildings: StagePresetUnit[] = [];
+  const mobiles: StagePresetUnit[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const entry = item as Partial<StagePresetUnit>;
+    if (typeof entry.typeId !== 'string' || !UNIT_TYPE_IDS.includes(entry.typeId)) continue;
+    const config = UNIT_CONFIGS[entry.typeId];
+    // 主堡不进继承：每波重新播种，血量由 castleHpRatio 单独带
+    if (isCastleId(entry.typeId)) continue;
+    if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y)) continue;
+    const hpRatio = typeof entry.hpRatio === 'number' && Number.isFinite(entry.hpRatio)
+      ? clamp01(entry.hpRatio)
+      : 1;
+    const unit: StagePresetUnit = {
+      faction: 0,
+      typeId: entry.typeId,
+      x: entry.x as number,
+      y: entry.y as number,
+      hpRatio,
+    };
+    (isBuildingConfig(config) ? buildings : mobiles).push(unit);
+  }
+  return [...buildings, ...mobiles].slice(0, ENDLESS_MAX_CARRIED_UNITS);
 }
 
 function clamp01(value: number): number {
