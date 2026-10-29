@@ -65,6 +65,24 @@ export function isStageUnlocked(
   return progress.stages[orderedStageIds[index - 1]!] !== undefined;
 }
 
+/** 战役星数：每关通关得 1 颗，重复通关不叠加。 */
+export interface CampaignStars {
+  earned: number;
+  total: number;
+}
+
+/**
+ * 统计战役星数：只计当前关卡表里存在的关卡，已下线关卡的旧记录不算。
+ * 后续排行榜直接上报 earned。
+ */
+export function countCampaignStars(
+  progress: CampaignProgress,
+  orderedStageIds: readonly string[],
+): CampaignStars {
+  const earned = orderedStageIds.filter((stageId) => progress.stages[stageId] !== undefined).length;
+  return { earned, total: orderedStageIds.length };
+}
+
 /** 进度仓库：读写 localStorage，写失败时静默保留内存态。 */
 export interface CampaignProgressStore {
   load(): CampaignProgress;

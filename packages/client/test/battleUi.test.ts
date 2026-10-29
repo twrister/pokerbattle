@@ -122,6 +122,11 @@ describe('对局 HUD 与结算弹窗', () => {
         </div>
         <div id="battle-result-members" class="battle-result-table is-hidden"></div>
         <p id="battle-result-stage" class="is-hidden"></p>
+        <div id="battle-result-highlight" class="is-hidden">
+          <span id="battle-result-highlight-label"></span>
+          <strong id="battle-result-highlight-value"></strong>
+        </div>
+        <span id="battle-result-badge" class="is-hidden"></span>
         <button id="btn-battle-result-next" class="is-hidden"></button>
         <button id="btn-battle-result-retry" class="is-hidden"></button>
         <button id="btn-battle-result-return"></button>
@@ -414,6 +419,40 @@ describe('对局 HUD 与结算弹窗', () => {
     result.show({ winner: Faction.Blue, reason: 'time_limit', endTick: 10 }, Faction.Blue);
     expect(root.classList.contains('is-stage')).toBe(false);
     expect(stageLine.classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('无限防守结算：自定义标题、大号成绩块与新纪录角标，普通战役结算会清掉', () => {
+    const result = createBattleResult(() => {});
+    const stageLine = document.querySelector('#battle-result-stage')!;
+    const highlight = document.querySelector('#battle-result-highlight')!;
+    const badge = document.querySelector('#battle-result-badge')!;
+    const retry = document.querySelector('#btn-battle-result-retry')!;
+
+    result.showStage({
+      cleared: false,
+      seconds: 300,
+      hasNext: false,
+      onNext: vi.fn(),
+      onRetry: vi.fn(),
+      titleText: '防线失守',
+      highlight: { label: '守住波数', value: '7' },
+      badge: '新纪录',
+      retryLabel: '重新挑战',
+    });
+    expect(document.querySelector('#battle-result-title')?.textContent).toBe('防线失守');
+    expect(highlight.classList.contains('is-hidden')).toBe(false);
+    expect(document.querySelector('#battle-result-highlight-value')?.textContent).toBe('7');
+    expect(badge.textContent).toBe('新纪录');
+    expect(badge.classList.contains('is-hidden')).toBe(false);
+    // 成绩块已说明结果，失败行收起
+    expect(stageLine.classList.contains('is-hidden')).toBe(true);
+    expect(retry.textContent).toBe('重新挑战');
+
+    result.showStage({ cleared: false, seconds: 10, hasNext: false, onNext: vi.fn(), onRetry: vi.fn() });
+    expect(document.querySelector('#battle-result-title')?.textContent).toBe('失败');
+    expect(highlight.classList.contains('is-hidden')).toBe(true);
+    expect(badge.classList.contains('is-hidden')).toBe(true);
+    expect(retry.textContent).toBe('重试');
   });
 
   it('结算弹窗展示双方名字与城堡残血', () => {

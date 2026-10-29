@@ -2,7 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StageDef } from '@pb/sim';
 import { emptyProgress, recordStageClear } from '../src/campaign/progress.js';
-import { buildRoadPath, createCampaignPage, layoutStageNodes } from '../src/ui/campaignPage.js';
+import {
+  MIN_ROW_HEIGHT,
+  buildRoadPath,
+  campaignStageGoalText,
+  createCampaignPage,
+  layoutStageNodes,
+} from '../src/ui/campaignPage.js';
 
 /** 构造最小关卡，只填页面会读到的字段。 */
 function stage(id: string, index: number, arena?: StageDef['arena']): StageDef {
@@ -17,10 +23,18 @@ function stage(id: string, index: number, arena?: StageDef['arena']): StageDef {
   };
 }
 
+/** 读取节点星星徽章状态：金星 / 空星 / 无。 */
+function starState(button: HTMLElement): 'earned' | 'empty' | 'none' {
+  const star = button.querySelector('.campaign-stage-star');
+  if (!star) return 'none';
+  return star.classList.contains('is-earned') ? 'earned' : 'empty';
+}
+
 beforeEach(() => {
   document.body.innerHTML = `
     <main id="campaign" class="is-hidden">
       <button id="btn-campaign-back"></button>
+      <span id="campaign-stars"></span>
       <div id="campaign-list"></div>
     </main>`;
 });
@@ -48,14 +62,20 @@ describe('战役选关页', () => {
       '锁',
     ]);
     expect(buttons[2]!.querySelector('.campaign-stage-arena')?.textContent).toBe('要塞');
-    // 只有已通关的关卡带完成标记，且不再显示副标题与星级
-    expect(buttons.map((button) => button.querySelector('.campaign-stage-status')!.textContent)).toEqual([
-      '✓ 已完成',
-      '',
-      '',
+    // 每张卡片都写目标摘要，不再依赖图片表达关卡内容
+    expect(buttons.map((button) => button.querySelector('.campaign-stage-goal')!.textContent)).toEqual([
+      '赢下这一局',
+      '赢下这一局',
+      '赢下这一局',
     ]);
+    // 已通关为金星，已解锁未通关为空星，锁定关不显示星星
+    expect(buttons.map((button) => starState(button))).toEqual(['earned', 'empty', 'none']);
     expect(buttons[0]!.classList.contains('is-cleared')).toBe(true);
-    expect(document.querySelector('.campaign-stage-goal')).toBeNull();
+    // 标题栏统计已得 / 总星数
+    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 1 / 3');
+    // 节点不再使用任何城堡贴图
+    expect(document.querySelector('.campaign-stage-castle')).toBeNull();
+    expect(document.querySelector('.campaign-stage img')).toBeNull();
   });
 
   it('点击解锁关卡触发 onStartStage，锁定关卡不触发', () => {
@@ -92,8 +112,9 @@ describe('战役选关页', () => {
       '2',
       '3',
     ]);
-    // 全解锁不代表已通关，未打过的关卡不应显示完成标记
-    expect(buttons.map((button) => button.querySelector('.campaign-stage-status')!.textContent)).toEqual(['', '', '']);
+    // 全解锁不代表已通关，未打过的关卡只显示空星
+    expect(buttons.map((button) => starState(button))).toEqual(['empty', 'empty', 'empty']);
+    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 0 / 3');
 
     buttons[2]!.click();
     expect(onStartStage).toHaveBeenCalledWith('c');
@@ -113,13 +134,8 @@ describe('战役选关页', () => {
     expect(buttons.map((button) => button.classList.contains('is-current'))).toEqual([false, true, false]);
     expect(buttons.map((button) => button.classList.contains('is-locked'))).toEqual([false, false, true]);
     expect(buttons.map((button) => button.classList.contains('is-boss'))).toEqual([false, false, true]);
-    // 普通关用箭塔贴图，最后一关用主堡
-    expect(buttons[0]!.querySelector<HTMLImageElement>('.campaign-stage-castle')!.getAttribute('src')).toBe(
-      'buildings/tower_red.png',
-    );
-    expect(buttons[2]!.querySelector<HTMLImageElement>('.campaign-stage-castle')!.getAttribute('src')).toBe(
-      'buildings/base_red.png',
-    );
+    // 卡片按节点所在半区反向挂：左列节点挂右侧，右列节点挂左侧
+    expect(buttons.map((button) => button.dataset.card)).toEqual(['right', 'left', 'right']);
   });
 
   it('全部通关时没有当前关', () => {
@@ -187,8 +203,9 @@ describe('战役选关页', () => {
     page.show();
     let endless = document.querySelector<HTMLButtonElement>('.campaign-endless')!;
     expect(endless.disabled).toBe(true);
-    // 大城堡让给无限防守节点
+    // 终点大节点让给无限防守
     expect(document.querySelectorAll('.campaign-stage.is-boss')).toHaveLength(1);
+    expect(endless.querySelector('.campaign-stage-goal')!.textContent).toBe('撑过每一波进攻，直到防线崩溃');
 
     for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
     page.show();
@@ -197,6 +214,23 @@ describe('战役选关页', () => {
     expect(endless.textContent).toContain('最佳 7 波');
     endless.click();
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('战役目标摘要', () => {
+  it('两条以内拼成一行，超出部分用 +N 概括，限制条件排在最后', () => {
+    expect(campaignStageGoalText([{ kind: 'win_match' }])).toBe('赢下这一局');
+    expect(campaignStageGoalText([{ kind: 'play_any' }, { kind: 'destroy_towers' }])).toBe(
+      '打出任意兵种 · 摧毁敌方箭塔',
+    );
+    // 先给通关条件，限制条件（最多出几手）被挤到 +N 里，不抢主目标的版面
+    expect(
+      campaignStageGoalText([
+        { kind: 'max_plays', count: 3 },
+        { kind: 'destroy_unit', typeId: 'melee_grunt', label: '步兵' },
+        { kind: 'destroy_towers' },
+      ]),
+    ).toBe('击毁步兵 · 摧毁敌方箭塔 +1');
   });
 });
 
@@ -214,6 +248,18 @@ describe('战役地图布局', () => {
       expect(point.x).toBeGreaterThan(0);
       expect(point.x).toBeLessThan(720);
     });
+  });
+
+  it('传入可视高度时压缩行距一屏放下，行距不低于下限', () => {
+    const { points, height } = layoutStageNodes(9, 1100);
+    expect(height).toBe(1100);
+    const row = points[0]!.y - points[1]!.y;
+    expect(row).toBeGreaterThanOrEqual(MIN_ROW_HEIGHT);
+    expect(points[8]!.y).toBeGreaterThan(0);
+    // 可视高度太小时退回最小行距，地图超出视口改为滚动
+    const tight = layoutStageNodes(9, 400);
+    expect(tight.points[0]!.y - tight.points[1]!.y).toBe(MIN_ROW_HEIGHT);
+    expect(tight.height).toBeGreaterThan(400);
   });
 
   it('buildRoadPath 每段一条三次贝塞尔，少于两点返回空串', () => {

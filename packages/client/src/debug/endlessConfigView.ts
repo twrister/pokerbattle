@@ -3,18 +3,20 @@ import {
   captureEndlessConfigAsDefault,
   clampEndlessWaveSeconds,
   defaultEndlessWaveSeconds,
+  dumpEndlessConfigDraft,
   sanitizeEndlessConfigDraft,
   type EndlessConfigDraft,
 } from '@pb/sim';
 
-/** 运行控制用的出兵窗口视图，与 sim EndlessConfigDraft / endless.json 一致。 */
+/** 调试面板与配置页共用的草稿视图，与 sim EndlessConfigDraft / endless.json 一致。 */
 export type EndlessConfigView = EndlessConfigDraft;
 
 export { clampEndlessWaveSeconds };
 
-/** 从当前运行时草稿生成控件初值。 */
+/** 从当前运行时草稿生成控件初值；每波覆盖项原样带出，配置页才能接着改。 */
 export function defaultEndlessConfigView(): EndlessConfigView {
-  return { waveSeconds: defaultEndlessWaveSeconds() };
+  const draft = dumpEndlessConfigDraft();
+  return { waveSeconds: draft.waveSeconds ?? defaultEndlessWaveSeconds(), waves: draft.waves };
 }
 
 /** 把控件值写回运行时；下一波生成会读到。 */

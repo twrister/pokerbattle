@@ -54,4 +54,20 @@ describe('无限防守存档', () => {
     expect(sanitizeEndlessSave('x')).toEqual({ run: null, best: null });
     expect(sanitizeEndlessSave({ run: { wave: 2 }, best: { bestWave: 'a' } })).toEqual({ run: null, best: null });
   });
+
+  it('存下继承阵容，旧存档没有该字段时补成空数组', () => {
+    const store = createEndlessProgressStore(memoryStorage());
+    const run = {
+      ...createRun(9),
+      wave: 3,
+      carriedUnits: [{ faction: 0 as const, typeId: 'melee_grunt' as const, x: 9, y: 5, hpRatio: 0.5 }],
+    };
+    store.saveRun(run);
+    expect(store.load().run?.carriedUnits).toHaveLength(1);
+
+    const legacy = { ...createRun(4) } as Record<string, unknown>;
+    delete legacy.carriedUnits;
+    store.saveRun(legacy as never);
+    expect(store.load().run?.carriedUnits).toEqual([]);
+  });
 });

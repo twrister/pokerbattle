@@ -92,6 +92,8 @@
         --stage-safe-top: env(safe-area-inset-top);
         --stage-safe-bottom: env(safe-area-inset-bottom);
         --stage-safe-left: max(0px, calc(env(safe-area-inset-left) - var(--stage-left)));
+        /* 右侧同理：舞台已经贴住视口右缘的部分不再重复扣一次安全区 */
+        --stage-safe-right: max(0px, calc(env(safe-area-inset-right) - var(--stage-left)));
       }
 
       * {
@@ -119,6 +121,7 @@
       html:not(.is-dev) #btn-open-unit-stats,
       html:not(.is-dev) #btn-open-scene-config,
       html:not(.is-dev) #unit-stats,
+      html:not(.is-dev) #endless-config,
       html:not(.is-dev) #scene-config,
       html:not(.is-dev) #sfx-config,
       html:not(.is-dev) #panel-stats,
@@ -566,6 +569,7 @@
       .icon-video { background-image: url('%BASE_URL%ui/icons/video.png'); }
       .icon-cross { background-image: url('%BASE_URL%ui/icons/cross.png'); }
       .icon-return { background-image: url('%BASE_URL%ui/icons/arrowLeft.png'); }
+      .icon-home { background-image: url('%BASE_URL%ui/icons/home.png'); }
       .icon-next { background-image: url('%BASE_URL%ui/icons/next.png'); }
       .icon-music-on { background-image: url('%BASE_URL%ui/icons/musicOn.png'); }
       .icon-music-off { background-image: url('%BASE_URL%ui/icons/musicOff.png'); }
@@ -1040,7 +1044,7 @@
         resize: vertical;
       }
 
-      /* 公告页脚：兜底的意见入口与开发服编辑按钮同处一栏 */
+      /* 公告页脚：兜底的「提意见」入口与开发服编辑按钮同处一栏 */
       .patch-notes-footer {
         display: grid;
         gap: calc(10 * var(--hu));
@@ -1818,24 +1822,113 @@
         display: none;
       }
 
+      /* 下一关 / 重试：与返回按钮同一套卡通厚度按钮，绿=前进，蓝=再来一次 */
       #btn-battle-result-next,
       #btn-battle-result-retry {
+        --btn-bg: var(--btn-confirm-bg);
+        --btn-shadow: var(--btn-confirm-shadow);
         width: 100%;
-        margin-bottom: calc(8 * var(--hu));
+        margin-bottom: calc(4 * var(--hu));
         padding: calc(10 * var(--hu));
-        border: calc(3 * var(--hu)) solid var(--outline);
+        border: var(--stroke-w) solid var(--outline);
         border-radius: calc(14 * var(--hu));
-        background: linear-gradient(180deg, #7be07b, #3fb83f);
+        background: var(--btn-bg);
+        box-shadow:
+          inset 0 calc(-3 * var(--hu)) 0 rgba(0, 0, 0, 0.14),
+          0 var(--press-depth) 0 var(--btn-shadow);
         color: #fff;
         font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
+        font-size: calc(18 * var(--hu));
+        text-shadow: var(--text-outline);
         cursor: pointer;
+        transition: transform 0.06s, box-shadow 0.06s;
       }
 
       #btn-battle-result-retry {
-        background: linear-gradient(180deg, #ffd37a, #f0a020);
+        --btn-bg: var(--btn-secondary-bg);
+        --btn-shadow: var(--btn-secondary-shadow);
       }
 
+      #btn-battle-result-next:hover,
+      #btn-battle-result-retry:hover {
+        background: var(--btn-bg);
+        border-color: var(--outline);
+        filter: brightness(1.07);
+      }
+
+      #btn-battle-result-next:active,
+      #btn-battle-result-retry:active {
+        transform: translateY(calc(3 * var(--hu)));
+        box-shadow:
+          inset 0 calc(-2 * var(--hu)) 0 rgba(0, 0, 0, 0.14),
+          0 calc(2 * var(--hu)) 0 var(--btn-shadow);
+      }
+
+      /* 无限防守成绩块：小标签 + 大号描边数字，与标题条同一套字体 */
+      #battle-result-highlight {
+        display: grid;
+        gap: calc(2 * var(--hu));
+        padding: calc(10 * var(--hu)) 0 calc(6 * var(--hu));
+        border-radius: calc(16 * var(--hu));
+        background: var(--cream-deep);
+      }
+
+      #battle-result-highlight-label {
+        color: var(--ink-soft);
+        font-family: var(--font-display);
+        font-size: calc(15 * var(--hu));
+        letter-spacing: 0.06em;
+      }
+
+      #battle-result-highlight-value {
+        color: #ffd23f;
+        font-family: var(--font-display);
+        font-size: calc(64 * var(--hu));
+        font-weight: 400;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        -webkit-text-stroke: calc(3 * var(--hu)) var(--outline);
+        paint-order: stroke fill;
+        text-shadow: 0 calc(4 * var(--hu)) 0 var(--outline);
+      }
+
+      /* 金色角标：新纪录 / 首次通关得星 */
+      #battle-result-badge {
+        justify-self: center;
+        padding: calc(4 * var(--hu)) calc(16 * var(--hu));
+        border: var(--stroke-w) solid var(--outline);
+        border-radius: 999px;
+        background: var(--btn-primary-bg);
+        box-shadow: 0 calc(3 * var(--hu)) 0 var(--btn-primary-shadow);
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: calc(18 * var(--hu));
+        text-shadow: var(--text-outline);
+        animation: battle-result-badge-pop 0.36s ease-out;
+      }
+
+      @keyframes battle-result-badge-pop {
+        0% {
+          transform: scale(0.6);
+          opacity: 0;
+        }
+        70% {
+          transform: scale(1.08);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #battle-result-badge {
+          animation: none;
+        }
+      }
+
+      #battle-result-highlight.is-hidden,
+      #battle-result-badge.is-hidden,
       #battle-result-stage.is-hidden,
       #btn-battle-result-next.is-hidden,
       #btn-battle-result-retry.is-hidden {
@@ -1876,63 +1969,121 @@
         text-decoration: line-through;
       }
 
-      /* 无限防守：本局叠加，占用目标卡片的位置，只读展示不拦鼠标 */
+      /*
+       * 无限防守：本局叠加，贴右上角。
+       * 左侧留给返回键/音效键按钮列，中间留给顶部波次进度，只读展示不拦鼠标。
+       */
       #endless-stats {
         position: absolute;
-        top: calc(max(calc(12 * var(--hu)), var(--stage-safe-top)) + calc(88 * var(--hu)));
-        left: max(calc(12 * var(--hu)), var(--stage-safe-left));
+        top: max(calc(12 * var(--hu)), var(--stage-safe-top));
+        right: max(calc(12 * var(--hu)), var(--stage-safe-right));
         z-index: 3;
-        width: calc(210 * var(--hu));
+        width: calc(232 * var(--hu));
         box-sizing: border-box;
-        padding: calc(8 * var(--hu)) calc(12 * var(--hu));
-        border-radius: calc(12 * var(--hu));
-        background: rgba(20, 33, 61, 0.78);
+        padding: 0 calc(12 * var(--hu)) calc(8 * var(--hu));
+        overflow: hidden;
+        /* 与强化弹层/结算面板同一套描边与厚投影，底色保持深色半透明以免挡战场 */
+        border: var(--stroke-w) solid var(--outline);
+        border-radius: calc(14 * var(--hu));
+        background: rgba(20, 33, 61, 0.82);
+        box-shadow: 0 calc(4 * var(--hu)) 0 rgba(10, 18, 36, 0.45);
         color: #fff;
         font-size: calc(13 * var(--hu));
         pointer-events: none;
       }
 
+      /* 标题色带：金色贴顶，呼应强化弹层的标题条 */
       #endless-stats-title {
         display: block;
-        margin-bottom: calc(4 * var(--hu));
+        margin: 0 calc(-12 * var(--hu)) calc(6 * var(--hu));
+        padding: calc(4 * var(--hu)) calc(12 * var(--hu));
+        border-bottom: var(--stroke-w) solid var(--outline);
+        background: var(--btn-primary-bg);
+        color: #fff;
         font-family: var(--font-display);
         font-size: calc(15 * var(--hu));
+        letter-spacing: 0.04em;
+        -webkit-text-stroke: calc(1.5 * var(--hu)) var(--outline);
+        paint-order: stroke fill;
       }
 
+      /*
+       * 一行三列：标签 | 初始+叠加脚注 | 当前值。
+       * 列宽由整个列表共享（subgrid），标签长短不一时数值仍对齐成一列。
+       */
       #endless-stats-list {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr) max-content;
+        column-gap: calc(6 * var(--hu));
         margin: 0;
         padding: 0;
         list-style: none;
         font-variant-numeric: tabular-nums;
       }
 
-      /* 已选强化：小号 chip 换行排布，数量多了也不撑宽面板 */
-      #endless-stats-boons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: calc(4 * var(--hu));
-        margin: calc(6 * var(--hu)) 0 0;
-        padding: 0;
-        list-style: none;
+      #endless-stats-list li {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-template-columns: subgrid;
+        align-items: baseline;
+        line-height: 1.45;
       }
 
-      #endless-stats-boons li {
-        padding: calc(1 * var(--hu)) calc(6 * var(--hu));
-        border-radius: 999px;
-        background: rgba(255, 211, 122, 0.22);
-        color: #ffd37a;
+      .endless-stat-label {
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      /* 脚注只说明来路，压低存在感；空脚注也保留占位以便当前值成列 */
+      .endless-stat-detail {
+        display: flex;
+        align-items: baseline;
+        justify-content: flex-end;
+        gap: calc(4 * var(--hu));
+        color: rgba(255, 255, 255, 0.45);
         font-size: calc(11 * var(--hu));
         white-space: nowrap;
       }
 
-      /* 无限防守：波次间强化三选一 / 续玩入口弹层 */
+      .endless-stat-current {
+        color: #fff;
+        font-weight: 700;
+        text-align: right;
+      }
+
+      /* 到上限：金色小徽标，提示这条已经堆不动了 */
+      .endless-stat-max {
+        padding: 0 calc(4 * var(--hu));
+        border-radius: 999px;
+        background: rgba(255, 211, 122, 0.24);
+        color: #ffd37a;
+        font-size: calc(9 * var(--hu));
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+
+      /*
+       * 三选一期间弹层带全屏遮罩（z-index 60），把这面板临时抬到遮罩之上，
+       * 玩家能一边挑强化一边对照当前叠加；仍是只读，不拦鼠标。
+       */
+      #endless-stats.is-elevated {
+        z-index: 61;
+      }
+
+      /*
+       * 无限防守：波次间强化三选一 / 续玩入口弹层。
+       * 与结算面板同一套外观：奶油卡 + 贴顶金色色带标题 + 粗描边厚投影。
+       * 三选一时面板被挂进 #hud，与「本局叠加」共处一个层叠上下文，遮罩才能压在 HUD 上
+       * 而叠加面板又能靠 is-elevated 浮到遮罩之上；#hud 本身不吃事件，这里要自己开。
+       */
       .boon-panel {
         position: fixed;
         inset: 0;
         z-index: 60;
         display: grid;
         place-items: center;
-        background: rgba(10, 18, 36, 0.62);
+        padding: calc(28 * var(--hu));
+        background: rgba(12, 22, 48, 0.62);
+        pointer-events: auto;
       }
 
       .boon-panel.is-hidden {
@@ -1940,72 +2091,188 @@
       }
 
       .boon-panel-box {
-        width: min(92vw, calc(460 * var(--hu)));
-        box-sizing: border-box;
-        padding: calc(18 * var(--hu));
-        border: calc(3 * var(--hu)) solid var(--outline);
-        border-radius: calc(18 * var(--hu));
-        background: #fff6e0;
-        color: #3a2a10;
+        display: grid;
+        gap: calc(12 * var(--hu));
+        width: min(100%, calc(440 * var(--hu)));
+        padding: 0 calc(20 * var(--hu)) calc(22 * var(--hu));
+        overflow: hidden;
+        border: calc(4 * var(--hu)) solid var(--outline);
+        border-radius: calc(20 * var(--hu));
+        background: var(--cream);
+        box-shadow:
+          inset 0 calc(-5 * var(--hu)) 0 var(--cream-deep),
+          0 calc(8 * var(--hu)) 0 rgba(20, 33, 61, 0.5),
+          0 calc(24 * var(--hu)) calc(50 * var(--hu)) rgba(0, 0, 0, 0.3);
+        color: var(--ink);
         text-align: center;
+        animation: boon-panel-in 0.22s ease-out;
       }
 
+      @keyframes boon-panel-in {
+        from {
+          opacity: 0;
+          transform: translateY(calc(16 * var(--hu))) scale(0.97);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* 标题色带：负边距贴满面板顶部，与结算标题条一致 */
       .boon-panel-title {
-        margin: 0 0 calc(6 * var(--hu));
+        margin: 0 calc(-20 * var(--hu));
+        padding: calc(12 * var(--hu)) calc(12 * var(--hu)) calc(10 * var(--hu));
+        border-bottom: var(--stroke-w) solid var(--outline);
+        background: var(--btn-primary-bg);
+        box-shadow: inset 0 calc(-4 * var(--hu)) 0 rgba(0, 0, 0, 0.14);
+        color: #fff;
         font-family: var(--font-display);
-        font-size: calc(24 * var(--hu));
+        font-size: calc(30 * var(--hu));
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        -webkit-text-stroke: calc(2.5 * var(--hu)) var(--outline);
+        paint-order: stroke fill;
+        text-shadow: 0 calc(3 * var(--hu)) 0 var(--outline);
+      }
+
+      /* 继承属性胶囊：换行排布，数量多了也不撑宽 */
+      .boon-panel-stats {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: calc(6 * var(--hu));
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .boon-panel-stats li {
+        padding: calc(2 * var(--hu)) calc(10 * var(--hu));
+        border-radius: 999px;
+        background: var(--cream-deep);
+        color: var(--ink);
+        font-size: calc(13 * var(--hu));
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
 
       .boon-panel-info {
-        margin: 0 0 calc(12 * var(--hu));
-        font-size: calc(14 * var(--hu));
+        margin: 0;
+        color: var(--ink-soft);
+        font-family: var(--font-display);
+        font-size: calc(16 * var(--hu));
       }
 
       .boon-panel-list {
         display: grid;
-        gap: calc(8 * var(--hu));
+        gap: calc(10 * var(--hu));
       }
 
-      .boon-panel-option {
+      /* 续玩入口按钮：外观交给 .cartoon-btn，这里只补尺寸 */
+      .boon-panel-option.cartoon-btn {
         display: grid;
         gap: calc(2 * var(--hu));
         padding: calc(10 * var(--hu));
-        border: calc(3 * var(--hu)) solid var(--outline);
         border-radius: calc(14 * var(--hu));
-        background: linear-gradient(180deg, #7be07b, #3fb83f);
-        color: #fff;
-        font-family: var(--font-display);
-        font-size: calc(17 * var(--hu));
-        cursor: pointer;
+        font-size: calc(18 * var(--hu));
       }
 
-      .boon-panel-option span {
-        font-size: calc(13 * var(--hu));
-        opacity: 0.92;
+      .boon-panel-option.cartoon-btn span {
+        font-size: calc(12 * var(--hu));
+        opacity: 0.9;
+      }
+
+      /* 强化卡片：白底 + 左侧稀有度色条，按下与大厅按钮一样下沉 */
+      .boon-panel-option.is-boon,
+      .boon-panel-option.is-rare {
+        --boon-accent: #3d8fd4;
+        --boon-shadow: #1c5fa6;
+        position: relative;
+        display: grid;
+        gap: calc(3 * var(--hu));
+        padding: calc(10 * var(--hu)) calc(14 * var(--hu)) calc(10 * var(--hu)) calc(26 * var(--hu));
+        overflow: hidden;
+        border: var(--stroke-w) solid var(--outline);
+        border-radius: calc(14 * var(--hu));
+        background: #fffdf7;
+        box-shadow: 0 calc(4 * var(--hu)) 0 var(--boon-shadow);
+        color: var(--ink);
+        text-align: left;
+        transition: transform 0.06s, box-shadow 0.06s;
+      }
+
+      .boon-panel-option.is-boon::before,
+      .boon-panel-option.is-rare::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: calc(12 * var(--hu));
+        background: var(--boon-accent);
+        border-right: var(--stroke-w) solid var(--outline);
       }
 
       .boon-panel-option.is-rare {
-        background: linear-gradient(180deg, #c58cff, #7c3fe0);
+        --boon-accent: linear-gradient(180deg, #c58cff, #7c3fe0);
+        --boon-shadow: #5a2aa8;
+        background: linear-gradient(120deg, #fffdf7 60%, #f1e4ff 100%);
+      }
+
+      .boon-panel-option.is-boon:hover,
+      .boon-panel-option.is-rare:hover {
+        background: #fffdf7;
+        border-color: var(--outline);
+        filter: brightness(1.03);
+      }
+
+      .boon-panel-option.is-rare:hover {
+        background: linear-gradient(120deg, #fffdf7 60%, #f1e4ff 100%);
+      }
+
+      .boon-panel-option.is-boon:active,
+      .boon-panel-option.is-rare:active {
+        transform: translateY(calc(3 * var(--hu)));
+        box-shadow: 0 calc(1 * var(--hu)) 0 var(--boon-shadow);
+      }
+
+      .boon-panel-option.is-boon strong,
+      .boon-panel-option.is-rare strong {
+        font-family: var(--font-display);
+        font-size: calc(19 * var(--hu));
+        font-weight: 400;
+      }
+
+      .boon-panel-option.is-rare strong {
+        color: #6a2fc8;
+      }
+
+      .boon-panel-option.is-boon span,
+      .boon-panel-option.is-rare span {
+        color: var(--ink-soft);
+        font-size: calc(13 * var(--hu));
+        line-height: 1.35;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .boon-panel-box {
+          animation: none;
+        }
       }
 
       /*
-       * 战役选关页：扁平风地图。纯色底 + 单层细线路径 + 纯色卡片节点，
-       * 关卡沿路径自下而上排布；节点坐标用 720 设计宽单位（--x/--y），
-       * 乘以 --mu（= 地图实际宽 / 720）定位，与 SVG viewBox 天然对齐。
+       * 战役选关页：与大厅共用同一套天蓝菱格舞台，节点是圆形序号徽章，
+       * 旁边挂奶油信息卡（标题 + 地图/限时 + 目标），视觉语言与排行榜列表一致。
+       * 节点坐标用 720 设计宽单位（--x/--y），乘以 --mu（= 地图实际宽 / 720）定位，
+       * 与 SVG viewBox 天然对齐。
        */
       #campaign .lobby-shell {
         height: 100svh;
         min-height: 0;
         padding: 0;
-        background: #16294d;
       }
 
-      #campaign .lobby-shell::before,
-      #campaign .lobby-shell::after {
-        display: none;
-      }
-
-      /* 标题栏悬浮在地图上方，纯色半透明条 */
+      /* 标题栏悬浮在地图上：只铺一层向上加深的渐变，不遮挡背后的关卡 */
       #campaign .online-page-header {
         position: absolute;
         top: 0;
@@ -2017,9 +2284,9 @@
         padding:
           max(env(safe-area-inset-top), calc(28 * var(--hu)))
           calc(28 * var(--hu))
-          calc(16 * var(--hu))
+          calc(20 * var(--hu))
           calc(36 * var(--hu));
-        background: rgba(16, 32, 62, 0.92);
+        background: linear-gradient(180deg, rgba(12, 42, 78, 0.9) 0%, rgba(12, 42, 78, 0) 100%);
         pointer-events: none;
       }
 
@@ -2053,7 +2320,7 @@
         cursor: grabbing;
       }
 
-      /* 地图画布：关卡少时贴底，第 1 关始终在视口下方 */
+      /* 地图画布：关卡少时贴底，第 1 关始终在视口下方；底色交给 lobby-shell 的天蓝舞台 */
       .campaign-map {
         --mu: calc(100cqw / 720);
         position: relative;
@@ -2062,7 +2329,6 @@
         height: calc(var(--map-h) * var(--mu));
         margin-top: auto;
         overflow: hidden;
-        background: #1b3562;
       }
 
       .campaign-road {
@@ -2071,6 +2337,8 @@
         width: 100%;
         height: 100%;
         pointer-events: none;
+        /* 给路径一点厚度感，白色小路不会糊在天蓝底上 */
+        filter: drop-shadow(0 calc(3 * var(--mu)) 0 rgba(10, 30, 60, 0.22));
       }
 
       .campaign-road path {
@@ -2079,40 +2347,55 @@
         stroke-linejoin: round;
       }
 
-      /* 路径：已解锁段为实线，锁定段为暗色虚线 */
+      /* 路径：已解锁段为奶油色实线，锁定段为半透明虚线 */
       .campaign-road-surface.is-open {
-        stroke: #3a8ee6;
-        stroke-width: 10;
+        stroke: #fdf6e6;
+        stroke-width: 13;
       }
 
       .campaign-road-surface.is-locked {
-        stroke: #3c4f74;
-        stroke-width: 8;
-        stroke-dasharray: 2 18;
+        stroke: rgba(240, 248, 255, 0.42);
+        stroke-width: 10;
+        stroke-dasharray: 2 20;
       }
 
-      /* 关卡节点：城堡底座落在 (--x, --y)，卡片挂在城堡下方 */
+      /*
+       * 关卡节点：按钮盒本身就是序号圆章，圆心钉在 (--x, --y) 上；
+       * 信息卡绝对定位挂在圆章一侧（data-card 决定左挂还是右挂），
+       * 不参与按钮盒尺寸计算，因此卡片再长也不会把节点带偏。
+       */
       .campaign-stage {
-        --castle-h: 120;
+        --node-size: 72;
+        --card-gap: 14;
         position: absolute;
         left: calc(var(--x) * var(--mu));
-        top: calc((var(--y) - var(--castle-h)) * var(--mu));
+        top: calc(var(--y) * var(--mu));
         z-index: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        display: block;
+        width: calc(var(--node-size) * var(--mu));
+        height: calc(var(--node-size) * var(--mu));
         padding: 0;
         border: 0;
         background: none;
-        color: #fff;
+        color: var(--ink);
         font-family: var(--font-display);
-        transform: translateX(-50%);
+        transform: translate(-50%, -50%);
+        transition: none;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
       }
 
+      /* 压过全局 button:hover/:active：外壳 transform 负责居中定位，按下时不能被改写，否则整个节点会跳位 */
+      .campaign-stage:hover,
+      .campaign-stage:active {
+        border: 0;
+        background: none;
+        transform: translate(-50%, -50%);
+      }
+
+      /* 终点关（最后一关 / 无限防守）节点更大一圈 */
       .campaign-stage.is-boss {
-        --castle-h: 160;
+        --node-size: 88;
       }
 
       .campaign-stage:focus-visible {
@@ -2121,166 +2404,228 @@
 
       .campaign-stage:focus-visible .campaign-stage-plate {
         outline: calc(3 * var(--mu)) solid #fff;
-        outline-offset: calc(2 * var(--mu));
+        outline-offset: calc(3 * var(--mu));
       }
 
-      .campaign-stage-castle {
-        position: relative;
-        display: block;
-        height: calc(var(--castle-h) * var(--mu));
-        width: auto;
-        pointer-events: none;
-        transition: transform 0.12s;
-      }
-
-      .campaign-stage:hover:not(:disabled) .campaign-stage-castle {
-        transform: scale(1.04);
-      }
-
-      .campaign-stage:active:not(:disabled) .campaign-stage-castle,
-      .campaign-stage:active:not(:disabled) .campaign-stage-plate {
-        transform: translateY(calc(2 * var(--mu)));
-      }
-
-      /* 卡片：序号圆章 + 标题 + 地图名，纯色无描边 */
-      .campaign-stage-plate {
-        position: relative;
-        display: flex;
-        align-items: center;
-        gap: calc(8 * var(--mu));
-        margin-top: calc(-4 * var(--mu));
-        padding: calc(6 * var(--mu)) calc(16 * var(--mu)) calc(6 * var(--mu)) calc(6 * var(--mu));
-        border-radius: calc(14 * var(--mu));
-        background: #2a4a82;
-        white-space: nowrap;
-        transition: transform 0.12s;
-      }
-
+      /* 序号圆章：粗描边 + 底部实色投影，和馆内按钮同一套厚度感 */
       .campaign-stage-index {
         position: relative;
+        z-index: 2;
         display: grid;
-        flex: none;
         place-items: center;
-        width: calc(40 * var(--mu));
-        height: calc(40 * var(--mu));
+        width: 100%;
+        height: 100%;
+        border: calc(4 * var(--mu)) solid var(--outline);
         border-radius: 50%;
-        background: #3a8ee6;
+        background: linear-gradient(180deg, #58a9e6 0%, #3d8fd4 55%, #2670b8 100%);
+        box-shadow: 0 calc(5 * var(--mu)) 0 var(--btn-secondary-shadow);
         color: #fff;
-        font-size: calc(20 * var(--mu));
+        font-size: calc(var(--node-size) * 0.42 * var(--mu));
+        font-family: var(--font-display);
+        line-height: 1;
+        text-shadow: 0 calc(2 * var(--mu)) 0 var(--outline);
+        transition: transform 0.1s ease-out;
       }
 
-      .campaign-stage.is-cleared .campaign-stage-index {
-        background: var(--accent);
+      /* 按下只轻微收缩，投影不变，避免节点上下跳 */
+      .campaign-stage:active:not(:disabled) .campaign-stage-index {
+        transform: scale(0.96);
+      }
+
+      /* 信息卡：奶油底 + 粗描边 + 底部投影，与排行榜行同一套外观 */
+      .campaign-stage-plate {
+        position: absolute;
+        top: 50%;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: calc(4 * var(--mu));
+        width: calc(230 * var(--mu));
+        padding: calc(8 * var(--mu)) calc(12 * var(--mu));
+        border: calc(3 * var(--mu)) solid var(--outline);
+        border-radius: calc(14 * var(--mu));
+        background: var(--cream);
+        box-shadow:
+          inset 0 calc(-4 * var(--mu)) 0 var(--cream-deep),
+          0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.35);
+        text-align: left;
+        transform: translateY(-50%);
+        transition: transform 0.12s;
+      }
+
+      /* 卡片挂在圆章外侧，避开来回折返的小路 */
+      .campaign-stage[data-card='right'] .campaign-stage-plate {
+        left: calc(100% + var(--card-gap) * var(--mu));
+      }
+
+      .campaign-stage[data-card='left'] .campaign-stage-plate {
+        right: calc(100% + var(--card-gap) * var(--mu));
+      }
+
+      .campaign-stage:hover:not(:disabled) .campaign-stage-plate {
+        transform: translateY(calc(-50% - 1 * var(--mu)));
       }
 
       .campaign-stage-title {
-        display: flex;
-        align-items: center;
-        gap: calc(8 * var(--mu));
-        font-size: calc(21 * var(--mu));
-        letter-spacing: 0.02em;
-      }
-
-      /* 战役地图名小标签，跟在关卡标题后面 */
-      .campaign-stage-arena {
-        padding: calc(1 * var(--mu)) calc(9 * var(--mu));
-        border-radius: 999px;
-        background: #16294d;
-        color: var(--text-dim);
-        font-size: calc(14 * var(--mu));
-      }
-
-      /* 完成徽章：文字留给读屏，视觉上是城堡右上角的绿底对勾 */
-      .campaign-stage-status {
-        position: absolute;
-        top: calc(var(--castle-h) * 0.12 * var(--mu));
-        left: calc(50% + var(--castle-h) * 0.24 * var(--mu));
-        width: calc(40 * var(--mu));
-        height: calc(40 * var(--mu));
+        display: block;
         overflow: hidden;
-        border-radius: 50%;
-        background: var(--accent);
-        color: transparent;
-        font-size: 0;
+        color: var(--ink);
+        font-size: calc(18 * var(--mu));
+        letter-spacing: 0.02em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
-      .campaign-stage-status:empty {
+      /* 地图名 / 限时 / 最佳波数的小圆角标签 */
+      .campaign-stage-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(6 * var(--mu));
+      }
+
+      .campaign-stage-meta:empty {
         display: none;
       }
 
-      .campaign-stage-status::before {
-        content: '';
-        position: absolute;
-        left: 32%;
-        top: 16%;
-        width: 26%;
-        height: 46%;
-        border-right: calc(5 * var(--mu)) solid #fff;
-        border-bottom: calc(5 * var(--mu)) solid #fff;
-        transform: rotate(45deg);
+      .campaign-stage-arena {
+        padding: calc(1 * var(--mu)) calc(9 * var(--mu));
+        border-radius: 999px;
+        background: var(--cream-deep);
+        color: var(--ink);
+        font-size: calc(13 * var(--mu));
+        white-space: nowrap;
       }
 
-      /* 当前关：脚下黄色细环向外扩散，卡片变黄 */
-      .campaign-stage.is-current::after {
-        content: '';
+      /* 目标摘要：最多两行，超出省略，保证卡片高度一致 */
+      .campaign-stage-goal {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        color: var(--ink-soft);
+        font-size: calc(13 * var(--mu));
+        line-height: 1.3;
+      }
+
+      /* 星星徽章：圆章右上角，已得为描边金星，未得为半透明灰星 */
+      .campaign-stage-star {
         position: absolute;
-        top: calc((var(--castle-h) - 40) * var(--mu));
-        left: 50%;
-        z-index: -1;
-        width: calc(160 * var(--mu));
-        height: calc(56 * var(--mu));
-        border: calc(3 * var(--mu)) solid var(--highlight);
-        border-radius: 50%;
-        transform: translateX(-50%);
-        animation: campaign-current-pulse 1.4s ease-out infinite;
+        top: calc(-10 * var(--mu));
+        right: calc(-10 * var(--mu));
+        z-index: 3;
+        color: rgba(220, 230, 242, 0.75);
+        font-family: var(--font-display);
+        font-size: calc(32 * var(--mu));
+        line-height: 1;
+        -webkit-text-stroke: calc(2.5 * var(--mu)) var(--outline);
+        paint-order: stroke fill;
         pointer-events: none;
       }
 
-      .campaign-stage.is-current .campaign-stage-plate {
-        background: var(--highlight);
-        color: var(--outline);
+      .campaign-stage-star.is-earned {
+        color: #ffd23f;
+        text-shadow: 0 calc(2 * var(--mu)) 0 var(--outline);
       }
 
+      /* 标题栏星数胶囊：奶油底金星，后续排行榜也按此数排名 */
+      .campaign-stars {
+        justify-self: end;
+        padding: calc(4 * var(--hu)) calc(14 * var(--hu));
+        border: var(--stroke-w) solid var(--outline);
+        border-radius: 999px;
+        background: var(--cream);
+        box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.35);
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: calc(20 * var(--hu));
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .campaign-stars::first-letter {
+        color: #f0a800;
+      }
+
+      /* 已通关：圆章换绿，卡片投影同步压绿 */
+      .campaign-stage.is-cleared .campaign-stage-index {
+        background: linear-gradient(180deg, #6cc951 0%, #4fb33d 55%, #36962c 100%);
+        box-shadow: 0 calc(5 * var(--mu)) 0 var(--btn-confirm-shadow);
+      }
+
+      /* 当前关：圆章换金，外圈脉冲环提示「从这里继续」 */
       .campaign-stage.is-current .campaign-stage-index {
-        background: var(--outline);
-        color: var(--highlight);
+        background: var(--btn-primary-bg);
+        box-shadow: 0 calc(5 * var(--mu)) 0 var(--btn-primary-shadow);
+        color: var(--outline);
+        text-shadow: none;
+      }
+
+      .campaign-stage.is-current .campaign-stage-plate {
+        border-color: var(--outline);
+        background: var(--highlight);
+        box-shadow:
+          inset 0 calc(-4 * var(--mu)) 0 var(--gold-deep),
+          0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.35);
+      }
+
+      .campaign-stage.is-current .campaign-stage-goal {
+        color: rgba(20, 33, 61, 0.72);
       }
 
       .campaign-stage.is-current .campaign-stage-arena {
-        background: rgba(20, 33, 61, 0.15);
-        color: var(--outline);
+        background: rgba(20, 33, 61, 0.16);
+      }
+
+      .campaign-stage.is-current::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        border: calc(3 * var(--mu)) solid var(--highlight);
+        border-radius: 50%;
+        animation: campaign-current-pulse 1.6s ease-out infinite;
+        pointer-events: none;
       }
 
       @keyframes campaign-current-pulse {
         0% {
-          opacity: 1;
-          transform: translateX(-50%) scale(0.7);
+          opacity: 0.9;
+          transform: scale(1);
         }
         100% {
           opacity: 0;
-          transform: translateX(-50%) scale(1.25);
+          transform: scale(1.45);
         }
       }
 
-      /* 锁定：城堡去色、卡片发灰，序号位画成锁形徽章 */
+      /* 锁定：圆章灰化、文案位画成锁形，卡片整体降一档亮度 */
       .campaign-stage.is-locked {
         cursor: not-allowed;
       }
 
-      .campaign-stage.is-locked .campaign-stage-castle {
-        filter: grayscale(1) brightness(0.7);
-        opacity: 0.7;
+      .campaign-stage.is-locked .campaign-stage-index {
+        background: linear-gradient(180deg, #8593a8 0%, #6d7c92 100%);
+        box-shadow: 0 calc(5 * var(--mu)) 0 #53617a;
+        color: transparent;
+        font-size: 0;
       }
 
       .campaign-stage.is-locked .campaign-stage-plate {
-        background: #34466b;
-        color: var(--text-dim);
+        background: #c9d2df;
+        box-shadow:
+          inset 0 calc(-4 * var(--mu)) 0 #aab6c6,
+          0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.3);
+        opacity: 0.92;
       }
 
-      .campaign-stage.is-locked .campaign-stage-index {
-        background: #4a5a7a;
-        color: transparent;
-        font-size: 0;
+      .campaign-stage.is-locked .campaign-stage-title,
+      .campaign-stage.is-locked .campaign-stage-goal {
+        color: var(--ink-soft);
+      }
+
+      .campaign-stage.is-locked .campaign-stage-arena {
+        background: #b0bcca;
+        color: var(--ink-soft);
       }
 
       .campaign-stage.is-locked .campaign-stage-index::before,
@@ -2293,19 +2638,19 @@
 
       /* 锁梁 */
       .campaign-stage.is-locked .campaign-stage-index::before {
-        top: 18%;
+        top: 20%;
         width: 32%;
-        height: 30%;
-        border: calc(3 * var(--mu)) solid #fff;
+        height: 28%;
+        border: calc(4 * var(--mu)) solid #fff;
         border-bottom: 0;
-        border-radius: calc(8 * var(--mu)) calc(8 * var(--mu)) 0 0;
+        border-radius: calc(10 * var(--mu)) calc(10 * var(--mu)) 0 0;
       }
 
       /* 锁身 */
       .campaign-stage.is-locked .campaign-stage-index::after {
-        top: 44%;
+        top: 46%;
         width: 48%;
-        height: 36%;
+        height: 34%;
         border-radius: calc(3 * var(--mu));
         background: #fff;
       }
@@ -2949,33 +3294,39 @@
         margin-left: auto;
       }
 
+      /* 局内返回键：沿用大厅设置/公告的图标胶囊风格，点开的是暂停确认框 */
       #btn-back-menu {
         position: absolute;
         top: max(calc(12 * var(--hu)), var(--stage-safe-top));
         left: max(calc(12 * var(--hu)), var(--stage-safe-left));
         z-index: 2;
-        width: auto;
-        min-width: calc(64 * var(--hu));
-        max-width: calc(88 * var(--hu));
-        padding: calc(6 * var(--hu)) calc(10 * var(--hu));
-        border-radius: calc(12 * var(--hu));
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: calc(5 * var(--hu));
+        min-height: calc(38 * var(--hu));
+        padding: calc(4 * var(--hu)) calc(14 * var(--hu)) calc(4 * var(--hu)) calc(9 * var(--hu));
+        border-radius: calc(999 * var(--hu));
         --press-depth: calc(4 * var(--hu));
         pointer-events: auto;
         font-size: calc(15 * var(--hu));
-        line-height: 1.25;
-        letter-spacing: 0.02em;
+        line-height: 1;
+        letter-spacing: 0.04em;
         white-space: nowrap;
-        text-align: center;
       }
 
-      /* 局内音效开关：竖排在返回键正下方，与返回键左缘对齐成按钮列，不再横向挤占血条空间 */
+      #btn-back-menu .ui-icon {
+        font-size: calc(22 * var(--hu));
+      }
+
+      /* 局内音效开关：单机/联机已挪进暂停弹窗，回放与观战没有暂停框，保留 HUD 上的图标钮 */
       .sfx-toggle.is-battle {
+        display: none;
         position: absolute;
-        /* 返回键高约 37hu，再留 9hu 间距 */
-        top: calc(max(calc(12 * var(--hu)), var(--stage-safe-top)) + calc(46 * var(--hu)));
+        /* 返回键高约 38hu，再留 9hu 间距 */
+        top: calc(max(calc(12 * var(--hu)), var(--stage-safe-top)) + calc(47 * var(--hu)));
         left: max(calc(12 * var(--hu)), var(--stage-safe-left));
         z-index: 2;
-        display: inline-flex;
         align-items: center;
         justify-content: center;
         /* 与返回键同宽（64hu），纵排时上下像同一列按钮 */
@@ -2986,6 +3337,11 @@
         --press-depth: calc(4 * var(--hu));
         pointer-events: auto;
         line-height: 1;
+      }
+
+      #hud.is-replay .sfx-toggle.is-battle,
+      #hud.is-spectate .sfx-toggle.is-battle {
+        display: inline-flex;
       }
 
       .sfx-toggle.is-battle .sfx-toggle-icon {
@@ -4049,6 +4405,40 @@
         color: var(--ink-soft);
         font-size: calc(15 * var(--hu));
         line-height: 1.6;
+      }
+
+      /*
+       * 暂停弹窗里的音效开关只是附属设置，不该和「退出对局」主操作抢视觉。
+       * 这里只压缩这一行的字号、留白与开关尺寸，大厅设置里的同名行保持原样；
+       * 滑块位移要跟着轨道内宽一起收，否则开关会顶到轨道外。
+       */
+      #btn-pause-sfx-toggle {
+        gap: calc(8 * var(--hu));
+        padding: calc(7 * var(--hu)) calc(10 * var(--hu));
+        border-radius: calc(10 * var(--hu));
+      }
+
+      #btn-pause-sfx-toggle .settings-row-label {
+        font-size: calc(14 * var(--hu));
+      }
+
+      #btn-pause-sfx-toggle .settings-row-hint {
+        font-size: calc(11 * var(--hu));
+      }
+
+      #btn-pause-sfx-toggle .settings-switch {
+        width: calc(38 * var(--hu));
+        height: calc(21 * var(--hu));
+      }
+
+      #btn-pause-sfx-toggle .settings-switch-thumb {
+        width: calc(15 * var(--hu));
+        height: calc(15 * var(--hu));
+      }
+
+      #btn-pause-sfx-toggle[aria-checked='true'] .settings-switch-thumb {
+        /* 轨道内宽 38-4(描边)=34，滑块 15 且左侧已占 1，故滑到底正好 18 */
+        transform: translateX(calc(18 * var(--hu)));
       }
 
       .versus-exit-actions {
@@ -6809,6 +7199,90 @@
           #0a1018;
       }
 
+      /* 无限关卡参数页：结构复用单位参数页，只补表格与兵种池的专属样式 */
+      #endless-config {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 22% 18%, rgba(120, 96, 48, 0.22), transparent 34%),
+          #0a1018;
+      }
+
+      .endless-config-window {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .endless-config-window input {
+        width: 84px;
+        padding: 4px 6px;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(18, 28, 40, 0.85);
+        color: var(--text);
+        font: inherit;
+      }
+
+      /* 波号列窄、常驻；留空即走公式的格子用虚线底提示可覆盖 */
+      .endless-config-table th[data-field='wave'],
+      .endless-config-table td.endless-config-wave {
+        width: 64px;
+        min-width: 64px;
+        max-width: 64px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-dim);
+      }
+
+      .endless-config-table tr.is-custom td.endless-config-wave {
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .endless-config-table td[data-field='units'] {
+        min-width: 220px;
+      }
+
+      .endless-config-table td[data-field='actions'] button {
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(28, 42, 57, 0.78);
+        color: var(--text-dim);
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+
+      .endless-config-unit-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .endless-config-unit-row button,
+      .endless-config-unit-row select {
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        background: rgba(18, 28, 40, 0.85);
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 6px;
+      }
+
+      .endless-config-hint {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
       #unit-stats.is-overlay {
         z-index: 40;
         background: rgba(6, 10, 16, 0.94);
@@ -7552,7 +8026,7 @@
             <div class="patch-notes-footer">
               <button id="btn-feedback-open" class="cartoon-btn patch-notes-feedback" type="button" aria-expanded="false" aria-controls="feedback-dialog">
                 <span class="patch-notes-feedback-icon ui-icon icon-exclamation" aria-hidden="true"></span>
-                <span>意见</span>
+                <span>提意见</span>
               </button>
               <div class="patch-notes-dev-bar dev-only">
                 <p id="patch-notes-status" role="status" aria-live="polite"></p>
@@ -7620,6 +8094,7 @@
           <h1>兵种图鉴</h1>
           <div class="codex-header-actions">
             <button id="btn-codex-unit-stats" class="codex-back dev-only" type="button">单位参数</button>
+            <button id="btn-codex-endless-config" class="codex-back dev-only" type="button">无限关卡参数</button>
             <button id="btn-codex-scene-config" class="codex-back dev-only" type="button">场景配置</button>
           </div>
         </header>
@@ -7717,6 +8192,7 @@
         <header class="online-page-header">
           <button id="btn-campaign-back" class="online-page-back" type="button">返回</button>
           <h1>战役</h1>
+          <span id="campaign-stars" class="campaign-stars">★ 0 / 0</span>
         </header>
         <div id="campaign-list" role="list"></div>
       </div>
@@ -8179,6 +8655,25 @@
       </div>
     </main>
 
+    <main id="endless-config" class="is-hidden" aria-hidden="true">
+      <div class="unit-stats-shell">
+        <header class="unit-stats-header">
+          <button id="btn-endless-config-back" class="unit-stats-back" type="button">返回图鉴</button>
+          <h1>无限关卡参数</h1>
+          <label class="endless-config-window">
+            全局出兵窗口
+            <input id="endless-config-wave-seconds" type="number" step="1" min="30" max="600" />
+          </label>
+        </header>
+        <section id="endless-config-panel" class="unit-stats-panel" aria-live="polite"></section>
+        <footer class="unit-stats-footer">
+          <div id="endless-config-status" role="status" aria-live="polite">改完点保存写回配置文件</div>
+          <button id="btn-endless-config-add-wave" type="button">添加一波</button>
+          <button id="btn-endless-config-save" type="button">保存</button>
+        </footer>
+      </div>
+    </main>
+
     <main id="scene-config" class="is-hidden" aria-hidden="true">
       <div class="scene-config-shell">
         <header class="scene-config-header">
@@ -8410,9 +8905,8 @@
         <ul id="stage-hud-objectives"></ul>
       </section>
       <section id="endless-stats" class="is-hidden" aria-label="本局叠加">
-        <strong id="endless-stats-title">无限防守</strong>
+        <strong id="endless-stats-title">本局叠加</strong>
         <ul id="endless-stats-list"></ul>
-        <ul id="endless-stats-boons"></ul>
       </section>
       <div id="battle-announce" class="is-hidden" role="status" aria-live="polite">
         <span id="battle-announce-text"></span>
@@ -8466,6 +8960,11 @@
           </div>
           <div id="battle-result-members" class="battle-result-table is-hidden"></div>
           <p id="battle-result-stage" class="is-hidden"></p>
+          <div id="battle-result-highlight" class="is-hidden">
+            <span id="battle-result-highlight-label"></span>
+            <strong id="battle-result-highlight-value"></strong>
+          </div>
+          <span id="battle-result-badge" class="is-hidden"></span>
           <button id="btn-battle-result-next" class="is-hidden" type="button">下一关</button>
           <button id="btn-battle-result-retry" class="is-hidden" type="button">重试</button>
           <button id="btn-battle-result-return" type="button">返回</button>
@@ -8479,13 +8978,24 @@
             <button class="mode-dialog-close" type="button" aria-label="取消" data-versus-exit-cancel><span class="ui-icon icon-cross" aria-hidden="true"></span></button>
           </header>
           <p id="versus-exit-detail">中途退出将记为失败，确定要离开吗？</p>
+          <!-- 弹窗自带音效开关：局内已不再单独摆图标钮，暂停时顺手就能关声音 -->
+          <button id="btn-pause-sfx-toggle" class="settings-row" type="button" role="switch" aria-checked="true">
+            <span class="settings-row-copy">
+              <span class="settings-row-label">音效</span>
+              <span class="settings-row-hint" data-sfx-hint>局内战斗与界面提示音</span>
+            </span>
+            <span class="settings-switch" aria-hidden="true"><span class="settings-switch-thumb"></span></span>
+          </button>
           <div class="versus-exit-actions">
             <button id="btn-versus-exit-cancel" type="button" data-versus-exit-cancel>取消</button>
             <button id="btn-versus-exit-confirm" type="button">确定退出</button>
           </div>
         </div>
       </div>
-      <button id="btn-back-menu" type="button">返回</button>
+      <button id="btn-back-menu" type="button" aria-label="返回">
+        <span class="ui-icon icon-home" aria-hidden="true"></span>
+        <span class="topbar-action-label">返回</span>
+      </button>
       <button id="btn-battle-sfx-toggle" class="sfx-toggle is-battle" type="button" aria-label="音效开关" aria-pressed="false">
         <span class="sfx-toggle-icon ui-icon icon-music-on" aria-hidden="true"></span>
       </button>

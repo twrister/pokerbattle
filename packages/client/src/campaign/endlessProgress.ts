@@ -41,6 +41,7 @@ export function sanitizeEndlessSave(raw: unknown): EndlessSave {
   const save: EndlessSave = { run: null, best: null };
   if (typeof raw !== 'object' || raw === null) return save;
   const { run, best } = raw as Partial<EndlessSave>;
+  // 老存档没有 carriedUnits：sanitizeRun 会补成空数组，续玩时当作没有继承阵容
   if (run && typeof run === 'object' && Array.isArray(run.boons)) save.run = sanitizeRun(run);
   if (best && typeof best === 'object' && Number.isFinite(best.bestWave)) {
     save.best = {

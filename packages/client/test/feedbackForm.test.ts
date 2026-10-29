@@ -29,7 +29,7 @@ function buildProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
 
 function mountDom(): void {
   document.body.innerHTML = `
-    <button id="btn-feedback-open" type="button" aria-expanded="false" aria-controls="feedback-dialog">意见</button>
+    <button id="btn-feedback-open" type="button" aria-expanded="false" aria-controls="feedback-dialog">提意见</button>
     <div id="feedback-dialog" class="is-hidden" aria-hidden="true">
       <button data-feedback-close type="button">关闭</button>
       <form id="feedback-form">

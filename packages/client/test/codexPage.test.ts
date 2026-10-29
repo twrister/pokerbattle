@@ -297,4 +297,21 @@ describe('兵种图鉴页', () => {
     expect(onOpenUnitStats).toHaveBeenCalledOnce();
     page.dispose();
   });
+
+  it('开发服无限关卡参数入口会回调 onOpenEndlessConfig', () => {
+    document.body.innerHTML = `
+      <main id="codex" class="is-hidden">
+        <button id="btn-codex-back"></button>
+        <button id="btn-codex-endless-config"></button>
+        <nav id="codex-category-list"></nav>
+        <div id="codex-unit-list"></div>
+        <article id="codex-detail"></article>
+      </main>
+    `;
+    const onOpenEndlessConfig = vi.fn();
+    const page = createCodexPage({ onBack: vi.fn(), onOpenEndlessConfig });
+    document.querySelector<HTMLButtonElement>('#btn-codex-endless-config')?.click();
+    expect(onOpenEndlessConfig).toHaveBeenCalledOnce();
+    page.dispose();
+  });
 });

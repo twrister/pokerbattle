@@ -29,6 +29,8 @@ export interface CodexPageOptions {
   onBack: () => void;
   /** 开发服：打开单位参数对比/编辑页。 */
   onOpenUnitStats?: () => void;
+  /** 开发服：打开无限关卡参数页。 */
+  onOpenEndlessConfig?: () => void;
   /** 开发服：打开场景参数配置页。 */
   onOpenSceneConfig?: () => void;
 }
@@ -59,6 +61,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
   const root = required<HTMLElement>('#codex');
   const backButton = required<HTMLButtonElement>('#btn-codex-back', root);
   const unitStatsButton = root.querySelector<HTMLButtonElement>('#btn-codex-unit-stats');
+  const endlessConfigButton = root.querySelector<HTMLButtonElement>('#btn-codex-endless-config');
   const sceneConfigButton = root.querySelector<HTMLButtonElement>('#btn-codex-scene-config');
   const categoryList = required<HTMLElement>('#codex-category-list', root);
   const unitList = required<HTMLElement>('#codex-unit-list', root);
@@ -70,9 +73,11 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
 
   const back = (): void => options.onBack();
   const openUnitStats = (): void => options.onOpenUnitStats?.();
+  const openEndlessConfig = (): void => options.onOpenEndlessConfig?.();
   const openSceneConfig = (): void => options.onOpenSceneConfig?.();
   backButton.addEventListener('click', back);
   unitStatsButton?.addEventListener('click', openUnitStats);
+  endlessConfigButton?.addEventListener('click', openEndlessConfig);
   sceneConfigButton?.addEventListener('click', openSceneConfig);
 
   // 两个列表都隐藏了原生滚动条，指针拖拽承担滚动；拖拽后的 click 由模块吞掉，不会误切兵种
@@ -225,6 +230,7 @@ export function createCodexPage(options: CodexPageOptions): CodexPageHandle {
       stopDetailDragScroll();
       backButton.removeEventListener('click', back);
       unitStatsButton?.removeEventListener('click', openUnitStats);
+      endlessConfigButton?.removeEventListener('click', openEndlessConfig);
       sceneConfigButton?.removeEventListener('click', openSceneConfig);
     },
   };

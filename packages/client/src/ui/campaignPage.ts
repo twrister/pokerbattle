@@ -1,5 +1,10 @@
-import { CAMPAIGN_ARENA_PRESETS, type StageDef } from '@pb/sim';
-import { isStageUnlocked, type CampaignProgress } from '../campaign/progress.js';
+import { CAMPAIGN_ARENA_PRESETS, describeStageObjective, type StageDef, type StageObjective } from '@pb/sim';
+import {
+  countCampaignStars,
+  isStageUnlocked,
+  type CampaignProgress,
+  type CampaignStars,
+} from '../campaign/progress.js';
 import { enableDragScroll } from './dragScroll.js';
 
 export interface CampaignPageOptions {
@@ -30,14 +35,19 @@ export interface CampaignPageHandle {
 
 /** 地图坐标统一用 720 设计宽单位，与 CSS 的 --hu 对齐。 */
 export const CAMPAIGN_MAP_WIDTH = 720;
-/** 相邻关卡的纵向间距。 */
-const ROW_HEIGHT = 220;
-/** 最上面一关之上留给悬浮标题栏与山脉装饰的高度。 */
-const TOP_PADDING = 300;
-/** 第 1 关之下留给木牌与入口小路的高度。 */
-const BOTTOM_PADDING = 190;
-/** 节点横坐标按序号循环，走出左中右的「之」字路线。 */
-const ZIGZAG_X = [200, 360, 520, 360] as const;
+/** 关卡节点只占左右两列，卡片放在节点的另一侧，中间留给小路。 */
+const NODE_X_LEFT = 190;
+const NODE_X_RIGHT = 530;
+/** 相邻关卡的默认纵向间距；按视口自适应时作为上限。 */
+const ROW_HEIGHT = 200;
+/** 自适应行距的下限：相邻两行的信息卡横向有交叠，行距不能小于卡片高度。 */
+export const MIN_ROW_HEIGHT = 110;
+/** 最上面一关之上留白，刚好让出悬浮标题栏。 */
+const TOP_PADDING = 150;
+/** 第 1 关之下留白，露出入口小路。 */
+const BOTTOM_PADDING = 70;
+/** 卡片最多显示几条目标，多出的用「+N」概括。 */
+const GOAL_TEXT_LIMIT = 2;
 
 export interface MapPoint {
   x: number;
@@ -45,7 +55,7 @@ export interface MapPoint {
 }
 
 export interface StageNodeLayout {
-  /** 每关节点（城堡底座）在地图上的坐标，下标与关卡顺序一致。 */
+  /** 每关节点在地图上的坐标，下标与关卡顺序一致。 */
   points: MapPoint[];
   /** 地图总高（设计单位）。 */
   height: number;
@@ -53,13 +63,21 @@ export interface StageNodeLayout {
 
 /**
  * 计算关卡节点在地图上的位置：第 1 关在最底部，往上每关固定行距，
- * 横向在左中右之间摆动。y 以地图顶边为 0 向下增长。
+ * 横向在左右两列之间摆动。y 以地图顶边为 0 向下增长。
+ * @param fitHeight 可视高度（设计单位）；传入时压缩行距让全部关卡一屏放下，
+ *   行距夹在 [MIN_ROW_HEIGHT, ROW_HEIGHT]，关卡过多放不下时退回滚动
  */
-export function layoutStageNodes(count: number): StageNodeLayout {
-  const height = TOP_PADDING + Math.max(0, count - 1) * ROW_HEIGHT + BOTTOM_PADDING;
+export function layoutStageNodes(count: number, fitHeight?: number): StageNodeLayout {
+  const gaps = Math.max(0, count - 1);
+  const rowHeight = fitHeight !== undefined && gaps > 0
+    ? clamp((fitHeight - TOP_PADDING - BOTTOM_PADDING) / gaps, MIN_ROW_HEIGHT, ROW_HEIGHT)
+    : ROW_HEIGHT;
+  const content = TOP_PADDING + gaps * rowHeight + BOTTOM_PADDING;
+  // 关卡少、行距已到上限时，地图仍铺满视口，节点贴底
+  const height = fitHeight !== undefined ? Math.max(content, fitHeight) : content;
   const points = Array.from({ length: count }, (_, index) => ({
-    x: ZIGZAG_X[index % ZIGZAG_X.length]!,
-    y: height - BOTTOM_PADDING - index * ROW_HEIGHT,
+    x: index % 2 === 0 ? NODE_X_LEFT : NODE_X_RIGHT,
+    y: height - BOTTOM_PADDING - index * rowHeight,
   }));
   return { points, height };
 }
@@ -82,13 +100,33 @@ export function buildRoadPath(points: readonly MapPoint[]): string {
   return commands.join(' ');
 }
 
+/** 限制类目标（会不会扣分），排在通关条件之后，读者先看到「要做什么」。 */
+const CONSTRAINT_KINDS: ReadonlySet<StageObjective['kind']> = new Set([
+  'max_plays',
+  'forbid_category',
+  'base_hp_above',
+]);
+
+/**
+ * 关卡目标摘要：先把通关条件、再排限制条件，最多两行，其余用「+N」概括。
+ * 文案与局内目标面板同源，关卡改目标时两处一起变。
+ */
+export function campaignStageGoalText(objectives: readonly StageObjective[]): string {
+  const goals = objectives.filter((objective) => !CONSTRAINT_KINDS.has(objective.kind));
+  const constraints = objectives.filter((objective) => CONSTRAINT_KINDS.has(objective.kind));
+  const texts = [...goals, ...constraints].map(describeStageObjective);
+  if (texts.length <= GOAL_TEXT_LIMIT) return texts.join(' · ');
+  return `${texts.slice(0, GOAL_TEXT_LIMIT).join(' · ')} +${texts.length - GOAL_TEXT_LIMIT}`;
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** 战役选关页：扁平地图，关卡沿蜿蜒小路自下而上排布，锁定关卡禁用，已通关显示完成标记。 */
+/** 战役选关页：与大厅同一套扁平风，关卡节点沿蜿蜒小路自下而上排布，锁定时禁用点击。 */
 export function createCampaignPage(options: CampaignPageOptions): CampaignPageHandle {
   const root = required<HTMLElement>('#campaign');
   const backButton = required<HTMLButtonElement>('#btn-campaign-back', root);
   const list = required<HTMLElement>('#campaign-list', root);
+  const starsEl = required<HTMLElement>('#campaign-stars', root);
   // 地图隐藏了滚动条，按住拖动即可上下浏览；拖拽收尾的误触 click 会被吞掉
   const disposeDragScroll = enableDragScroll(list);
   let scrollFrame = 0;
@@ -112,7 +150,8 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
       && (options.unlockAllStages === true || (cleared.length > 0 && cleared[cleared.length - 1] === true));
     const nodeCount = stages.length + (endless ? 1 : 0);
     const lastUnlocked = endlessUnlocked ? stages.length : unlocked.lastIndexOf(true);
-    const { points, height } = layoutStageNodes(nodeCount);
+    const { points, height } = layoutStageNodes(nodeCount, fitHeight());
+    renderStars(countCampaignStars(progress, orderedIds));
 
     const map = document.createElement('div');
     map.className = 'campaign-map';
@@ -123,7 +162,7 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
         unlocked: unlocked[index]!,
         cleared: cleared[index]!,
         current: index === currentIndex,
-        // 有无限防守节点时，大城堡留给它
+        // 有无限防守节点时，大号终点节点留给它
         boss: !endless && stages.length > 1 && index === stages.length - 1,
       }),
     );
@@ -145,6 +184,25 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     }
   };
 
+  /** 列表可视高度换算成 720 设计单位；尚未布局（宽为 0）时返回 undefined，退回固定行距。 */
+  const fitHeight = (): number | undefined => {
+    const width = list.clientWidth;
+    if (width <= 0 || list.clientHeight <= 0) return undefined;
+    return list.clientHeight / (width / CAMPAIGN_MAP_WIDTH);
+  };
+
+  /** 标题栏星数胶囊：已得 / 总数。 */
+  const renderStars = (stars: CampaignStars): void => {
+    starsEl.textContent = `★ ${stars.earned} / ${stars.total}`;
+    starsEl.setAttribute('aria-label', `已获得 ${stars.earned} 颗星，共 ${stars.total} 颗`);
+  };
+
+  /** 视口尺寸变化时按新高度重排，保证仍然一屏放下。 */
+  const onResize = (): void => {
+    if (!root.classList.contains('is-hidden')) render();
+  };
+  window.addEventListener('resize', onResize);
+
   /** 把节点滚动到列表可视区竖直居中。 */
   const centerOn = (element: HTMLElement): void => {
     const listRect = list.getBoundingClientRect();
@@ -153,99 +211,59 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     list.scrollTop = list.scrollTop + offset - list.clientHeight / 2;
   };
 
-  /** 单个关卡节点：城堡贴图 + 木牌（序号 + 标题 + 地图名）+ 完成徽章；锁定时禁用点击。 */
+  /** 卡片朝向：节点在左半区时卡片挂到右边，反之挂左边，避免压住小路与对侧节点。 */
+  const cardSide = (point: MapPoint): 'left' | 'right' => (point.x < CAMPAIGN_MAP_WIDTH / 2 ? 'right' : 'left');
+
+  /** 单关节点：圆形序号徽章钉在小路上，奶油信息卡写标题、地图/限时与目标。 */
   const createStageButton = (
     stage: StageDef,
     point: MapPoint,
     state: { unlocked: boolean; cleared: boolean; current: boolean; boss: boolean },
   ): HTMLButtonElement => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'campaign-stage';
+    const button = createStageButtonShell(point, cardSide(point));
     button.disabled = !state.unlocked;
     button.dataset.stageId = stage.id;
     button.classList.toggle('is-cleared', state.cleared);
     button.classList.toggle('is-current', state.current);
     button.classList.toggle('is-locked', !state.unlocked);
     button.classList.toggle('is-boss', state.boss);
-    button.setAttribute('role', 'listitem');
-    button.style.setProperty('--x', String(point.x));
-    button.style.setProperty('--y', String(point.y));
 
-    // 普通关用箭塔，最后一关用主堡当「大城堡」，与局内建筑风格一致
-    const castle = document.createElement('img');
-    castle.className = 'campaign-stage-castle';
-    castle.src = state.boss ? 'buildings/base_red.png' : 'buildings/tower_red.png';
-    castle.alt = '';
-    castle.draggable = false;
-    castle.setAttribute('aria-hidden', 'true');
+    button.append(createNode(state.unlocked ? String(stage.index) : '锁'));
 
-    const plate = document.createElement('span');
-    plate.className = 'campaign-stage-plate';
+    const plate = createPlate(stage.title);
+    // 地图名跟着关卡走；限时只在关卡单独指定时显示，默认时长不占版面
+    if (stage.arena) plate.meta.append(createPill(CAMPAIGN_ARENA_PRESETS[stage.arena].name));
+    if (stage.durationSeconds) plate.meta.append(createPill(`限时 ${stage.durationSeconds} 秒`));
+    plate.root.append(plate.meta, createGoal(campaignStageGoalText(stage.objectives)));
+    button.append(plate.root);
 
-    const index = document.createElement('span');
-    index.className = 'campaign-stage-index';
-    index.textContent = state.unlocked ? String(stage.index) : '锁';
+    // 星星徽章：已通关为金星，已解锁未通关为灰色空星预告，锁定关不显示
+    if (state.cleared) button.append(createStar(true));
+    else if (state.unlocked) button.append(createStar(false));
 
-    const title = document.createElement('span');
-    title.className = 'campaign-stage-title';
-    title.textContent = stage.title;
-    if (stage.arena) {
-      const arena = document.createElement('span');
-      arena.className = 'campaign-stage-arena';
-      arena.textContent = CAMPAIGN_ARENA_PRESETS[stage.arena].name;
-      title.append(arena);
-    }
-    plate.append(index, title);
-
-    // 文字供读屏使用，视觉上由 CSS 渲染成对勾徽章
-    const status = document.createElement('span');
-    status.className = 'campaign-stage-status';
-    status.textContent = state.cleared ? '✓ 已完成' : '';
-
-    button.append(castle, plate, status);
     button.addEventListener('click', () => options.onStartStage(stage.id));
     return button;
   };
 
-  /** 无限防守节点：复用关卡节点样式的大城堡，木牌写最佳波数；没有 stageId。 */
+  /** 无限防守节点：复用关卡节点样式的大号终点节点，卡片写最佳波数；没有 stageId。 */
   const createEndlessButton = (
     entry: CampaignEndlessEntry,
     point: MapPoint,
     unlocked: boolean,
   ): HTMLButtonElement => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'campaign-stage campaign-endless is-boss';
+    const button = createStageButtonShell(point, cardSide(point));
     button.disabled = !unlocked;
+    button.classList.add('campaign-endless', 'is-boss');
     button.classList.toggle('is-locked', !unlocked);
-    button.setAttribute('role', 'listitem');
-    button.style.setProperty('--x', String(point.x));
-    button.style.setProperty('--y', String(point.y));
 
-    const castle = document.createElement('img');
-    castle.className = 'campaign-stage-castle';
-    castle.src = 'buildings/base.png';
-    castle.alt = '';
-    castle.draggable = false;
-    castle.setAttribute('aria-hidden', 'true');
+    button.append(createNode(unlocked ? '∞' : '锁'));
 
-    const plate = document.createElement('span');
-    plate.className = 'campaign-stage-plate';
-    const index = document.createElement('span');
-    index.className = 'campaign-stage-index';
-    index.textContent = unlocked ? '∞' : '锁';
-    const title = document.createElement('span');
-    title.className = 'campaign-stage-title';
-    title.textContent = '无限防守';
+    const plate = createPlate('无限防守');
     const best = entry.getBestWave();
-    const sub = document.createElement('span');
-    sub.className = 'campaign-stage-arena';
-    sub.textContent = best ? `最佳 ${best} 波` : '守住一波又一波';
-    title.append(sub);
-    plate.append(index, title);
+    plate.meta.append(createPill(best ? `最佳 ${best} 波` : '一波接一波'));
+    plate.root.append(plate.meta, createGoal('撑过每一波进攻，直到防线崩溃'));
+    button.append(plate.root);
 
-    button.append(castle, plate);
     button.addEventListener('click', () => entry.onStart());
     return button;
   };
@@ -265,9 +283,75 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     dispose() {
       cancelAnimationFrame(scrollFrame);
       disposeDragScroll();
+      window.removeEventListener('resize', onResize);
       backButton.removeEventListener('click', options.onBack);
     },
   };
+}
+
+/** 节点按钮外壳：定位到 (--x, --y)，并声明卡片挂哪一侧。 */
+function createStageButtonShell(point: MapPoint, side: 'left' | 'right'): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'campaign-stage';
+  button.dataset.card = side;
+  button.setAttribute('role', 'listitem');
+  button.style.setProperty('--x', String(point.x));
+  button.style.setProperty('--y', String(point.y));
+  return button;
+}
+
+/** 圆形序号徽章；锁定关文案为「锁」，视觉上由 CSS 画成锁形。 */
+function createNode(label: string): HTMLSpanElement {
+  const node = document.createElement('span');
+  node.className = 'campaign-stage-index';
+  node.textContent = label;
+  return node;
+}
+
+/** 奶油信息卡：标题在上，标签与目标依次排下去。 */
+function createPlate(title: string): {
+  root: HTMLSpanElement;
+  meta: HTMLSpanElement;
+} {
+  const root = document.createElement('span');
+  root.className = 'campaign-stage-plate';
+
+  const titleEl = document.createElement('span');
+  titleEl.className = 'campaign-stage-title';
+  titleEl.textContent = title;
+
+  const meta = document.createElement('span');
+  meta.className = 'campaign-stage-meta';
+
+  root.append(titleEl);
+  return { root, meta };
+}
+
+/** 卡片上的小圆角标签：地图名、限时、最佳波数。 */
+function createPill(text: string): HTMLSpanElement {
+  const pill = document.createElement('span');
+  pill.className = 'campaign-stage-arena';
+  pill.textContent = text;
+  return pill;
+}
+
+/** 卡片上的目标摘要，最多两行，超出由 CSS 省略。 */
+function createGoal(text: string): HTMLSpanElement {
+  const goal = document.createElement('span');
+  goal.className = 'campaign-stage-goal';
+  goal.textContent = text;
+  return goal;
+}
+
+/** 星星徽章：钉在节点右上角，earned 为金星，否则为灰色空星；读屏文案说明是否已得星。 */
+function createStar(earned: boolean): HTMLSpanElement {
+  const star = document.createElement('span');
+  star.className = 'campaign-stage-star';
+  star.classList.toggle('is-earned', earned);
+  star.textContent = '★';
+  star.setAttribute('aria-label', earned ? '已获得 1 星' : '通关可得 1 星');
+  return star;
 }
 
 /**
@@ -307,6 +391,11 @@ function createMapSvg(className: string, height: number): SVGSVGElement {
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('aria-hidden', 'true');
   return svg;
+}
+
+/** 把数值夹到 [min, max]。 */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function required<T extends Element>(selector: string, root: ParentNode = document): T {

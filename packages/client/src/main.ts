@@ -5,10 +5,11 @@ import {
   CAMPAIGN_STAGES,
   advanceWave,
   applyBoon,
-  applyEndlessConfigDraft,
+  applyEndlessWaveSeconds,
   buildWaveStage,
   countLivingMobileUnits,
   createRun,
+  collectSurvivors,
   defaultEndlessWaveSeconds,
   endlessWaveSpawnProgress,
   isBossWave,
@@ -29,6 +30,7 @@ import {
   type MatchResult,
   type StageDef,
   type StageOutcome,
+  type StagePresetUnit,
   type SoloDifficulty,
   type UnitTypeId,
   fromFloat,
@@ -124,6 +126,7 @@ import { createStageHud } from './ui/stageHud.js';
 import { createEndlessStatsPanel } from './ui/endlessStatsPanel.js';
 import { shouldShowHandGuide } from './ui/handGuide.js';
 import { createVersusExitConfirm } from './ui/versusExitConfirm.js';
+import { createPauseConfirm } from './ui/pauseConfirm.js';
 import { createRejoinDialog } from './ui/rejoinDialog.js';
 import { createSpectatorHands, type SpectatorHandNames } from './ui/spectatorHands.js';
 import { createCodexPage } from './ui/codexPage.js';
@@ -142,6 +145,7 @@ import { createScreenController, type AppScreen, type ScreenController } from '.
 import { createSceneConfigPage } from './ui/sceneConfigPage.js';
 import { createSfxConfigPage } from './ui/sfxConfigPage.js';
 import { createUnitStatsPage } from './ui/unitStatsPage.js';
+import { createEndlessConfigPage } from './ui/endlessConfigPage.js';
 import { ARENA_H, ARENA_W } from './view/coords.js';
 import { applyMatchRulesView, defaultMatchRulesView } from './debug/matchRulesView.js';
 import { loadRuntimeDefaults } from './debug/runtimeDefaults.js';
@@ -171,10 +175,12 @@ const backButton = requiredElement<HTMLButtonElement>('#btn-back-menu');
 sfx.attachUnlock();
 sfx.preloadAll();
 bindGlobalUiSfx(document);
-// 局内音符按钮；大厅设置弹层里的开关与它共用 sfx 状态，靠订阅互相同步
+// 局内音效开关：单机/联机在暂停弹窗里，回放/观战没有暂停框，只在 HUD 上放图标钮；
+// 与大厅设置弹层共用 sfx 状态，靠订阅互相同步
 createSfxToggle({
   buttons: [
     document.querySelector<HTMLButtonElement>('#btn-battle-sfx-toggle'),
+    document.querySelector<HTMLButtonElement>('#btn-pause-sfx-toggle'),
   ].filter((button): button is HTMLButtonElement => Boolean(button)),
 });
 
@@ -333,6 +339,7 @@ const specialTierPage = createSpecialTierPage({
   onBack: () => screens.show('deck-config'),
 });
 const unitStatsPage = createUnitStatsPage({ onBack: () => screens.show('codex') });
+const endlessConfigPage = createEndlessConfigPage({ onBack: () => screens.show('codex') });
 const handOddsPage = createHandOddsPage({
   onBack: () => screens.show('deck-config'),
   onBeforeBalance: () => unitStatsPage.flushPending(),
@@ -342,6 +349,7 @@ const sfxConfigPage = createSfxConfigPage({ onBack: () => screens.show('menu') }
 const codexPage = createCodexPage({
   onBack: () => screens.show('menu'),
   onOpenUnitStats: () => screens.show('unit-stats'),
+  onOpenEndlessConfig: () => screens.show('endless-config'),
   onOpenSceneConfig: () => screens.show('scene-config'),
 });
 const battleHud = createBattleHud();
@@ -942,7 +950,7 @@ function enterBattleSession(mode: BattleMode): () => void {
     : soloBot
       ? loop.addCommandSource((match) => (match ? soloBot.decide(match) : null))
       : () => {};
-  /** 无限防守：顶部只显示波次与出兵进度，左侧显示本局叠加。 */
+  /** 无限防守：顶部只显示波次与出兵进度，右上角显示本局叠加。 */
   const endlessWaveInfo = stageDef && isEndlessStage(stageDef) && endlessRun
     ? { wave: endlessRun.wave, boss: isBossWave(endlessRun.wave) }
     : null;
@@ -1455,7 +1463,8 @@ function enterBattleSession(mode: BattleMode): () => void {
               initial: endlessRun?.waveSeconds ?? defaultEndlessWaveSeconds(),
               // 无限关的出兵窗口跟着挑战存档走：改完同步进当前挑战，下一波生效
               onChange: (seconds) => {
-                applyEndlessConfigDraft({ waveSeconds: seconds });
+                // 只改全局窗口，别把配置页维护的每波覆盖一起冲掉
+                applyEndlessWaveSeconds(seconds);
                 if (!endlessRun) return;
                 endlessRun = sanitizeRun({ ...endlessRun, waveSeconds: seconds });
                 endlessProgress.saveRun(endlessRun);
@@ -1551,9 +1560,39 @@ function enterBattleSession(mode: BattleMode): () => void {
   const returnToMenu = (): void => {
     unitStatsPage.hide();
     sceneConfigPage.hide();
+    // 战役/无限关的上下文只对当前这局有效，离开时一起清掉，
+    // 否则下次普通人机会带着上次的关卡与波次信息
+    if (stageDef) {
+      selectedStage = null;
+      endlessRun = null;
+      // 关卡退出去选关页，玩家能立刻看到刚记下的成绩与解锁状态
+      screens.show('campaign');
+      return;
+    }
     screens.show('menu');
   };
-  backButton.addEventListener('click', returnToMenu);
+
+  /**
+   * 单机/沙盒返回：未结算先暂停并弹确认框。
+   *
+   * 单机模拟只在本机推进，暂停是安全的；结算已经弹出时返回只是正常离场，
+   * 不再多问一次。无限关主动退出等同挑战失败，要先结账再离开。
+   */
+  const pauseConfirm = createPauseConfirm({
+    dialog: versusExitConfirm,
+    isResolved: () => resultShown || pendingStageOutcome !== null,
+    isPaused: () => loop.paused,
+    setPaused: (paused) => {
+      loop.paused = paused;
+    },
+    isEndless: () => Boolean(stageDef && isEndlessStage(stageDef) && endlessRun),
+    onEndlessAbandon: () => {
+      // 先结账并清掉进行中的存档，免得下次进关卡还能「继续」这条已经失败的路
+      if (endlessRun) finishEndlessAsFailed(endlessRun);
+    },
+    onExit: returnToMenu,
+  });
+  backButton.addEventListener('click', pauseConfirm.requestExit);
 
   let lastFrameAt = performance.now();
   let smoothedFps = 60;
@@ -1604,7 +1643,13 @@ function enterBattleSession(mode: BattleMode): () => void {
             // 目标落定后冻结对局，避免结算面板出现后战场还在继续打
             loop.paused = true;
             if (endlessRun && isEndlessStage(stageDef)) {
-              showEndlessWaveResult(endlessRun, pendingStageOutcome, loop.match!.getCastleHpRatio(Faction.Blue));
+              // 本波残血与存活单位一起交给结算：下一波开局要把阵容原样摆回去
+              showEndlessWaveResult(
+                endlessRun,
+                pendingStageOutcome,
+                loop.match!.getCastleHpRatio(Faction.Blue),
+                collectSurvivors(loop.match!),
+              );
             } else {
               showStageResult(stageDef, pendingStageOutcome);
             }
@@ -1641,7 +1686,10 @@ function enterBattleSession(mode: BattleMode): () => void {
     container.classList.add('is-hidden');
     hud.classList.remove('is-solo', 'is-solo-debug');
     container.classList.remove('is-solo');
-    backButton.removeEventListener('click', returnToMenu);
+    backButton.removeEventListener('click', pauseConfirm.requestExit);
+    // 暂停框可能还开着就切屏了，兜底收掉并恢复推进状态
+    versusExitConfirm.hide();
+    loop.paused = false;
     disableUnitPlacement();
     disableBuildingPlacementFn();
     disableDebugUnitDrag();
@@ -2540,6 +2588,11 @@ screens = createScreenController({
     unitStatsPage.show();
     return () => unitStatsPage.hide();
   },
+  'endless-config': () => {
+    syncLobbyPresenceForScreen('endless-config');
+    endlessConfigPage.show();
+    return () => endlessConfigPage.hide();
+  },
   'scene-config': () => {
     syncLobbyPresenceForScreen('scene-config');
     sceneConfigPage.show();
@@ -2596,6 +2649,7 @@ function disposeApp(): void {
   specialTierPage.dispose();
   handOddsPage.dispose();
   unitStatsPage.dispose();
+  endlessConfigPage.dispose();
   sceneConfigPage.dispose();
   sfxConfigPage.dispose();
   codexPage.dispose();
@@ -2645,6 +2699,8 @@ function recordLocalBattle(
  */
 function showStageResult(def: StageDef, outcome: StageOutcome): void {
   const cleared = outcome.status === 'success';
+  // 每关一颗星，只在首次通关时给，写进度前先判断以前是否通关过
+  const firstClear = cleared && campaignProgress.load().stages[def.id] === undefined;
   if (cleared) {
     campaignProgress.recordClear({
       stageId: def.id,
@@ -2669,6 +2725,7 @@ function showStageResult(def: StageDef, outcome: StageOutcome): void {
     seconds: outcome.seconds,
     // 残局关输法很多（超手数、用了禁用牌型、超时），直接告诉玩家输在哪
     failText: outcome.reason ? STAGE_FAIL_REASON_TEXT[outcome.reason] : undefined,
+    badge: firstClear ? '+1 ★' : undefined,
     hasNext: Boolean(next),
     onNext: () => {
       if (!next) return;
@@ -2721,15 +2778,19 @@ function openEndlessEntry(): void {
 /**
  * 一波结束：守住则推进波次并弹三选一，选完存档开下一波；
  * 主堡陷落则结束挑战、刷新最佳并展示结算。
+ * survivors 为本波结束时玩家场上存活单位，会原位置、原血量带入下一波。
  */
-function showEndlessWaveResult(run: EndlessRunState, outcome: StageOutcome, hpRatio: number): void {
+function showEndlessWaveResult(
+  run: EndlessRunState,
+  outcome: StageOutcome,
+  hpRatio: number,
+  survivors: readonly StagePresetUnit[],
+): void {
   battleResult.setReturnLabel('返回战役');
-  // 弹层出现时收起局内叠加，避免两张卡片叠在左上角
-  endlessStats.hide();
   if (outcome.status === 'success') {
     sfx.play('result_win');
     // 清场流没有固定波长，累计时长记本波实际用时
-    const advanced = advanceWave(run, hpRatio, outcome.seconds);
+    const advanced = advanceWave(run, hpRatio, outcome.seconds, survivors);
     // Boss 波之后只给稀有强化
     const choices = rollBoonChoices(advanced, isBossWave(run.wave));
     const proceed = (next: EndlessRunState): void => {
@@ -2740,11 +2801,36 @@ function showEndlessWaveResult(run: EndlessRunState, outcome: StageOutcome, hpRa
       proceed(advanced);
       return;
     }
-    boonPickPanel.showChoices(advanced, run.wave, choices, (boonId) => proceed(applyBoon(advanced, boonId)));
+    // 三选一期间保留叠加 HUD 并抬到弹层遮罩之上，让玩家边选边看当前叠加
+    endlessStats.show(advanced, true);
+    boonPickPanel.showChoices(run.wave, choices, (boonId) => proceed(applyBoon(advanced, boonId)));
     return;
   }
-  const clearedWaves = run.wave - 1;
-  // run 记的是本波开局（即上一波守住时）的残血，正好作为同波数的比较依据
+  // 失守结算铺满屏幕，先收起叠加面板，避免和结算卡叠在一起
+  endlessStats.hide();
+  const { improved, clearedWaves } = finishEndlessAsFailed(run);
+  battleResult.showStage({
+    cleared: false,
+    seconds: outcome.seconds,
+    hasNext: false,
+    onNext: () => {},
+    onRetry: () => startNewEndlessRun(),
+    titleText: '防线失守',
+    highlight: { label: '守住波数', value: String(clearedWaves) },
+    badge: improved ? '新纪录' : undefined,
+    retryLabel: '重新挑战',
+  });
+}
+
+/**
+ * 结束无限防守挑战并按失败记账。
+ *
+ * clearedWaves 取「当前波次 - 1」：主堡陷落与主动退出都只算完整守住的波数。
+ * run 里存的是本波开局的残血，正好作为同波数的比较依据。
+ * 返回刷新后的最佳纪录状态，供结算文案与调用方判断。
+ */
+function finishEndlessAsFailed(run: EndlessRunState): { improved: boolean; clearedWaves: number } {
+  const clearedWaves = Math.max(0, run.wave - 1);
   const improved = endlessProgress.finishRun(run, clearedWaves);
   try {
     playerProfile.recordStageChallenge({ stageId: 'endless', outcome: clearedWaves > 0 ? 'cleared' : 'failed' });
@@ -2752,14 +2838,7 @@ function showEndlessWaveResult(run: EndlessRunState, outcome: StageOutcome, hpRa
   } catch (error) {
     console.error('[account] 无限防守记录写入失败', error);
   }
-  battleResult.showStage({
-    cleared: false,
-    seconds: outcome.seconds,
-    failText: `守住 ${clearedWaves} 波${improved ? '，刷新最佳纪录！' : ''}`,
-    hasNext: false,
-    onNext: () => {},
-    onRetry: () => startNewEndlessRun(),
-  });
+  return { improved, clearedWaves };
 }
 
 /** 引信炸弹拖拽预览半径：读取兵种 aoeRadius，缺省回落 8。 */

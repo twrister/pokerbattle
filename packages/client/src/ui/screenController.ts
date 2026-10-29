@@ -11,6 +11,7 @@ export type AppScreen =
   | 'replay-list'
   | 'replay'
   | 'unit-stats'
+  | 'endless-config'
   | 'scene-config'
   | 'sfx-config'
   | 'sandbox'

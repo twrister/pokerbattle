@@ -113,7 +113,7 @@ function mountMainMenuDom(): void {
       <div id="patch-notes-dialog" class="is-hidden" aria-hidden="true">
         <button data-patch-notes-close></button>
         <div id="patch-notes-list"></div>
-        <button id="btn-feedback-open" type="button" aria-expanded="false">意见</button>
+        <button id="btn-feedback-open" type="button" aria-expanded="false">提意见</button>
         <p id="patch-notes-status"></p>
         <button id="btn-patch-notes-add" type="button">新增版本</button>
         <button id="btn-patch-notes-save" type="button">保存</button>

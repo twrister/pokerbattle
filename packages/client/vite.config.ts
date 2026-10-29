@@ -447,11 +447,19 @@ function validateMatchRulesBody(value: unknown): string | undefined {
 }
 
 /**
- * 写盘前确认出兵窗口合法。
+ * 写盘前确认出兵窗口与每波覆盖项合法。
  * 这里手写一份区间而不是复用 sim 的校验：vite 配置加载器不认 endlessConfig 里的 JSON 导入。
  */
 const ENDLESS_WAVE_SECONDS_MIN = 30;
 const ENDLESS_WAVE_SECONDS_MAX = 600;
+const ENDLESS_WAVE_INTERVAL_MIN = 6;
+const ENDLESS_WAVE_INTERVAL_MAX = 60;
+const ENDLESS_WAVE_BUDGET_MIN = 1;
+const ENDLESS_WAVE_BUDGET_MAX = 999;
+const ENDLESS_UNIT_WEIGHT_MIN = 0.5;
+const ENDLESS_UNIT_WEIGHT_MAX = 20;
+const ENDLESS_WAVE_ROWS_MAX = 60;
+const ENDLESS_WAVE_UNITS_MAX = 12;
 
 function validateEndlessConfigBody(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'body must be a JSON object';
@@ -462,6 +470,51 @@ function validateEndlessConfigBody(value: unknown): string | undefined {
   }
   if (seconds < ENDLESS_WAVE_SECONDS_MIN || seconds > ENDLESS_WAVE_SECONDS_MAX) {
     return `waveSeconds must be between ${ENDLESS_WAVE_SECONDS_MIN} and ${ENDLESS_WAVE_SECONDS_MAX}`;
+  }
+  if (rec.waves === undefined) return undefined;
+  if (!Array.isArray(rec.waves)) return 'waves must be an array';
+  return validateEndlessWaves(rec.waves);
+}
+
+/** 逐条校验每波覆盖；错误信息带波号，方便从 dev 面板直接定位。 */
+function validateEndlessWaves(waves: readonly unknown[]): string | undefined {
+  for (const raw of waves) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'each wave must be an object';
+    const wave = raw as Record<string, unknown>;
+    if (!Number.isInteger(wave.wave) || (wave.wave as number) < 1 || (wave.wave as number) > ENDLESS_WAVE_ROWS_MAX) {
+      return `wave must be an integer between 1 and ${ENDLESS_WAVE_ROWS_MAX}`;
+    }
+    const label = `wave ${String(wave.wave)}`;
+    const ranges: Array<[string, number, number]> = [
+      ['waveSeconds', ENDLESS_WAVE_SECONDS_MIN, ENDLESS_WAVE_SECONDS_MAX],
+      ['budget', ENDLESS_WAVE_BUDGET_MIN, ENDLESS_WAVE_BUDGET_MAX],
+      ['intervalSeconds', ENDLESS_WAVE_INTERVAL_MIN, ENDLESS_WAVE_INTERVAL_MAX],
+    ];
+    for (const [key, min, max] of ranges) {
+      const field = wave[key];
+      if (field === undefined) continue;
+      if (typeof field !== 'number' || !Number.isFinite(field)) return `${label} ${key} must be a finite number`;
+      if (field < min || field > max) return `${label} ${key} must be between ${min} and ${max}`;
+    }
+    const units = wave.units;
+    if (units === undefined) continue;
+    if (!Array.isArray(units)) return `${label} units must be an array`;
+    if (units.length > ENDLESS_WAVE_UNITS_MAX) return `${label} units exceeds ${ENDLESS_WAVE_UNITS_MAX}`;
+    for (const unitRaw of units) {
+      if (!unitRaw || typeof unitRaw !== 'object' || Array.isArray(unitRaw)) {
+        return `${label} each unit must be an object`;
+      }
+      const unit = unitRaw as Record<string, unknown>;
+      if (typeof unit.typeId !== 'string' || unit.typeId.length === 0) {
+        return `${label} unit typeId must be a non-empty string`;
+      }
+      if (typeof unit.weight !== 'number' || !Number.isFinite(unit.weight)) {
+        return `${label} unit ${unit.typeId} weight must be a finite number`;
+      }
+      if (unit.weight < ENDLESS_UNIT_WEIGHT_MIN || unit.weight > ENDLESS_UNIT_WEIGHT_MAX) {
+        return `${label} unit ${unit.typeId} weight must be between ${ENDLESS_UNIT_WEIGHT_MIN} and ${ENDLESS_UNIT_WEIGHT_MAX}`;
+      }
+    }
   }
   return undefined;
 }

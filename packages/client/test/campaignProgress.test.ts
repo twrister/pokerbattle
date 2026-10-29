@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CAMPAIGN_PROGRESS_STORAGE_KEY,
+  countCampaignStars,
   createCampaignProgressStore,
   emptyProgress,
   isStageUnlocked,
@@ -25,6 +26,14 @@ function memoryStorage(): Storage {
 
 describe('战役进度', () => {
   const order = ['a', 'b', 'c'];
+
+  it('星数每关一颗，重复通关不叠加，已下线关卡不计入', () => {
+    expect(countCampaignStars(emptyProgress(), order)).toEqual({ earned: 0, total: 3 });
+    let progress = recordStageClear(emptyProgress(), { stageId: 'a', seconds: 50 });
+    progress = recordStageClear(progress, { stageId: 'a', seconds: 40 });
+    progress = recordStageClear(progress, { stageId: 'removed', seconds: 10 });
+    expect(countCampaignStars(progress, order)).toEqual({ earned: 1, total: 3 });
+  });
 
   it('第一关始终解锁，其余需上一关通关', () => {
     const progress = recordStageClear(emptyProgress(), { stageId: 'a', seconds: 50 });

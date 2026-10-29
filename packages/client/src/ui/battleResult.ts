@@ -32,6 +32,14 @@ export interface StageResultInfo {
   hasNext: boolean;
   onNext: () => void;
   onRetry: () => void;
+  /** 覆盖默认标题（通关 / 失败），如无限防守的「防线失守」。 */
+  titleText?: string;
+  /** 大号成绩块，如「守住波数 7」；有它时用时/失败行收起，避免信息重复。 */
+  highlight?: { label: string; value: string };
+  /** 金色角标，如「新纪录」「+1 ★」；缺省不显示。 */
+  badge?: string;
+  /** 重试按钮文案，缺省「重试」。 */
+  retryLabel?: string;
 }
 
 export interface BattleResultHandle {
@@ -91,6 +99,10 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
   const stageLine = requiredElement<HTMLElement>('#battle-result-stage');
   const nextButton = requiredElement<HTMLButtonElement>('#btn-battle-result-next');
   const retryButton = requiredElement<HTMLButtonElement>('#btn-battle-result-retry');
+  const highlight = requiredElement<HTMLElement>('#battle-result-highlight');
+  const highlightLabel = requiredElement<HTMLElement>('#battle-result-highlight-label');
+  const highlightValue = requiredElement<HTMLElement>('#battle-result-highlight-value');
+  const badge = requiredElement<HTMLElement>('#battle-result-badge');
   /** 当前战役按钮回调；普通结算时为空。 */
   let stageInfo: StageResultInfo | null = null;
   nextButton.addEventListener('click', () => stageInfo?.onNext());
@@ -100,10 +112,17 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
   const setStageUi = (info: StageResultInfo | null): void => {
     stageInfo = info;
     root.classList.toggle('is-stage', Boolean(info));
-    stageLine.classList.toggle('is-hidden', !info);
+    // 有大号成绩块时它已说明结果，用时/失败行收起
+    stageLine.classList.toggle('is-hidden', !info || Boolean(info.highlight));
     stageLine.classList.toggle('is-failed', Boolean(info && !info.cleared));
     nextButton.classList.toggle('is-hidden', !info || !info.cleared || !info.hasNext);
     retryButton.classList.toggle('is-hidden', !info || info.cleared);
+    retryButton.textContent = info?.retryLabel ?? '重试';
+    highlight.classList.toggle('is-hidden', !info?.highlight);
+    highlightLabel.textContent = info?.highlight?.label ?? '';
+    highlightValue.textContent = info?.highlight?.value ?? '';
+    badge.classList.toggle('is-hidden', !info?.badge);
+    badge.textContent = info?.badge ?? '';
     if (info) {
       stageLine.textContent = info.cleared ? `用时 ${Math.round(info.seconds)} 秒` : info.failText ?? '未达成目标';
     }
@@ -178,7 +197,7 @@ export function createBattleResult(onReturnToMenu: () => void): BattleResultHand
       setStageUi(info);
       // 战役标题以关卡成败为准，不看对局胜负（例如守城目标在超时时也算通关）
       sfx.play(info.cleared ? 'result_win' : 'result_lose');
-      title.textContent = info.cleared ? '通关' : '失败';
+      title.textContent = info.titleText ?? (info.cleared ? '通关' : '失败');
       root.dataset.outcome = info.cleared ? '胜利' : '失败';
       root.classList.remove('is-hidden');
       root.setAttribute('aria-hidden', 'false');
