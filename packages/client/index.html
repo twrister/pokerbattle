@@ -2412,7 +2412,7 @@
 
       /*
        * 关卡节点：按钮盒本身就是序号圆章，圆心钉在 (--x, --y) 上；
-       * 信息卡绝对定位挂在圆章一侧（data-card 决定左挂还是右挂），
+       * 信息卡绝对定位挂在圆章一侧（统一挂在右侧），
        * 不参与按钮盒尺寸计算，因此卡片再长也不会把节点带偏。
        */
       .campaign-stage {
@@ -2491,8 +2491,8 @@
         display: flex;
         flex-direction: column;
         gap: calc(4 * var(--mu));
-        width: calc(230 * var(--mu));
-        padding: calc(8 * var(--mu)) calc(12 * var(--mu));
+        width: calc(400 * var(--mu));
+        padding: calc(14 * var(--mu)) calc(16 * var(--mu));
         border: calc(3 * var(--mu)) solid var(--outline);
         border-radius: calc(14 * var(--mu));
         background: var(--cream);
@@ -2504,13 +2504,9 @@
         transition: transform 0.12s;
       }
 
-      /* 卡片挂在圆章外侧，避开来回折返的小路 */
-      .campaign-stage[data-card='right'] .campaign-stage-plate {
+      /* 卡片统一挂在圆章右侧 */
+      .campaign-stage .campaign-stage-plate {
         left: calc(100% + var(--card-gap) * var(--mu));
-      }
-
-      .campaign-stage[data-card='left'] .campaign-stage-plate {
-        right: calc(100% + var(--card-gap) * var(--mu));
       }
 
       .campaign-stage:hover:not(:disabled) .campaign-stage-plate {
@@ -2525,37 +2521,6 @@
         letter-spacing: 0.02em;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-
-      /* 地图名 / 限时 / 最佳波数的小圆角标签 */
-      .campaign-stage-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: calc(6 * var(--mu));
-      }
-
-      .campaign-stage-meta:empty {
-        display: none;
-      }
-
-      .campaign-stage-arena {
-        padding: calc(1 * var(--mu)) calc(9 * var(--mu));
-        border-radius: 999px;
-        background: var(--cream-deep);
-        color: var(--ink);
-        font-size: calc(13 * var(--mu));
-        white-space: nowrap;
-      }
-
-      /* 目标摘要：最多两行，超出省略，保证卡片高度一致 */
-      .campaign-stage-goal {
-        display: -webkit-box;
-        overflow: hidden;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        color: var(--ink-soft);
-        font-size: calc(13 * var(--mu));
-        line-height: 1.3;
       }
 
       /* 星星徽章：圆章右上角，已得为描边金星，未得为半透明灰星 */
@@ -2619,14 +2584,6 @@
           0 calc(4 * var(--mu)) 0 rgba(20, 33, 61, 0.35);
       }
 
-      .campaign-stage.is-current .campaign-stage-goal {
-        color: rgba(20, 33, 61, 0.72);
-      }
-
-      .campaign-stage.is-current .campaign-stage-arena {
-        background: rgba(20, 33, 61, 0.16);
-      }
-
       .campaign-stage.is-current::after {
         content: '';
         position: absolute;
@@ -2669,13 +2626,7 @@
         opacity: 0.92;
       }
 
-      .campaign-stage.is-locked .campaign-stage-title,
-      .campaign-stage.is-locked .campaign-stage-goal {
-        color: var(--ink-soft);
-      }
-
-      .campaign-stage.is-locked .campaign-stage-arena {
-        background: #b0bcca;
+      .campaign-stage.is-locked .campaign-stage-title {
         color: var(--ink-soft);
       }
 

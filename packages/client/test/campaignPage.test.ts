@@ -61,13 +61,9 @@ describe('战役选关页', () => {
       '2',
       '锁',
     ]);
-    expect(buttons[2]!.querySelector('.campaign-stage-arena')?.textContent).toBe('要塞');
-    // 每张卡片都写目标摘要，不再依赖图片表达关卡内容
-    expect(buttons.map((button) => button.querySelector('.campaign-stage-goal')!.textContent)).toEqual([
-      '赢下这一局',
-      '赢下这一局',
-      '赢下这一局',
-    ]);
+    // 卡片只保留标题，不再有标签与目标小字
+    expect(document.querySelector('.campaign-stage-arena')).toBeNull();
+    expect(document.querySelector('.campaign-stage-goal')).toBeNull();
     // 已通关为金星，已解锁未通关为空星，锁定关不显示星星
     expect(buttons.map((button) => starState(button))).toEqual(['earned', 'empty', 'none']);
     expect(buttons[0]!.classList.contains('is-cleared')).toBe(true);
@@ -134,8 +130,6 @@ describe('战役选关页', () => {
     expect(buttons.map((button) => button.classList.contains('is-current'))).toEqual([false, true, false]);
     expect(buttons.map((button) => button.classList.contains('is-locked'))).toEqual([false, false, true]);
     expect(buttons.map((button) => button.classList.contains('is-boss'))).toEqual([false, false, true]);
-    // 卡片按节点所在半区反向挂：左列节点挂右侧，右列节点挂左侧
-    expect(buttons.map((button) => button.dataset.card)).toEqual(['right', 'left', 'right']);
   });
 
   it('全部通关时没有当前关', () => {
@@ -205,13 +199,12 @@ describe('战役选关页', () => {
     expect(endless.disabled).toBe(true);
     // 终点大节点让给无限防守
     expect(document.querySelectorAll('.campaign-stage.is-boss')).toHaveLength(1);
-    expect(endless.querySelector('.campaign-stage-goal')!.textContent).toBe('撑过每一波进攻，直到防线崩溃');
+    expect(endless.querySelector('.campaign-stage-title')!.textContent).toBe('无限防守');
 
     for (const id of ['a', 'b', 'c']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
     page.show();
     endless = document.querySelector<HTMLButtonElement>('.campaign-endless')!;
     expect(endless.disabled).toBe(false);
-    expect(endless.textContent).toContain('最佳 7 波');
     endless.click();
     expect(onStart).toHaveBeenCalledTimes(1);
   });
@@ -251,7 +244,7 @@ describe('战役目标摘要', () => {
 });
 
 describe('战役地图布局', () => {
-  it('layoutStageNodes 自下而上等距排布，横向之字摆动', () => {
+  it('layoutStageNodes 自下而上等距排布，节点统一在左列', () => {
     const { points, height } = layoutStageNodes(5);
     expect(points).toHaveLength(5);
     for (let i = 1; i < points.length; i += 1) {
@@ -259,7 +252,7 @@ describe('战役地图布局', () => {
     }
     expect(points[0]!.y).toBeLessThan(height);
     expect(points[4]!.y).toBeGreaterThan(0);
-    expect(new Set(points.map((point) => point.x)).size).toBeGreaterThan(1);
+    expect(new Set(points.map((point) => point.x)).size).toBe(1);
     points.forEach((point) => {
       expect(point.x).toBeGreaterThan(0);
       expect(point.x).toBeLessThan(720);

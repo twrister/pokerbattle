@@ -1,4 +1,4 @@
-import { CAMPAIGN_ARENA_PRESETS, describeStageObjective, type StageDef, type StageObjective } from '@pb/sim';
+import { describeStageObjective, type StageDef, type StageObjective } from '@pb/sim';
 import {
   countCampaignStars,
   isStageUnlocked,
@@ -35,13 +35,12 @@ export interface CampaignPageHandle {
 
 /** 地图坐标统一用 720 设计宽单位，与 CSS 的 --hu 对齐。 */
 export const CAMPAIGN_MAP_WIDTH = 720;
-/** 关卡节点只占左右两列，卡片放在节点的另一侧，中间留给小路。 */
-const NODE_X_LEFT = 190;
-const NODE_X_RIGHT = 530;
+/** 关卡序号节点统一排在左列，信息卡挂在节点右侧。 */
+const NODE_X = 110;
 /** 相邻关卡的默认纵向间距；按视口自适应时作为上限。 */
 const ROW_HEIGHT = 200;
-/** 自适应行距的下限：相邻两行的信息卡横向有交叠，行距不能小于卡片高度。 */
-export const MIN_ROW_HEIGHT = 110;
+/** 自适应行距的下限：不能小于序号圆章与卡片的高度。 */
+export const MIN_ROW_HEIGHT = 90;
 /** 最上面一关之上留白，刚好让出悬浮标题栏。 */
 const TOP_PADDING = 150;
 /** 第 1 关之下留白，露出入口小路。 */
@@ -76,7 +75,7 @@ export function layoutStageNodes(count: number, fitHeight?: number): StageNodeLa
   // 关卡少、行距已到上限时，地图仍铺满视口，节点贴底
   const height = fitHeight !== undefined ? Math.max(content, fitHeight) : content;
   const points = Array.from({ length: count }, (_, index) => ({
-    x: index % 2 === 0 ? NODE_X_LEFT : NODE_X_RIGHT,
+    x: NODE_X,
     y: height - BOTTOM_PADDING - index * rowHeight,
   }));
   return { points, height };
@@ -217,16 +216,13 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     list.scrollTop = list.scrollTop + offset - list.clientHeight / 2;
   };
 
-  /** 卡片朝向：节点在左半区时卡片挂到右边，反之挂左边，避免压住小路与对侧节点。 */
-  const cardSide = (point: MapPoint): 'left' | 'right' => (point.x < CAMPAIGN_MAP_WIDTH / 2 ? 'right' : 'left');
-
-  /** 单关节点：圆形序号徽章钉在小路上，奶油信息卡写标题、地图/限时与目标。 */
+  /** 单关节点：圆形序号徽章钉在小路上，右侧奶油信息卡只写标题。 */
   const createStageButton = (
     stage: StageDef,
     point: MapPoint,
     state: { unlocked: boolean; cleared: boolean; current: boolean; boss: boolean },
   ): HTMLButtonElement => {
-    const button = createStageButtonShell(point, cardSide(point));
+    const button = createStageButtonShell(point);
     button.disabled = !state.unlocked;
     button.dataset.stageId = stage.id;
     button.classList.toggle('is-cleared', state.cleared);
@@ -236,12 +232,7 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
 
     button.append(createNode(state.unlocked ? String(stage.index) : '锁'));
 
-    const plate = createPlate(stage.title);
-    // 地图名跟着关卡走；限时只在关卡单独指定时显示，默认时长不占版面
-    if (stage.arena) plate.meta.append(createPill(CAMPAIGN_ARENA_PRESETS[stage.arena].name));
-    if (stage.durationSeconds) plate.meta.append(createPill(`限时 ${stage.durationSeconds} 秒`));
-    plate.root.append(plate.meta, createGoal(campaignStageGoalText(stage.objectives)));
-    button.append(plate.root);
+    button.append(createPlate(stage.title));
 
     // 星星徽章：已通关为金星，已解锁未通关为灰色空星预告，锁定关不显示
     if (state.cleared) button.append(createStar(true));
@@ -257,18 +248,14 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     point: MapPoint,
     unlocked: boolean,
   ): HTMLButtonElement => {
-    const button = createStageButtonShell(point, cardSide(point));
+    const button = createStageButtonShell(point);
     button.disabled = !unlocked;
     button.classList.add('campaign-endless', 'is-boss');
     button.classList.toggle('is-locked', !unlocked);
 
     button.append(createNode(unlocked ? '∞' : '锁'));
 
-    const plate = createPlate('无限防守');
-    const best = entry.getBestWave();
-    plate.meta.append(createPill(best ? `最佳 ${best} 波` : '一波接一波'));
-    plate.root.append(plate.meta, createGoal('撑过每一波进攻，直到防线崩溃'));
-    button.append(plate.root);
+    button.append(createPlate('无限防守'));
 
     button.addEventListener('click', () => entry.onStart());
     return button;
@@ -295,12 +282,11 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
   };
 }
 
-/** 节点按钮外壳：定位到 (--x, --y)，并声明卡片挂哪一侧。 */
-function createStageButtonShell(point: MapPoint, side: 'left' | 'right'): HTMLButtonElement {
+/** 节点按钮外壳：定位到 (--x, --y)。 */
+function createStageButtonShell(point: MapPoint): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'campaign-stage';
-  button.dataset.card = side;
   button.setAttribute('role', 'listitem');
   button.style.setProperty('--x', String(point.x));
   button.style.setProperty('--y', String(point.y));
@@ -315,11 +301,8 @@ function createNode(label: string): HTMLSpanElement {
   return node;
 }
 
-/** 奶油信息卡：标题在上，标签与目标依次排下去。 */
-function createPlate(title: string): {
-  root: HTMLSpanElement;
-  meta: HTMLSpanElement;
-} {
+/** 奶油信息卡：只显示关卡标题。 */
+function createPlate(title: string): HTMLSpanElement {
   const root = document.createElement('span');
   root.className = 'campaign-stage-plate';
 
@@ -327,27 +310,8 @@ function createPlate(title: string): {
   titleEl.className = 'campaign-stage-title';
   titleEl.textContent = title;
 
-  const meta = document.createElement('span');
-  meta.className = 'campaign-stage-meta';
-
   root.append(titleEl);
-  return { root, meta };
-}
-
-/** 卡片上的小圆角标签：地图名、限时、最佳波数。 */
-function createPill(text: string): HTMLSpanElement {
-  const pill = document.createElement('span');
-  pill.className = 'campaign-stage-arena';
-  pill.textContent = text;
-  return pill;
-}
-
-/** 卡片上的目标摘要，最多两行，超出由 CSS 省略。 */
-function createGoal(text: string): HTMLSpanElement {
-  const goal = document.createElement('span');
-  goal.className = 'campaign-stage-goal';
-  goal.textContent = text;
-  return goal;
+  return root;
 }
 
 /** 星星徽章：钉在节点右上角，earned 为金星，否则为灰色空星；读屏文案说明是否已得星。 */
