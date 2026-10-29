@@ -206,6 +206,15 @@ export function collectSurvivors(match: MatchState, faction: Faction = Faction.B
 }
 
 /**
+ * 收集玩家当前手牌（牌 id），作为下一波的继承手牌。
+ * 与 collectSurvivors 同构：波末收一次，下一波开局原样发回，手牌进度不会因换波归零。
+ */
+export function collectHand(match: MatchState, faction: Faction = Faction.Blue): string[] {
+  const deck = match.decks[faction];
+  return deck ? deck.hand.map((card) => card.id) : [];
+}
+
+/**
  * 单位是否已越过河道进入敌方半场。
  * 河道占据 [ARENA_RIVER_MIN_Y, ARENA_RIVER_MAX_Y]，蓝方过河即 y >= 上沿，红方反之。
  */
@@ -224,6 +233,8 @@ export function buildWaveStage(state: EndlessRunState): StageDef {
   // 清场目标的判定门槛取脚本里最后一次出兵的时刻：兵没放完就还有后续敌人
   const spawnEndSeconds = steps.reduce((end, step) => Math.max(end, step.atSeconds), 0);
   const inherited = state.carriedUnits ?? [];
+  // carriedHand 缺省表示还没继承过，首波与旧存档继续走规则里的默认起手
+  const inheritedHand = state.carriedHand;
   return {
     id: `endless_w${state.wave}`,
     index: 0,
@@ -235,13 +246,15 @@ export function buildWaveStage(state: EndlessRunState): StageDef {
     wildCount: state.wildCards,
     rules: {
       wildCardsEnabled: state.wildCards > 0,
-      initialHandSize: state.initialHandSize,
       normalHandLimit: state.handLimit,
       normalDrawIntervalSeconds: state.drawIntervalSeconds,
     },
     enemy: { kind: 'script', steps },
     // 上一波的存活单位原样摆回场上，玩家攒的阵容才能延续
     ...(inherited.length > 0 ? { preset: inherited } : {}),
+    // 上一波的手牌原样发回，换波不清空手牌进度
+    // 空数组也要带上：空手与「首波还没继承」是两件事
+    ...(inheritedHand !== undefined ? { carriedHand: inheritedHand } : {}),
     objectives: [{ kind: 'clear_wave', spawnEndSeconds }],
     seed: ((state.runSeed + state.wave) >>> 0) || 1,
   };

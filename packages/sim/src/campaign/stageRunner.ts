@@ -77,6 +77,9 @@ export class StageRunner {
     if (def.playerRanks || def.playerJokers === false) {
       match.setSlotDeckCards(Faction.Blue, filterPlayerCards(def));
     }
+    // 继承手牌最后套用：覆盖默认起手，把上一波结束时的牌面原样带回这一波
+    // 用 undefined 判断而不是长度：空数组表示「上一波把牌打空了」，不该再发默认起手
+    if (def.carriedHand !== undefined) match.setSlotHand(Faction.Blue, def.carriedHand);
   }
 
   /**

@@ -375,6 +375,7 @@ export {
   advanceWave,
   createRun,
   isBossWave,
+  sanitizeCarriedHand,
   sanitizeCarriedUnits,
   sanitizeRun,
   type EndlessRunState,
@@ -390,6 +391,7 @@ export {
 export {
   buildWaveStage,
   buildWaveSteps,
+  collectHand,
   collectSurvivors,
   endlessDefaultUnitCost,
   endlessDefaultWaveUnits,

@@ -23,8 +23,6 @@ export interface EndlessRunState {
   waveSeconds: number;
   /** 手牌上限。 */
   handLimit: number;
-  /** 起手张数，不超过手牌上限。 */
-  initialHandSize: number;
   /** 发牌间隔（秒）。 */
   drawIntervalSeconds: number;
   /** 玩家主堡开局血量比例（0~1），由上一波结束时的残血继承。 */
@@ -39,6 +37,12 @@ export interface EndlessRunState {
   totalSeconds: number;
   /** 上一波结束时玩家场上的存活单位，原位置、原血量比例带入下一波开局。 */
   carriedUnits: StagePresetUnit[];
+  /**
+   * 上一波结束时玩家手上的牌（牌 id），下一波开局原样发回，最多收手牌上限张。
+   * 缺省（undefined）表示还没继承过：首波与旧存档走规则里的默认起手；
+   * 空数组表示上一波把牌打空了，下一波就是空手开局，不会再补默认起手。
+   */
+  carriedHand?: string[];
 }
 
 /**
@@ -51,7 +55,6 @@ export function createRun(runSeed: number, waveSeconds: number = defaultEndlessW
     wave: 1,
     waveSeconds: clampEndlessWaveSeconds(waveSeconds),
     handLimit: 7,
-    initialHandSize: 5,
     drawIntervalSeconds: 5,
     castleHpRatio: 1,
     wildCards: 0,
@@ -68,16 +71,19 @@ export function isBossWave(wave: number): boolean {
 }
 
 /**
- * 撑过一波：记下残血与存活单位、累计时长并推进到下一波，同时结算每波回血。
+ * 撑过一波：记下残血、存活单位与手牌、累计时长并推进到下一波，同时结算每波回血。
  * remainingHpRatio 为本波结束时玩家主堡血量比例；
  * elapsedSeconds 为本波实际用时（清场流，时长不固定），缺省按窗口长度记；
- * survivors 为本波结束时玩家场上的存活单位，不带则清空继承（调试/旧调用方）。
+ * survivors 为本波结束时玩家场上的存活单位，不带则清空继承（调试/旧调用方）；
+ * hand 为本波结束时玩家手牌（牌 id）；不传表示这次不继承（下一波走默认起手），
+ * 传空数组表示上一波把牌打空了，下一波也要空手开局。
  */
 export function advanceWave(
   state: EndlessRunState,
   remainingHpRatio: number,
   elapsedSeconds: number = state.waveSeconds,
   survivors: readonly StagePresetUnit[] = [],
+  hand?: readonly string[],
 ): EndlessRunState {
   const healed = clamp01(remainingHpRatio) + state.regenPerWave;
   return {
@@ -86,6 +92,7 @@ export function advanceWave(
     castleHpRatio: clamp01(healed),
     totalSeconds: state.totalSeconds + Math.max(0, elapsedSeconds),
     carriedUnits: sanitizeCarriedUnits(survivors),
+    carriedHand: hand ? sanitizeCarriedHand(hand, state.handLimit) : undefined,
   };
 }
 
@@ -100,7 +107,6 @@ export function sanitizeRun(state: EndlessRunState): EndlessRunState {
       Number.isFinite(state.waveSeconds) ? state.waveSeconds : defaultEndlessWaveSeconds(),
     ),
     handLimit,
-    initialHandSize: clampInt(state.initialHandSize, 1, handLimit),
     drawIntervalSeconds: Math.max(ENDLESS_MIN_DRAW_INTERVAL, state.drawIntervalSeconds),
     castleHpRatio: Math.max(0.01, clamp01(state.castleHpRatio)),
     wildCards: clampInt(state.wildCards, 0, MAX_WILD_CARDS),
@@ -108,7 +114,27 @@ export function sanitizeRun(state: EndlessRunState): EndlessRunState {
     boons: [...state.boons],
     totalSeconds: Math.max(0, state.totalSeconds),
     carriedUnits: sanitizeCarriedUnits(state.carriedUnits),
+    // 缺省保持缺省：未继承过的存档继续走默认起手，不能悄悄变成「空手开局」
+    ...(state.carriedHand === undefined
+      ? {}
+      : { carriedHand: sanitizeCarriedHand(state.carriedHand, handLimit) }),
   };
+}
+
+/**
+ * 清洗继承手牌：只保留非空字符串 id、去重并按手牌上限截断。
+ * 非数组（旧存档、坏数据）按空数组处理，表示「没有可继承的手牌」。
+ */
+export function sanitizeCarriedHand(raw: unknown, handLimit: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ids: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string' || item.length === 0) continue;
+    if (ids.includes(item)) continue;
+    ids.push(item);
+    if (ids.length >= handLimit) break;
+  }
+  return ids;
 }
 
 /**

@@ -103,6 +103,12 @@ export interface StageDef {
    */
   packHand?: string[];
   /**
+   * 继承手牌（按牌 id 写入，如 ["spades-A","hearts-9"]）。
+   * 无限防守用：把上一波结束时玩家手上的牌原样发到开局手上，
+   * 而不是按规则里的起手张数重新抽；牌堆里不存在的 id 会被跳过。
+   */
+  carriedHand?: string[];
+  /**
    * 是否播种双方主堡，缺省 true。
    * false 用于「无基地」关卡：对局不会自动收局，通关全看关卡目标。
    */

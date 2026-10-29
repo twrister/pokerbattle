@@ -15,6 +15,7 @@ import {
   applyEndlessConfigDraft,
   buildWaveStage,
   buildWaveSteps,
+  collectHand,
   collectSurvivors,
   createPokerCards,
   createRun,
@@ -386,6 +387,66 @@ describe('单位继承', () => {
     const legacy = { ...createRun(1) } as Partial<EndlessRunState>;
     delete legacy.carriedUnits;
     expect(sanitizeRun(legacy as EndlessRunState).carriedUnits).toEqual([]);
+  });
+});
+
+describe('手牌继承', () => {
+  it('撑过一波时记下手牌，下一波开局原样发回手上', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(1)));
+    const handIds = collectHand(match);
+    expect(handIds.length).toBeGreaterThan(0);
+    const next = advanceWave(createRun(1), 1, 30, [], handIds);
+    expect(next.carriedHand).toEqual(handIds);
+
+    // 继承手牌按原张数与牌面出现，不再按规则里的起手张数重抽
+    const inherited = createStageMatch(buildWaveStage(next)).match;
+    expect(inherited.decks[Faction.Blue]!.hand.map((card) => card.id)).toEqual(handIds);
+  });
+
+  it('继承后手牌不会出现重复牌面', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(2)));
+    const next = advanceWave(createRun(2), 1, 30, [], collectHand(match));
+    const hand = createStageMatch(buildWaveStage(next)).match.decks[Faction.Blue]!.hand;
+    const ids = hand.map((card) => card.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('牌堆里没有的牌 id 被跳过，其余手牌照常发回', () => {
+    const { match } = createStageMatch(buildWaveStage(createRun(3)));
+    const handed = collectHand(match);
+    expect(handed.length).toBeGreaterThan(0);
+    const next = advanceWave(createRun(3), 1, 30, [], [...handed.slice(0, 1), 'not-a-card']);
+    const def = buildWaveStage(next);
+    expect(def.carriedHand).toEqual([handed[0], 'not-a-card']);
+    const hand = createStageMatch(def).match.decks[Faction.Blue]!.hand;
+    expect(hand.map((card) => card.id)).toEqual([handed[0]]);
+  });
+
+  it('首波不带 carriedHand（还没继承），继承后即使空手也显式带空数组', () => {
+    expect(buildWaveStage(createRun(1)).carriedHand).toBeUndefined();
+    // 不传 hand 表示这次不继承：下一波仍走默认起手
+    expect(advanceWave(createRun(1), 1, 30).carriedHand).toBeUndefined();
+    expect(buildWaveStage(advanceWave(createRun(1), 1, 30)).carriedHand).toBeUndefined();
+    // 传空数组 = 上一波把牌打空了，不能再发默认起手
+    const emptied = advanceWave(createRun(1), 1, 30, [], []);
+    expect(emptied.carriedHand).toEqual([]);
+    expect(buildWaveStage(emptied).carriedHand).toEqual([]);
+    expect(createStageMatch(buildWaveStage(emptied)).match.decks[Faction.Blue]!.hand).toHaveLength(0);
+  });
+
+  it('读档时清洗继承手牌：去空、去重并按手牌上限截断', () => {
+    const dirty = {
+      ...createRun(1),
+      handLimit: 2,
+      carriedHand: ['A-spades', '', 'A-spades', null, 'K-hearts', 'Q-clubs'],
+    } as unknown as EndlessRunState;
+    expect(sanitizeRun(dirty).carriedHand).toEqual(['A-spades', 'K-hearts']);
+  });
+
+  it('旧存档没有 carriedHand 时按默认起手续玩', () => {
+    const legacy = { ...createRun(1) } as Partial<EndlessRunState>;
+    delete legacy.carriedHand;
+    expect(sanitizeRun(legacy as EndlessRunState).carriedHand).toBeUndefined();
   });
 });
 

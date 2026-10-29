@@ -239,6 +239,28 @@ export class PokerDeck {
     for (const card of cards) this.pile.push({ card, waitDraws: 0, cooldown: 0 });
   }
 
+  /**
+   * 把指定牌 id 直接发到手上，不受抽取权重与冷却影响（无限关继承上一波手牌用）。
+   * 牌堆里找不到的 id（例如本波关掉的万能牌）直接跳过，按传入顺序最多发到手牌上限。
+   */
+  setHand(cardIds: readonly string[]): PlayingCard[] {
+    // 已有手牌先全部退回牌堆，保证继承后的手牌集合完全由入参决定
+    for (const card of this.cardsInHand.values()) {
+      this.pile.push({ card, waitDraws: 0, cooldown: 0 });
+    }
+    this.cardsInHand.clear();
+    const dealt: PlayingCard[] = [];
+    for (const cardId of cardIds) {
+      if (this.cardsInHand.size >= this.currentMaxHandSize) break;
+      const index = this.pile.findIndex((entry) => entry.card.id === cardId);
+      if (index < 0) continue;
+      const entry = this.pile.splice(index, 1)[0]!;
+      this.cardsInHand.set(entry.card.id, entry.card);
+      dealt.push(entry.card);
+    }
+    return dealt;
+  }
+
   /** 连续补牌但不突破手牌上限。 */
   drawMany(count: number): PlayingCard[] {
     const drawn: PlayingCard[] = [];

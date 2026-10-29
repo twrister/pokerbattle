@@ -32,9 +32,9 @@ describe('本局叠加面板', () => {
   });
 
   it('叠加后只显示拿到的那几行，并给出初始值、增量与当前值', () => {
-    const run = { ...createRun(3), handLimit: 9, initialHandSize: 7, drawIntervalSeconds: 3.5, wildCards: 2 };
+    const run = { ...createRun(3), handLimit: 9, drawIntervalSeconds: 3.5, wildCards: 2 };
     const rows = describeRunStats(run);
-    expect(rows.map((row) => row.label)).toEqual(['主堡', '手牌上限', '起手', '发牌间隔', '万能牌']);
+    expect(rows.map((row) => row.label)).toEqual(['主堡', '手牌上限', '发牌间隔', '万能牌']);
 
     const handLimit = rows.find((row) => row.label === '手牌上限');
     const draw = rows.find((row) => row.label === '发牌间隔');
@@ -49,18 +49,17 @@ describe('本局叠加面板', () => {
     const run = {
       ...createRun(4),
       handLimit: MAX_HAND_SIZE,
-      initialHandSize: MAX_HAND_SIZE,
       drawIntervalSeconds: ENDLESS_MIN_DRAW_INTERVAL,
       wildCards: MAX_WILD_CARDS,
     };
     const maxed = describeRunStats(run)
       .filter((row) => row.maxed)
       .map((row) => row.label);
-    expect(maxed).toEqual(['手牌上限', '起手', '发牌间隔', '万能牌']);
+    expect(maxed).toEqual(['手牌上限', '发牌间隔', '万能牌']);
 
     createEndlessStatsPanel().show(run);
     const badges = [...document.querySelectorAll('#endless-stats-list .endless-stat-max')];
-    expect(badges).toHaveLength(4);
+    expect(badges).toHaveLength(3);
     expect(badges[0].getAttribute('title')).toBe('已到上限');
   });
 

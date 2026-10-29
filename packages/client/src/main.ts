@@ -9,6 +9,7 @@ import {
   buildWaveStage,
   countLivingMobileUnits,
   createRun,
+  collectHand,
   collectSurvivors,
   defaultEndlessWaveSeconds,
   endlessWaveSpawnProgress,
@@ -1333,6 +1334,8 @@ function enterBattleSession(mode: BattleMode): () => void {
         externalCardConsume: true,
         // 教学段/首次上手才开虚拟手指；后续关卡与老玩家不再打扰
         guideEnabled: shouldShowHandGuide(stageDef, playerProfile.getProfile().stats),
+        // 无限关的起手牌来自上一波继承，空手就是真空手，不能让面板补满默认起手
+        skipInitialDraw: stageDef ? isEndlessStage(stageDef) : false,
         getDrawRemainingMs: () => (loop.match!.getTicksUntilDraw(Faction.Blue) * 1000) / TICK_RATE,
         getDrawIntervalMs: () => (loop.match!.getDrawIntervalTicks() * 1000) / TICK_RATE,
         getMaxHandSize: () => loop.match!.getMaxHandSizeForSlot(Faction.Blue),
@@ -1662,12 +1665,13 @@ function enterBattleSession(mode: BattleMode): () => void {
             // 目标落定后冻结对局，避免结算面板出现后战场还在继续打
             loop.paused = true;
             if (endlessRun && isEndlessStage(stageDef)) {
-              // 本波残血与存活单位一起交给结算：下一波开局要把阵容原样摆回去
+              // 本波残血、存活单位与手牌一起交给结算：下一波开局要把这三样原样摆回去
               showEndlessWaveResult(
                 endlessRun,
                 pendingStageOutcome,
                 loop.match!.getCastleHpRatio(Faction.Blue),
                 collectSurvivors(loop.match!),
+                collectHand(loop.match!),
               );
             } else {
               showStageResult(stageDef, pendingStageOutcome);
@@ -2799,19 +2803,21 @@ function openEndlessEntry(): void {
 /**
  * 一波结束：守住则推进波次并弹三选一，选完存档开下一波；
  * 主堡陷落则结束挑战、刷新最佳并展示结算。
- * survivors 为本波结束时玩家场上存活单位，会原位置、原血量带入下一波。
+ * survivors 为本波结束时玩家场上存活单位，会原位置、原血量带入下一波；
+ * hand 为本波结束时玩家手牌，会原样发到下一波开局。
  */
 function showEndlessWaveResult(
   run: EndlessRunState,
   outcome: StageOutcome,
   hpRatio: number,
   survivors: readonly StagePresetUnit[],
+  hand: readonly string[],
 ): void {
   battleResult.setReturnLabel('返回战役');
   if (outcome.status === 'success') {
     sfx.play('result_win');
     // 清场流没有固定波长，累计时长记本波实际用时
-    const advanced = advanceWave(run, hpRatio, outcome.seconds, survivors);
+    const advanced = advanceWave(run, hpRatio, outcome.seconds, survivors, hand);
     // Boss 波之后只给稀有强化
     const choices = rollBoonChoices(advanced, isBossWave(run.wave));
     const proceed = (next: EndlessRunState): void => {

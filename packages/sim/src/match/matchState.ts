@@ -258,6 +258,20 @@ export class MatchState {
     this.pendingDraw[slot] = false;
   }
 
+  /**
+   * 把指定席位的起手牌换成给定的牌 id 集合（无限关继承上一波手牌用）。
+   * 仅开局前可用；已开打则忽略，保证确定性。
+   * 牌堆里不存在的 id 会被跳过（例如上一波有、这一波被关掉的万能牌）。
+   */
+  setSlotHand(slot: number, cardIds: readonly string[]): void {
+    if (this.world.tick !== 0 || this.result) return;
+    const deck = this.decks[slot];
+    if (!deck) return;
+    deck.setHand(cardIds);
+    this.nextDrawTicks[slot] = this.normalDrawIntervalTicks;
+    this.pendingDraw[slot] = false;
+  }
+
   /** 指定席位本局累计打出某牌型的次数，供关卡目标判定。 */
   getPlayedCategoryCount(slot: number, category: HandCategory): number {
     return this.playedCategoryCounts[slot]?.get(category) ?? 0;

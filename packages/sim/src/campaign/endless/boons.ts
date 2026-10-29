@@ -43,14 +43,6 @@ export const BOONS: readonly BoonDef[] = [
     apply: (s) => ({ ...s, castleHpRatio: Math.min(1, s.castleHpRatio + 0.25) }),
   },
   {
-    id: 'initial_hand',
-    name: '整装待发',
-    description: '每波起手牌 +1',
-    rarity: 'common',
-    available: (s) => s.initialHandSize < s.handLimit,
-    apply: (s) => ({ ...s, initialHandSize: s.initialHandSize + 1 }),
-  },
-  {
     id: 'wild_card',
     name: '万能之力',
     description: '牌堆万能牌 +1',

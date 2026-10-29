@@ -130,6 +130,12 @@ export interface HandPanelOptions {
    * 缺省关闭，联机对局与已过教学段的关卡不需要。
    */
   guideEnabled?: boolean;
+  /**
+   * 跳过面板的兜底发牌。
+   * 起手牌由外部决定时（如无限关继承上一波手牌）置 true，
+   * 否则空手开局会被这里补满默认起手，丢掉「上一波把牌打空」的状态。
+   */
+  skipInitialDraw?: boolean;
 }
 
 export interface HandPanelHandle {
@@ -251,7 +257,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   root.classList.remove('is-play-locked');
   root.classList.add('is-active');
   // MatchState 已发过初始手牌时不要再抽，否则两端牌面会分叉
-  if (deck.hand.length === 0) {
+  if (!options.skipInitialDraw && deck.hand.length === 0) {
     deck.drawMany(INITIAL_HAND_SIZE);
   }
   render();

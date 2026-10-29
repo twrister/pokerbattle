@@ -82,14 +82,6 @@ export function describeRunStats(run: EndlessRunState): StatRow[] {
       maxed: run.handLimit >= MAX_HAND_SIZE,
     },
     {
-      label: '起手',
-      current: `${run.initialHandSize} 张`,
-      base: `${DEFAULT_RUN.initialHandSize} 张`,
-      delta: formatDelta(run.initialHandSize - DEFAULT_RUN.initialHandSize),
-      // 起手牌不能超过手牌上限，两者顶到一起就加不动了
-      maxed: run.initialHandSize >= run.handLimit,
-    },
-    {
       label: '发牌间隔',
       current: `${formatSeconds(run.drawIntervalSeconds)}s`,
       base: `${formatSeconds(DEFAULT_RUN.drawIntervalSeconds)}s`,
