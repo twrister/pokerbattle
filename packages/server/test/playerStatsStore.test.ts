@@ -356,8 +356,7 @@ describe('PlayerStatsStore', () => {
     expect(store.lookup('high-score')?.score).toBe(10);
   });
 
-  it('排行榜按积分、胜率排序，未入前 N 也能查到自己的名次', () => {
-    const store = tempStore();
+  it('排行榜按积分、胜率排序，未入前 N 也能查到自己的名次', () => {    const store = tempStore();
     store.recordDecisiveMatch('ace', 'bronze', { winner: '王牌', loser: '铜牌' });
     store.recordDecisiveMatch('ace', 'silver', { winner: '王牌', loser: '银牌' });
     store.recordDecisiveMatch('silver', 'bronze', { winner: '银牌', loser: '铜牌' });
@@ -371,6 +370,102 @@ describe('PlayerStatsStore', () => {
     expect(store.listLeaderboard(1).map((row) => row.playerId)).toEqual(['ace']);
     expect(store.lookupLeaderboardEntry('bronze')).toMatchObject({ rank: 3, playerId: 'bronze' });
     expect(store.lookupLeaderboardEntry('missing')).toBeNull();
+  });
+
+  it('战役榜按星数排序，只收 1 星以上，名次独立计算', () => {
+    let now = 100;
+    const store = tempStore(() => now);
+    store.recordCampaignStars('two-stars', 2);
+    now = 200;
+    store.recordCampaignStars('ten-stars', 10);
+    now = 300;
+    store.recordCampaignStars('five-stars', 5);
+    // 只打联机没碰战役的玩家不进榜
+    store.recordDecisiveMatch('no-stars', 'two-stars', { winner: '没星', loser: '两星' });
+
+    expect(store.listCampaignLeaderboard().map((row) => row.playerId)).toEqual([
+      'ten-stars',
+      'five-stars',
+      'two-stars',
+    ]);
+    expect(store.listCampaignLeaderboard()[0]).toMatchObject({ rank: 1, campaignStars: 10 });
+    expect(store.listCampaignLeaderboard(1).map((row) => row.playerId)).toEqual(['ten-stars']);
+    expect(store.lookupCampaignLeaderboardEntry('five-stars')).toMatchObject({
+      rank: 2,
+      campaignStars: 5,
+    });
+    expect(store.lookupCampaignLeaderboardEntry('no-stars')).toBeNull();
+    expect(store.lookupCampaignLeaderboardEntry('missing')).toBeNull();
+    // 胜点榜仍保留所有人，并带上星数字段
+    expect(store.listLeaderboard()).toHaveLength(4);
+    expect(store.listLeaderboard().find((row) => row.playerId === 'ten-stars')).toMatchObject({
+      campaignStars: 10,
+    });
+  });
+
+  it('星数只增不减，非法上报被忽略', () => {
+    const store = tempStore();
+    store.upsertPlayer('p1', '玩家');
+    store.recordCampaignStars('p1', 6);
+    expect(store.lookup('p1')?.campaignStars).toBe(6);
+    // 本地档丢失后回退上报小值不应让榜面倒退
+    store.recordCampaignStars('p1', 2);
+    expect(store.lookup('p1')?.campaignStars).toBe(6);
+
+    store.recordCampaignStars('p1', -1);
+    store.recordCampaignStars('p1', 'oops');
+    store.recordCampaignStars('', 5);
+    expect(store.lookup('p1')?.campaignStars).toBe(6);
+    expect(store.listPlayers()).toHaveLength(1);
+  });
+
+  it('星数上报超过上限时截断', () => {
+    const store = tempStore();
+    store.recordCampaignStars('p1', 999_999);
+    expect(store.lookup('p1')?.campaignStars).toBe(9999);
+  });
+
+  it('未登记的玩家直接上报星数也会建档', () => {
+    const store = tempStore();
+    store.recordCampaignStars('fresh', 4);
+    expect(store.lookup('fresh')).toMatchObject({ campaignStars: 4, matches: 0, score: 0 });
+  });
+
+  it('旧档缺 campaignStars 时回退为 0，星数落盘后新实例能恢复', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-player-stats-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'player-stats.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 2,
+        players: [
+          {
+            playerId: 'legacy-stars',
+            displayName: '旧档',
+            matches: 0,
+            wins: 0,
+            losses: 0,
+            score: 0,
+            firstSeenAt: 10,
+            lastPlayedAt: 20,
+            lastOnlineAt: 20,
+          },
+        ],
+      }),
+    );
+    const store = new PlayerStatsStore({ filePath, now: () => 99 });
+    expect(store.lookup('legacy-stars')?.campaignStars).toBe(0);
+    expect(store.listCampaignLeaderboard()).toEqual([]);
+
+    store.recordCampaignStars('legacy-stars', 9);
+    const reloaded = new PlayerStatsStore({ filePath, now: () => 200 });
+    expect(reloaded.lookup('legacy-stars')?.campaignStars).toBe(9);
+    expect(reloaded.listCampaignLeaderboard()[0]).toMatchObject({
+      playerId: 'legacy-stars',
+      campaignStars: 9,
+      rank: 1,
+    });
   });
 
   it('旧档缺 score 时回退为 0', () => {

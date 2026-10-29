@@ -83,6 +83,17 @@ export function countCampaignStars(
   return { earned, total: orderedStageIds.length };
 }
 
+/**
+ * 战役总星数（排行榜与选关页标题共用）：关卡首通星 + 无限防守守住波数。
+ * 无限防守每守住一波算 1 星，历史最佳不叠加，因此取 bestWave 即可。
+ */
+export function totalCampaignStars(stars: CampaignStars, endlessBestWave: number | null): number {
+  const endless = endlessBestWave != null && Number.isFinite(endlessBestWave)
+    ? Math.max(0, Math.floor(endlessBestWave))
+    : 0;
+  return stars.earned + endless;
+}
+
 /** 进度仓库：读写 localStorage，写失败时静默保留内存态。 */
 export interface CampaignProgressStore {
   load(): CampaignProgress;

@@ -7,6 +7,7 @@ import {
   isStageUnlocked,
   recordStageClear,
   sanitizeProgress,
+  totalCampaignStars,
 } from '../src/campaign/progress.js';
 
 /** 内存版 Storage，避免依赖 jsdom 的 localStorage。 */
@@ -33,6 +34,16 @@ describe('战役进度', () => {
     progress = recordStageClear(progress, { stageId: 'a', seconds: 40 });
     progress = recordStageClear(progress, { stageId: 'removed', seconds: 10 });
     expect(countCampaignStars(progress, order)).toEqual({ earned: 1, total: 3 });
+  });
+
+  it('总星数叠加无限防守守住波数，无记录或非法值按 0 计', () => {
+    const stars = { earned: 2, total: 3 };
+    expect(totalCampaignStars(stars, 5)).toBe(7);
+    expect(totalCampaignStars(stars, 0)).toBe(2);
+    expect(totalCampaignStars(stars, null)).toBe(2);
+    expect(totalCampaignStars(stars, Number.NaN)).toBe(2);
+    expect(totalCampaignStars(stars, -3)).toBe(2);
+    expect(totalCampaignStars(stars, 4.8)).toBe(6);
   });
 
   it('第一关始终解锁，其余需上一关通关', () => {

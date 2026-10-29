@@ -712,8 +712,10 @@ export function connectSpectateSession(options: ConnectSpectateOptions): Spectat
 export interface LobbyPresenceHandle {
   /** 复用大厅连接查询可加入房间。 */
   listRooms(): Promise<RoomListEntry[]>;
-  /** 复用大厅连接查询积分排行榜。 */
+  /** 复用大厅连接查询积分排行榜（同时带回战役榜）。 */
   listLeaderboard(): Promise<LeaderboardMessage>;
+  /** 战役星数变化后主动重报；与上次相同则跳过，避免无谓流量。 */
+  reportCampaignStars(): void;
   /** 探测该席位是否仍可重连；连接不可用时 reject，调用方按"不弹窗"处理。 */
   checkRejoin(roomId: string, token: string): Promise<RejoinStatusMessage>;
   /** 放弃重连：服务端立刻释放席位；失败无需重试。 */
@@ -732,13 +734,21 @@ const LOBBY_SOLO_HEARTBEAT_MS = 4000;
 /**
  * 建立大厅 presence：连上后发 lobby；dispose 前保持连接。
  * 口径由应用层决定：未入联机房间即登记（可覆盖卡组/图鉴/单机等页面）。
+ * getCampaignStars 每次发送时现取，重连后自然补上最新星数。
  */
 export function createLobbyPresence(
-  options: { name?: string; playerId?: string; activity?: LobbyActivity } = {},
+  options: {
+    name?: string;
+    playerId?: string;
+    activity?: LobbyActivity;
+    getCampaignStars?: () => number;
+  } = {},
 ): LobbyPresenceHandle {
   let disposed = false;
   let activity: LobbyActivity = options.activity === 'solo' ? 'solo' : 'lobby';
   let ws: WebSocket | null = null;
+  /** 上一次已发送的战役星数，用于跳过无变化的重复上报。 */
+  let sentCampaignStars = -1;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let openWaiters: Array<{ resolve: (socket: WebSocket) => void; reject: (error: Error) => void }> =
@@ -803,16 +813,26 @@ export function createLobbyPresence(
     });
   };
 
-  /** 把当前名字、设备 ID 和页面活动登记到服务端。 */
+  /** 读取当前战役星数；未接入时按 0 处理，非数字/负数也回落 0。 */
+  const readCampaignStars = (): number => {
+    const raw = options.getCampaignStars?.() ?? 0;
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return 0;
+    return Math.floor(raw);
+  };
+
+  /** 把当前名字、设备 ID、页面活动和战役星数登记到服务端。 */
   const sendLobby = (socket: WebSocket): void => {
     const playerName = options.name?.trim() ?? '';
     const playerId = options.playerId?.trim() ?? '';
+    const campaignStars = readCampaignStars();
+    sentCampaignStars = campaignStars;
     socket.send(
       encodeMessage({
         type: 'lobby',
         ...(playerName ? { name: playerName } : {}),
         ...(playerId ? { playerId } : {}),
         activity,
+        ...(campaignStars > 0 ? { campaignStars } : {}),
       }),
     );
   };
@@ -966,6 +986,16 @@ export function createLobbyPresence(
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(encodeMessage({ type: 'declineRejoin', roomId, token }));
       }
+    },
+    reportCampaignStars() {
+      if (disposed) return;
+      // 只有真的拿到新星数才重报：进战役/排行榜页都会调，避免白刷流量
+      const next = readCampaignStars();
+      if (next === sentCampaignStars) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        sendLobby(ws);
+      }
+      // 连接尚未就绪时不补发，open 回调里的 sendLobby 会带上最新值
     },
     setActivity(next) {
       const normalized: LobbyActivity = next === 'solo' ? 'solo' : 'lobby';

@@ -100,7 +100,7 @@ export interface ListLeaderboardMessage {
   playerId?: string;
 }
 
-/** 排行榜一行：积分权威来自服务端战绩。 */
+/** 排行榜一行：积分与战役星数都来自服务端权威战绩。 */
 export interface LeaderboardEntry {
   rank: number;
   playerId: string;
@@ -111,13 +111,24 @@ export interface LeaderboardEntry {
   losses: number;
   /** 无场次时为 null，避免除零。 */
   winRate: number | null;
+  /** 战役总星数：战役关卡首通 1 星 + 无限防守守住波数；老服务端可能缺省。 */
+  campaignStars?: number;
 }
 
-/** S→C：积分降序排行；self 为查询者本人，未登记则为 null。 */
+/**
+ * S→C：一次带回两张榜，客户端切页签无需再发请求。
+ * 名次按各自榜单独立计算，因此同一玩家在两榜的 rank 可以不同。
+ */
 export interface LeaderboardMessage {
   type: 'leaderboard';
+  /** 胜点榜：按联机积分降序。 */
   entries: LeaderboardEntry[];
+  /** 查询者本人在胜点榜的名次，未登记为 null。 */
   self: LeaderboardEntry | null;
+  /** 战役榜：按战役星数降序，只收录至少 1 星的玩家。 */
+  campaignEntries?: LeaderboardEntry[];
+  /** 查询者本人在战役榜的名次，无星或未登记为 null。 */
+  campaignSelf?: LeaderboardEntry | null;
 }
 
 /** C→S：观战已开局房间，不占席位。 */
@@ -140,6 +151,8 @@ export interface LobbyMessage {
   playerId?: string;
   /** 缺省视为大厅，兼容旧客户端。 */
   activity?: LobbyActivity;
+  /** 客户端当前战役总星数；随 presence 上报，服务端只增不减地记账。 */
+  campaignStars?: number;
 }
 
 /** 清洗大厅活动；未知值回退大厅，避免坏包污染运维表。 */

@@ -118,7 +118,11 @@ import {
 import { createBattleHud } from './ui/battleHud.js';
 import { createBattleDamagePanel } from './ui/battleDamagePanel.js';
 import { createBattleResult } from './ui/battleResult.js';
-import { createCampaignProgressStore } from './campaign/progress.js';
+import {
+  countCampaignStars,
+  createCampaignProgressStore,
+  totalCampaignStars,
+} from './campaign/progress.js';
 import { createCampaignPage } from './ui/campaignPage.js';
 import { createEndlessProgressStore } from './campaign/endlessProgress.js';
 import { createBoonPickPanel } from './ui/boonPickPanel.js';
@@ -255,6 +259,15 @@ function lobbyActivityForScreen(screen: AppScreen | null): 'lobby' | 'solo' {
   return screen === 'solo' ? 'solo' : 'lobby';
 }
 
+/**
+ * 当前战役总星数：关卡首通星 + 无限防守历史最佳波数。
+ * 选关页标题与排行榜上报共用同一口径，避免两处数字不一致。
+ */
+function currentCampaignStars(): number {
+  const stars = countCampaignStars(campaignProgress.load(), CAMPAIGN_STAGES.map((stage) => stage.id));
+  return totalCampaignStars(stars, endlessProgress.load().best?.bestWave ?? null);
+}
+
 /** 确保未入房玩家登记为大厅；幂等。 */
 function ensureAppLobbyPresence(activity: 'lobby' | 'solo' = 'lobby'): LobbyPresenceHandle {
   if (!appLobbyPresence) {
@@ -263,6 +276,7 @@ function ensureAppLobbyPresence(activity: 'lobby' | 'solo' = 'lobby'): LobbyPres
       name: profile.displayName,
       playerId: profile.deviceAccountId,
       activity,
+      getCampaignStars: currentCampaignStars,
     });
   }
   return appLobbyPresence;
@@ -274,14 +288,17 @@ function stopAppLobbyPresence(): void {
   appLobbyPresence = null;
 }
 
-/** 按当前页面同步大厅 presence：入房页断开，单机刷新 activity。 */
+/** 按当前页面同步大厅 presence：入房页断开，单机刷新 activity，并顺手补报战役星数。 */
 function syncLobbyPresenceForScreen(screen: AppScreen): void {
   if (screen === 'versus' || screen === 'room' || screen === 'spectate') {
     stopAppLobbyPresence();
     return;
   }
   const activity = lobbyActivityForScreen(screen);
-  ensureAppLobbyPresence(activity).setActivity(activity);
+  const presence = ensureAppLobbyPresence(activity);
+  presence.setActivity(activity);
+  // 战役/排行榜页打开时星数可能刚变，重报一次（内部按值去重）
+  presence.reportCampaignStars();
 }
 
 const mainMenu = createMainMenu({
@@ -2706,6 +2723,8 @@ function showStageResult(def: StageDef, outcome: StageOutcome): void {
       stageId: def.id,
       seconds: outcome.seconds,
     });
+    // 星数变了立刻上报，回大厅/看榜时就是最新值
+    appLobbyPresence?.reportCampaignStars();
   }
   try {
     playerProfile.recordStageChallenge({
@@ -2832,6 +2851,8 @@ function showEndlessWaveResult(
 function finishEndlessAsFailed(run: EndlessRunState): { improved: boolean; clearedWaves: number } {
   const clearedWaves = Math.max(0, run.wave - 1);
   const improved = endlessProgress.finishRun(run, clearedWaves);
+  // 无限防守每守住一波 1 星，最佳刷新后立刻同步给服务端
+  if (improved) appLobbyPresence?.reportCampaignStars();
   try {
     playerProfile.recordStageChallenge({ stageId: 'endless', outcome: clearedWaves > 0 ? 'cleared' : 'failed' });
     mainMenu.refreshProfile();

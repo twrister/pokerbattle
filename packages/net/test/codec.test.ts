@@ -65,6 +65,7 @@ describe('协议编解码', () => {
           wins: 3,
           losses: 1,
           winRate: 0.75,
+          campaignStars: 6,
         },
       ],
       self: {
@@ -76,6 +77,31 @@ describe('协议编解码', () => {
         wins: 3,
         losses: 1,
         winRate: 0.75,
+        campaignStars: 6,
+      },
+      campaignEntries: [
+        {
+          rank: 1,
+          playerId: 'device-1',
+          displayName: 'Alice',
+          score: 12,
+          matches: 4,
+          wins: 3,
+          losses: 1,
+          winRate: 0.75,
+          campaignStars: 6,
+        },
+      ],
+      campaignSelf: {
+        rank: 1,
+        playerId: 'device-1',
+        displayName: 'Alice',
+        score: 12,
+        matches: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+        campaignStars: 6,
       },
     });
     expect(decodeServerMessage(leaderboard)).toEqual({
@@ -90,6 +116,7 @@ describe('协议编解码', () => {
           wins: 3,
           losses: 1,
           winRate: 0.75,
+          campaignStars: 6,
         },
       ],
       self: {
@@ -101,6 +128,31 @@ describe('协议编解码', () => {
         wins: 3,
         losses: 1,
         winRate: 0.75,
+        campaignStars: 6,
+      },
+      campaignEntries: [
+        {
+          rank: 1,
+          playerId: 'device-1',
+          displayName: 'Alice',
+          score: 12,
+          matches: 4,
+          wins: 3,
+          losses: 1,
+          winRate: 0.75,
+          campaignStars: 6,
+        },
+      ],
+      campaignSelf: {
+        rank: 1,
+        playerId: 'device-1',
+        displayName: 'Alice',
+        score: 12,
+        matches: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+        campaignStars: 6,
       },
     });
 
@@ -109,12 +161,14 @@ describe('协议编解码', () => {
       name: 'Alice',
       playerId: 'device-1',
       activity: 'solo',
+      campaignStars: 6,
     });
     expect(decodeClientMessage(lobby)).toEqual({
       type: 'lobby',
       name: 'Alice',
       playerId: 'device-1',
       activity: 'solo',
+      campaignStars: 6,
     });
 
     const rejoin = encodeMessage({

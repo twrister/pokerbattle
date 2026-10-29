@@ -7,11 +7,13 @@ const DISPLAY_NAME_MAX_LENGTH = 16;
 /** 覆盖 UUID 与 `pb-时间戳-随机串` 兜底格式。 */
 const PLAYER_ID_MAX_LENGTH = 80;
 const PLAYER_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
-const STORE_SCHEMA_VERSION = 2;
+const STORE_SCHEMA_VERSION = 3;
 /** 战败扣分门槛：只有积分已超过该值才 -1，避免新手一直掉到 0。 */
 export const LOSS_PENALTY_THRESHOLD = 10;
 /** 排行榜默认条数。 */
 export const LEADERBOARD_DEFAULT_LIMIT = 50;
+/** 战役星数上限：防止异常客户端上报天文数字撑爆榜面。 */
+export const CAMPAIGN_STARS_MAX = 9999;
 
 /** 磁盘/内存中的玩家战绩行；胜率由 list 时派生。 */
 export interface PlayerStatsRecord {
@@ -22,6 +24,8 @@ export interface PlayerStatsRecord {
   losses: number;
   /** 联机战斗积分：胜 +1，超过 LOSS_PENALTY_THRESHOLD 后败 -1。 */
   score: number;
+  /** 战役总星数：战役关卡首通 + 无限防守守住波数；只增不减。 */
+  campaignStars: number;
   firstSeenAt: number;
   lastPlayedAt: number;
   /** 最近一次入厅/入房或最后一条 WS 断开的时间。 */
@@ -38,6 +42,8 @@ export interface LeaderboardRecord {
   wins: number;
   losses: number;
   winRate: number | null;
+  /** 战役总星数；战役榜按它排序，胜点榜也带上供客户端展示。 */
+  campaignStars: number;
 }
 
 /** 运维接口行：在落盘字段上附加胜率。 */
@@ -151,6 +157,7 @@ export class PlayerStatsStore {
         wins: 0,
         losses: 0,
         score: 0,
+        campaignStars: 0,
         firstSeenAt: now,
         lastPlayedAt: now,
         lastOnlineAt: now,
@@ -158,6 +165,24 @@ export class PlayerStatsStore {
     } else {
       this.players.set(id, { ...existing, displayName, lastOnlineAt: now });
     }
+    this.persist();
+  }
+
+  /**
+   * 记录客户端上报的战役星数：只增不减，避免重装或本地档被清后榜面倒退。
+   * 非法 ID 与非法星数静默忽略；未登记的玩家先建好空档案再接星数。
+   */
+  recordCampaignStars(playerId: string, stars: unknown): void {
+    const id = normalizePlayerId(playerId);
+    const next = clampCampaignStars(stars);
+    if (!id || next <= 0) return;
+    const existing = this.players.get(id);
+    if (!existing) {
+      this.ensurePlayer(id, 'player');
+    }
+    const record = this.players.get(id);
+    if (!record || next <= record.campaignStars) return;
+    this.players.set(id, { ...record, campaignStars: next });
     this.persist();
   }
 
@@ -241,7 +266,7 @@ export class PlayerStatsStore {
 
   /** 按积分排出前 N 名，供大厅排行榜。 */
   listLeaderboard(limit = LEADERBOARD_DEFAULT_LIMIT): LeaderboardRecord[] {
-    return this.rankAllPlayers().slice(0, Math.max(0, Math.floor(limit)));
+    return this.rankAllPlayers().slice(0, clampLimit(limit));
   }
 
   /** 查某人在全量榜中的名次；未登记返回 null。 */
@@ -249,6 +274,22 @@ export class PlayerStatsStore {
     const id = normalizePlayerId(playerId);
     if (!id) return null;
     return this.rankAllPlayers().find((entry) => entry.playerId === id) ?? null;
+  }
+
+  /**
+   * 战役榜：按星数排出前 N 名。
+   * 0 星玩家不进榜——只打联机、没碰战役的人不该出现在战役榜尾。
+   */
+  listCampaignLeaderboard(limit = LEADERBOARD_DEFAULT_LIMIT): LeaderboardRecord[] {
+    return this.rankCampaignPlayers().slice(0, clampLimit(limit));
+  }
+
+  /** 查某人在战役榜的名次；无星或未登记返回 null。 */
+  lookupCampaignLeaderboardEntry(playerId: string): LeaderboardRecord | null {
+    const id = normalizePlayerId(playerId);
+    if (!id) return null;
+    const entry = this.rankCampaignPlayers().find((row) => row.playerId === id);
+    return entry ?? null;
   }
 
   private ensurePlayer(playerId: string, name: string): void {
@@ -268,6 +309,7 @@ export class PlayerStatsStore {
       wins: 0,
       losses: 0,
       score: 0,
+      campaignStars: 0,
       firstSeenAt: now,
       lastPlayedAt: now,
       lastOnlineAt: now,
@@ -305,16 +347,24 @@ export class PlayerStatsStore {
         }
         return a.record.displayName.localeCompare(b.record.displayName, 'zh');
       })
-      .map(({ record, winRate }, index) => ({
-        rank: index + 1,
-        playerId: record.playerId,
-        displayName: record.displayName,
-        score: record.score,
-        matches: record.matches,
-        wins: record.wins,
-        losses: record.losses,
-        winRate,
-      }));
+      .map(({ record, winRate }, index) => toLeaderboardRecord(record, winRate, index + 1));
+  }
+
+  /**
+   * 战役榜专用排序：星数降序 → 最近活跃降序 → 昵称。
+   * 只收 ≥1 星的玩家，名次同样从 1 开始独立计算。
+   */
+  private rankCampaignPlayers(): LeaderboardRecord[] {
+    return [...this.players.values()]
+      .filter((record) => record.campaignStars > 0)
+      .sort((a, b) => {
+        if (b.campaignStars !== a.campaignStars) return b.campaignStars - a.campaignStars;
+        if (b.lastPlayedAt !== a.lastPlayedAt) return b.lastPlayedAt - a.lastPlayedAt;
+        return a.displayName.localeCompare(b.displayName, 'zh');
+      })
+      .map((record, index) =>
+        toLeaderboardRecord(record, record.matches > 0 ? record.wins / record.matches : null, index + 1),
+      );
   }
 
   private load(): void {
@@ -374,6 +424,7 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
   const losses = readNonNegativeInt(row.losses);
   const score = readNonNegativeInt(row.score);
   if (wins + losses > matches) return null;
+  const campaignStars = clampCampaignStars(row.campaignStars);
   const firstSeenAt = readPositiveInt(row.firstSeenAt);
   const lastPlayedAt = Math.max(readPositiveInt(row.lastPlayedAt), firstSeenAt);
   // 旧档没有 lastOnlineAt 时回退到对局/首次见到时间，避免排序落到 0。
@@ -385,6 +436,7 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
     wins,
     losses,
     score,
+    campaignStars,
     firstSeenAt,
     lastPlayedAt,
     lastOnlineAt,
@@ -394,6 +446,37 @@ function sanitizeRecord(raw: unknown): PlayerStatsRecord | null {
 function readNonNegativeInt(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
   return Math.floor(value);
+}
+
+/** 星数清洗：非数字/负数回落 0，超过上限截断。 */
+function clampCampaignStars(value: unknown): number {
+  const stars = readNonNegativeInt(value);
+  return Math.min(CAMPAIGN_STARS_MAX, stars);
+}
+
+/** 排行榜条数清洗：负数与非法值回落 0，小数向下取整。 */
+function clampLimit(limit: number): number {
+  if (!Number.isFinite(limit)) return 0;
+  return Math.max(0, Math.floor(limit));
+}
+
+/** 战绩行转排行榜行；两榜共用同一份字段，只有 rank 与排序口径不同。 */
+function toLeaderboardRecord(
+  record: PlayerStatsRecord,
+  winRate: number | null,
+  rank: number,
+): LeaderboardRecord {
+  return {
+    rank,
+    playerId: record.playerId,
+    displayName: record.displayName,
+    score: record.score,
+    matches: record.matches,
+    wins: record.wins,
+    losses: record.losses,
+    winRate,
+    campaignStars: record.campaignStars,
+  };
 }
 
 /**
@@ -438,6 +521,7 @@ export function listAllOpsPlayers(
       wins: 0,
       losses: 0,
       score: 0,
+      campaignStars: 0,
       winRate: null,
       firstSeenAt: 0,
       lastPlayedAt: 0,

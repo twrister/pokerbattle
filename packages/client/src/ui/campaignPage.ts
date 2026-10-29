@@ -2,8 +2,8 @@ import { CAMPAIGN_ARENA_PRESETS, describeStageObjective, type StageDef, type Sta
 import {
   countCampaignStars,
   isStageUnlocked,
+  totalCampaignStars,
   type CampaignProgress,
-  type CampaignStars,
 } from '../campaign/progress.js';
 import { enableDragScroll } from './dragScroll.js';
 
@@ -151,7 +151,13 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     const nodeCount = stages.length + (endless ? 1 : 0);
     const lastUnlocked = endlessUnlocked ? stages.length : unlocked.lastIndexOf(true);
     const { points, height } = layoutStageNodes(nodeCount, fitHeight());
-    renderStars(countCampaignStars(progress, orderedIds));
+    // 标题只显示星星总数：关卡首通星 + 无限防守守住波数
+    renderStars(
+      totalCampaignStars(
+        countCampaignStars(progress, orderedIds),
+        endless?.getBestWave() ?? null,
+      ),
+    );
 
     const map = document.createElement('div');
     map.className = 'campaign-map';
@@ -191,10 +197,10 @@ export function createCampaignPage(options: CampaignPageOptions): CampaignPageHa
     return list.clientHeight / (width / CAMPAIGN_MAP_WIDTH);
   };
 
-  /** 标题栏星数胶囊：已得 / 总数。 */
-  const renderStars = (stars: CampaignStars): void => {
-    starsEl.textContent = `★ ${stars.earned} / ${stars.total}`;
-    starsEl.setAttribute('aria-label', `已获得 ${stars.earned} 颗星，共 ${stars.total} 颗`);
+  /** 标题栏星数胶囊：只显示总星数（关卡星 + 无限防守星）。 */
+  const renderStars = (total: number): void => {
+    starsEl.textContent = `★ ${total}`;
+    starsEl.setAttribute('aria-label', `共获得 ${total} 颗星`);
   };
 
   /** 视口尺寸变化时按新高度重排，保证仍然一屏放下。 */

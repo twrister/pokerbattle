@@ -71,8 +71,8 @@ describe('战役选关页', () => {
     // 已通关为金星，已解锁未通关为空星，锁定关不显示星星
     expect(buttons.map((button) => starState(button))).toEqual(['earned', 'empty', 'none']);
     expect(buttons[0]!.classList.contains('is-cleared')).toBe(true);
-    // 标题栏统计已得 / 总星数
-    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 1 / 3');
+    // 标题栏只显示星数总和
+    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 1');
     // 节点不再使用任何城堡贴图
     expect(document.querySelector('.campaign-stage-castle')).toBeNull();
     expect(document.querySelector('.campaign-stage img')).toBeNull();
@@ -114,7 +114,7 @@ describe('战役选关页', () => {
     ]);
     // 全解锁不代表已通关，未打过的关卡只显示空星
     expect(buttons.map((button) => starState(button))).toEqual(['empty', 'empty', 'empty']);
-    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 0 / 3');
+    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 0');
 
     buttons[2]!.click();
     expect(onStartStage).toHaveBeenCalledWith('c');
@@ -214,6 +214,22 @@ describe('战役选关页', () => {
     expect(endless.textContent).toContain('最佳 7 波');
     endless.click();
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('标题星数包含无限防守守住波数', () => {
+    let progress = emptyProgress();
+    for (const id of ['a', 'b']) progress = recordStageClear(progress, { stageId: id, seconds: 10 });
+    const page = createCampaignPage({
+      onBack: vi.fn(),
+      onStartStage: vi.fn(),
+      getStages: () => stages,
+      getProgress: () => progress,
+      endless: { getBestWave: () => 5, onStart: vi.fn() },
+    });
+    page.show();
+    // 2 关通关星 + 无限防守最佳 5 波
+    expect(document.querySelector('#campaign-stars')!.textContent).toBe('★ 7');
+    expect(document.querySelector('#campaign-stars')!.getAttribute('aria-label')).toBe('共获得 7 颗星');
   });
 });
 

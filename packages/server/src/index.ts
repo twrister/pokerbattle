@@ -162,6 +162,8 @@ wss.on('connection', (ws) => {
           activity: message.activity,
         });
         bindConnectedPlayer(ws, message.playerId, message.name);
+        // 星数随 presence 一起上报：进战役页/回大厅都会刷新，只增不减
+        playerStats.recordCampaignStars(message.playerId ?? '', message.campaignStars);
       }
       return;
     }
@@ -283,12 +285,14 @@ function bindConnectedPlayer(ws: WebSocket, playerId: string | null | undefined,
   metrics.notePlayerActive(id);
 }
 
-/** 组装排行榜回包：前 50 名 + 查询者本人（未入榜也带真实名次）。 */
+/** 组装排行榜回包：两张榜各取前 50 名，并附上查询者本人（未入榜也带真实名次）。 */
 function buildLeaderboard(playerId: string | undefined): LeaderboardMessage {
   return {
     type: 'leaderboard',
     entries: playerStats.listLeaderboard(),
     self: playerId ? playerStats.lookupLeaderboardEntry(playerId) : null,
+    campaignEntries: playerStats.listCampaignLeaderboard(),
+    campaignSelf: playerId ? playerStats.lookupCampaignLeaderboardEntry(playerId) : null,
   };
 }
 

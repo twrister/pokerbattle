@@ -1719,6 +1719,43 @@
         color: #ffe1dc;
       }
 
+      /* 排行榜双页签：胶囊样式与牌型验证页一致，选中态金色 */
+      .leaderboard-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(6 * var(--hu));
+        justify-content: center;
+        flex-shrink: 0;
+        margin-bottom: calc(10 * var(--hu));
+      }
+
+      .leaderboard-tab {
+        min-height: calc(34 * var(--hu));
+        padding: calc(6 * var(--hu)) calc(16 * var(--hu));
+        border: calc(2 * var(--hu)) solid var(--outline);
+        border-radius: 999px;
+        background: var(--card-bg);
+        box-shadow: 0 calc(3 * var(--hu)) 0 rgba(20, 33, 61, 0.35);
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: calc(14 * var(--hu));
+        font-weight: 400;
+        cursor: pointer;
+      }
+
+      .leaderboard-tab:hover:not(.is-active) {
+        border-color: var(--outline);
+        background: var(--card-bg-hover);
+      }
+
+      .leaderboard-tab.is-active,
+      .leaderboard-tab.is-active:hover {
+        border-color: var(--outline);
+        background: var(--btn-primary-bg);
+        color: #fff;
+        text-shadow: var(--text-outline);
+      }
+
       #leaderboard-list {
         display: grid;
         gap: calc(8 * var(--hu));
@@ -7920,7 +7957,7 @@
           <button id="btn-leaderboard" class="nav-entry" type="button">
             <span class="nav-icon ui-icon icon-trophy" aria-hidden="true"></span>
             <span class="nav-label">排行榜</span>
-            <span class="nav-tag">胜点榜</span>
+            <span class="nav-tag">胜点 · 战役</span>
           </button>
           <button id="btn-replays" class="nav-entry" type="button">
             <span class="nav-icon ui-icon icon-video" aria-hidden="true"></span>
@@ -8205,6 +8242,28 @@
           <h1>排行榜</h1>
           <button id="btn-leaderboard-refresh" class="online-page-refresh" type="button">刷新</button>
         </header>
+        <div class="leaderboard-tabs" role="tablist" aria-label="排行榜分类">
+          <button
+            id="leaderboard-tab-score"
+            class="leaderboard-tab is-active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="leaderboard-list"
+          >
+            胜点榜
+          </button>
+          <button
+            id="leaderboard-tab-campaign"
+            class="leaderboard-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="leaderboard-list"
+          >
+            战役榜
+          </button>
+        </div>
         <div id="leaderboard-list" role="list"></div>
         <div id="leaderboard-status" role="status" aria-live="polite"></div>
       </div>

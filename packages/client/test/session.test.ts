@@ -794,4 +794,39 @@ describe('createLobbyPresence', () => {
     });
     presence.dispose();
   });
+
+  it('大厅 presence 带上战役星数，星数变化时才补报', async () => {
+    let stars = 3;
+    const presence = createLobbyPresence({
+      name: 'Tester',
+      playerId: 'device-1',
+      getCampaignStars: () => stars,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({ type: 'lobby', campaignStars: 3 });
+
+    // 星数没变不重复上报，避免每次切页都刷流量
+    presence.reportCampaignStars();
+    expect(ws.sent).toHaveLength(1);
+
+    stars = 8;
+    presence.reportCampaignStars();
+    expect(ws.sent).toHaveLength(2);
+    expect(JSON.parse(ws.sent.at(-1)!)).toMatchObject({ type: 'lobby', campaignStars: 8 });
+
+    presence.dispose();
+  });
+
+  it('0 星不上报 campaignStars 字段，兼容老服务端', async () => {
+    const presence = createLobbyPresence({
+      name: 'Tester',
+      playerId: 'device-1',
+      getCampaignStars: () => 0,
+    });
+    await Promise.resolve();
+    const ws = MockWebSocket.instances[0]!;
+    expect(JSON.parse(ws.sent[0]!)).not.toHaveProperty('campaignStars');
+    presence.dispose();
+  });
 });
