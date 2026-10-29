@@ -408,6 +408,20 @@
           0 0 0 calc(2 * var(--hu)) rgba(120, 180, 240, 0.25);
       }
 
+      /*
+       * 列表类大厅页（联机大厅/排行榜/战绩回放）把舞台锁死一屏高。
+       * .lobby-shell 只设了 min-height，榜单或房间一多就把盒子撑高；
+       * 天蓝 radial-gradient 按盒子尺寸绘制，进页面时会跟着纵向拉伸「跳一下」。
+       * 锁高后整页不再滚动，改由各页的内部列表自己滚。
+       */
+      #online-lobby .lobby-shell,
+      #leaderboard .lobby-shell,
+      #replay-list .lobby-shell {
+        height: 100svh;
+        min-height: 0;
+        overflow: hidden;
+      }
+
       /* 两团柔光云朵装饰，替代原冷色线框，不吃点击 */
       .lobby-shell::before,
       .lobby-shell::after {
