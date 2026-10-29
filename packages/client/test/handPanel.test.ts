@@ -1170,7 +1170,7 @@ describe('单机手牌交互', () => {
     panel.dispose();
   });
 
-  it('基地陷落时进入禁用态并挡住出牌', () => {
+  it('结果锁定后进入禁用态并挡住出牌，只提示停止发牌', () => {
     const onPlay = vi.fn();
     const panel = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
@@ -1178,13 +1178,17 @@ describe('单机手牌交互', () => {
     });
     panel.setPlayLocked(true);
     expect(document.querySelector('#solo-hand')?.classList.contains('is-play-locked')).toBe(true);
-    expect(document.querySelector('#hand-status')?.textContent).toContain('停止发牌');
+    // 战役胜利锁手也复用这条路径，文案不能写成「基地陷落」
+    expect(document.querySelector('#hand-status')?.textContent).toBe('停止发牌');
     document.querySelector<HTMLButtonElement>('.hand-formation')?.click();
     expect(onPlay).not.toHaveBeenCalled();
+    // 重开解锁要把上一局的锁定文案一起收掉
+    panel.setPlayLocked(false);
+    expect(document.querySelector('#hand-status')?.textContent).toBe('');
     panel.dispose();
   });
 
-  it('销毁或重建时清掉基地陷落锁定，避免同房间下一局点不了牌', () => {
+  it('销毁或重建时清掉出牌锁定，避免同房间下一局点不了牌', () => {
     const first = createHandPanel({
       deck: deckWithCards(['3-spades', '4-hearts', '5-clubs']),
     });

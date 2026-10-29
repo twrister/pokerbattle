@@ -50,6 +50,11 @@ const MAX_CATEGORY_CARDS = 5;
 const LABEL_SELECT_BEST = '推荐';
 /** 箭头弧顶相对首尾连线的最大抬高像素。 */
 const ARROW_MAX_LIFT = 180;
+/**
+ * 关卡结果落定后锁定手牌时的提示。
+ * 战役胜或负都会锁手，与基地是否陷落无关，所以只说停止发牌。
+ */
+const STATUS_PLAY_LOCKED = '停止发牌';
 
 /**
  * 一次出兵请求；point 为拖拽落点屏幕坐标。
@@ -142,7 +147,7 @@ export interface HandPanelHandle {
   readonly deck: PokerDeck;
   update: (deltaMs: number) => void;
   setDrawInterval: (seconds: number) => void;
-  /** 基地陷落后灰罩并禁止出牌。 */
+  /** 关卡结果落定后灰罩并禁止出牌。 */
   setPlayLocked: (locked: boolean) => void;
   /** MatchState 步进后同步手牌 DOM（外部抽牌/扣牌时用）。 */
   syncFromDeck: () => void;
@@ -182,7 +187,7 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
   /** 本轮滑选按下时的牌下标；与当前划到的牌组成闭区间，往回滑会收缩临时选中区间。 */
   let dragAnchorIndex: number | null = null;
   let playing = false;
-  /** 基地陷落后锁定出牌。 */
+  /** 结果锁定后禁止出牌。 */
   let playLocked = false;
   let disposed = false;
   /** 用于作废上一轮尚未结束的布局位移动画回调。 */
@@ -1037,7 +1042,11 @@ export function createHandPanel(options: HandPanelOptions = {}): HandPanelHandle
         // 锁定出牌后不再引导，手指立刻收起
         guide.hide();
         selected.clear();
-        setActionStatus('基地陷落 · 停止发牌');
+        // 战役在任意结果落定时都会锁手（胜或负），基地未必陷落，所以只用中性文案
+        setActionStatus(STATUS_PLAY_LOCKED);
+      } else {
+        // 重开时复用同一个面板，解锁要顺带清掉上一局的锁定文案
+        setActionStatus(null);
       }
       syncStatus();
     },
