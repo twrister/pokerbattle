@@ -39,6 +39,8 @@ export interface OpsPlayerRecord {
   wins: number;
   losses: number;
   score?: number;
+  /** 战役总星数；旧版游戏服可能不返回。 */
+  campaignStars?: number;
   winRate: number | null;
   firstSeenAt: number;
   lastPlayedAt: number;

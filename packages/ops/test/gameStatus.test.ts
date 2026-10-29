@@ -93,6 +93,7 @@ describe('fetchGamePlayers', () => {
               matches: 0,
               wins: 0,
               losses: 0,
+              campaignStars: 7,
               winRate: null,
               firstSeenAt: 1,
               lastPlayedAt: 1,
@@ -123,8 +124,9 @@ describe('fetchGamePlayers', () => {
     const result = await fetchGamePlayers('http://127.0.0.1:9090');
     expect(result.reachable).toBe(true);
     expect(result.players).toEqual([
-      expect.objectContaining({ playerId: 'solo-1', location: 'solo' }),
-      expect.objectContaining({ playerId: 'weird-1', location: 'lobby' }),
+      // 旧版游戏服不上报星数时回落 0，上报则原样透传给运维表。
+      expect.objectContaining({ playerId: 'solo-1', location: 'solo', campaignStars: 7 }),
+      expect.objectContaining({ playerId: 'weird-1', location: 'lobby', campaignStars: 0 }),
     ]);
   });
 });

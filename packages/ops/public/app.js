@@ -650,15 +650,16 @@ function round2(value) {
   return Math.round(value * 100) / 100;
 }
 
-/** 渲染全部玩家；场次/胜率来自服务端历史，位置来自大厅、单机、房间或离线。 */
-function renderPlayers(players) {  const rows = Array.isArray(players) ? players : [];
+/** 渲染全部玩家；场次/胜率/星数来自服务端历史，位置来自大厅、单机、房间或离线。 */
+function renderPlayers(players) {
+  const rows = Array.isArray(players) ? players : [];
   const onlineCount = rows.filter((player) => player.location && player.location !== 'offline').length;
   if (els.playerHint) {
     els.playerHint.textContent = rows.length
       ? `共 ${rows.length} 人 · 在线 ${onlineCount} 人`
       : '暂无玩家数据';
   }
-  const colCount = showClearActions ? 9 : 8;
+  const colCount = showClearActions ? 10 : 9;
   if (!els.playerTbody) return;
   if (rows.length === 0) {
     els.playerTbody.innerHTML = `<tr><td colspan="${colCount}" class="empty">暂无玩家数据</td></tr>`;
@@ -686,6 +687,7 @@ function renderPlayers(players) {  const rows = Array.isArray(players) ? players
         <td>${Number(player.wins) || 0}</td>
         <td>${Number(player.losses) || 0}</td>
         <td>${winRate}</td>
+        <td>${Number(player.campaignStars) || 0}</td>
         <td>${escapeHtml(formatLastOnline(player))}</td>
         ${actionCell}
       </tr>`;

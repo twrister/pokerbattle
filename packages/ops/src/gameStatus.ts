@@ -291,6 +291,8 @@ function sanitizePlayers(rows: unknown[]): OpsPlayerRecord[] {
       wins: typeof item.wins === 'number' ? item.wins : 0,
       losses: typeof item.losses === 'number' ? item.losses : 0,
       score: typeof item.score === 'number' ? item.score : 0,
+      // 旧版游戏服没有星数字段，回落 0 而不是丢弃，保证表结构稳定。
+      campaignStars: typeof item.campaignStars === 'number' ? item.campaignStars : 0,
       winRate: typeof item.winRate === 'number' ? item.winRate : null,
       firstSeenAt: typeof item.firstSeenAt === 'number' ? item.firstSeenAt : 0,
       lastPlayedAt: typeof item.lastPlayedAt === 'number' ? item.lastPlayedAt : 0,
