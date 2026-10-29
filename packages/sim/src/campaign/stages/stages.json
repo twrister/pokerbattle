@@ -6,7 +6,7 @@
     "seed": 1101,
     "rules": {
       "wildCardsEnabled": false,
-      "initialHandSize": 1,
+      "initialHandSize": 3,
       "normalHandLimit": 5,
       "normalDrawIntervalSeconds": 5
     },
@@ -18,25 +18,37 @@
       {
         "faction": 1,
         "typeId": "melee_grunt",
-        "x": 8.4,
+        "x": 7.8,
         "y": 20.6
       },
       {
         "faction": 1,
         "typeId": "melee_grunt",
-        "x": 9.6,
+        "x": 9,
+        "y": 20.6
+      },
+      {
+        "faction": 1,
+        "typeId": "melee_grunt",
+        "x": 10.2,
         "y": 20.6
       },
       {
         "faction": 1,
         "typeId": "ranged_archer",
-        "x": 8.4,
+        "x": 7.8,
         "y": 21.8
       },
       {
         "faction": 1,
         "typeId": "ranged_archer",
-        "x": 9.6,
+        "x": 9,
+        "y": 21.8
+      },
+      {
+        "faction": 1,
+        "typeId": "ranged_archer",
+        "x": 10.2,
         "y": 21.8
       }
     ],

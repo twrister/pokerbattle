@@ -184,15 +184,15 @@ describe('前三关试玩（无头仿真）', () => {
     return true;
   }
 
-  it('1-1：起手 1 张、上限 5 张、常规 5 秒补一张，整副牌随机发', () => {
+  it('1-1：起手 3 张、上限 5 张、常规 5 秒补一张，整副牌随机发', () => {
     const { match } = createStageMatch(getStageById('c1_1')!);
     expect(match.getMaxHandSize()).toBe(5);
     // 常规阶段默认就是最慢的 5 秒档
     expect(match.getDrawIntervalTicks()).toBe(TICK_RATE * 5);
     const hand = match.decks[Faction.Blue].hand;
-    // 起手一张，牌堆仍留着除这张外的整副牌（万能牌关闭时为 54 张）
-    expect(hand).toHaveLength(1);
-    expect(match.decks[Faction.Blue].availableCount).toBe(53);
+    // 起手三张，牌堆仍留着除这三张外的整副牌（万能牌关闭时为 54 张）
+    expect(hand).toHaveLength(3);
+    expect(match.decks[Faction.Blue].availableCount).toBe(51);
   });
 
   it('1-1：没出兵时第一个目标未完成，打出一张牌即完成', () => {
@@ -207,13 +207,13 @@ describe('前三关试玩（无头仿真）', () => {
     expect(runner.tracker.getStatus()).toBe('pending');
   });
 
-  it('1-1：敌方区域是 2 民兵 + 2 弓手，满血且正常索敌，双方都没有主堡', () => {
+  it('1-1：敌方区域是 3 民兵 + 3 弓手，满血且正常索敌，双方都没有主堡', () => {
     const { match, runner } = createStageMatch(getStageById('c1_1')!);
     const redUnits = match.world.units.filter((unit) => unit.faction === Faction.Red && !unit.dead);
-    expect(redUnits).toHaveLength(4);
-    // 两个民兵在前、两个弓手在后，都是教学关的固定防线
-    expect(redUnits.filter((unit) => unit.typeId === 'melee_grunt')).toHaveLength(2);
-    expect(redUnits.filter((unit) => unit.typeId === 'ranged_archer')).toHaveLength(2);
+    expect(redUnits).toHaveLength(6);
+    // 三个民兵在前、三个弓手在后，都是教学关的固定防线
+    expect(redUnits.filter((unit) => unit.typeId === 'melee_grunt')).toHaveLength(3);
+    expect(redUnits.filter((unit) => unit.typeId === 'ranged_archer')).toHaveLength(3);
     for (const unit of redUnits) {
       // 不驻守：够不着就追击，玩家放兵后敌人会主动迎上来
       expect(unit.hold).toBe(false);
@@ -254,7 +254,7 @@ describe('前三关试玩（无头仿真）', () => {
   });
 
   it('1-1：持续出单牌能在时限内清场', () => {
-    // 防数值改动把关卡改死：只打单牌、不点选其他阵型，也要能收掉这 4 个敌兵
+    // 防数值改动把关卡改死：只打单牌、不点选其他阵型，也要能收掉这 6 个敌兵
     const { match, runner } = createStageMatch(getStageById('c1_1')!);
     const deadline = TICK_RATE * 100;
     for (let tick = 0; tick < deadline && runner.tracker.getStatus() === 'pending'; tick += 1) {
