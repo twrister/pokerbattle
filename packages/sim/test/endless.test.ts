@@ -22,6 +22,7 @@ import {
   fromFloat,
   getEndlessWaveOverride,
   getPokerCardById,
+  isBuildingConfig,
   isWildCard,
   rollBoonChoices,
   sanitizeEndlessConfigDraft,
@@ -50,6 +51,22 @@ function run(match: MatchState, runner: StageRunner, ticks: number): void {
     match.step(command ? [command] : []);
     runner.update();
   }
+}
+
+/**
+ * 推进一步并在当帧直接清空红方单位。
+ * 用于把「场上已经没敌人」这个条件提前满足，从而验证判定只卡在出兵队列上。
+ */
+function stepAndClearRed(match: MatchState, runner: StageRunner): void {
+  const command = runner.decide(match);
+  match.step(command ? [command] : []);
+  for (const unit of match.world.units) {
+    if (unit.faction !== Faction.Red || isBuildingConfig(unit.config)) continue;
+    unit.hp = 0;
+    unit.dead = true;
+  }
+  match.world.removeDeadUnits();
+  runner.update();
 }
 
 describe('万能牌张数', () => {
@@ -163,7 +180,8 @@ describe('强化', () => {
   });
 });
 
-describe('无限防守对局判定', () => {  it('敌方没有主堡也不会立即收局，清完这一波判成功', () => {
+describe('无限防守对局判定', () => {
+  it('敌方没有主堡也不会立即收局，清完这一波判成功', () => {
     // 敌方不出兵，只验证结束判定：出兵窗口过后场上没敌人即清场
     const def: StageDef = {
       ...buildWaveStage(createRun(1)),
@@ -190,6 +208,54 @@ describe('无限防守对局判定', () => {  it('敌方没有主堡也不会立
     expect(runner.tracker.getOutcome()).toBeNull();
     run(match, runner, 31 * TICK_RATE);
     expect(runner.tracker.getOutcome()?.status).toBe('success');
+  });
+
+  it('出兵队列还剩敌人时，场上空着也不判清场', () => {
+    // 同一出兵点排了 3 只敌人：队列每帧只下发一条，时间门槛到了也还有兵没进场
+    const def: StageDef = {
+      ...buildWaveStage(createRun(1)),
+      enemy: {
+        kind: 'script',
+        steps: [{ atSeconds: 2, typeId: 'melee_grunt', count: 3, x: 9, y: 24 }],
+      },
+      objectives: [{ kind: 'clear_wave', spawnEndSeconds: 2 }],
+    };
+    const { match, runner } = createStageMatch(def);
+    // 每帧都把红方清空：模拟「时间已到且场上没有敌人」，但队列里还有待下发的兵
+    for (let i = 0; i < TICK_RATE * 2; i += 1) {
+      stepAndClearRed(match, runner);
+    }
+    expect(runner.tracker.getOutcome()).toBeNull();
+    expect(runner.hasPendingEnemySpawns()).toBe(true);
+
+    // 队列放完后再清一次场，才允许判定这一波结束
+    for (let i = 0; i < 10 && runner.hasPendingEnemySpawns(); i += 1) {
+      stepAndClearRed(match, runner);
+    }
+    expect(runner.hasPendingEnemySpawns()).toBe(false);
+    stepAndClearRed(match, runner);
+    expect(runner.tracker.getOutcome()?.status).toBe('success');
+  });
+
+  it('真实波次里不会在最后一个敌人进场前判清场', () => {
+    // 波次脚本最后一个出兵点有多只敌人，要分多帧才进场；判定必须等它们都生成
+    const def = buildWaveStage(createRun(12345));
+    const { match, runner } = createStageMatch(def);
+    let queueDrainedTick = -1;
+    let judgeTick = -1;
+    for (let i = 0; i < TICK_RATE * 120; i += 1) {
+      stepAndClearRed(match, runner);
+      if (queueDrainedTick < 0 && !runner.hasPendingEnemySpawns()) queueDrainedTick = match.world.tick;
+      if (runner.tracker.getOutcome()) {
+        judgeTick = match.world.tick;
+        break;
+      }
+    }
+    expect(queueDrainedTick).toBeGreaterThan(0);
+    expect(judgeTick).toBeGreaterThanOrEqual(queueDrainedTick);
+    // 出兵结束时刻之后仍要继续等最后一个出兵点的兵进场，不能卡在 spawnEnd 那一帧
+    const spawnEnd = (def.objectives[0] as { spawnEndSeconds: number }).spawnEndSeconds;
+    expect(judgeTick).toBeGreaterThan(spawnEnd * TICK_RATE);
   });
 
   it('波次关卡的目标是清场，且不带存活时长条件', () => {

@@ -56,6 +56,12 @@ export class ObjectiveTracker {
      * 无基地关卡拿不到对局结算，必须靠这里兜住超时。
      */
     private readonly timeLimitTicks: number | null = null,
+    /**
+     * 敌方是否还有没下发的出兵指令，缺省视为没有队列。
+     * 清场目标必须等它返回 false：同一时刻的一批敌人要分多帧才进场，
+     * 只看「出兵时间已过」会在敌人还没出完时误判这一波已经清空。
+     */
+    private readonly hasPendingEnemySpawns: () => boolean = () => false,
   ) {}
 
   /** 已落定的结果；未落定为 null。 */
@@ -166,11 +172,13 @@ export class ObjectiveTracker {
       case 'play_any':
         return match.getPlayedFormationCount(this.playerSlot) > 0;
       case 'clear_enemy_units':
-        return !hasLivingMobileUnit(match, Faction.Red);
+        // 出兵队列还没放完就还有后续敌人，不能算清光
+        return !this.hasPendingEnemySpawns() && !hasLivingMobileUnit(match, Faction.Red);
       case 'clear_wave':
-        // 出兵未放完就还有后续敌人，必须等窗口结束再判全灭
+        // 出兵窗口结束且队列放完才不会有新敌人，再判场上全灭
         return (
           match.world.tick >= objective.spawnEndSeconds * TICK_RATE
+          && !this.hasPendingEnemySpawns()
           && !hasLivingMobileUnit(match, Faction.Red)
         );
       case 'claim_castle_pack':

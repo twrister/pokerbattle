@@ -33,13 +33,27 @@ export class StageRunner {
     this.applyStageSwitches();
     this.applyCastleHp();
     this.placePresetUnits();
-    this.tracker = new ObjectiveTracker(def, Faction.Blue, TICK_RATE * stageDurationSeconds(def));
+    // 清场判定要问敌方队列：同一时刻的一批敌人要分多帧才进场，只看时间会误判
+    this.tracker = new ObjectiveTracker(
+      def,
+      Faction.Blue,
+      TICK_RATE * stageDurationSeconds(def),
+      () => this.hasPendingEnemySpawns(),
+    );
     this.enemy = createEnemy(def);
   }
 
   /** 敌方指令来源，供 SimLoop.addCommandSource 挂载；无敌方行为时返回 null。 */
   decide(match: MatchState): Command | null {
     return this.enemy ? this.enemy.decide(match) : null;
+  }
+
+  /**
+   * 敌方是否还有没下发的出兵指令。
+   * 只有脚本敌人有队列；人机与无敌人关卡恒为 false，清场判定不受影响。
+   */
+  hasPendingEnemySpawns(): boolean {
+    return this.enemy instanceof ScriptedEnemy && this.enemy.hasPendingSpawns;
   }
 
   /** 每个逻辑帧 step 之后调用，更新目标判定。 */

@@ -983,7 +983,9 @@ function enterBattleSession(mode: BattleMode): () => void {
     const elapsedSeconds = match.world.tick / TICK_RATE;
     battleHud.updateEndlessProgress({
       ratio: endlessWaveSpawnProgress(endlessSpawnEndSeconds, elapsedSeconds),
-      spawnDone: elapsedSeconds >= endlessSpawnEndSeconds,
+      // 时间到不等于兵已出完：最后一批敌人要分多帧进场，队列空了才算真的只等清场
+      spawnDone: elapsedSeconds >= endlessSpawnEndSeconds
+        && !(stageRunner?.hasPendingEnemySpawns() ?? false),
       remaining: countLivingMobileUnits(match, Faction.Red),
     });
   };

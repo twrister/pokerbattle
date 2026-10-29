@@ -37,6 +37,15 @@ export class ScriptedEnemy {
   get remaining(): number {
     return this.queue.length;
   }
+
+  /**
+   * 队列里是否还有没下发的出兵指令。
+   * 清场判定要用它而不是「最后一个出兵点的时间」：同一时刻的一批敌人要分多帧才进场，
+   * 只看时间会在敌人还没出完时误判这一波已经清空。
+   */
+  get hasPendingSpawns(): boolean {
+    return this.queue.length > 0;
+  }
 }
 
 /** 把一步展开成若干 Spawn 指令，以落点为中心横向对称排开。 */
